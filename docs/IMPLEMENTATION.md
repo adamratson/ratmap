@@ -23,7 +23,7 @@ background geolocation and no background downloads — accepted, see §7.
 | # | Constraint | Why |
 |---|---|---|
 | C1 | **Call `navigator.storage.persist()` at startup and verify with `persisted()`. Refuse to start a region download if it returns false** — explain why instead. | Default storage is best-effort and evictable. Persistent mode is *excluded from eviction*. Never let a user believe they have offline maps they don't — they find out with no signal, on a mountain. |
-| C2 | **Drive Add-to-Home-Screen in onboarding on iOS.** Detect standalone via `display-mode: standalone`. | WebKit grants `persist()` "based on heuristics like whether the website is opened as a Home Screen Web App". Install isn't just discovery — it *gates the storage guarantee*. iOS has no `beforeinstallprompt`, so this must be a hand-held UI flow. |
+| C2 | **Installation gates persistence on both platforms — drive it in onboarding.** Detect standalone via `display-mode: standalone`. On **iOS** hand-hold Share → Add to Home Screen; on **Android** capture `beforeinstallprompt` and offer a real install button. | Both engines key `persist()` on installation: WebKit grants it "based on heuristics like whether the website is opened as a Home Screen Web App", and Chromium's heuristic counts PWA installation plus engagement. Install is not just discovery — it *gates the storage guarantee*. Only iOS lacks `beforeinstallprompt`, so only iOS needs the manual walkthrough. |
 | C3 | **Every PMTiles artifact must have a globally unique filename.** | `FileSource.getKey()` returns `file.name`, and that key is how `Protocol.add()` registers the archive. Two regions each shipping `basemap.pmtiles` collide and silently serve the wrong region's tiles. Use `<region>-basemap.pmtiles`. |
 | C4 | **Configure CORS on the R2 bucket: allow the `Range` request header, expose `ETag` and `Content-Range`.** | Unlike a native app, a browser enforces CORS on range requests. Without exposed `ETag`, the pmtiles library cannot do its archive-consistency check. Classic silent failure — tiles just never load. |
 | C5 | **Store `.pmtiles` archives in OPFS, not the service-worker Cache API.** Keep the SW cache for the app shell only. | Cache API has a much smaller effective quota; OPFS gives real random-access file handles, which is what range reads need. |
@@ -33,7 +33,7 @@ background geolocation and no background downloads — accepted, see §7.
 | C9 | **No geocoding API.** Search is a local SQLite FTS5 index via `sql.js`/`wa-sqlite`, or an IndexedDB inverted index. | Works offline, no key or quota, queries never leave the device. |
 | C10 | **Persist routes as complete coordinate arrays, never a server-side route ID.** | A saved route must render with the network permanently off. |
 | C11 | **Waypoint placement must not require a successful network snap.** | If a waypoint only commits after `/trace_route`, offline editing becomes impossible. Allow unsnapped waypoints with deferred snapping. |
-| C12 | **Region downloads must be resumable and chunked, and hold a Screen Wake Lock while running.** | No Background Fetch or Background Sync on iOS. A multi-GB download only progresses in the foreground; assume it will be interrupted. |
+| C12 | **Baseline: region downloads are resumable, chunked, and hold a Screen Wake Lock while running. Enhancement: use the Background Fetch API where available.** Build the baseline first; the enhancement is strictly optional and must not be a second code path of equal weight. | iOS has no Background Fetch or Background Sync, so a multi-GB download only progresses in the foreground and *will* be interrupted — the resumable baseline is mandatory. Chromium on Android **does** support Background Fetch, letting a download survive app close with browser-provided progress and cancel UI. Detect, don't assume. |
 | C13 | **Pin the Protomaps basemap build version.** Never track `latest`. | A schema bump between v2 and v4 silently removed `ele`. Treat their schema as a dependency that breaks. |
 | C14 | **Never generate tiles in the browser.** | Valhalla tile builds need ~600 GB scratch, up to ~1.6 TB with elevation. Contours likewise. Build offline, ship the output. |
 | C15 | **Do not hotlink Protomaps or Mapterhorn buckets in production.** | Both explicitly ask users to copy to their own storage. Extract regions into our bucket. |
@@ -61,7 +61,13 @@ background geolocation and no background downloads — accepted, see §7.
 
 - Storage API fully supported from Safari 17 / iOS 17.
 - No Background Fetch or Background Sync on iOS → **C12**.
-- No background geolocation on iOS PWAs → §7.
+- Background Fetch **is** supported on Chromium (Android + desktop), not in WebView →
+  **C12** enhancement path.
+- Chromium grants `persist()` silently via heuristic — PWA installation and engagement are
+  the criteria; it is silently *denied*, never prompted → **C1, C2**.
+- Firefox behaves differently again: it *prompts* the user for persistence rather than
+  deciding heuristically. Treat as a third behaviour, not a Chromium clone.
+- **No background geolocation on any platform**, Android included → §7.
 - Screen Wake Lock supported from Safari 16.4.
 - `map.setTerrain({source, exaggeration})` and hillshade layers work off a `raster-dem`
   source; custom protocols can feed DEM sources.
@@ -270,17 +276,42 @@ collisions (C3), CORS (C4), OPFS vs SW cache (C5), foreground-only downloads (C1
 
 State these plainly in the product, not just here.
 
-- **No background geolocation.** Cannot record a track with the phone pocketed and screen
-  off. Following a route means app foregrounded and screen on. This is a platform
-  capability that does not exist, not a workaround gap.
-- **No background downloads.** Region downloads only progress in the foreground.
-- **iOS install friction.** No install prompt; Share → Add to Home Screen manually — and
-  it gates persistence (C2).
+- **No background geolocation — on either platform.** Cannot record a track with the phone
+  pocketed and screen off. Following a route means app foregrounded and screen on. There is
+  no Web API for this on any platform; Android does not rescue it. This is a capability
+  that does not exist, not a workaround gap.
+- **No background downloads on iOS.** Region downloads only progress in the foreground
+  there. Android gets Background Fetch (C12).
+- **iOS install friction.** No install prompt; Share → Add to Home Screen manually — and it
+  gates persistence (C2). Android has a real install button.
 
-**Escape hatch — do not design against it, but know it exists.** If background location or
-store distribution later becomes necessary, wrap this same web codebase in **Capacitor**:
-native background-geolocation plugins and App Store/Play distribution, no rewrite. The
-cost is re-acquiring the native build and review overhead. Nothing in this spec forecloses
+### Platform matrix
+
+Android is the stronger platform throughout. Where behaviour differs, iOS is the
+constraint that shapes the design — build for iOS, enhance for Android.
+
+| Capability | iOS Safari | Android Chromium |
+|---|---|---|
+| MapLibre GL JS, PMTiles, OPFS | ✅ | ✅ |
+| Storage quota (installed) | up to 60% origin / 80% overall | comparable, disk-proportional |
+| `persist()` | heuristic, keyed on Home Screen install | heuristic, keyed on install + engagement |
+| Install prompt | ❌ manual Share → Add to Home Screen | ✅ `beforeinstallprompt` |
+| Background Fetch | ❌ | ✅ |
+| Background Sync | ❌ | ✅ |
+| **Background geolocation** | ❌ | ❌ |
+| Store distribution without rewrite | ❌ needs Capacitor | ✅ TWA via Bubblewrap |
+
+Two consequences worth internalising: **nothing platform-specific is required for the core
+product** — every capability the app depends on exists on both. And the *only* hard
+limitation that survives on both is background geolocation, which is precisely why this is
+scoped as a route planner rather than a track recorder.
+
+**Escape hatch — do not design against it, but know it exists.** The two platforms offer
+asymmetric exits. On **Android**, a TWA built with Bubblewrap puts this exact PWA on the
+Play Store with no code change. On **iOS**, and for background geolocation on either
+platform, wrap the same web codebase in **Capacitor**: native plugins plus store
+distribution, still no rewrite. The cost is re-acquiring the native build and review
+overhead. Nothing in this spec forecloses
 it — which is why C10 and C11 are still here even though nothing in the PWA path needs
 them yet.
 

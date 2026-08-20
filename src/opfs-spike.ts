@@ -1,4 +1,4 @@
-import { FileSource, PMTiles, type Protocol } from 'pmtiles';
+import { FileSource, PMTiles, TileType, type Header, type Protocol } from 'pmtiles';
 import type { Map as MLMap } from 'maplibre-gl';
 
 // Phase 0 §2 spike harness — not app UI. Exercises:
@@ -7,6 +7,70 @@ import type { Map as MLMap } from 'maplibre-gl';
 // Run this on a real iPhone (not desktop Safari or the simulator, per §4 Phase 0.3) with
 // a real .pmtiles file to actually validate the spike, then check behavior after
 // backgrounding and resuming the app.
+//
+// On success the camera flies to the archive's own bounds and draws its content in a
+// flat, schema-agnostic color (SPIKE_COLOR below) — otherwise there'd be nothing to
+// look at: a source with no layers renders invisibly, and the camera never moves
+// toward whatever region you just loaded.
+
+const SPIKE_COLOR = '#ff00c8';
+
+function extractVectorLayerIds(metadata: unknown): string[] {
+  if (
+    typeof metadata !== 'object' ||
+    metadata === null ||
+    !('vector_layers' in metadata) ||
+    !Array.isArray((metadata as { vector_layers: unknown }).vector_layers)
+  ) {
+    return [];
+  }
+  return (metadata as { vector_layers: Array<{ id?: unknown }> }).vector_layers
+    .map((layer) => layer.id)
+    .filter((id): id is string => typeof id === 'string');
+}
+
+// Schema-agnostic rendering: an arbitrary uploaded archive's real layer names and
+// styling are unknown, so this isn't "the" style — it's just enough to prove the
+// loaded archive is what's on screen (bright, unmissable color) rather than adding
+// a source with nothing visibly drawn from it.
+function addGenericLayers(map: MLMap, sourceId: string, tileType: TileType, metadata: unknown): void {
+  if (tileType === TileType.Mvt) {
+    for (const layerId of extractVectorLayerIds(metadata)) {
+      // Outlines only, deliberately no fill: a real extract can have many
+      // overlapping vector_layers (buildings, parcels, ...), and even a low-opacity
+      // fill on each stacks into a solid block that buries the base map's labels.
+      map.addLayer({
+        id: `${sourceId}-line-${layerId}`,
+        type: 'line',
+        source: sourceId,
+        'source-layer': layerId,
+        paint: { 'line-color': SPIKE_COLOR, 'line-width': 1, 'line-opacity': 0.7 },
+      });
+      map.addLayer({
+        id: `${sourceId}-circle-${layerId}`,
+        type: 'circle',
+        source: sourceId,
+        'source-layer': layerId,
+        paint: { 'circle-color': SPIKE_COLOR, 'circle-radius': 3 },
+      });
+    }
+  } else {
+    // Png/Jpeg/Webp/Avif: draw it as plain raster. If it's actually terrarium-encoded
+    // terrain, this shows the raw height-encoded pixels rather than a hillshade —
+    // still proof the bytes are being read, just not a real terrain visualization.
+    map.addLayer({ id: `${sourceId}-raster`, type: 'raster', source: sourceId });
+  }
+}
+
+function flyToArchive(map: MLMap, header: Header): void {
+  map.fitBounds(
+    [
+      [header.minLon, header.minLat],
+      [header.maxLon, header.maxLat],
+    ],
+    { padding: 40, duration: 0 },
+  );
+}
 
 export interface OpfsSpikeDeps {
   protocol: Protocol;
@@ -52,15 +116,17 @@ export async function runSpike(
     const header = await pmtiles.getHeader();
 
     const sourceId = `opfs-${key}`;
-    if (!deps.map.getSource(sourceId)) {
-      deps.map.addSource(sourceId, { type: 'vector', url: `pmtiles://${key}` });
+    const isNewSource = !deps.map.getSource(sourceId);
+    if (isNewSource) {
+      const sourceType = header.tileType === TileType.Mvt ? 'vector' : 'raster';
+      deps.map.addSource(sourceId, { type: sourceType, url: `pmtiles://${key}` });
+      const metadata = await pmtiles.getMetadata();
+      addGenericLayers(deps.map, sourceId, header.tileType, metadata);
     }
-    // Deliberately not adding style layers: an arbitrary uploaded archive's schema
-    // is unknown, and wiring real layers is Phase 1/2 work once our own pinned
-    // archives exist. This only proves the OPFS -> FileSource -> Protocol.add() ->
-    // registered-source path (spike 2).
+    flyToArchive(deps.map, header);
+
     result.textContent =
-      `OK — registered as pmtiles://${key} (source "${sourceId}" added, no layers). ` +
+      `OK — registered as pmtiles://${key} (source "${sourceId}", generic layers in ${SPIKE_COLOR}). ` +
       `zoom ${header.minZoom}-${header.maxZoom}. Write throughput: ${(bytesPerSecond / 1e6).toFixed(1)} MB/s.`;
   } catch (err) {
     result.textContent = `Failed: ${(err as Error).message}`;

@@ -5,16 +5,29 @@ import type { Map as MLMap } from 'maplibre-gl';
 // header — our test files are arbitrary bytes, not valid archives. Protocol is kept
 // real (via importOriginal): it's cheap, side-effect-free, and using the real class
 // for deps.protocol lets vi.spyOn(protocol, 'add') verify the actual registration API.
-const { PMTilesMock, getHeaderMock } = vi.hoisted(() => {
-  const getHeaderMock = vi.fn().mockResolvedValue({ minZoom: 0, maxZoom: 14 });
+const { PMTilesMock, getHeaderMock, getMetadataMock } = vi.hoisted(() => {
+  // Literal value, not the real enum import, since vi.hoisted factories run before
+  // this file's own imports are evaluated — mirrors pmtiles' TileType.Mvt = 1.
+  const TileType = { Mvt: 1 } as const;
+  const getHeaderMock = vi.fn().mockResolvedValue({
+    minZoom: 0,
+    maxZoom: 14,
+    tileType: TileType.Mvt,
+    minLon: 11.2,
+    minLat: 43.7,
+    maxLon: 11.3,
+    maxLat: 43.8,
+  });
+  const getMetadataMock = vi.fn().mockResolvedValue({ vector_layers: [{ id: 'testlayer' }] });
   class PMTilesMock {
     source: unknown;
     constructor(source: unknown) {
       this.source = source;
     }
     getHeader = getHeaderMock;
+    getMetadata = getMetadataMock;
   }
-  return { PMTilesMock, getHeaderMock };
+  return { PMTilesMock, getHeaderMock, getMetadataMock };
 });
 
 vi.mock('pmtiles', async (importOriginal) => {
@@ -79,6 +92,7 @@ afterEach(() => {
   // @ts-expect-error test cleanup
   delete navigator.storage;
   getHeaderMock.mockClear();
+  getMetadataMock.mockClear();
 });
 
 describe('writeToOpfs (§2 spikes 2 & 4)', () => {
@@ -112,13 +126,15 @@ describe('runSpike (OPFS -> FileSource -> Protocol.add(), §2 spike 2)', () => {
     const protocol = new Protocol();
     const addSource = vi.fn();
     const getSource = vi.fn().mockReturnValue(undefined);
-    const map = { addSource, getSource } as unknown as MLMap;
+    const addLayer = vi.fn();
+    const fitBounds = vi.fn();
+    const map = { addSource, getSource, addLayer, fitBounds } as unknown as MLMap;
     const result = document.createElement('div');
-    return { protocol, map, addSource, getSource, result };
+    return { protocol, map, addSource, getSource, addLayer, fitBounds, result };
   }
 
-  it('registers the archive and adds a vector source keyed by filename (C3)', async () => {
-    const { protocol, map, addSource, result } = setup();
+  it('registers the archive, adds a vector source keyed by filename (C3), and flies to its bounds', async () => {
+    const { protocol, map, addSource, addLayer, fitBounds, result } = setup();
     const addSpy = vi.spyOn(protocol, 'add');
     const file = new File([new Uint8Array(1024)], 'region-a-basemap.pmtiles');
 
@@ -129,18 +145,29 @@ describe('runSpike (OPFS -> FileSource -> Protocol.add(), §2 spike 2)', () => {
       type: 'vector',
       url: 'pmtiles://region-a-basemap.pmtiles',
     });
+    // One vector_layers entry ("testlayer") -> line + circle generic layers (no fill).
+    expect(addLayer).toHaveBeenCalledTimes(2);
+    expect(fitBounds).toHaveBeenCalledWith(
+      [
+        [11.2, 43.7],
+        [11.3, 43.8],
+      ],
+      expect.objectContaining({ padding: 40 }),
+    );
     expect(result.textContent).toContain('OK — registered as pmtiles://region-a-basemap.pmtiles');
     expect(result.textContent).toContain('zoom 0-14');
   });
 
-  it('does not re-add a source that is already registered under that key', async () => {
-    const { protocol, map, addSource, getSource, result } = setup();
+  it('does not re-add layers for a source that is already registered, but still flies there', async () => {
+    const { protocol, map, addSource, addLayer, fitBounds, getSource, result } = setup();
     getSource.mockReturnValue({});
     const file = new File([new Uint8Array(1024)], 'region-a-basemap.pmtiles');
 
     await runSpike(file, { protocol, map }, result);
 
     expect(addSource).not.toHaveBeenCalled();
+    expect(addLayer).not.toHaveBeenCalled();
+    expect(fitBounds).toHaveBeenCalledTimes(1);
   });
 
   it('shows a failure message instead of throwing when the write fails', async () => {

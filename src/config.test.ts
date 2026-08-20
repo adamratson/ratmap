@@ -9,9 +9,11 @@ describe('config', () => {
     vi.unstubAllEnvs();
   });
 
-  it('falls back to the documented Protomaps demo bucket and AWS terrarium URLs when unset', async () => {
+  it('falls back to the Source Cooperative basemap mirror and AWS terrarium URLs when unset', async () => {
     const config = await import('./config');
-    expect(config.DEMO_BASEMAP_PMTILES_URL).toBe('https://demo-bucket.protomaps.com/v4.pmtiles');
+    expect(config.DEMO_BASEMAP_PMTILES_URL).toBe(
+      'https://data.source.coop/protomaps/openstreetmap/v4.pmtiles',
+    );
     expect(config.FALLBACK_TERRAIN_RASTER_DEM_URL).toBe(
       'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
     );

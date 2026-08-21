@@ -76,11 +76,36 @@ background geolocation and no background downloads — accepted, see §7.
 
 1. **`raster-dem` fed by `pmtiles://` carrying WebP terrarium tiles**, rendering hillshade
    *and* `setTerrain` in **iOS Safari specifically**. Least-proven link in the chain.
+   ⚠️ **Still open, re-test needed.** First iPhone attempt (2026-08-21) loaded
+   `usgs-mt-whitney-8-15-webp-512.pmtiles` and reported "hillshade and contours work" — but
+   the OPFS spike at that point only drew the raw archive as a flat `raster` layer, not a
+   decoded hillshade (see code as of that point). What was actually on screen was almost
+   certainly the *pre-existing* global AWS-fallback hillshade layer at that location (real,
+   but unrelated to the loaded file) plus banding from the undecoded terrarium WebP pixels,
+   which coincidentally reads as "contours." The archive loading and rendering *something*
+   is still a real, useful partial signal (OPFS → FileSource → Protocol.add() → PMTiles
+   bytes reaching the GPU all worked) — just not evidence for the specific claim this item
+   needs.
+   The OPFS spike now registers raster archives as `raster-dem` (`encoding: 'terrarium'`)
+   with a real `hillshade` layer, tinted magenta so it's visually unambiguous versus any
+   other hillshade already on screen — verified rendering correctly (proper ridge/valley
+   relief, not noise) in desktop Chromium. **Needs a re-test on the real iPhone** with the
+   Whitney file to actually close this item.
 2. **OPFS → `getFile()` → `FileSource` → `Protocol.add()`** serving a local archive, and
    how it behaves after the app is backgrounded and resumed.
+   ✅ **Confirmed** (2026-08-21, real iPhone): loaded via the OPFS spike picker, backgrounded
+   the app, resumed — archive stayed registered and rendered. Not yet stress-tested (long
+   background duration, OS memory pressure evicting the tab, multiple archives at once).
 3. **`persist()` actually granted** on a real iOS device once installed to Home Screen,
    and observed retention past 7 days of no use.
+   ⚠️ **Partially confirmed**: granted on install (2026-08-21). 7-day retention check still
+   outstanding — re-open without touching it before 2026-08-28 and recheck the status
+   banner.
 4. Sustained OPFS write throughput for a multi-GB download on a mid-range phone.
+   ⚠️ **Weak signal only**: 471 MB/s on a small (single-digit MB) test file (2026-08-21,
+   real iPhone). That's a burst write, not sustained — flash write speed on phones commonly
+   degrades over a multi-GB transfer as any write cache fills. Not representative until
+   tested with a file in the hundreds of MB to low GB range.
 
 If (1) fails, fall back to AWS Open Data terrain tiles
 (`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`) for online

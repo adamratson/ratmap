@@ -55,10 +55,23 @@ function addGenericLayers(map: MLMap, sourceId: string, tileType: TileType, meta
       });
     }
   } else {
-    // Png/Jpeg/Webp/Avif: draw it as plain raster. If it's actually terrarium-encoded
-    // terrain, this shows the raw height-encoded pixels rather than a hillshade —
-    // still proof the bytes are being read, just not a real terrain visualization.
-    map.addLayer({ id: `${sourceId}-raster`, type: 'raster', source: sourceId });
+    // Png/Jpeg/Webp/Avif: assume terrarium-encoded terrain and render real hillshade,
+    // not a flat raster preview. This project only ever ships raster PMTiles as DEM
+    // (see config.ts / FALLBACK_TERRAIN_RASTER_DEM_URL) — a non-DEM raster archive
+    // would just hillshade into visual noise here, which is an acceptable trade-off
+    // for what this spike exists to prove (§2 spike 1: raster-dem fed by pmtiles://,
+    // rendering hillshade in iOS Safari). SPIKE_COLOR tint keeps this visually
+    // distinct from any other hillshade layer already on the map (e.g. the AWS
+    // fallback), so it's unambiguous that what's rendering came from the loaded file.
+    map.addLayer({
+      id: `${sourceId}-hillshade`,
+      type: 'hillshade',
+      source: sourceId,
+      paint: {
+        'hillshade-shadow-color': SPIKE_COLOR,
+        'hillshade-accent-color': SPIKE_COLOR,
+      },
+    });
   }
 }
 
@@ -118,8 +131,16 @@ export async function runSpike(
     const sourceId = `opfs-${key}`;
     const isNewSource = !deps.map.getSource(sourceId);
     if (isNewSource) {
-      const sourceType = header.tileType === TileType.Mvt ? 'vector' : 'raster';
-      deps.map.addSource(sourceId, { type: sourceType, url: `pmtiles://${key}` });
+      if (header.tileType === TileType.Mvt) {
+        deps.map.addSource(sourceId, { type: 'vector', url: `pmtiles://${key}` });
+      } else {
+        // See addGenericLayers: raster PMTiles are assumed to be terrarium DEM.
+        deps.map.addSource(sourceId, {
+          type: 'raster-dem',
+          url: `pmtiles://${key}`,
+          encoding: 'terrarium',
+        });
+      }
       const metadata = await pmtiles.getMetadata();
       addGenericLayers(deps.map, sourceId, header.tileType, metadata);
     }

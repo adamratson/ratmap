@@ -5,10 +5,10 @@ import type { Map as MLMap } from 'maplibre-gl';
 // header — our test files are arbitrary bytes, not valid archives. Protocol is kept
 // real (via importOriginal): it's cheap, side-effect-free, and using the real class
 // for deps.protocol lets vi.spyOn(protocol, 'add') verify the actual registration API.
-const { PMTilesMock, getHeaderMock, getMetadataMock } = vi.hoisted(() => {
-  // Literal value, not the real enum import, since vi.hoisted factories run before
-  // this file's own imports are evaluated — mirrors pmtiles' TileType.Mvt = 1.
-  const TileType = { Mvt: 1 } as const;
+const { PMTilesMock, getHeaderMock, getMetadataMock, TileType } = vi.hoisted(() => {
+  // Literal values, not the real enum import, since vi.hoisted factories run before
+  // this file's own imports are evaluated — mirrors pmtiles' TileType.Mvt = 1, .Webp = 4.
+  const TileType = { Mvt: 1, Webp: 4 } as const;
   const getHeaderMock = vi.fn().mockResolvedValue({
     minZoom: 0,
     maxZoom: 14,
@@ -27,7 +27,7 @@ const { PMTilesMock, getHeaderMock, getMetadataMock } = vi.hoisted(() => {
     getHeader = getHeaderMock;
     getMetadata = getMetadataMock;
   }
-  return { PMTilesMock, getHeaderMock, getMetadataMock };
+  return { PMTilesMock, getHeaderMock, getMetadataMock, TileType };
 });
 
 vi.mock('pmtiles', async (importOriginal) => {
@@ -156,6 +156,30 @@ describe('runSpike (OPFS -> FileSource -> Protocol.add(), §2 spike 2)', () => {
     );
     expect(result.textContent).toContain('OK — registered as pmtiles://region-a-basemap.pmtiles');
     expect(result.textContent).toContain('zoom 0-14');
+  });
+
+  it('registers a raster archive as raster-dem and renders real hillshade, not a flat preview', async () => {
+    getHeaderMock.mockResolvedValueOnce({
+      minZoom: 8,
+      maxZoom: 15,
+      tileType: TileType.Webp,
+      minLon: -118.3,
+      minLat: 36.5,
+      maxLon: -118.2,
+      maxLat: 36.6,
+    });
+    const { protocol, map, addSource, addLayer, result } = setup();
+    const file = new File([new Uint8Array(1024)], 'usgs-mt-whitney-8-15-webp-512.pmtiles');
+
+    await runSpike(file, { protocol, map }, result);
+
+    expect(addSource).toHaveBeenCalledWith('opfs-usgs-mt-whitney-8-15-webp-512.pmtiles', {
+      type: 'raster-dem',
+      url: 'pmtiles://usgs-mt-whitney-8-15-webp-512.pmtiles',
+      encoding: 'terrarium',
+    });
+    expect(addLayer).toHaveBeenCalledTimes(1);
+    expect(addLayer.mock.calls[0]?.[0]).toMatchObject({ type: 'hillshade' });
   });
 
   it('does not re-add layers for a source that is already registered, but still flies there', async () => {

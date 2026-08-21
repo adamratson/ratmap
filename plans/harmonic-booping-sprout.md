@@ -225,7 +225,6 @@ Much smaller than the native plan — offline elevation and 3D terrain are alrea
 - **Offline routing.** The one genuinely hard remaining item. Valhalla tiles per region
   plus a WASM build; immature. Routing tiles rival or exceed the basemap per region
   (Germany ~4.6 GB), so opt-in with per-artifact sizes shown.
-- **Custom region selection** — user-drawn bbox needs a server-side extract job.
 - **Trail rendering** — if Protomaps path coverage is inadequate at high zoom, custom
   `tippecanoe` from OSM extracts. Verify coverage during Phase 1.
 

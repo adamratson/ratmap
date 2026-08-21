@@ -76,21 +76,15 @@ background geolocation and no background downloads — accepted, see §7.
 
 1. **`raster-dem` fed by `pmtiles://` carrying WebP terrarium tiles**, rendering hillshade
    *and* `setTerrain` in **iOS Safari specifically**. Least-proven link in the chain.
-   ⚠️ **Still open, re-test needed.** First iPhone attempt (2026-08-21) loaded
-   `usgs-mt-whitney-8-15-webp-512.pmtiles` and reported "hillshade and contours work" — but
-   the OPFS spike at that point only drew the raw archive as a flat `raster` layer, not a
-   decoded hillshade (see code as of that point). What was actually on screen was almost
-   certainly the *pre-existing* global AWS-fallback hillshade layer at that location (real,
-   but unrelated to the loaded file) plus banding from the undecoded terrarium WebP pixels,
-   which coincidentally reads as "contours." The archive loading and rendering *something*
-   is still a real, useful partial signal (OPFS → FileSource → Protocol.add() → PMTiles
-   bytes reaching the GPU all worked) — just not evidence for the specific claim this item
-   needs.
-   The OPFS spike now registers raster archives as `raster-dem` (`encoding: 'terrarium'`)
-   with a real `hillshade` layer, tinted magenta so it's visually unambiguous versus any
-   other hillshade already on screen — verified rendering correctly (proper ridge/valley
-   relief, not noise) in desktop Chromium. **Needs a re-test on the real iPhone** with the
-   Whitney file to actually close this item.
+   ✅ **Confirmed** (2026-08-21, real iPhone, corrected renderer): `usgs-mt-whitney-8-15-webp-512.pmtiles`
+   loaded via the OPFS spike (OPFS → FileSource → Protocol.add() → `raster-dem` source,
+   `encoding: 'terrarium'`) renders real, correctly-decoded relief shading. (First attempt
+   the same day, before the spike drew a proper `hillshade` layer, gave a false positive —
+   see git history / earlier revision of this doc for that trail. Left out here since the
+   corrected result supersedes it.)
+   Not yet covered: `setTerrain`/3D specifically (only 2D hillshade was tested), and this
+   was tested from the OPFS spike, not the main map's own terrain source — closing this
+   fully means our real `terrain-global.pmtiles` (Phase 1) gets the same test.
 2. **OPFS → `getFile()` → `FileSource` → `Protocol.add()`** serving a local archive, and
    how it behaves after the app is backgrounded and resumed.
    ✅ **Confirmed** (2026-08-21, real iPhone): loaded via the OPFS spike picker, backgrounded
@@ -115,12 +109,22 @@ hillshade and accept that offline terrain needs a different encoding.
 
 ## 3. Architecture
 
-**Everything is a static file.** One R2 bucket on a custom domain with CORS (C4), plus
-static app hosting (Cloudflare Pages). Zero runtime compute through Phase 4.
+**Everything is a static file.** One R2 bucket (CORS per C4; custom domain deferred to
+Phase 3 — R2's own `*.r2.dev` public bucket URL is fine through Phase 1/2 dev), plus
+static app hosting. **Deployed:** GitHub Pages at `<user>.github.io/ratmap`, not the
+Cloudflare Pages this section originally named — decided during Phase 0, no material
+difference to this architecture (still static hosting, still zero compute). Zero runtime
+compute through Phase 4.
+
+**§8.2 resolved: catalog-only**, not full planet (2026-08-21). No `planet-<version>.pmtiles`.
+Instead a small low-zoom world extract for "pan anywhere at low detail," plus regions built
+on demand (Phase 4). Cuts R2 storage from ~120 GB/~$3/month to a rounding error; the
+tradeoff is panning outside a downloaded region shows nothing useful above the low zoom cap
+until that region is extracted.
 
 ```
-R2 bucket (custom domain, CORS: allow Range, expose ETag + Content-Range)
-├─ planet-<version>.pmtiles        Protomaps basemap, pinned            (C13)
+R2 bucket (CORS: allow Range, expose ETag + Content-Range)
+├─ world-catalog-<version>.pmtiles Protomaps basemap, low-zoom extract, pinned (C13)
 ├─ terrain-global.pmtiles          coarse, pmtiles extract from Mapterhorn
 ├─ peaks-global.pmtiles            ours: natural=peak|volcano|saddle + ele
 ├─ regions/manifest.json           versioned, open-ended artifact list  (C16)
@@ -164,8 +168,11 @@ npm 11.12.1.
 Separate repo or `infra/`. Scripted and re-runnable on data refresh. **Identical to the
 native plan except for CORS.**
 
-- R2 bucket, custom domain, **no Worker**, CORS per C4.
-- Pinned Protomaps planet build (C13). Consume their published builds.
+- R2 bucket, **no custom domain yet** (use the bucket's `*.r2.dev` URL — Phase 3 swaps in
+  a custom domain), **no Worker**, CORS per C4.
+- **Catalog-only (§8.2, decided 2026-08-21):** `pmtiles extract` a low-zoom-capped world
+  cutout from a pinned Protomaps published build — not the full ~120 GB planet. Full
+  per-region detail comes from Phase 4's on-demand extracts, not this file.
 - `peaks-global.pmtiles`: OSM extract → filter `natural=peak`, `natural=volcano`,
   `natural=saddle`, `mountain_pass=yes` → keep `name`, `ele`, `prominence`, `wikidata` →
   `tippecanoe`. Prefer OSM's surveyed `ele` over DEM sampling; it matches signage. Drive
@@ -344,9 +351,10 @@ them yet.
 
 ## 8. Open decisions — ask Adam, do not guess
 
-1. **App name and domain.** Blocks the repo scaffold and hosting setup.
-2. **Planet or catalog-only?** Keep the ~120 GB planet for "pan anywhere online", or ship
-   only a low-zoom world plus regional extracts and cut storage to cents/month.
+1. **App name:** `ratmap` (decided Phase 0). **Domain:** still open, but no longer blocking
+   — app hosting uses GitHub Pages' free subdomain, R2 uses `*.r2.dev`. Revisit at Phase 3.
+2. ~~Planet or catalog-only?~~ **Decided 2026-08-21: catalog-only.** Low-zoom world extract
+   plus on-demand regions (Phase 4), not the ~120 GB planet. See §3.
 3. Contour interval and styling — needs a cartographic call on real target regions.
 4. Street-level address search — currently out of scope; would ship per-region.
 5. Accounts/sync — currently none, all local.

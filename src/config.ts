@@ -20,6 +20,16 @@ export const FALLBACK_TERRAIN_RASTER_DEM_URL =
   import.meta.env.VITE_FALLBACK_TERRAIN_URL ??
   'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 
-// Vendor locally per C7 before this ships offline (Phase 1). Remote for now.
-export const GLYPHS_URL = 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf';
-export const SPRITE_URL = 'https://protomaps.github.io/basemaps-assets/sprites/v4/light';
+// C7: vendored locally (infra/scripts/vendor-assets.sh) into public/fonts, public/sprites
+// — Regular/Italic/Medium only, matching the app's current {lang:'en'} usage in main.ts.
+// Origin-qualified, not left root-relative: MapLibre's style spec requires an *absolute*
+// sprite URL and rejects a root-relative one outright ("Invalid sprite URL ..., must be
+// absolute") — verified by hitting exactly that error during Phase 1 (2026-08-21).
+//
+// Plain string concatenation, deliberately not new URL(...): GLYPHS_URL's {fontstack}/
+// {range} are literal placeholder tokens MapLibre substitutes itself — confirmed
+// new URL('/x/{fontstack}/{range}.pbf', origin) percent-encodes the braces to %7B/%7D,
+// which would silently break that substitution (glyph requests hitting the wrong path).
+const ORIGIN_BASE = `${window.location.origin}${import.meta.env.BASE_URL}`;
+export const GLYPHS_URL = `${ORIGIN_BASE}fonts/{fontstack}/{range}.pbf`;
+export const SPRITE_URL = `${ORIGIN_BASE}sprites/light`;

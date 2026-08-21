@@ -2,14 +2,20 @@ import { defineConfig } from 'vitest/config';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // GitHub Pages project site: served at https://<user>.github.io/ratmap/, not the
-// domain root. Only applies to `vite build` — dev and `vitest` keep base '/' so
-// `npm run dev` still serves from http://localhost:5173/ directly.
+// domain root. Applies to `vite build` and `vite preview` — dev and `vitest` keep base
+// '/' so `npm run dev` still serves from http://localhost:5173/ directly. `isPreview` is
+// required alongside `command === 'build'`: preview's own `command` is 'serve', not
+// 'build' (only `isPreview` distinguishes it) — get this wrong and `vite preview` serves
+// with base '/' while the already-built dist/ files reference /ratmap/, so every asset
+// request 404s (well, silently falls back to index.html — SPA fallback masks it as an
+// odd hang, not a clean error). Verified by hitting exactly this bug during Phase 1 asset
+// vendoring (2026-08-21).
 const GH_PAGES_BASE = '/ratmap/';
 
 // Service worker caches the app shell only (C5). Tile archives (.pmtiles) live in
 // OPFS, never in the SW Cache API — do not add runtime caching rules for them here.
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? GH_PAGES_BASE : '/',
+export default defineConfig(({ command, isPreview }) => ({
+  base: command === 'build' || isPreview ? GH_PAGES_BASE : '/',
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
@@ -38,8 +44,12 @@ export default defineConfig(({ command }) => ({
         ],
       },
       workbox: {
-        // App shell precache only — see module comment.
-        globPatterns: ['**/*.{js,css,html,svg}'],
+        // App shell precache only — see module comment. pbf/json/png added alongside
+        // js/css/html/svg so the vendored glyphs (C7) and sprites actually precache;
+        // without this, "vendored locally" would still mean "missing offline" the
+        // first time the app boots with no network, since only globPatterns-matched
+        // build output gets into the precache manifest.
+        globPatterns: ['**/*.{js,css,html,svg,pbf,png,json}'],
         navigateFallback: 'index.html',
       },
     }),

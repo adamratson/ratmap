@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Secrets — never commit R2 credentials
+.env
+infra/.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

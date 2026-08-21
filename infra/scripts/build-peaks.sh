@@ -55,11 +55,49 @@ fi
 
 osmium export "$WORK_DIR/peaks-raw.osm.pbf" -o "$WORK_DIR/peaks.geojson" --overwrite -a id
 
+# Clean the free-text OSM `ele` into a real number before tiling — see normalize-peaks.py.
+python3 "$(dirname "${BASH_SOURCE[0]}")/normalize-peaks.py" \
+  "$WORK_DIR/peaks.geojson" "$WORK_DIR/peaks-normalized.geojson"
+
+# Elevation regression check (plan §4 Phase 1 acceptance): a schema or parsing change that
+# silently breaks `ele` should fail the build here, not be discovered on a mountain.
+# Only asserts summits actually present in the sources being built.
+python3 - "$WORK_DIR/peaks-normalized.geojson" <<'PYCHECK'
+import json, sys
+
+EXPECTED = {"Ben Nevis": 1345, "Mont Blanc": 4808}
+TOLERANCE_M = 2
+
+with open(sys.argv[1]) as f:
+    features = json.load(f)["features"]
+
+by_name = {}
+for feat in features:
+    props = feat.get("properties", {})
+    name, ele = props.get("name"), props.get("ele")
+    if name in EXPECTED and isinstance(ele, (int, float)):
+        by_name.setdefault(name, ele)
+
+checked = 0
+for name, expected in EXPECTED.items():
+    actual = by_name.get(name)
+    if actual is None:
+        print(f"  (skip {name}: not in this extract)")
+        continue
+    if abs(actual - expected) > TOLERANCE_M:
+        sys.exit(f"FAIL: {name} ele={actual}, expected ~{expected}")
+    print(f"  OK {name}: {actual} m")
+    checked += 1
+
+if checked == 0:
+    print("  (no known summits in this extract — elevation assertions skipped)")
+PYCHECK
+
 OUT="$DIST_DIR/peaks-global.pmtiles"
 tippecanoe -o "$OUT" -zg --drop-densest-as-needed \
   --include=name --include=ele --include=prominence --include=wikidata \
   -l peaks -n "ratmap peaks" --force \
-  "$WORK_DIR/peaks.geojson"
+  "$WORK_DIR/peaks-normalized.geojson"
 
 pmtiles show "$OUT"
 echo "Built $OUT"

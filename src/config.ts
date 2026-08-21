@@ -1,24 +1,59 @@
-// Phase 0 placeholders only. Both defaults point at third-party demo/public data —
-// neither is ours, neither is pinned. Phase 1 replaces both with our own pinned,
-// R2-hosted builds (C13, C15 — this is fine for local dev, not for production).
-// Override locally via .env.local without touching this file.
+// Tile/data artifact locations. Phase 1 built these into our own R2 bucket
+// (infra/scripts/build-*.sh + upload.sh); C15 — we serve our own copies, never hotlink
+// Protomaps' or Mapterhorn's buckets.
+//
+// R2_BASE defaults to the bucket's public .r2.dev development URL. That host is
+// rate-limited and explicitly not for production traffic — Phase 3 swaps in a custom
+// domain by setting VITE_R2_BASE_URL, no code change needed here.
+const R2_BASE =
+  import.meta.env.VITE_R2_BASE_URL ?? 'https://pub-1a40001ed7db4ec58589d03151a30bad.r2.dev';
 
-// Protomaps' own demo-bucket.protomaps.com/v4.pmtiles (used in all their official
-// examples) 404s as of 2026-08-20 — confirmed via curl and in-browser (see
-// docs/IMPLEMENTATION.md C13 for what that failure looks like). This points at their
-// Source Cooperative mirror instead (data.source.coop/protomaps/openstreetmap/v4.pmtiles,
-// documented at docs.protomaps.com/basemaps/downloads), confirmed live: 206 Partial
-// Content on a Range request, CORS allow-origin: *. It's a ~135 GB planet archive, but
-// PMTiles range-fetches only the tiles a viewport needs, so that's fine for browsing.
-export const DEMO_BASEMAP_PMTILES_URL =
-  import.meta.env.VITE_DEMO_BASEMAP_PMTILES_URL ??
-  'https://data.source.coop/protomaps/openstreetmap/v4.pmtiles';
+// C13: artifact filenames carry their build date, so a refresh is an explicit, reviewable
+// change here rather than a silent "latest" that can shift schema under us. C3: these are
+// also the registry keys, so they must stay globally unique.
+export const BASEMAP_PMTILES_URL =
+  import.meta.env.VITE_BASEMAP_PMTILES_URL ?? `${R2_BASE}/world-catalog-2026-08-21.pmtiles`;
 
-// AWS Open Data terrarium terrain — the plan's explicit fallback (§2) for online
-// hillshade when a pmtiles-hosted raster-dem source isn't available yet.
+export const TERRAIN_PMTILES_URL =
+  import.meta.env.VITE_TERRAIN_PMTILES_URL ?? `${R2_BASE}/terrain-global-2026-08-21.pmtiles`;
+
+export const PEAKS_PMTILES_URL =
+  import.meta.env.VITE_PEAKS_PMTILES_URL ?? `${R2_BASE}/peaks-global.pmtiles`;
+
+// The world catalog is a deliberately low-zoom extract (§8.2 catalog-only): it holds
+// z0-5 only, so MapLibre must be told to overzoom rather than request tiles that do not
+// exist. Per-region archives (Phase 4) supply real detail above this.
+export const BASEMAP_MAX_ZOOM = 5;
+
+// terrain-global is likewise a coarse z0-4 extract — enough for context hillshade, not
+// for a real elevation profile. Phase 4 region terrain replaces it locally.
+export const TERRAIN_MAX_ZOOM = 4;
+
+// Peaks are points; tippecanoe chose z0-5 for the current (Scotland-only) build. Overzoom
+// so markers stay visible when zoomed past the archive's own maxzoom.
+export const PEAKS_MAX_ZOOM = 5;
+
+// AWS Open Data terrarium terrain — the plan's documented §2 fallback. Kept as an opt-in
+// escape hatch (VITE_USE_FALLBACK_TERRAIN=1) now that our own terrain archive works, so
+// there's a one-flag way to isolate "is this our archive or MapLibre?" when debugging.
 export const FALLBACK_TERRAIN_RASTER_DEM_URL =
   import.meta.env.VITE_FALLBACK_TERRAIN_URL ??
   'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+
+export const USE_FALLBACK_TERRAIN = import.meta.env.VITE_USE_FALLBACK_TERRAIN === '1';
+
+export const OSM_ATTRIBUTION =
+  '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>';
+export const TERRAIN_ATTRIBUTION =
+  '<a href="https://mapterhorn.com/attribution" target="_blank" rel="noreferrer">© Mapterhorn</a>';
+
+// The FTS5 search index (C9). Shipped in public/ and precached by the service worker
+// rather than fetched from R2, because Phase 2's acceptance test requires search to work
+// on a cold offline start — an R2 fetch would need its own download+cache flow to survive
+// that. §3 puts the places index in OPFS long-term; Phase 4 moves it there per-region,
+// at which point this becomes the fallback for "no region downloaded yet".
+// Refresh with: infra/scripts/build-places.sh && cp infra/dist/places.sqlite public/data/
+export const PLACES_DB_URL = `${window.location.origin}${import.meta.env.BASE_URL}data/places.sqlite`;
 
 // C7: vendored locally (infra/scripts/vendor-assets.sh) into public/fonts, public/sprites
 // — Regular/Italic/Medium only, matching the app's current {lang:'en'} usage in main.ts.

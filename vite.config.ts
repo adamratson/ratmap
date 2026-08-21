@@ -49,7 +49,15 @@ export default defineConfig(({ command, isPreview }) => ({
         // without this, "vendored locally" would still mean "missing offline" the
         // first time the app boots with no network, since only globPatterns-matched
         // build output gets into the precache manifest.
-        globPatterns: ['**/*.{js,css,html,svg,pbf,png,json}'],
+        //
+        // wasm + sqlite are here for offline search (C9): the SQLite WASM runtime and
+        // the FTS5 index both have to be cached, or search silently fails on a cold
+        // offline start — exactly what Phase 2's acceptance test checks.
+        globPatterns: ['**/*.{js,css,html,svg,pbf,png,json,wasm,sqlite}'],
+        // Default is 2 MiB, which silently drops the sqlite index and the wasm runtime
+        // from the precache manifest. Raised to cover them; still app-shell only —
+        // .pmtiles archives go to OPFS, never here (C5).
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallback: 'index.html',
       },
     }),

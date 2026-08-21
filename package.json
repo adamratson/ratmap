@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@protomaps/basemaps": "^5.7.2",
+    "@sqlite.org/sqlite-wasm": "^3.41.2",
     "maplibre-gl": "^5",
     "pmtiles": "^4"
   },
   "devDependencies": {
+    "@types/geojson": "^7946.0.16",
     "jsdom": "^30.0.1",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",

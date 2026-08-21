@@ -212,6 +212,27 @@ with `ETag` readable**. Pipeline asserts known elevations — Ben Nevis 1345, Mo
 shell boots, map renders labelled tiles, summits show names and heights, search returns
 results. Same on Android Chrome.
 
+**Status (2026-08-21): built, desktop-verified.** Every bullet above is implemented and
+checked in a real browser (headless Chromium against the production build). Notes:
+
+- **Search uses `@sqlite.org/sqlite-wasm`, not `sql.js`** as this doc suggested. sql.js
+  ships FTS3 only — `USING fts5` fails at runtime with "no such module: fts5", confirmed
+  against its compile options. The official build has `ENABLE_FTS5`. It is deserialized
+  in-memory rather than via the OPFS VFS, because that VFS wants SharedArrayBuffer, which
+  needs COOP/COEP headers, which GitHub Pages cannot set.
+- **`places.sqlite` ships in `public/`** and is service-worker precached, rather than
+  living in OPFS as §3 describes. That is what makes search work on a cold offline start
+  *before* any region download exists. Phase 4 should move it to OPFS per region and leave
+  this as the no-region-yet fallback.
+- **Offline tile rendering is not durably solved yet, and cannot be until Phase 4.** In the
+  offline cold-start test the basemap did render labelled tiles — but from the browser's
+  ordinary HTTP cache, which is evictable and not a guarantee. Hillshade and peaks did not
+  render at all. Genuine offline tiles require the OPFS region downloader (C5, C12). Treat
+  the tile half of this acceptance criterion as *pending Phase 4*, not met.
+- Still to verify **on a real device**: this was all checked on desktop. The iPhone run
+  (installed to Home Screen, Airplane Mode, force-quit, relaunch) and the Android Chrome
+  equivalent have not been done.
+
 ### Phase 3 — Launch
 
 Small, compared to the native path — no review, no store, no privacy manifest.

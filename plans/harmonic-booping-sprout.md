@@ -174,17 +174,7 @@ with `ETag` readable**. Pipeline asserts known elevations — Ben Nevis 1345, Mo
 shell boots, map renders labelled tiles, summits show names and heights, search returns
 results. Same on Android Chrome.
 
-### Phase 3 — Launch
-
-Small, compared to the native path — no review, no store, no privacy manifest.
-
-- Deploy to production domain; verify the manifest, icons and iOS splash screens.
-- Lighthouse PWA audit clean.
-- Verify update flow: a new SW version must not strand a user mid-download.
-
-**Acceptance:** a stranger can reach the URL, install it, and use it offline.
-
-### Phase 4 — Offline regions
+### Phase 3 — Offline regions
 
 - Build pipeline (offline, not a service): `pmtiles extract` per region → R2, plus a
   static versioned manifest of name, bbox, per-artifact size, build date (C16). Unique
@@ -201,7 +191,7 @@ Small, compared to the native path — no review, no store, no privacy manifest.
 with hillshade and contours rendering entirely from OPFS. Kill the app mid-download and
 confirm it resumes rather than restarting.
 
-### Phase 5 — Route planning
+### Phase 4 — Route planning
 
 - Engine: **Valhalla** behind an async cancellable interface. Hosted or small VPS.
 - `/route` with `pedestrian` / `bicycle` costing.
@@ -218,7 +208,7 @@ offline, follow against the GPS dot, off-route distance, GPX import. Foreground 
 **Acceptance:** plan a route online, Airplane Mode, view and follow it over an offline
 region with a working elevation profile.
 
-### Phase 6 — Deferred
+### Phase 5 — Deferred
 
 Much smaller than the native plan — offline elevation and 3D terrain are already done.
 
@@ -227,6 +217,16 @@ Much smaller than the native plan — offline elevation and 3D terrain are alrea
   (Germany ~4.6 GB), so opt-in with per-artifact sizes shown.
 - **Trail rendering** — if Protomaps path coverage is inadequate at high zoom, custom
   `tippecanoe` from OSM extracts. Verify coverage during Phase 1.
+
+### Phase 6 — Launch
+
+Small, compared to the native path — no review, no store, no privacy manifest.
+
+- Deploy to production domain; verify the manifest, icons and iOS splash screens.
+- Lighthouse PWA audit clean.
+- Verify update flow: a new SW version must not strand a user mid-download.
+
+**Acceptance:** a stranger can reach the URL, install it, and use it offline.
 
 ---
 

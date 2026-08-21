@@ -128,8 +128,12 @@ describe('PEAKS_NOTABILITY_FILTER', () => {
 });
 
 describe('peakAt', () => {
+  /** getLayer returns truthy for every id, i.e. the layers have finished loading. */
+  const layersReady = () => vi.fn().mockReturnValue({});
+
   it('returns the topmost hit properties', () => {
     const map = {
+      getLayer: layersReady(),
       queryRenderedFeatures: vi.fn().mockReturnValue([
         { properties: { name: 'Ben Nevis', ele: 1345 } },
         { properties: { name: 'Other' } },
@@ -140,7 +144,37 @@ describe('peakAt', () => {
   });
 
   it('returns null when nothing is under the point', () => {
-    const map = { queryRenderedFeatures: vi.fn().mockReturnValue([]) } as unknown as MLMap;
+    const map = {
+      getLayer: layersReady(),
+      queryRenderedFeatures: vi.fn().mockReturnValue([]),
+    } as unknown as MLMap;
     expect(peakAt(map, [10, 10])).toBeNull();
+  });
+
+  it('returns null instead of throwing when the peaks layers are not added yet', () => {
+    // Pointer handlers are live before the map's `load` event adds these layers.
+    // queryRenderedFeatures throws on an unknown layer id, so it must not be called.
+    const queryRenderedFeatures = vi.fn(() => {
+      throw new Error("The layer 'peaks-symbol' does not exist in the map's style");
+    });
+    const map = {
+      getLayer: vi.fn().mockReturnValue(undefined),
+      queryRenderedFeatures,
+    } as unknown as MLMap;
+
+    expect(peakAt(map, [10, 10])).toBeNull();
+    expect(queryRenderedFeatures).not.toHaveBeenCalled();
+  });
+
+  it('queries only the layers that exist, when some are missing', () => {
+    const queryRenderedFeatures = vi.fn().mockReturnValue([]);
+    const map = {
+      getLayer: vi.fn((id: string) => (id === PEAKS_LAYER_ID ? {} : undefined)),
+      queryRenderedFeatures,
+    } as unknown as MLMap;
+
+    peakAt(map, [10, 10]);
+
+    expect(queryRenderedFeatures).toHaveBeenCalledWith([10, 10], { layers: [PEAKS_LAYER_ID] });
   });
 });

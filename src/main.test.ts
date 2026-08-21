@@ -5,14 +5,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // importing it fresh (vi.resetModules + dynamic import) against mocked collaborators
 // and asserting on the DOM / spy calls it produces.
 
-const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock } = vi.hoisted(() => {
-  const mapCtorSpy = vi.fn();
-  const addProtocolSpy = vi.fn();
-  const handlers: Record<string, Array<(e: unknown) => void>> = {};
+const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances } = vi.hoisted(
+  () => {
+    const mapCtorSpy = vi.fn();
+    const addProtocolSpy = vi.fn();
+    const handlers: Record<string, Array<(e: unknown) => void>> = {};
+    const mapInstances: MapMock[] = [];
 
   class MapMock {
     constructor(options: unknown) {
       mapCtorSpy(options);
+      mapInstances.push(this);
     }
     addControl(): void {}
     on(event: string, cb: (e: unknown) => void): void {
@@ -32,8 +35,12 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock } = vi.hoisted
       return true;
     }
     easeTo(): void {}
+    zoom = 6;
     getZoom(): number {
-      return 6;
+      return this.zoom;
+    }
+    getCenter(): { lat: number; lng: number } {
+      return { lat: 56.8, lng: -4.5 };
     }
     queryRenderedFeatures(): unknown[] {
       return [];
@@ -43,18 +50,19 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock } = vi.hoisted
     }
   }
 
-  class MarkerMock {
-    setLngLat(): this {
-      return this;
+    class MarkerMock {
+      setLngLat(): this {
+        return this;
+      }
+      addTo(): this {
+        return this;
+      }
+      remove(): void {}
     }
-    addTo(): this {
-      return this;
-    }
-    remove(): void {}
-  }
 
-  return { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock };
-});
+    return { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances };
+  },
+);
 
 vi.mock('maplibre-gl', () => ({
   default: {
@@ -97,6 +105,7 @@ beforeEach(() => {
   mapCtorSpy.mockClear();
   addProtocolSpy.mockClear();
   for (const key of Object.keys(handlers)) delete handlers[key];
+  mapInstances.length = 0;
   mountOpfsSpikeSpy.mockClear();
   bootstrapStorageMock.mockReset();
   isStandaloneMock.mockReset();
@@ -175,6 +184,25 @@ describe('app bootstrap', () => {
 
     const banner = document.querySelector('.status-card.warn, .status-card.ok');
     expect(banner?.textContent).toMatch(expected);
+  });
+
+  it('surfaces the catalog-only zoom ceiling instead of silently showing a stretched map', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: false });
+
+    await loadMain();
+    const notice = document.querySelector<HTMLElement>('#detail-notice')!;
+
+    // Within the archive's range: nothing to say.
+    handlers.zoom?.[0]?.({});
+    expect(notice.hidden).toBe(true);
+
+    // Zoomed well past what the world catalog holds.
+    (mapInstances[0] as unknown as { zoom: number }).zoom = 12;
+    handlers.zoom?.[0]?.({});
+
+    expect(notice.hidden).toBe(false);
+    expect(notice.textContent).toMatch(/detail/i);
+    expect(notice.title).toMatch(/offline region/i);
   });
 
   it('walks iOS users through Add to Home Screen when storage is not persisted (C2)', async () => {

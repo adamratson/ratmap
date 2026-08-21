@@ -21,6 +21,7 @@ import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS } from './in
 import { bootstrapStorage, isStandalone } from './storage';
 import { listPlaces, savePlace, deletePlace, type SavedPlace } from './saved-places';
 import { PlacesSearch, type SearchResult } from './search';
+import { describeDetailLimit } from './detail-limit';
 import { mountOpfsSpike } from './opfs-spike';
 
 // C17: the registry is the single owner of addProtocol/Protocol.add for the whole app.
@@ -39,6 +40,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <button id="locate-btn" type="button" title="Show my location">Locate</button>
     <button id="places-btn" type="button" title="Saved places">Saved</button>
   </div>
+  <div id="detail-notice" hidden></div>
   <div id="status-panel"></div>
   <div id="sheet" hidden></div>
 `;
@@ -104,6 +106,22 @@ map.on('load', () => {
   addPeaksLayer(map, registry);
   mountOpfsSpike(statusPanel, { protocol: registry.protocol, map });
 });
+
+// --- Detail-limit notice (§8.2 catalog-only makes this reachable) --------------------
+
+const detailNotice = document.querySelector<HTMLDivElement>('#detail-notice')!;
+
+map.on('zoom', renderDetailLimit);
+map.on('load', renderDetailLimit);
+
+function renderDetailLimit(): void {
+  const state = describeDetailLimit(map.getZoom(), BASEMAP_MAX_ZOOM);
+  detailNotice.hidden = !state.overzoomed;
+  if (!state.overzoomed) return;
+
+  detailNotice.textContent = state.label;
+  detailNotice.title = state.detail ?? '';
+}
 
 // --- Peak detail sheet -------------------------------------------------------------
 

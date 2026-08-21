@@ -121,10 +121,21 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
   );
 }
 
-/** Properties of the topmost peak at a screen point, or null if none is there. */
+/**
+ * Properties of the topmost peak at a screen point, or null if none is there.
+ *
+ * Queries only layers that currently exist: `queryRenderedFeatures` *throws* on an unknown
+ * layer id rather than returning nothing. The peaks layers are added on the map's `load`
+ * event, but pointer handlers are live from construction — so any mouse movement before
+ * load (or after a style reload drops them) would otherwise raise "The layer
+ * 'peaks-symbol' does not exist in the map's style and cannot be queried for features".
+ */
 export function peakAt(map: MLMap, point: PointLike): PeakProperties | null {
-  const hits = map.queryRenderedFeatures(point, {
-    layers: [PEAKS_LAYER_ID, `${PEAKS_LAYER_ID}-marker`],
-  });
+  const layers = [PEAKS_LAYER_ID, `${PEAKS_LAYER_ID}-marker`].filter((id) =>
+    Boolean(map.getLayer(id)),
+  );
+  if (layers.length === 0) return null;
+
+  const hits = map.queryRenderedFeatures(point, { layers });
   return hits.length > 0 ? (hits[0].properties as PeakProperties) : null;
 }

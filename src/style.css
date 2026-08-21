@@ -115,6 +115,29 @@ body,
   color: #64748b;
 }
 
+/* Sits bottom-centre, clear of the search box and the HUD buttons. Informational, not a
+   dismissible alert: the condition is ongoing, so it should disappear by zooming out
+   rather than by being cleared. */
+#detail-notice {
+  position: absolute;
+  bottom: calc(1.6rem + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #fff;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: help;
+}
+
+#detail-notice[hidden] {
+  display: none;
+}
+
 #status-panel {
   position: absolute;
   /* Below the search box rather than on top of it — the search field is the primary

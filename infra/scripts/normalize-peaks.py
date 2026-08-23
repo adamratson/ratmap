@@ -7,7 +7,13 @@ style expression means the tiles carry a real number, the renderer stays trivial
 bad value can never surface as "NaN m" at a summit — a wrong elevation on a mountain is
 worse than a missing one.
 
-Reads GeoJSON on argv[1], writes normalized GeoJSON to argv[2].
+Reads **line-delimited** GeoJSON on argv[1], writes line-delimited GeoJSON to argv[2] —
+one feature per line, streamed, never the whole document at once. A planet-scale peaks
+export is ~1.2 M features and `json.load` of that costs ~1.4 GB of Python objects
+(measured: ~1.16 kB per feature, 5x the JSON text); streaming it is flat in memory
+instead. Callers pass `osmium export -f geojsonseq -x print_record_separator=false`.
+Same reasoning as build-contours.sh, which already exports GeoJSONSeq so tippecanoe can
+stream — tippecanoe reads line-delimited input natively.
 """
 import json
 import re
@@ -40,27 +46,35 @@ def parse_elevation(raw):
 
 
 def main(src, dest):
-    with open(src) as f:
-        data = json.load(f)
-
     kept_ele = 0
     dropped_ele = 0
-    for feature in data.get("features", []):
-        props = feature.get("properties", {})
-        if "ele" not in props:
-            continue
-        parsed = parse_elevation(props["ele"])
-        if parsed is None:
-            del props["ele"]
-            dropped_ele += 1
-        else:
-            props["ele"] = parsed
-            kept_ele += 1
+    total = 0
 
-    with open(dest, "w") as f:
-        json.dump(data, f)
+    with open(src) as src_f, open(dest, "w") as dest_f:
+        for line in src_f:
+            # RFC8142 puts an RS (0x1e) before each record. Our callers turn that off
+            # (`-x print_record_separator=false`), but stripping it anyway means the
+            # script also works on a plain `osmium export -f geojsonseq` file.
+            line = line.lstrip("\x1e").strip()
+            if not line:
+                continue
 
-    total = len(data.get("features", []))
+            feature = json.loads(line)
+            total += 1
+
+            props = feature.get("properties", {})
+            if "ele" in props:
+                parsed = parse_elevation(props["ele"])
+                if parsed is None:
+                    del props["ele"]
+                    dropped_ele += 1
+                else:
+                    props["ele"] = parsed
+                    kept_ele += 1
+
+            dest_f.write(json.dumps(feature))
+            dest_f.write("\n")
+
     print(
         f"normalize-peaks: {total} features, {kept_ele} with usable ele, "
         f"{dropped_ele} unparseable ele dropped"

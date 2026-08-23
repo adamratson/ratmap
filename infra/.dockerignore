@@ -1,0 +1,5 @@
+# Build context is infra/ (see docker/README.md). Keep secrets and multi-GB build output
+# out of the image layers.
+.env
+dist/
+docker/README.md

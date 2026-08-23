@@ -66,19 +66,38 @@ echo "  bbox: $BBOX"
 echo "  basemap maxzoom=$BASEMAP_MAXZOOM, terrain maxzoom=$TERRAIN_MAXZOOM"
 echo
 
+# Extract to a temporary name, verify, and only then move into place.
+#
+# An interrupted `pmtiles extract` leaves a file of roughly the right *size* whose header
+# is still all zeros — it looks like a plausible artifact in `ls` and only fails on
+# "magic number not detected". One of those was nearly published: it survived because the
+# build was killed after writing tile data but before finalising the header. Nothing may
+# appear under its real name until it has passed verification.
+extract_verified() {
+  local source="$1" out="$2" maxzoom="$3"
+  local tmp="$out.building"
+
+  rm -f "$tmp"
+  pmtiles extract "$source" "$tmp" --bbox="$BBOX" --maxzoom="$maxzoom" $DRY_RUN
+  [ -n "$DRY_RUN" ] && return 0
+
+  if ! pmtiles verify "$tmp" >/dev/null 2>&1; then
+    echo "  FAILED verification: $(basename "$out") is not a valid PMTiles archive" >&2
+    rm -f "$tmp"
+    return 1
+  fi
+  mv "$tmp" "$out"
+  echo "  verified $(basename "$out") ($(du -h "$out" | cut -f1))"
+}
+
 echo "==> basemap"
-pmtiles extract "$BASEMAP_SOURCE" "$OUT_DIR/$REGION_ID-basemap.pmtiles" \
-  --bbox="$BBOX" --maxzoom="$BASEMAP_MAXZOOM" $DRY_RUN
+extract_verified "$BASEMAP_SOURCE" "$OUT_DIR/$REGION_ID-basemap.pmtiles" "$BASEMAP_MAXZOOM"
 
 echo "==> terrain"
-pmtiles extract "$TERRAIN_SOURCE" "$OUT_DIR/$REGION_ID-terrain.pmtiles" \
-  --bbox="$BBOX" --maxzoom="$TERRAIN_MAXZOOM" $DRY_RUN
+extract_verified "$TERRAIN_SOURCE" "$OUT_DIR/$REGION_ID-terrain.pmtiles" "$TERRAIN_MAXZOOM"
 
 if [ -z "$DRY_RUN" ]; then
   echo
-  for f in "$OUT_DIR"/*.pmtiles; do
-    pmtiles verify "$f" >/dev/null && echo "verified $(basename "$f") ($(du -h "$f" | cut -f1))"
-  done
   echo "Built $OUT_DIR"
   echo "Next: ./scripts/build-manifest.py, then ./scripts/upload.sh"
 fi

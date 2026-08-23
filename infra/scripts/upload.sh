@@ -40,6 +40,36 @@ done
 MANIFEST="$DIST_DIR/regions/manifest.json"
 if [ -f "$MANIFEST" ]; then
   require_cmd aws
+
+  # Refuse to silently unpublish a region.
+  #
+  # The manifest describes whatever is in dist/, and dist/ is disposable scratch — one
+  # `rm -rf infra/dist` and the next upload quietly drops every region that wasn't
+  # rebuilt, while its archives sit orphaned in the bucket. Nearly happened: a manifest
+  # naming only Montenegro was one command away from delisting Lochaber.
+  PUBLISHED_MANIFEST="$(mktemp)"
+  trap 'rm -f "$PUBLISHED_MANIFEST"' EXIT
+  if AWS_DEFAULT_REGION=auto aws s3 cp "s3://${R2_BUCKET}/regions/manifest.json" \
+       "$PUBLISHED_MANIFEST" --endpoint-url "https://${R2_ENDPOINT_HOST}" \
+       --no-progress >/dev/null 2>&1; then
+    MISSING="$(python3 - "$PUBLISHED_MANIFEST" "$MANIFEST" <<'PY'
+import json, sys
+def ids(path):
+    with open(path) as f:
+        return {r["id"] for r in json.load(f).get("regions", [])}
+print(" ".join(sorted(ids(sys.argv[1]) - ids(sys.argv[2]))))
+PY
+)"
+    if [ -n "$MISSING" ]; then
+      echo >&2
+      echo "REFUSING TO UPLOAD: this manifest would unpublish region(s): $MISSING" >&2
+      echo "Their archives are still in the bucket, but nobody could download them." >&2
+      echo "Rebuild them into dist/ first, or set ALLOW_UNPUBLISH=1 if that is intended." >&2
+      [ "${ALLOW_UNPUBLISH:-}" = "1" ] || exit 1
+      echo "ALLOW_UNPUBLISH=1 set — continuing." >&2
+    fi
+  fi
+
   echo "Uploading regions/manifest.json"
   AWS_DEFAULT_REGION=auto aws s3 cp "$MANIFEST" "s3://${R2_BUCKET}/regions/manifest.json" \
     --endpoint-url "https://${R2_ENDPOINT_HOST}" \

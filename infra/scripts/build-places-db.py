@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Build places.sqlite — the offline search index (C9: no geocoding API, ever).
 
-Input: one or more GeoJSON files of point features (places and peaks).
+Input: one or more **line-delimited** GeoJSON files of point features (places and peaks),
+as produced by normalize-peaks.py. Read a line at a time rather than `json.load`-ing each
+document: a continent's export is millions of features and the whole-document form costs
+~1.16 kB of Python objects per feature.
 Output: a SQLite DB with an FTS5 index over names.
 
 Schema note: FTS5 is used in `content=` (external content) mode, so names aren't stored
@@ -55,6 +58,21 @@ KIND_RANK = {
 }
 
 
+def stream_features(paths):
+    """Yield features one at a time from line-delimited GeoJSON files.
+
+    Never holds more than a single feature, so peak memory is set by what build()
+    accumulates (the rows list and the dedupe set) rather than by the size of the inputs.
+    """
+    for path in paths:
+        with open(path) as f:
+            for line in f:
+                # RFC8142 record separator — see the note in normalize-peaks.py.
+                line = line.lstrip("\x1e").strip()
+                if line:
+                    yield json.loads(line)
+
+
 def build(sources, dest):
     db = sqlite3.connect(dest)
     db.executescript(
@@ -78,46 +96,43 @@ def build(sources, dest):
 
     rows = []
     seen = set()
-    for src in sources:
-        with open(src) as f:
-            data = json.load(f)
-        for feature in data.get("features", []):
-            props = feature.get("properties", {})
-            name = props.get("name")
-            if not name or not isinstance(name, str):
-                continue
+    for feature in stream_features(sources):
+        props = feature.get("properties", {})
+        name = props.get("name")
+        if not name or not isinstance(name, str):
+            continue
 
-            classified = classify(props)
-            if classified is None:
-                continue
-            kind, population = classified
+        classified = classify(props)
+        if classified is None:
+            continue
+        kind, population = classified
 
-            geometry = feature.get("geometry") or {}
-            if geometry.get("type") != "Point":
-                continue
-            lon, lat = geometry["coordinates"][:2]
+        geometry = feature.get("geometry") or {}
+        if geometry.get("type") != "Point":
+            continue
+        lon, lat = geometry["coordinates"][:2]
 
-            # The same feature can appear in overlapping extracts; dedupe on
-            # name+rounded position rather than OSM id, which differs across sources.
-            key = (name, round(lat, 4), round(lon, 4), kind)
-            if key in seen:
-                continue
-            seen.add(key)
+        # The same feature can appear in overlapping extracts; dedupe on
+        # name+rounded position rather than OSM id, which differs across sources.
+        key = (name, round(lat, 4), round(lon, 4), kind)
+        if key in seen:
+            continue
+        seen.add(key)
 
-            ele = props.get("ele")
-            ele = float(ele) if isinstance(ele, (int, float)) else None
+        ele = props.get("ele")
+        ele = float(ele) if isinstance(ele, (int, float)) else None
 
-            rows.append(
-                (
-                    name,
-                    kind,
-                    lat,
-                    lon,
-                    ele,
-                    population or None,
-                    KIND_RANK.get(kind, 0) + min(population // 1000, 40),
-                )
+        rows.append(
+            (
+                name,
+                kind,
+                lat,
+                lon,
+                ele,
+                population or None,
+                KIND_RANK.get(kind, 0) + min(population // 1000, 40),
             )
+        )
 
     db.executemany(
         "INSERT INTO places (name, kind, lat, lon, ele, population, rank)"

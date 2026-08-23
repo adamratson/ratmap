@@ -65,8 +65,13 @@ echo "  interval: ${CONTOUR_INTERVAL} m (index every ${INDEX_EVERY} m), zoom ${C
 echo
 
 # Copernicus tiles are 1°x1°, named by their south-west corner.
+#
+# Only cells containing land are published, so an all-ocean cell legitimately 404s.
+# Availability is checked up front and reported, rather than left to surface as a GDAL
+# "Can't open ... Skipping it" warning buried in the output — a genuinely missing *land*
+# tile would leave a silent hole in the contours, and that needs to be obvious.
 echo "==> resolving Copernicus GLO-30 tiles"
-python3 - "$WEST" "$SOUTH" "$EAST" "$NORTH" > "$WORK_DIR/tiles.txt" <<'PY'
+python3 - "$WEST" "$SOUTH" "$EAST" "$NORTH" > "$WORK_DIR/candidates.txt" <<'PY'
 import math, sys
 west, south, east, north = (float(v) for v in sys.argv[1:5])
 base = "https://copernicus-dem-30m.s3.amazonaws.com"
@@ -75,9 +80,27 @@ for lat in range(math.floor(south), math.ceil(north)):
         ns = f"{'N' if lat >= 0 else 'S'}{abs(lat):02d}"
         ew = f"{'W' if lon < 0 else 'E'}{abs(lon):03d}"
         name = f"Copernicus_DSM_COG_10_{ns}_00_{ew}_00_DEM"
-        print(f"/vsicurl/{base}/{name}/{name}.tif")
+        print(f"{ns}_{ew}\t{base}/{name}/{name}.tif")
 PY
-wc -l < "$WORK_DIR/tiles.txt" | xargs echo "  tiles:"
+
+: > "$WORK_DIR/tiles.txt"
+missing=()
+while IFS=$'\t' read -r label url; do
+  if curl -sfI --max-time 20 "$url" >/dev/null 2>&1; then
+    echo "/vsicurl/$url" >> "$WORK_DIR/tiles.txt"
+  else
+    missing+=("$label")
+  fi
+done < "$WORK_DIR/candidates.txt"
+
+echo "  usable tiles: $(wc -l < "$WORK_DIR/tiles.txt" | tr -d ' ') of $(wc -l < "$WORK_DIR/candidates.txt" | tr -d ' ')"
+if [ "${#missing[@]}" -gt 0 ]; then
+  echo "  not published (expected for all-ocean cells): ${missing[*]}"
+fi
+if [ ! -s "$WORK_DIR/tiles.txt" ]; then
+  echo "No DEM tiles available for this bbox — nothing to contour." >&2
+  exit 1
+fi
 
 gdalbuildvrt -input_file_list "$WORK_DIR/tiles.txt" "$WORK_DIR/dem.vrt" >/dev/null
 

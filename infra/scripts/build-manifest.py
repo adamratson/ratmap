@@ -53,8 +53,14 @@ def zoom_range(path):
         header = json.loads(out)
         return header.get("minzoom"), header.get("maxzoom")
     except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as err:
-        print(f"  ! could not read zoom range from {path.name}: {err}", file=sys.stderr)
-        return None, None
+        # Hard failure, not a warning. An unreadable header is how a corrupt archive
+        # presents itself — an interrupted `pmtiles extract` leaves a plausibly-sized file
+        # whose header is all zeros. Publishing it would put a broken download in the
+        # catalogue, so refuse to write a manifest describing it at all.
+        raise SystemExit(
+            f"FAIL: {path.name} is not a readable PMTiles archive ({err}).\n"
+            f"      Rebuild it; do not publish this manifest."
+        )
 
 
 def sha256(path, chunk=1 << 20):

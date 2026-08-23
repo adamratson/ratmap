@@ -1,0 +1,61 @@
+# Planet-scale runs of the infra/ pipeline.
+#
+#   cd infra/docker
+#   docker compose build
+#   docker compose run --rm infra doctor          # check the box can take it
+#   docker compose run --rm infra global all      # the whole planet (days)
+#
+# Long runs want to survive a closed terminal:
+#   docker compose run -d --name ratmap-global infra global all
+#   docker logs -f ratmap-global
+#
+services:
+  infra:
+    build:
+      context: ..                 # infra/ — see infra/.dockerignore
+      dockerfile: docker/Dockerfile
+    image: ratmap-infra:latest
+    init: true                    # so ctrl-C actually reaps osmium/tippecanoe children
+
+    volumes:
+      # Scratch + the 85 GB Geofabrik cache. A named volume lives inside the Docker VM's
+      # disk image, which is the fast option but means the VM's disk must be big enough —
+      # on Docker Desktop raise it to 250 GB+ (Settings -> Resources -> Disk image size).
+      #
+      # To put it on an external disk instead, replace with a bind mount:
+      #   - /Volumes/BigDisk/ratmap-work:/work
+      # Correct, and survives `docker volume prune`, but VirtioFS is markedly slower for
+      # the multi-GB sequential reads osmium does.
+      - ratmap-work:/work
+
+      # Build output, straight into the repo's infra/dist so upload.sh and the app see it.
+      - ../dist:/opt/ratmap/infra/dist
+
+      # Iterate on the pipeline scripts without rebuilding the image. Comment out to run
+      # strictly what was baked in at build time.
+      - ../scripts:/opt/ratmap/infra/scripts:ro
+      - ../regions.json:/opt/ratmap/infra/regions.json:ro
+
+    # R2 credentials for upload.sh. Optional: absent, every stage except upload still
+    # runs. Injected as environment rather than bind-mounted, because a bind mount of a
+    # file that doesn't exist yet silently becomes a directory.
+    env_file:
+      - path: ../.env
+        required: false
+
+    environment:
+      # Zoom ceilings and contour settings are the build scripts' own defaults; override
+      # here (or with `-e`) when a run wants something else. Uncommenting these changes
+      # artifact sizes a lot — check the tables in infra/README.md first.
+      # WORLD_CATALOG_MAXZOOM: "5"
+      # TERRAIN_MAXZOOM: "4"
+      # REGION_BASEMAP_MAXZOOM: "15"
+      # REGION_TERRAIN_MAXZOOM: "11"
+
+      # Progress bars are noise in `docker logs`; set to 1 when watching interactively.
+      RATMAP_CURL_PROGRESS: "${RATMAP_CURL_PROGRESS:-}"
+
+    stop_grace_period: 60s
+
+volumes:
+  ratmap-work:

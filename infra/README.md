@@ -38,9 +38,15 @@ All were run for real (2026-08-21) against small/coarse inputs to verify the com
 actually correct, not just plausible — see the comments at the top of each script for what
 was verified and the exact numbers.
 
-**`build-peaks.sh` and `build-places.sh` default to one small region (Scotland)**, not a
-global run — see the comment in `build-peaks.sh` for how to point them at global sources.
-That's a much bigger download (tens of GB); don't kick it off by accident.
+**`build-peaks.sh` and `build-places.sh` derive their inputs from `regions.json`** — the
+deduplicated union of every region's `osmExtract` (see `region-osm-sources.py`). Both
+produce single *global* artifacts that have to cover whatever the catalogue publishes, so
+deriving the list means adding a region can't silently ship a map with no summits and no
+search. Re-run both whenever you add a region.
+
+Override with `PEAKS_SOURCE_URLS` / `PLACES_SOURCE_URLS` for a genuinely global build off
+Geofabrik's continent extracts — that's 85 GB of source; don't kick it off by accident.
+`docker/` packages exactly that run — see [Running the whole planet](#running-the-whole-planet-docker).
 
 `build-peaks.sh` normalizes OSM's free-text `ele` into a real number
 (`normalize-peaks.py` — the raw tag includes values like `~340` and `1141m`) and asserts
@@ -107,7 +113,33 @@ real browser (206s on all three, no console errors).
 - Elevation assertions run inside `build-peaks.sh` but are **not wired into CI** — nothing
   runs the data pipeline on a schedule or on push, so a regression is only caught when
   someone rebuilds by hand
-- A global (rather than Scotland-only) peaks/places build
+- A global (rather than Scotland-only) peaks/places build has **not been run**. The
+  toolchain and driver for it exist (`docker/`, below); what's missing is someone
+  spending the days and the 85 GB of downloads
+
+## Running the whole planet (Docker)
+
+Everything above is sized for a laptop and the sources `regions.json` implies. For the
+global peaks/places build the README keeps pointing at, `docker/` has a pinned toolchain
+image and a driver that runs the whole pipeline against Geofabrik's eight continent
+extracts:
+
+```sh
+cd docker
+docker compose build
+docker compose run --rm infra doctor       # tool versions + resource preflight
+docker compose run --rm infra global all   # days; ~85 GB downloaded once
+```
+
+It runs these same scripts with these same defaults — it adds a resumable, md5-verified
+source cache (otherwise peaks and places each download 85 GB, with no resume), a
+preflight that refuses to start on a box that can't finish, and per-stage logs.
+
+Two things worth knowing before starting: it needs **~150 GB of disk but only ~4 GB of
+RAM** (disk is the binding constraint — the GeoJSON intermediates are line-delimited and
+streamed, so memory doesn't scale with the planet), and **contours stay per-region** — a
+planet contour build is the C14 scratch-space problem, not something the image hides.
+Details and the escape hatches are in `docker/README.md`.
 
 ## Offline regions (Phase 3)
 
@@ -129,12 +161,44 @@ artifact kind needs no code change anywhere — that is what C16's open-ended sc
 `upload.sh` deliberately uploads the manifest **last**: a manifest listing artifacts that
 aren't in the bucket yet would offer the user a download that 404s.
 
+### Three guards against publishing something broken
+
+All three exist because the corresponding failure actually happened during the Montenegro
+build (2026-08-23):
+
+- **Extraction is atomic.** `build-region.sh` extracts to `<name>.building`, runs
+  `pmtiles verify`, and only then renames. An interrupted `pmtiles extract` leaves a file
+  of exactly the right *size* whose header is all zeros — it looks fine in `ls` and only
+  fails on "magic number not detected".
+- **The manifest fails closed.** `build-manifest.py` aborts if it can't read an archive's
+  PMTiles header, rather than recording `zNone-None` and carrying on. That is precisely
+  what it did for the corrupt terrain file, one command away from publishing it.
+- **`upload.sh` refuses to unpublish.** `dist/` is disposable scratch; one `rm -rf` and
+  the next manifest silently delists every region that wasn't rebuilt, orphaning its
+  archives in the bucket. The uploader diffs against the published manifest and stops.
+  Override with `ALLOW_UNPUBLISH=1` when a delist is genuinely intended.
+
+Source extracts are cached in `infra/.cache/osm` (gitignored) and downloaded with retry
+and resume — Geofabrik drops connections, and a bare `curl` gave up on the first blip
+partway through a 320 MB transfer. Running peaks then places re-downloads nothing.
+
 Measured sizes (2026-08-21/22), useful for choosing maxzooms:
 
-| Region | basemap | terrain | contours |
-|---|---|---|---|
-| lochaber | z13 → 4.9 MB, z14 → 8.4 MB, **z15 → 14 MB** | z11 → 18 MB | z11–14 → 21 MB |
-| scotland | z12 → 84 MB, z13 → 175 MB | z10 → 107 MB, z11 → 340 MB, z12 → 1.1 GB | untested, expect large |
+| Region | area | basemap | terrain | contours |
+|---|---|---|---|---|
+| lochaber | 0.6 sq° | z13 → 4.9 MB, z14 → 8.4 MB, **z15 → 14 MB** | z11 → 18 MB | z11–14 → 21 MB |
+| montenegro | 3.6 sq° | z15 → 113 MB | z11 → 67 MB | z11–14 → see below |
+| scotland | 51 sq° | z12 → 84 MB, z13 → 175 MB | z10 → 107 MB, z11 → 340 MB, z12 → 1.1 GB | untested, expect large |
+
+Size scales with area, so dry-run (`build-region.sh <id> --dry-run`) before committing to
+a large one. Contours are the slowest step by far: the intermediate GeoJSON is roughly
+300 MB per square degree before tiling.
+
+Copernicus only publishes DEM tiles for cells containing land, so an all-ocean cell 404s.
+`build-contours.sh` checks availability up front and prints which cells were skipped —
+Montenegro legitimately skips N41/E018 (open Adriatic). A missing *land* tile would leave
+a silent hole in the contours, so this is reported rather than left to a buried GDAL
+warning.
 
 Raster terrain grows far faster per zoom level than the vector basemap — hence the
 different default ceilings (`REGION_BASEMAP_MAXZOOM`, `REGION_TERRAIN_MAXZOOM`).

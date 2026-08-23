@@ -32,3 +32,6 @@ test-results
 playwright-report
 blob-report
 .playwright
+
+# Cached OSM source extracts (hundreds of MB)
+infra/.cache

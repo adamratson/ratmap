@@ -1,20 +1,29 @@
 {
-  "comment": "Region definitions for the offline download catalogue (Phase 3). bbox is [west, south, east, north]. Keep ids URL-safe and stable — they become part of artifact filenames, which are also TileSourceRegistry keys (C3).",
+  "comment": "Region definitions for the offline download catalogue (Phase 3). bbox is [west, south, east, north]. Keep ids URL-safe and stable — they become part of artifact filenames, which are also TileSourceRegistry keys (C3). osmExtract is the Geofabrik source covering the region; build-peaks.sh and build-places.sh derive their inputs from the union of these, so publishing a region automatically gets it summits and search rather than silently shipping a map with neither.",
   "regions": [
     {
       "id": "lochaber",
       "name": "Lochaber & Ben Nevis",
-      "bbox": [-5.6, 56.5, -4.6, 57.1]
+      "bbox": [-5.6, 56.5, -4.6, 57.1],
+      "osmExtract": "https://download.geofabrik.de/europe/united-kingdom/scotland-latest.osm.pbf"
     },
     {
       "id": "cairngorms",
       "name": "Cairngorms",
-      "bbox": [-4.4, 56.8, -2.8, 57.4]
+      "bbox": [-4.4, 56.8, -2.8, 57.4],
+      "osmExtract": "https://download.geofabrik.de/europe/united-kingdom/scotland-latest.osm.pbf"
     },
     {
       "id": "scotland",
       "name": "Scotland",
-      "bbox": [-8.7, 54.6, -0.7, 61.0]
+      "bbox": [-8.7, 54.6, -0.7, 61.0],
+      "osmExtract": "https://download.geofabrik.de/europe/united-kingdom/scotland-latest.osm.pbf"
+    },
+    {
+      "id": "montenegro",
+      "name": "Montenegro",
+      "bbox": [18.4, 41.8, 20.4, 43.6],
+      "osmExtract": "https://download.geofabrik.de/europe/montenegro-latest.osm.pbf"
     }
   ]
 }

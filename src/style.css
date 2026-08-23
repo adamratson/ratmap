@@ -199,6 +199,14 @@ body,
   cursor: pointer;
 }
 
+/* Repeat count for deduped cards; empty (and so invisible) until the second occurrence. */
+.status-count {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
 .status-dismiss {
   position: absolute;
   top: 0.25rem;
@@ -314,6 +322,81 @@ body,
   font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
+}
+
+.regions-intro {
+  margin-bottom: 0.5rem !important;
+}
+
+.regions-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.region-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.region-row:last-child {
+  border-bottom: 0;
+}
+
+.region-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.region-name {
+  font-size: 0.9rem;
+  color: var(--slate-900);
+}
+
+.region-meta {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.region-action {
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.region-action.danger {
+  background: #e2e8f0;
+  color: #b91c1c;
+}
+
+/* Spans both grid columns so the bar runs the full row width. */
+.region-progress {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.region-progress[hidden] {
+  display: none;
+}
+
+.region-progress-bar {
+  width: 0%;
+  height: 100%;
+  background: #2563eb;
+  transition: width 0.2s linear;
 }
 
 .places-empty {

@@ -75,9 +75,6 @@ vi.mock('maplibre-gl', () => ({
   Marker: MarkerMock,
 }));
 
-const mountOpfsSpikeSpy = vi.hoisted(() => vi.fn());
-vi.mock('./opfs-spike', () => ({ mountOpfsSpike: mountOpfsSpikeSpy }));
-
 const bootstrapStorageMock = vi.hoisted(() => vi.fn());
 const isStandaloneMock = vi.hoisted(() => vi.fn());
 vi.mock('./storage', () => ({
@@ -106,7 +103,6 @@ beforeEach(() => {
   addProtocolSpy.mockClear();
   for (const key of Object.keys(handlers)) delete handlers[key];
   mapInstances.length = 0;
-  mountOpfsSpikeSpy.mockClear();
   bootstrapStorageMock.mockReset();
   isStandaloneMock.mockReset();
   isStandaloneMock.mockReturnValue(false);
@@ -164,16 +160,6 @@ describe('app bootstrap', () => {
     expect(document.querySelector('.status-card.error')?.textContent).toContain('boom');
   });
 
-  it('wires the OPFS spike harness with the registry protocol and map instance', async () => {
-    bootstrapStorageMock.mockResolvedValue({ supported: false });
-
-    await loadMain();
-    handlers.load?.[0]?.({});
-
-    expect(mountOpfsSpikeSpy).toHaveBeenCalledTimes(1);
-    expect(mountOpfsSpikeSpy.mock.calls[0]?.[1].map).toBeInstanceOf(MapMock);
-  });
-
   it.each([
     [{ supported: false }, /unsupported/i],
     [{ supported: true, persisted: true }, /granted/i],
@@ -203,6 +189,35 @@ describe('app bootstrap', () => {
     expect(notice.hidden).toBe(false);
     expect(notice.textContent).toMatch(/detail/i);
     expect(notice.title).toMatch(/offline region/i);
+  });
+
+  it('reports lost connection once, not once per failed tile', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: false });
+    await loadMain();
+
+    // MapLibre fires one error per tile; offline that is dozens within a second.
+    for (let i = 0; i < 12; i++) {
+      handlers.error?.[0]?.({ error: new TypeError('Failed to fetch') });
+    }
+
+    const cards = document.querySelectorAll('.status-card.warn');
+    const offlineCards = [...cards].filter((c) => /no connection/i.test(c.textContent ?? ''));
+    expect(offlineCards).toHaveLength(1);
+    expect(offlineCards[0].querySelector('.status-count')?.textContent).toBe('×12');
+  });
+
+  it('distinguishes a real map fault from lost connection', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: false });
+    await loadMain();
+
+    // A genuine style/data bug must not be disguised as "no connection" — that would hide
+    // real faults behind a reassuring message.
+    handlers.error?.[0]?.({ error: new TypeError("layer 'x' does not exist") });
+
+    expect(document.querySelector('.status-card.error')?.textContent).toMatch(/does not exist/);
+    expect(document.querySelector('.status-card.warn')?.textContent ?? '').not.toMatch(
+      /no connection/i,
+    );
   });
 
   it('walks iOS users through Add to Home Screen when storage is not persisted (C2)', async () => {

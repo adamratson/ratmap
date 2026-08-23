@@ -22,7 +22,13 @@ import { bootstrapStorage, isStandalone } from './storage';
 import { listPlaces, savePlace, deletePlace, type SavedPlace } from './saved-places';
 import { PlacesSearch, type SearchResult } from './search';
 import { describeDetailLimit } from './detail-limit';
-import { mountOpfsSpike } from './opfs-spike';
+import {
+  bestAvailableZoom,
+  fetchManifest,
+  loadCachedManifest,
+  type Region,
+} from './regions/manifest';
+import { renderRegionsSheet, restoreDownloadedRegions } from './regions/regions-ui';
 
 // C17: the registry is the single owner of addProtocol/Protocol.add for the whole app.
 const registry = TileSourceRegistry.install();
@@ -39,6 +45,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div id="hud">
     <button id="locate-btn" type="button" title="Show my location">Locate</button>
     <button id="places-btn" type="button" title="Saved places">Saved</button>
+    <button id="regions-btn" type="button" title="Offline regions">Offline</button>
   </div>
   <div id="detail-notice" hidden></div>
   <div id="status-panel"></div>
@@ -97,25 +104,109 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }));
 
+// Debug handle. Lets the e2e suite assert on real style state (which layers and sources
+// actually exist) rather than inferring it from screenshots, and is genuinely useful from
+// a devtools console. Read-only by convention — nothing in the app reads it back.
+(window as unknown as { __ratmapMap: maplibregl.Map }).__ratmapMap = map;
+
+/**
+ * A tile request that failed because the network is unreachable, as opposed to a genuine
+ * map/style fault.
+ *
+ * Deliberately keyed off the error rather than `navigator.onLine`: that flag reports the
+ * OS link state, not whether requests actually succeed, so it stays `true` behind a
+ * captive portal, a dead uplink, or a dropped connection mid-hike — precisely this app's
+ * situation. Verified during Phase 3 testing, where a fully offline map still reported
+ * `navigator.onLine === true` and produced the wrong banner.
+ */
+export function isNetworkFailure(error: Error | undefined): boolean {
+  // Matched on message, not on `name === 'TypeError'`: a real style or data bug throws
+  // TypeErrors too, and misreporting those as "no connection" would hide actual faults.
+  // These three messages are how Chrome, Firefox and Safari respectively report a failed
+  // fetch.
+  return /failed to fetch|networkerror|load failed/i.test(error?.message ?? '');
+}
+
 map.on('error', (e) => {
-  showStatus(`Map error: ${e.error?.message ?? 'unknown'} — see console`, 'error');
   console.error('MapLibre error', e.error);
+
+  // MapLibre raises one error per failed tile, so an offline map produces dozens within a
+  // second. Reporting each as its own card buried the map behind a wall of identical
+  // banners — observed during the Phase 3 offline test, hence the dedupe keys.
+  //
+  // Losing signal is an expected state for this app, not a fault: say it once, plainly.
+  if (isNetworkFailure(e.error)) {
+    showStatus(
+      'No connection — showing downloaded maps only. Areas without a downloaded region will be blank.',
+      'warn',
+      'offline-tiles',
+    );
+    return;
+  }
+
+  showStatus(`Map error: ${e.error?.message ?? 'unknown'} — see console`, 'error', 'map-error');
 });
 
 map.on('load', () => {
   addPeaksLayer(map, registry);
-  mountOpfsSpike(statusPanel, { protocol: registry.protocol, map });
+  // Downloaded regions are restored without any user action, so a cold offline launch
+  // renders from OPFS immediately (Phase 3 acceptance).
+  void restoreRegions();
 });
+
+async function restoreRegions(): Promise<void> {
+  try {
+    const manifest = await fetchManifest();
+    const restored = await restoreDownloadedRegions(map, registry, manifest.regions);
+    applyAvailableDetail(restored);
+  } catch {
+    // Offline with no cached catalogue is normal and not an error worth surfacing:
+    // any already-downloaded region still needs restoring from OPFS.
+    await restoreFromOpfsWithoutManifest();
+  }
+}
+
+/**
+ * Set the detail ceiling from whatever regions are actually present.
+ *
+ * Assigned unconditionally rather than only raised: deleting a region has to lower it
+ * again, or the app would keep claiming detail it no longer has.
+ */
+function applyAvailableDetail(regions: Region[]): void {
+  maxDataZoom = bestAvailableZoom(regions, BASEMAP_MAX_ZOOM);
+  renderDetailLimit();
+}
+
+/**
+ * Fallback restore for a cold *offline* start: the manifest lives on the network, but the
+ * archives are already local. Without this, the very scenario Phase 3 exists for — no
+ * signal, relaunch, expect your downloaded region — would show the blurry global map.
+ */
+async function restoreFromOpfsWithoutManifest(): Promise<void> {
+  const cached = loadCachedManifest();
+  if (!cached) return;
+  const restored = await restoreDownloadedRegions(map, registry, cached.regions);
+  applyAvailableDetail(restored);
+}
 
 // --- Detail-limit notice (§8.2 catalog-only makes this reachable) --------------------
 
 const detailNotice = document.querySelector<HTMLDivElement>('#detail-notice')!;
 
+// Raised once a downloaded region is loaded: the notice must reflect the best data
+// actually available, not the global catalogue's ceiling, or it would keep claiming
+// "limited detail" over a region the user has just downloaded.
+//
+// Derived from the artifacts' real PMTiles zoom ranges rather than a constant — a
+// hardcoded guess drifts from whatever the pipeline last built and made the notice fire
+// over a fully-downloaded region.
+let maxDataZoom = BASEMAP_MAX_ZOOM;
+
 map.on('zoom', renderDetailLimit);
 map.on('load', renderDetailLimit);
 
 function renderDetailLimit(): void {
-  const state = describeDetailLimit(map.getZoom(), BASEMAP_MAX_ZOOM);
+  const state = describeDetailLimit(map.getZoom(), maxDataZoom);
   detailNotice.hidden = !state.overzoomed;
   if (!state.overzoomed) return;
 
@@ -187,6 +278,20 @@ function hideSheet(): void {
 
 document.querySelector('#places-btn')!.addEventListener('click', () => {
   void showPlacesSheet();
+});
+
+document.querySelector('#regions-btn')!.addEventListener('click', () => {
+  void renderRegionsSheet({
+    map,
+    registry,
+    container: sheet,
+    onStatus: (message, kind) => {
+      showStatus(message, kind);
+      // A completed download (or a delete) changes what detail is available, so
+      // re-derive the ceiling from what is actually on disk rather than assuming.
+      void restoreRegions();
+    },
+  });
 });
 
 async function showPlacesSheet(): Promise<void> {
@@ -435,12 +540,44 @@ async function renderStorageStatus(): Promise<void> {
 
 // --- Status panel -------------------------------------------------------------------
 
-function showStatus(message: string, kind: 'ok' | 'warn' | 'error'): HTMLDivElement {
+/**
+ * @param dedupeKey when given, repeat calls reuse the existing card and show a repeat
+ *   count instead of stacking duplicates. Needed because MapLibre emits one error per
+ *   failed tile — without this, going offline buries the map under identical banners.
+ */
+function showStatus(
+  message: string,
+  kind: 'ok' | 'warn' | 'error',
+  dedupeKey?: string,
+): HTMLDivElement {
+  if (dedupeKey) {
+    const existing = statusPanel.querySelector<HTMLDivElement>(
+      `.status-card[data-key="${dedupeKey}"]`,
+    );
+    if (existing) {
+      const count = Number(existing.dataset.count ?? '1') + 1;
+      existing.dataset.count = String(count);
+      existing.querySelector('.status-count')!.textContent = `×${count}`;
+      return existing;
+    }
+  }
+
   const el = document.createElement('div');
   el.className = `status-card ${kind}`;
+  if (dedupeKey) {
+    el.dataset.key = dedupeKey;
+    el.dataset.count = '1';
+  }
+
   const text = document.createElement('p');
   text.textContent = message;
   el.append(text);
+
+  if (dedupeKey) {
+    const count = document.createElement('span');
+    count.className = 'status-count';
+    el.append(count);
+  }
 
   const dismiss = document.createElement('button');
   dismiss.type = 'button';

@@ -7,7 +7,7 @@ bucket itself (`SETUP.md`, needs your Cloudflare account).
 ## Prerequisites
 
 ```sh
-brew install tippecanoe pmtiles osmium-tool
+brew install tippecanoe pmtiles osmium-tool gdal   # gdal only needed for contours
 ```
 
 `aws`/`curl` are assumed present.
@@ -108,3 +108,39 @@ real browser (206s on all three, no console errors).
   runs the data pipeline on a schedule or on push, so a regression is only caught when
   someone rebuilds by hand
 - A global (rather than Scotland-only) peaks/places build
+
+## Offline regions (Phase 3)
+
+Region definitions live in `regions.json` (`id`, display `name`, `bbox`). The id becomes
+part of every artifact filename, which is also the OPFS key and the TileSourceRegistry key
+— so ids must stay unique and stable (C3).
+
+```sh
+./scripts/build-region.sh lochaber --dry-run   # size it first
+./scripts/build-region.sh lochaber             # extract basemap + terrain
+./scripts/build-contours.sh lochaber           # contours (needs gdal)
+python3 ./scripts/build-manifest.py            # regenerate regions/manifest.json
+./scripts/upload.sh                            # archives, then the manifest
+```
+
+`build-manifest.py` picks up whatever artifacts exist in a region's directory, so a new
+artifact kind needs no code change anywhere — that is what C16's open-ended schema buys.
+
+`upload.sh` deliberately uploads the manifest **last**: a manifest listing artifacts that
+aren't in the bucket yet would offer the user a download that 404s.
+
+Measured sizes (2026-08-21/22), useful for choosing maxzooms:
+
+| Region | basemap | terrain | contours |
+|---|---|---|---|
+| lochaber | z13 → 4.9 MB, z14 → 8.4 MB, **z15 → 14 MB** | z11 → 18 MB | z11–14 → 21 MB |
+| scotland | z12 → 84 MB, z13 → 175 MB | z10 → 107 MB, z11 → 340 MB, z12 → 1.1 GB | untested, expect large |
+
+Raster terrain grows far faster per zoom level than the vector basemap — hence the
+different default ceilings (`REGION_BASEMAP_MAXZOOM`, `REGION_TERRAIN_MAXZOOM`).
+
+**Basemap defaults to z15, not z13.** Paths carry `min_zoom: 14` in the Protomaps schema,
+so a z13 cutout generalises almost all of them away — decoding a z13 tile over Ben Nevis
+turned up exactly one path feature. On a walking map that is the wrong thing to drop, and
+the extra detail is cheap (4.9 MB → 14 MB for Lochaber). z15 is also the source archive's
+own maximum.

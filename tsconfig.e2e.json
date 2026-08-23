@@ -1,0 +1,11 @@
+{
+  // The app's tsconfig deliberately scopes `include` to `src`, so `npm run build` never
+  // typechecks test tooling. This picks up the rest, and is what `npm run typecheck`
+  // runs alongside it — otherwise e2e type errors only surface at test runtime.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["e2e", "playwright.config.ts", "vite.config.ts"]
+}

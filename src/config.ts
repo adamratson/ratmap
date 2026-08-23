@@ -5,8 +5,10 @@
 // R2_BASE defaults to the bucket's public .r2.dev development URL. That host is
 // rate-limited and explicitly not for production traffic — Phase 3 swaps in a custom
 // domain by setting VITE_R2_BASE_URL, no code change needed here.
-const R2_BASE =
+export const R2_BASE_URL =
   import.meta.env.VITE_R2_BASE_URL ?? 'https://pub-1a40001ed7db4ec58589d03151a30bad.r2.dev';
+
+const R2_BASE = R2_BASE_URL;
 
 // C13: artifact filenames carry their build date, so a refresh is an explicit, reviewable
 // change here rather than a silent "latest" that can shift schema under us. C3: these are

@@ -101,6 +101,13 @@ background geolocation and no background downloads — accepted, see §7.
    degrades over a multi-GB transfer as any write cache fills. Not representative until
    tested with a file in the hundreds of MB to low GB range.
 
+**The Phase 0 OPFS spike harness (the "pick a local .pmtiles file" picker) was removed on
+2026-08-23.** It existed to prove items 2 and 4 above before a real downloader existed;
+Phase 3's region downloader now does the same OPFS → `FileSource` → `Protocol.add()` path
+for real, at size, with resume — and is covered by the Playwright suite. Leaving debug
+scaffolding in the shipping UI was just clutter. The spike results recorded above stand;
+re-running them now means downloading a region.
+
 If (1) fails, fall back to AWS Open Data terrain tiles
 (`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`) for online
 hillshade and accept that offline terrain needs a different encoding.
@@ -110,15 +117,15 @@ hillshade and accept that offline terrain needs a different encoding.
 ## 3. Architecture
 
 **Everything is a static file.** One R2 bucket (CORS per C4; custom domain deferred to
-Phase 3 — R2's own `*.r2.dev` public bucket URL is fine through Phase 1/2 dev), plus
+Phase 6 — R2's own `*.r2.dev` public bucket URL is fine through Phase 1/2 dev), plus
 static app hosting. **Deployed:** GitHub Pages at `<user>.github.io/ratmap`, not the
 Cloudflare Pages this section originally named — decided during Phase 0, no material
 difference to this architecture (still static hosting, still zero compute). Zero runtime
-compute through Phase 4.
+compute through Phase 3.
 
 **§8.2 resolved: catalog-only**, not full planet (2026-08-21). No `planet-<version>.pmtiles`.
 Instead a small low-zoom world extract for "pan anywhere at low detail," plus regions built
-on demand (Phase 4). Cuts R2 storage from ~120 GB/~$3/month to a rounding error; the
+on demand (Phase 3). Cuts R2 storage from ~120 GB/~$3/month to a rounding error; the
 tradeoff is panning outside a downloaded region shows nothing useful above the low zoom cap
 until that region is extracted.
 
@@ -141,7 +148,7 @@ is the only place `Protocol.add()` is called. Remote archives use `FetchSource` 
 registered under a unique key (C3). Basemap, terrain and contours all route through it.
 Build in Phase 2; every later phase reuses it.
 
-**Runtime servers: zero through Phase 4.** Valhalla appears in Phase 5 for route
+**Runtime servers: zero through Phase 3.** Valhalla appears in Phase 4 for route
 computation only.
 
 ---
@@ -168,11 +175,11 @@ npm 11.12.1.
 Separate repo or `infra/`. Scripted and re-runnable on data refresh. **Identical to the
 native plan except for CORS.**
 
-- R2 bucket, **no custom domain yet** (use the bucket's `*.r2.dev` URL — Phase 3 swaps in
+- R2 bucket, **no custom domain yet** (use the bucket's `*.r2.dev` URL — Phase 6 swaps in
   a custom domain), **no Worker**, CORS per C4.
 - **Catalog-only (§8.2, decided 2026-08-21):** `pmtiles extract` a low-zoom-capped world
   cutout from a pinned Protomaps published build — not the full ~120 GB planet. Full
-  per-region detail comes from Phase 4's on-demand extracts, not this file.
+  per-region detail comes from Phase 3's on-demand extracts, not this file.
 - `peaks-global.pmtiles`: OSM extract → filter `natural=peak`, `natural=volcano`,
   `natural=saddle`, `mountain_pass=yes` → keep `name`, `ele`, `prominence`, `wikidata` →
   `tippecanoe`. Prefer OSM's surveyed `ele` over DEM sampling; it matches signage. Drive
@@ -222,28 +229,18 @@ checked in a real browser (headless Chromium against the production build). Note
   needs COOP/COEP headers, which GitHub Pages cannot set.
 - **`places.sqlite` ships in `public/`** and is service-worker precached, rather than
   living in OPFS as §3 describes. That is what makes search work on a cold offline start
-  *before* any region download exists. Phase 4 should move it to OPFS per region and leave
+  *before* any region download exists. Phase 3 should move it to OPFS per region and leave
   this as the no-region-yet fallback.
-- **Offline tile rendering is not durably solved yet, and cannot be until Phase 4.** In the
+- **Offline tile rendering is not durably solved yet, and cannot be until Phase 3.** In the
   offline cold-start test the basemap did render labelled tiles — but from the browser's
   ordinary HTTP cache, which is evictable and not a guarantee. Hillshade and peaks did not
   render at all. Genuine offline tiles require the OPFS region downloader (C5, C12). Treat
-  the tile half of this acceptance criterion as *pending Phase 4*, not met.
+  the tile half of this acceptance criterion as *pending Phase 3*, not met.
 - Still to verify **on a real device**: this was all checked on desktop. The iPhone run
   (installed to Home Screen, Airplane Mode, force-quit, relaunch) and the Android Chrome
   equivalent have not been done.
 
-### Phase 3 — Launch
-
-Small, compared to the native path — no review, no store, no privacy manifest.
-
-- Deploy to production domain; verify the manifest, icons and iOS splash screens.
-- Lighthouse PWA audit clean.
-- Verify update flow: a new SW version must not strand a user mid-download.
-
-**Acceptance:** a stranger can reach the URL, install it, and use it offline.
-
-### Phase 4 — Offline regions
+### Phase 3 — Offline regions
 
 - Build pipeline (offline, not a service): `pmtiles extract` per region → R2, plus a
   static versioned manifest of name, bbox, per-artifact size, build date (C16). Unique
@@ -260,7 +257,88 @@ Small, compared to the native path — no review, no store, no privacy manifest.
 with hillshade and contours rendering entirely from OPFS. Kill the app mid-download and
 confirm it resumes rather than restarting.
 
-### Phase 5 — Route planning
+**Status (2026-08-23): built and desktop-verified, contours included.**
+
+Verified end-to-end in headless Chromium against the production build, using a small test
+region (`lochaber`, 44.1 MB — basemap z13 + terrain z11 + contours z11–14):
+
+- Download → all three artifacts land in OPFS at exactly their manifest sizes.
+- Offline cold relaunch → region renders **from OPFS at hiking zoom with no network**:
+  legible contours, streams, and named climbing features on Ben Nevis's north face
+  (Tower Gully, The Comb, North East Buttress) at a 200 m scale bar. The detail-limit
+  notice correctly stops showing, because region data now exists at that zoom.
+- Interrupt mid-download → 16.7 MB partial retained, the button becomes **Resume**, and
+  resuming completes rather than restarting.
+- The **C1 gate genuinely blocks**: with persistence denied the download refuses and
+  explains why. Confirmed by observing the refusal — headless Chromium will not grant
+  `persist()` (no site-engagement/install heuristic, and CDP `Browser.grantPermissions`
+  `durableStorage` reports success but changes nothing), so the *downloader itself* was
+  exercised with persistence stubbed in the harness.
+
+**Contours** come from Copernicus GLO-30 read as COG through GDAL's `/vsicurl`, so only
+the region's bbox is fetched rather than the global DEM. 10 m interval with every 5th
+(50 m) tagged as an index contour at generation time. Adding them required **no app
+change** — the manifest, downloader and layer code all iterate declared artifacts, which
+is exactly what C16 exists to buy.
+
+Seven real bugs found and fixed during verification:
+
+- Every failed tile posted its own status card, so going offline buried the map behind
+  dozens of identical banners. Errors are now deduplicated with a repeat count, and an
+  offline map reports once, plainly, instead of shouting per tile.
+- Interrupted writes stranded Chromium writable swap files (`<name>.N.crswap`) in OPFS —
+  6.4 MB leaked from a single cancelled download, silently consuming the storage this
+  feature exists to manage. Now aborted rather than closed on error, plus a sweep for
+  files stranded by a page teardown we don't control.
+- The offline banner keyed off `navigator.onLine`, which reported `true` on a fully
+  offline map, so the wrong message showed. It now keys off the fetch failure itself —
+  `navigator.onLine` reports the OS link state, not whether requests succeed, so it also
+  lies behind a captive portal or a dead uplink, which is this app's whole situation.
+- **Downloading a region turned the rest of the map grey.** Protomaps' `layers()` emits a
+  viewport-filling `background` layer; the region code copied all 71 layers, so each
+  region added its own background and painted flat `#cccccc` over the entire global map.
+  Region layers are now restricted to source-bound ones — a style needs exactly one
+  background, and the global basemap already supplies it.
+- **Hillshade painted over the labels.** Every region artifact was inserted at the peaks
+  layer, which stacks each on top of the last; artifacts load basemap → contours →
+  terrain, so relief ended up above the basemap's own labels and washed out the gully and
+  corrie names. Relief and contours now insert beneath the region's *own* first label
+  layer — region-scoped deliberately, since targeting the first label in the whole style
+  would bury the relief under the region's opaque fills instead.
+- **Index contours were never emphasised.** `build-contours.sh` tags them via SQLite,
+  which emits an integer `0/1` under the alias `idx`; the style read `index` compared to
+  `true`, matching neither the name nor the type, so every contour silently drew at the
+  thin weight. Caught by reading the published tiles' own metadata rather than trusting
+  the code.
+- **Paths were effectively invisible** — both a data and a styling problem. Protomaps tags
+  paths with `min_zoom: 14`, so the region basemap's z13 ceiling generalised nearly all of
+  them away (decoding a z13 tile over Ben Nevis found exactly one path feature); and the
+  `light` flavour draws what remains as a 0.5 px `#ebebeb` hairline on a near-white
+  background. Region basemaps now build to z15 (4.9 MB → 14 MB for Lochaber, and z15 is
+  the source archive's own maximum), and paths get a dedicated cased, dashed layer with
+  tracks drawn solid and heavier than footpaths. On a walking map the paths are the single
+  most important feature on the sheet.
+
+Still open:
+
+- **On-device verification has still never been run** (iPhone install → Airplane Mode →
+  force-quit → relaunch; Android Chrome equivalent). Everything above is desktop.
+- Only `lochaber` is published. `cairngorms` and `scotland` are defined in
+  `infra/regions.json` but not built or uploaded. Scotland-scale contours are untested and
+  will be far larger — Lochaber alone is 21 MB for a 1°×0.6° box.
+- Contour interval/styling and the hillshade fade at high zoom are defensible defaults,
+  **not** the cartographic decision §8.3 still asks for.
+
+The manifest now records each artifact's real `minzoom`/`maxzoom`, read from its PMTiles
+header at build time. The app derives its detail ceiling from that rather than a hardcoded
+constant, which had drifted from the pipeline and made the "limited detail" notice fire
+over a fully-downloaded region — a warning that cries wolf is worse than none.
+
+There is a Playwright suite (`npm run test:e2e`) covering the download path, offline cold
+start, and each of the regressions above; it runs against the production build via
+`vite preview`, so service workers, precaching and the `/ratmap/` base path are real.
+
+### Phase 4 — Route planning
 
 - Engine: **Valhalla** behind an async cancellable interface. Hosted or small VPS.
 - `/route` with `pedestrian` / `bicycle` costing.
@@ -277,16 +355,37 @@ offline, follow against the GPS dot, off-route distance, GPX import. Foreground 
 **Acceptance:** plan a route online, Airplane Mode, view and follow it over an offline
 region with a working elevation profile.
 
-### Phase 6 — Deferred
+### Phase 5 — Deferred
 
 Much smaller than the native plan — offline elevation and 3D terrain are already done.
 
 - **Offline routing.** The one genuinely hard remaining item. Valhalla tiles per region
   plus a WASM build; immature. Routing tiles rival or exceed the basemap per region
   (Germany ~4.6 GB), so opt-in with per-artifact sizes shown.
-- **Custom region selection** — user-drawn bbox needs a server-side extract job.
 - **Trail rendering** — if Protomaps path coverage is inadequate at high zoom, custom
   `tippecanoe` from OSM extracts. Verify coverage during Phase 1.
+
+### Phase 6 — Launch
+
+Small, compared to the native path — no review, no store, no privacy manifest.
+
+- Deploy to production domain; verify the manifest, icons and iOS splash screens.
+- Lighthouse PWA audit clean.
+- Verify update flow: a new SW version must not strand a user mid-download.
+
+**Acceptance:** a stranger can reach the URL, install it, and use it offline.
+
+**Carried into this phase from earlier work:**
+
+- App icons are **placeholders** generated in Phase 0 (`scripts/gen-placeholder-icons.py`)
+  — a flat triangle, no real design. They become the app's face on a home screen.
+- **No iOS splash screens exist** (`apple-touch-startup-image`), so an installed iOS app
+  shows a blank screen while booting.
+- The R2 bucket is on its rate-limited `*.r2.dev` development URL, which Cloudflare
+  explicitly says is not for production traffic. A custom domain fixes that and §8.1
+  together.
+- On-device verification (iPhone Home Screen install + Airplane Mode + force-quit;
+  Android Chrome equivalent) has still never been run — everything so far is desktop.
 
 ---
 
@@ -298,7 +397,7 @@ Much smaller than the native plan — offline elevation and 3D terrain are alrea
 | Cloudflare Pages hosting | Free tier |
 | Domain | ~$10–15 / year |
 | Workers / search / app stores | $0 — not used |
-| Valhalla (Phase 5 only) | Hosted free tier or small VPS |
+| Valhalla (Phase 4 only) | Hosted free tier or small VPS |
 
 **~$3/month plus a domain, with zero compute.** No $99/yr Apple fee, no $25 Play fee.
 Cost tracks stored bytes, not users.
@@ -316,7 +415,7 @@ Mapterhorn terrain, the serverless posture, and the routing engine choice.
 | Never read PMTiles from Android assets | **Gone** — OPFS handles local archives on both platforms |
 | Always fully specify the URL inside `pmtiles://` | **Gone** |
 | Declare hillshade in style JSON, not `<Layer>` | **Inverted** — GL JS takes hillshade layers at runtime |
-| Offline elevation queries are hard (Phase 6) | **Gone** — `queryTerrainElevation` works offline |
+| Offline elevation queries are hard (deferred) | **Gone** — `queryTerrainElevation` works offline |
 | `isExcludedFromBackup` on iOS | **Gone** — no iOS filesystem |
 | App Store review, 4.2 risk, privacy manifest, TestFlight, 12-testers/14-days | **Gone** |
 
@@ -373,9 +472,9 @@ them yet.
 ## 8. Open decisions — ask Adam, do not guess
 
 1. **App name:** `ratmap` (decided Phase 0). **Domain:** still open, but no longer blocking
-   — app hosting uses GitHub Pages' free subdomain, R2 uses `*.r2.dev`. Revisit at Phase 3.
+   — app hosting uses GitHub Pages' free subdomain, R2 uses `*.r2.dev`. Revisit at Phase 6.
 2. ~~Planet or catalog-only?~~ **Decided 2026-08-21: catalog-only.** Low-zoom world extract
-   plus on-demand regions (Phase 4), not the ~120 GB planet. See §3.
+   plus on-demand regions (Phase 3), not the ~120 GB planet. See §3.
 3. Contour interval and styling — needs a cartographic call on real target regions.
 4. Street-level address search — currently out of scope; would ship per-region.
 5. Accounts/sync — currently none, all local.

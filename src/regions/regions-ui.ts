@@ -126,8 +126,16 @@ async function renderRegionRow(
     });
   } else {
     action.textContent = status === 'partial' ? 'Resume' : 'Download';
+    // The running download turns this same button into Cancel and installs its own
+    // listener for it — so this one has to stand down while that is in play, or a tap on
+    // Cancel would abort the download *and* immediately start a second one.
+    let running = false;
     action.addEventListener('click', () => {
-      void startDownload(region, deps, action, progress, bar, refresh);
+      if (running) return;
+      running = true;
+      void startDownload(region, deps, action, progress, bar, refresh).finally(() => {
+        running = false;
+      });
     });
   }
 

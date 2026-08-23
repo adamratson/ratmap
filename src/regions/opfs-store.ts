@@ -81,11 +81,26 @@ export async function finalizePartial(filename: string): Promise<void> {
   const partial = await dir.getFileHandle(partialName);
 
   // FileSystemHandle.move() is not universally available; fall back to copy + delete.
-  const movable = partial as FileSystemFileHandle & { move?: (name: string) => Promise<void> };
+  //
+  // Called with the two-argument (destinationDirectory, newName) form even though the
+  // destination is the directory the file is already in: WebKit implements only that
+  // overload and throws TypeError "Not enough arguments" for move(newName), while
+  // Chromium accepts both. With the single-argument form, every completed iOS download
+  // failed at exactly this point — the .part was full-size but could never be promoted,
+  // so the region stayed stuck on "Resume" and each retry re-failed instantly.
+  // (Verified in Safari 2026-08-23; the copy+delete path below is a real fallback, not
+  // dead code, so a move() failure must not be fatal.)
+  const movable = partial as FileSystemFileHandle & {
+    move?: (destination: FileSystemDirectoryHandle, name?: string) => Promise<void>;
+  };
   if (typeof movable.move === 'function') {
-    await movable.move(filename);
-    await sweepSwapFiles();
-    return;
+    try {
+      await movable.move(dir, filename);
+      await sweepSwapFiles();
+      return;
+    } catch {
+      // Fall through and copy instead: slower, but it finishes the download.
+    }
   }
 
   const source = await partial.getFile();

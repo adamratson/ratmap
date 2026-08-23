@@ -39,6 +39,8 @@ background geolocation and no background downloads — accepted, see §7.
 | C15 | **Do not hotlink Protomaps or Mapterhorn buckets in production.** | Both explicitly ask users to copy to their own storage. Extract regions into our bucket. |
 | C16 | **The region manifest schema is versioned and open-ended** — a region is "a set of named artifacts". | So routing tiles are an additive artifact later, not a migration. |
 | C17 | **`maplibregl.addProtocol` should be called exactly once in the app lifecycle.** | Documented library guidance; repeated registration causes subtle cache and handler issues. |
+| C18 | **Persist a bagged summit as a self-contained record — name, coordinates, elevation, list id, date — never as a bare OSM node id.** Keep the id as a *join hint* for re-matching, not as the record. | Same failure as C10. OSM nodes get deleted, re-created with a new id, or moved when a survey corrects them; a peaks rebuild then silently empties someone's log of twenty years of hillwalking. Irreplaceable user data must not depend on a foreign key we do not control. |
+| C19 | **Derive editorial list membership from CC0/ODbL sources (Wikidata, OSM tags) only. Never transcribe a publisher's table**, and carry per-list source and licence in the artifact. | Individual heights are facts, but a *curated selection* is exactly what UK/EU sui generis database right protects, and the Wainwrights are the selection of an in-copyright work. Attribution is already a hard requirement here for ODbL (Phase 2); a bagging list is the second place we ship someone else's data. |
 
 ---
 
@@ -319,10 +321,21 @@ Seven real bugs found and fixed during verification:
   tracks drawn solid and heavier than footpaths. On a walking map the paths are the single
   most important feature on the sheet.
 
+First run on a real iPhone (2026-08-23) found an eighth, iOS-only bug: **every completed
+download failed at the last step** with `TypeError: Not enough arguments`. WebKit
+implements only `move(destinationDirectory, newName)`; the single-argument
+`move(newName)` overload Chromium accepts throws there — so the full-size `.part` could
+never be promoted to its final name. The region stayed on **Resume** and each retry
+re-failed instantly, since resume had nothing left to fetch. Finalisation now uses the
+two-argument form (accepted by both engines) and treats a `move()` failure as a fall
+through to copy+delete rather than a fatal error. Confirmed against Safari directly, not
+inferred; covered by `src/regions/opfs-store.test.ts`.
+
 Still open:
 
-- **On-device verification has still never been run** (iPhone install → Airplane Mode →
-  force-quit → relaunch; Android Chrome equivalent). Everything above is desktop.
+- **Full on-device verification has still not been run** (iPhone install → Airplane Mode
+  → force-quit → relaunch; Android Chrome equivalent). Only the download path has been
+  exercised on hardware; everything else above is desktop.
 - Only `lochaber` is published. `cairngorms` and `scotland` are defined in
   `infra/regions.json` but not built or uploaded. Scotland-scale contours are untested and
   will be far larger — Lochaber alone is 21 MB for a 1°×0.6° box.
@@ -337,6 +350,116 @@ over a fully-downloaded region — a warning that cries wolf is worse than none.
 There is a Playwright suite (`npm run test:e2e`) covering the download path, offline cold
 start, and each of the regressions above; it runs against the production build via
 `vite preview`, so service workers, precaching and the `/ratmap/` base path are real.
+
+### Phase 3.5 — Summit lists (peak bagging)
+
+Numbered 3.5 rather than inserted as a new 4: it depends on Phase 3's manifest machinery
+and on the prominence pipeline, **not** on routing, and the later phase numbers are
+referenced from code comments and from §5 and §8 below. Ordering is by dependency, not by
+importance — this can ship before Phase 4.
+
+**What this is.** Named collections of summits that people work through and tick off:
+**Munros** (Scottish summits over 3000 ft, per the SMC's Munro Tables), **Wainwrights**
+(the 214 Lakeland fells of the *Pictorial Guides*), Corbetts, Grahams, Donalds, Hewitts,
+Nuttalls, Marilyns, and non-UK equivalents (Colorado 14ers, the NH 4000-footers, the UIAA
+Alpine 4000ers). For a large share of hill walkers this *is* why they open a map at all.
+It is also the first feature in this plan whose value is a list of things the user has
+**not** done yet, which changes what the map is for: the primary query stops being "what
+is around me" and becomes "what is around me that I still need".
+
+#### The split that determines everything else: rule-derived vs editorial
+
+| Kind | Lists | Where membership comes from |
+|---|---|---|
+| **Rule-derived** | Marilyns (P ≥ 150 m), Hewitts (≥ 2000 ft, P ≥ 30 m), Nuttalls (≥ 2000 ft, P ≥ 15 m), Corbetts (2500–3000 ft, P ≥ 500 ft), Grahams (2000–2500 ft, P ≥ 150 m) | Computed from `ele` + `prom`, both of which the peaks pipeline already produces, clipped to a boundary polygon. Costs nothing new and doubles as a hard test of `compute-prominence.py`. |
+| **Editorial** | **Munros**, Munro Tops, **Wainwrights**, Donalds | Not derivable. Membership is a published editorial judgement about what counts as a separate mountain. Must be joined from an outside source (C19). |
+
+**Do not try to fit a rule to the Munros.** The tables promote and demote by judgement, so
+a threshold tuned to reproduce today's count is wrong at the next revision — and wrong
+*silently*, which is the failure mode this document exists to prevent. The Wainwrights are
+worse: they are one man's selection, several of them are low-prominence shoulders that no
+rule would ever pick, and that is the whole point of the list.
+
+#### Pipeline (`infra/`)
+
+- **`build-summit-lists.py`** → `summit-lists.json`, a new **global artifact** alongside
+  `peaks-global.pmtiles`. Structure: `{ version, lists: [{ id, name, region, source,
+  licence, revision, criteria?, members: [...] }] }`. A member is `{ osmId, wikidata?,
+  name, lat, lng, ele }` — enough to render and to re-match without the tiles (C18).
+- **Rule-derived lists are generated**, from the same normalized GeoJSONL that
+  `build-peaks.sh` already produces, plus a boundary polygon per list (Scotland, England
+  and Wales, the Lake District national park). Criteria live in the artifact so the app
+  can explain *why* a summit qualifies.
+- **Editorial lists are joined, never transcribed (C19).** Route: a SPARQL query against
+  Wikidata (CC0) for list membership, joined onto our peaks by `wikidata` QID, with OSM
+  tags as the cross-check and the fallback for peaks with no QID. **Verify before relying
+  on this** — the same standard as §2:
+  1. Does OSM actually carry a usable membership tag in Scotland and the Lake District
+     (`munro=*` and friends)? Check taginfo for real key/value usage and coverage, not
+     the wiki page.
+  2. Does Wikidata's modelling of these lists give a clean, complete membership query, and
+     how many members fail to join onto an OSM peak we hold?
+  3. Whatever the join rate, it will not be 100%. Decide the policy *before* building:
+     an unmatched member is a visible gap in the list, not a silently shorter list.
+- **Count assertions in the build, exactly like the Ben Nevis elevation check.** Pin each
+  list's expected count *and the revision it comes from* and fail the build on drift —
+  currently published as 282 Munros and 214 Wainwrights, but **verify both against the
+  source at build time; do not take them from this document.** A list that quietly loses
+  four summits to a broken join is the bug this catches.
+- Bake a `lists` property into `peaks-global.pmtiles` as well (a delimited string, e.g.
+  `munro;marilyn`), so the map can style and filter membership without loading the JSON.
+  The JSON stays the source of truth for the checklist UI; the tile property is a render
+  hint. Rebuilding peaks is already scripted, so keeping the two in step is a pipeline
+  ordering problem, not a schema problem.
+- **Not per-region.** All UK lists together are a few thousand entries — low hundreds of
+  KB gzipped. It ships with the app shell and is precached, like `places.sqlite`, so
+  lists work on a cold offline start before any region is downloaded.
+
+#### App
+
+- **List browser**: pick a list → members with height, distance and bagged state; sort by
+  height, by distance, or unbagged-first; progress as `n/282` with a bar.
+- **Nearest unbagged**, from the GPS fix or the viewport centre. This is the single
+  feature that makes a bagging app worth opening, and it is pure local computation over a
+  few hundred points — no network, no index.
+- **Bag from the peak detail sheet.** The sheet already carries name, elevation, coords
+  and a Save action (`src/main.ts`); "Bag" sits next to "Save place" and records date and
+  an optional note. Storage is IndexedDB, a new store beside `saved-places` — a bagged
+  ascent is a log entry, not a bookmark, and merging the two would lose the distinction.
+- **Map rendering: list membership must override the notability filter.**
+  `PEAKS_NOTABILITY_FILTER` ranks on prominence, so a low-prominence Wainwright is exactly
+  the kind of summit it is designed to drop — and would vanish from the map at the zoom
+  the user is actually walking at. When a list is active its members always render,
+  filter regardless. Bagged and unbagged need distinct symbols that survive a greyscale
+  screen in rain; colour alone is not enough.
+- **Export and import.** The bagged log is irreplaceable user data that we hold in a
+  browser's IndexedDB, so it must be trivially extractable — GeoJSON/CSV out and back in,
+  sharing the Phase 4 export plumbing if that lands first, its own if not. Also the
+  migration path *in* from whatever the user already tracks.
+- **Attribution per list** in the UI, carried from the artifact's `source`/`licence`
+  fields (C19), sitting with the existing OSM attribution.
+
+#### Acceptance
+
+Airplane Mode throughout, on a device with `lochaber` downloaded:
+
+1. Open Munros → 282 members, progress `0/282`, nearest unbagged named with a distance.
+2. That nearest summit is visible on the map, **and so is a deliberately chosen
+   low-prominence Wainwright with the Wainwrights list active** — the filter-override
+   case, which is the one that regresses.
+3. Bag a summit, force-quit, relaunch → still bagged, with its date.
+4. Export the log, clear site data, re-import → identical log.
+5. Rebuild `peaks-global.pmtiles` with a changed OSM id for a bagged summit → the log
+   still renders that summit (C18). This is the test that proves the storage decision,
+   and it is easy to skip because nothing looks broken until years of data are gone.
+
+#### Cost and scope
+
+No new infrastructure and no runtime compute — one more static file in the bucket, a few
+hundred KB. §5 is unchanged.
+
+**Out of scope here:** verified/GPS-proven ascents, social features, leaderboards, and
+any account or sync (§8.5 still says local-only). Bagging is a private log.
 
 ### Phase 4 — Route planning
 
@@ -486,3 +609,11 @@ them yet.
    zoom thresholds (600/300/120/30 m at z9/11/13/15) remain judgement calls, not decisions.
 4. Street-level address search — currently out of scope; would ship per-region.
 5. Accounts/sync — currently none, all local.
+6. **Which summit lists ship first (Phase 3.5), and in what order?** The rule-derived
+   ones are nearly free once prominence exists; Munros and Wainwrights are the ones
+   people actually ask for and are the ones with a sourcing question (C19). Also: do we
+   ship non-UK lists at all, given that regions so far are Scotland and Montenegro?
+7. **Is a bagged ascent ever more than a tick?** Date and note are assumed. Photos,
+   companions, a linked route, weather — each is cheap on its own and together they are
+   a different product. Needs a call before the IndexedDB schema is written, because it
+   is user data and migrating it is the expensive kind of change.

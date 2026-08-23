@@ -5,16 +5,50 @@
 }
 
 html,
-body,
-#app {
+body {
   margin: 0;
   height: 100%;
   font-family: system-ui, -apple-system, sans-serif;
+  /* The map owns the whole screen and nothing here scrolls. Without this, iOS rubber-band
+     scrolling drags the map off the top of the screen and exposes the page behind it. */
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* Matches the manifest's theme/background colour, so any pixel the map has not covered
+     yet — first paint, or while iOS resizes the web view — reads as app chrome instead of
+     a white flash. */
+  background: var(--slate-800);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Fixed, not `height: 100%`. A percentage height resolves against the initial containing
+   block, which iOS sizes from the *small* viewport when a Home Screen app launches
+   fullscreen under `viewport-fit=cover` — the map then ends short of the bottom of the
+   screen and leaves a strip of page background above the home indicator. A fixed inset-0
+   box is sized from the layout viewport and covers the screen on every platform. */
+#app {
+  position: fixed;
+  inset: 0;
 }
 
 #map {
   position: absolute;
   inset: 0;
+}
+
+/* `black-translucent` draws the status bar straight over the map, so the clock and battery
+   compete with map labels for contrast. A short fade under the top inset keeps them
+   readable without adding a visible bar; it collapses to zero height wherever there is no
+   inset, so it costs nothing off iOS. */
+#app::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  z-index: 5;
+  background: linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 /* Respect the iOS notch/home indicator — the app runs fullscreen when installed. */
@@ -51,7 +85,11 @@ body,
   top: calc(0.5rem + env(safe-area-inset-top));
   left: calc(0.5rem + env(safe-area-inset-left));
   z-index: 4;
-  width: min(22rem, calc(100% - 1rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  /* The 4.25rem reserves the top-right column MapLibre's zoom/compass control occupies
+     (29px of button plus its 10px margin) on top of the 1rem of side gutters. Without it
+     the field grows to full width at phone sizes and sits on top of the zoom buttons —
+     it has the higher z-index, so they become untappable rather than just overlapped. */
+  width: min(22rem, calc(100% - 4.25rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
 }
 
 #search-input {
@@ -60,7 +98,10 @@ body,
   border: 0;
   border-radius: 0.5rem;
   background: #fff;
-  font-size: 0.95rem;
+  /* Never below 16px. iOS Safari zooms the page in when a field with smaller text takes
+     focus and does not zoom back out afterwards, leaving the map scaled and panned with
+     the controls pushed off-screen — which looks like a broken layout, not a zoom. */
+  font-size: 1rem;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
@@ -144,7 +185,10 @@ body,
      control and status cards are transient. */
   top: calc(3.6rem + env(safe-area-inset-top));
   left: calc(0.5rem + env(safe-area-inset-left));
-  right: calc(0.5rem + env(safe-area-inset-right));
+  /* Same top-right reservation as #search: a card is full-width at phone sizes and would
+     otherwise sit over the zoom control, which is exactly when a banner is up and the user
+     wants to zoom out. */
+  right: calc(3.75rem + env(safe-area-inset-right));
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -413,6 +457,30 @@ body,
   background: #2563eb;
   border: 2px solid #fff;
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.5);
+}
+
+/* MapLibre pins its own controls to the map container's corners with a flat 10px offset;
+   it knows nothing about the notch or the home indicator. Left alone, the zoom buttons sit
+   under the iOS status bar and the attribution under the home indicator. The insets are 0
+   off iOS, so this is inert everywhere else. */
+.maplibregl-ctrl-top-left,
+.maplibregl-ctrl-top-right {
+  top: env(safe-area-inset-top);
+}
+
+.maplibregl-ctrl-bottom-left,
+.maplibregl-ctrl-bottom-right {
+  bottom: env(safe-area-inset-bottom);
+}
+
+.maplibregl-ctrl-top-left,
+.maplibregl-ctrl-bottom-left {
+  left: env(safe-area-inset-left);
+}
+
+.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-bottom-right {
+  right: env(safe-area-inset-right);
 }
 
 /* Attribution is legally required — never let it collapse to nothing. */

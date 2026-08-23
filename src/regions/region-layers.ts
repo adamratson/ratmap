@@ -221,8 +221,62 @@ export async function addRegionToMap(
         // over them, so these go under the labels too.
         beneathLabels(map, region.id),
       );
+
+      addContourLabels(map, sourceId, region.id);
     }
   }
+}
+
+/**
+ * Height annotations along the index contours, as on a paper hill map.
+ *
+ * Index contours only (`idx == 1`, every 50 m). Labelling all of them at a 10 m interval
+ * would put five times as much text on the map for no extra information — the intermediate
+ * lines are read by counting up from an annotated one, which is the whole reason index
+ * contours are drawn heavier in the first place.
+ *
+ * Styling call, not a settled decision — §8.3 is still open.
+ */
+function addContourLabels(map: MLMap, sourceId: string, regionId: string): void {
+  map.addLayer(
+    {
+      id: `${sourceId}-labels`,
+      type: 'symbol',
+      source: sourceId,
+      'source-layer': 'contours',
+      filter: ['==', ['get', 'idx'], 1] as unknown as FilterSpecification,
+      // Below this the index lines are close enough together that labels collide more
+      // than they inform; contour tiles themselves only start at z11.
+      minzoom: 13,
+      layout: {
+        // Bare number, no unit: the convention on hill maps, and on a sheet already
+        // covered in contours the unit is never ambiguous. Peak labels keep "m" because
+        // there they sit alone against terrain.
+        'text-field': ['to-string', ['round', ['get', 'ele']]],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 10,
+        // Drawn along the line and rotated with it, the way a contour label reads on
+        // paper, rather than sitting horizontally beside it.
+        'symbol-placement': 'line',
+        // Well above the 250 px default: a contour can wander a long way across the
+        // viewport and repeating its height every few centimetres is just noise.
+        'symbol-spacing': 500,
+        // Contours curve hard around a corrie; the 45° default rejects placement there
+        // and whole lines end up unlabelled.
+        'text-max-angle': 60,
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
+      },
+      paint: {
+        'text-color': '#6b4a33',
+        // The halo is what stands in for breaking the line behind the label, which
+        // MapLibre cannot do — without it the contour runs straight through the digits.
+        'text-halo-color': 'rgba(255,255,255,0.9)',
+        'text-halo-width': 1.6,
+      },
+    },
+    beneathLabels(map, regionId),
+  );
 }
 
 /** Remove a region's layers and sources — used when the user deletes a download. */

@@ -127,6 +127,18 @@ preflight() {
   printf '  %-28s %s\n' "cpus" "$cpus"
   printf '  %-28s %s\n' "source cache" "$OSM_CACHE"
 
+  # The free-space figure above is the VM's, and on Docker Desktop the VM's disk is a
+  # sparse file on the host: it reports its *virtual* size (routinely 400 GB+) while only
+  # the used blocks are actually backed. A run can therefore sail through this check and
+  # still die of ENOSPC when the host fills. Nothing inside the container can see the
+  # host's free space, so this can only be flagged, not checked.
+  if df -PT "$WORK_DIR" 2>/dev/null | awk 'NR==2 {exit !($2 == "overlay" || $2 == "ext4")}'; then
+    echo "  ~ $WORK_DIR is inside the Docker VM. If that VM's disk is a sparse image"
+    echo "    (Docker Desktop's default), the $work_gb GB above is virtual — check the"
+    echo "    HOST has room for it, or bind-mount $WORK_DIR to a real disk. A planet run"
+    echo "    needs ~105 GB live at peak (85 GB of extracts + contour scratch + output)."
+  fi
+
   # Guarded on mountpoint existing: without the guard, a missing binary reads as
   # "not a mount" and fails preflight on a perfectly good setup.
   if command -v mountpoint >/dev/null 2>&1 \

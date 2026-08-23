@@ -1,0 +1,132 @@
+name: Build infra image
+
+# Builds the planet-scale pipeline toolchain (infra/docker) and publishes it to GHCR.
+#
+# Runs on a native amd64 runner, which is both the target architecture and the reason to
+# do this here rather than locally: cross-building amd64 on an arm64 Mac means compiling
+# tippecanoe under QEMU, and GITHUB_TOKEN authenticates to GHCR with no token to hand
+# around.
+
+on:
+  push:
+    branches: [main]
+    # The image is a function of the Dockerfile, the pipeline scripts it bakes in, and
+    # regions.json. Nothing else in the repo changes it, and the app's own churn
+    # shouldn't trigger a five-minute tippecanoe compile.
+    paths:
+      - 'infra/docker/**'
+      - 'infra/scripts/**'
+      - 'infra/regions.json'
+      - 'infra/.dockerignore'
+      - '.github/workflows/infra-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+# Unlike the Pages deploy, a superseded image build is pure waste — nothing is half-
+# uploaded that a cancel could corrupt, because the push only happens after the smoke
+# tests pass.
+concurrency:
+  group: infra-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # GHCR rejects uppercase path segments; github.repository_owner preserves the account's
+  # original casing, so it is lowercased below rather than trusted as-is.
+  IMAGE_NAME: ratmap-infra
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Resolve image reference
+        id: ref
+        run: |
+          owner="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          echo "image=ghcr.io/${owner}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      # Built and loaded into the local daemon *before* logging in or pushing, so the
+      # smoke tests below gate publication. amd64-only on an amd64 runner means --load
+      # works without the multi-arch manifest dance.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: infra
+          file: infra/docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: |
+            ${{ steps.ref.outputs.image }}:${{ github.sha }}
+            ${{ steps.ref.outputs.image }}:latest
+          # tippecanoe is a from-source compile; without a cache every run pays it.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The image build already fails closed on a bad pmtiles checksum and on sqlite
+      # lacking FTS5. These check the things that only surface at runtime — and are the
+      # exact failures found by hand: a doctor probe that reported a present GDAL driver
+      # as missing, and a missing numpy/scipy venv that broke build-peaks.sh outright.
+      - name: Smoke test — toolchain
+        run: |
+          set -euo pipefail
+          out="$(docker run --rm ${{ steps.ref.outputs.image }}:${{ github.sha }} doctor 2>&1)"
+          echo "$out"
+          grep -q 'GeoJSONSeq driver: OK' <<<"$out" || { echo "::error::GeoJSONSeq driver not reported OK"; exit 1; }
+          grep -q 'numpy .* scipy ' <<<"$out"     || { echo "::error::prominence venv (numpy/scipy) missing"; exit 1; }
+          if grep -q 'MISSING' <<<"$out"; then echo "::error::doctor reported a MISSING component"; exit 1; fi
+          for tool in pmtiles tippecanoe osmium gdal python3 sqlite3; do
+            grep -qE "^  ${tool} +[^ ]" <<<"$out" || { echo "::error::${tool} reported no version"; exit 1; }
+          done
+
+      # A real end-to-end run of the pipeline, which infra/README.md notes has never been
+      # wired into CI. Isle of Man is ~6 MB, so this costs about a minute.
+      #
+      # build-places.sh rather than build-peaks.sh deliberately: places exercises the same
+      # osmium -> geojsonseq -> streaming normalize path plus the FTS5 index, while peaks
+      # would additionally pull a DEM per region in regions.json — Scotland's alone is
+      # ~295 MB, too slow and too network-flaky to gate a build on.
+      - name: Smoke test — pipeline end to end
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e PLACES_SOURCE_URLS=https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf \
+            -v "${{ github.workspace }}/ci-dist:/opt/ratmap/infra/dist" \
+            ${{ steps.ref.outputs.image }}:${{ github.sha }} build-places.sh
+          # The container writes as root, so the artifact lands root-owned on a Linux
+          # runner. Copied to a runner-owned path before querying: sqlite wants a
+          # writable file and directory for anything beyond a bare read, and debugging
+          # that as a permissions error in CI is a waste of a morning.
+          sudo cp "${{ github.workspace }}/ci-dist/places.sqlite" "${RUNNER_TEMP}/places.sqlite"
+          sudo chown "$(id -u):$(id -g)" "${RUNNER_TEMP}/places.sqlite"
+          db="${RUNNER_TEMP}/places.sqlite"
+          [ -s "$db" ] || { echo "::error::places.sqlite was not produced"; exit 1; }
+          rows="$(sqlite3 "$db" 'SELECT COUNT(*) FROM places;')"
+          echo "places.sqlite rows: $rows"
+          [ "$rows" -gt 50 ] || { echo "::error::only $rows rows — the extract or the filter is wrong"; exit 1; }
+          # Proves the FTS5 index was populated and is queryable, not merely that the
+          # table exists — C9's search is the whole point of this artifact.
+          hits="$(sqlite3 "$db" "SELECT COUNT(*) FROM places_fts WHERE places_fts MATCH 'douglas';")"
+          [ "$hits" -ge 1 ] || { echo "::error::FTS5 lookup for a known Manx place returned nothing"; exit 1; }
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        run: |
+          docker push ${{ steps.ref.outputs.image }}:${{ github.sha }}
+          docker push ${{ steps.ref.outputs.image }}:latest
+          echo "### Pushed \`${{ steps.ref.outputs.image }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo '```sh' >> "$GITHUB_STEP_SUMMARY"
+          echo "docker pull ${{ steps.ref.outputs.image }}:latest" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

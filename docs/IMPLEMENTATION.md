@@ -476,5 +476,13 @@ them yet.
 2. ~~Planet or catalog-only?~~ **Decided 2026-08-21: catalog-only.** Low-zoom world extract
    plus on-demand regions (Phase 3), not the ~120 GB planet. See §3.
 3. Contour interval and styling — needs a cartographic call on real target regions.
+   **Partly resolved 2026-08-23:** peak *selection* no longer needs per-region tuning.
+   It ranks on topographic prominence computed from the DEM at build time
+   (`infra/scripts/compute-prominence.py`) rather than absolute elevation, which encoded
+   an assumption about Scottish terrain — at `ele >= 1000` Montenegro carried 268x
+   Scotland's peaks per square degree; on prominence the same figure is 2.8x, which is a
+   real difference in the terrain rather than an artefact. Validated against ten published
+   Scottish prominences at 19 m median error. Contour interval, path styling and the exact
+   zoom thresholds (600/300/120/30 m at z9/11/13/15) remain judgement calls, not decisions.
 4. Street-level address search — currently out of scope; would ship per-region.
 5. Accounts/sync — currently none, all local.

@@ -82,36 +82,57 @@ describe('addPeaksLayer', () => {
 describe('PEAKS_NOTABILITY_FILTER', () => {
   // Evaluates the filter expression the way MapLibre would, so the thresholds are
   // actually asserted rather than just the expression's shape.
-  function passes(props: { ele?: number; wikidata?: string }, zoom: number): boolean {
-    const eleFloor =
-      zoom >= 11 ? -1000 : zoom >= 9 ? 500 : zoom >= 7 ? 800 : 1000;
-    const byHeight = (props.ele ?? -1000) >= eleFloor;
+  function passes(props: { prom?: number; wikidata?: string }, zoom: number): boolean {
+    const floor =
+      zoom >= 15 ? -1 : zoom >= 13 ? 30 : zoom >= 11 ? 120 : zoom >= 9 ? 300 : 600;
+    const byProminence = (props.prom ?? -1) >= floor;
     const byNotability = zoom >= 9 && props.wikidata !== undefined;
-    return byHeight || byNotability;
+    return byProminence || byNotability;
   }
 
-  it('shows only major summits at country zoom', () => {
-    expect(passes({ ele: 1345 }, 6)).toBe(true);
-    expect(passes({ ele: 900 }, 6)).toBe(false);
+  it('shows only dominant summits at country zoom', () => {
+    expect(passes({ prom: 1483 }, 6)).toBe(true);   // Bobotov Kuk
+    expect(passes({ prom: 93 }, 6)).toBe(false);    // Savin kuk, a bump on the same massif
+  });
+
+  it('ranks a massif by prominence, which elevation cannot do', () => {
+    // Bobotov Kuk 2523 m / prom 1483; Savin kuk 2313 m / prom 93. Nearly the same height,
+    // completely different significance — this is the whole reason for the measure.
+    expect(passes({ prom: 1483 }, 8)).toBe(true);
+    expect(passes({ prom: 93 }, 8)).toBe(false);
+  });
+
+  it('travels between regions with different terrain', () => {
+    // The bug this guards: an elevation threshold readable over Scotland showed 268x the
+    // peaks per square degree over Montenegro. A prominent Scottish hill and a prominent
+    // Montenegrin one must both qualify at the same zoom.
+    expect(passes({ prom: 718 }, 8)).toBe(true);    // Schiehallion
+    expect(passes({ prom: 954 }, 8)).toBe(true);    // Rumija
+    // ...and a minor top in either place must not.
+    expect(passes({ prom: 40 }, 8)).toBe(false);
+    expect(passes({ prom: 22 }, 8)).toBe(false);
   });
 
   it('does not let wikidata flood low zooms', () => {
-    // The bug this guards: applying the notability proxy at every zoom swamped z6 over
-    // the Highlands, where a large share of hills carry a Wikidata id.
-    expect(passes({ ele: 300, wikidata: 'Q1' }, 6)).toBe(false);
-    expect(passes({ ele: 300, wikidata: 'Q1' }, 9)).toBe(true);
+    // Applying the notability proxy at every zoom swamped z6 over the Highlands, where a
+    // large share of hills carry a Wikidata id.
+    expect(passes({ prom: 30, wikidata: 'Q1' }, 6)).toBe(false);
+    expect(passes({ prom: 30, wikidata: 'Q1' }, 9)).toBe(true);
   });
 
-  it('lowers the height bar progressively as you zoom in', () => {
-    expect(passes({ ele: 850 }, 6)).toBe(false);
-    expect(passes({ ele: 850 }, 7)).toBe(true);
-    expect(passes({ ele: 600 }, 8)).toBe(false);
-    expect(passes({ ele: 600 }, 9)).toBe(true);
+  it('lowers the bar progressively as you zoom in', () => {
+    expect(passes({ prom: 400 }, 8)).toBe(false);
+    expect(passes({ prom: 400 }, 9)).toBe(true);
+    expect(passes({ prom: 150 }, 10)).toBe(false);
+    expect(passes({ prom: 150 }, 11)).toBe(true);
+    expect(passes({ prom: 40 }, 12)).toBe(false);
+    expect(passes({ prom: 40 }, 13)).toBe(true);
   });
 
-  it('only shows peaks with no elevation at all at the highest zooms', () => {
-    expect(passes({}, 9)).toBe(false);
-    expect(passes({}, 11)).toBe(true);
+  it('shows peaks with no computed prominence only at the highest zooms', () => {
+    // Peaks outside every built region have no `prom`; they must not vanish entirely.
+    expect(passes({}, 13)).toBe(false);
+    expect(passes({}, 15)).toBe(true);
   });
 
   it('is applied to the marker layer as well as the labels, so they stay in sync', () => {

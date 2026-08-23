@@ -14,7 +14,10 @@ services:
     build:
       context: ..                 # infra/ — see infra/.dockerignore
       dockerfile: docker/Dockerfile
-    image: ratmap-infra:latest
+    # Both `build` and `image` on purpose: `docker compose build` builds locally and tags
+    # it with this name, while on the run host `docker compose pull` fetches the amd64
+    # image that .github/workflows/infra-image.yml published — no toolchain build there.
+    image: ghcr.io/adamratson/ratmap-infra:latest
     init: true                    # so ctrl-C actually reaps osmium/tippecanoe children
 
     volumes:

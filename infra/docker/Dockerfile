@@ -98,10 +98,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libstdc++6 \
         osmium-tool \
         python3 \
+        python3-venv \
         sqlite3 \
         awscli \
         zlib1g \
     && rm -rf /var/lib/apt/lists/*
+
+# build-peaks.sh computes topographic prominence from the DEM and insists on an interpreter
+# at $INFRA_DIR/.venv/bin/python with numpy and scipy. Baked in here so the image runs the
+# peaks build as-is; .dockerignore keeps any host .venv (wrong OS, wrong interpreter) out
+# of the build context. Bounded to the current majors rather than pinned exactly, so the
+# build doesn't break on a version that doesn't exist for this Python — `ratmap doctor`
+# reports what actually got installed.
+ARG NUMPY_SPEC="numpy>=2,<3"
+ARG SCIPY_SPEC="scipy>=1.14,<2"
+RUN python3 -m venv /opt/ratmap/infra/.venv \
+    && /opt/ratmap/infra/.venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/ratmap/infra/.venv/bin/pip install --no-cache-dir "${NUMPY_SPEC}" "${SCIPY_SPEC}" \
+    && /opt/ratmap/infra/.venv/bin/python -c "import numpy, scipy; print('numpy', numpy.__version__, 'scipy', scipy.__version__)"
 
 COPY --from=tippecanoe-build /opt/tippecanoe/bin/ /usr/local/bin/
 COPY --from=pmtiles-fetch    /usr/local/bin/pmtiles /usr/local/bin/pmtiles
@@ -138,9 +152,18 @@ ENV TMPDIR=/work/tmp \
 
 # GDAL reads Copernicus COGs over /vsicurl for hours at a time; the defaults give up too
 # easily on a flaky link and lose a whole region's contour trace.
+#
+# GDAL_HTTP_RETRY_CODES=ALL because the default retry list is 429/500/502/503/504 — it
+# does not cover a connection reset or a short read mid-transfer, which is exactly how
+# this failed in practice: one Copernicus range read died with "TIFFReadEncodedTile()
+# failed" and Scotland silently came out with no prominence, while the identical fetch
+# succeeded on the next attempt. build-peaks.sh treats a failed DEM as non-fatal and
+# continues, so an unretried blip costs a region its `prom` values with nothing but one
+# stderr line in a multi-day log.
 ENV GDAL_HTTP_TIMEOUT=120 \
     GDAL_HTTP_MAX_RETRY=5 \
     GDAL_HTTP_RETRY_DELAY=5 \
+    GDAL_HTTP_RETRY_CODES=ALL \
     VSI_CACHE=TRUE \
     VSI_CACHE_SIZE=536870912 \
     GDAL_CACHEMAX=2048

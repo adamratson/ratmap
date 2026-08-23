@@ -22,6 +22,7 @@ multi-day unattended run needs and a laptop run doesn't.
 | GDAL | Debian trixie (3.10.3) | `gdal_contour`, `ogr2ogr` with the GeoJSONSeq driver |
 | python3 + sqlite3 | Debian trixie | The image build **fails** if FTS5 with `unicode61 remove_diacritics 2` doesn't work — C9's whole search index depends on it, and it's a distro build flag, not a guarantee |
 | awscli | Debian trixie (v2) | `manifest.json` upload only; request checksums forced to `when_required` so an aws-cli-v2/R2 checksum disagreement can't fail the last step of a three-day run |
+| numpy + scipy | in a venv at `/opt/ratmap/infra/.venv` | `build-peaks.sh`'s prominence pass requires an interpreter at exactly that path. Bounded to current majors rather than pinned; `ratmap doctor` reports what got installed (currently numpy 2.5.2, scipy 1.18.1) |
 
 Build args move any version without editing the Dockerfile:
 `--build-arg TIPPECANOE_VERSION=2.80.0`. Bumping `PMTILES_VERSION` also requires bumping
@@ -75,10 +76,25 @@ Docker Desktop's disk image also needs raising (Settings → Resources → Disk 
 
 ## Use
 
+On the machine that will actually run the planet build, pull rather than build — CI
+publishes an amd64 image on every change to `infra/`:
+
 ```sh
 cd infra/docker
-docker compose build
+docker compose pull
 docker compose run --rm infra doctor          # versions + a resource preflight
+```
+
+The GHCR package is **private on first publish**. Either make it public
+(Packages → the package → Package settings → Change visibility) or `docker login ghcr.io`
+on the run host with a token carrying `read:packages` — otherwise the pull 404s, which
+reads like a wrong image name rather than an auth problem.
+
+To build locally instead (arm64 Macs included):
+
+```sh
+docker compose build
+docker compose run --rm infra doctor
 ```
 
 `doctor` prints the toolchain versions and the same preflight `build-global.sh` runs, so

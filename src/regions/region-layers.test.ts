@@ -161,6 +161,39 @@ describe('addRegionToMap', () => {
     expect(JSON.stringify(paths.filter)).toContain('path');
   });
 
+  it('annotates index contours with their height, and only the index ones', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, region);
+
+    const labels = map.layers.find((l) => String(l.id).endsWith('contours-labels'));
+    expect(labels).toBeDefined();
+
+    const layout = labels!.layout as Record<string, unknown>;
+    // Placed along the line and rotated with it, the way a contour label reads on paper.
+    expect(layout['symbol-placement']).toBe('line');
+    // Labelling all contours at a 10 m interval would be 5x the text for no extra
+    // information — the intermediate lines are read by counting from an annotated one.
+    expect(JSON.stringify(labels!.filter)).toContain('idx');
+
+    // A halo stands in for breaking the line behind the digits, which MapLibre can't do.
+    const paint = labels!.paint as Record<string, unknown>;
+    expect(Number(paint['text-halo-width'])).toBeGreaterThan(0);
+  });
+
+  it('keeps contour labels below the region place labels', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, region);
+
+    const ids = map.layers.map((l) => String(l.id));
+    const firstRegionLabel = map.layers.findIndex(
+      (l) => l.type === 'symbol' && String(l.id).startsWith('region-lochaber-basemap-'),
+    );
+    expect(firstRegionLabel).toBeGreaterThan(-1);
+    expect(ids.indexOf('region-lochaber-contours-labels')).toBeLessThan(firstRegionLabel);
+  });
+
   it('skips artifacts that are not actually in OPFS yet', async () => {
     getArtifactFileMock.mockImplementation(async (name: string) =>
       name.includes('contours') ? null : new File([new Uint8Array(4)], name),

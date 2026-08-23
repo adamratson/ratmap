@@ -62,10 +62,64 @@ osmium export "$WORK_DIR/peaks-raw.osm.pbf" -o "$WORK_DIR/peaks.geojsonl" \
 python3 "$(dirname "${BASH_SOURCE[0]}")/normalize-peaks.py" \
   "$WORK_DIR/peaks.geojsonl" "$WORK_DIR/peaks-normalized.geojsonl"
 
+# Compute topographic prominence from the DEM, per region bbox.
+#
+# This is what the zoom filter ranks on. Absolute elevation encodes an assumption about
+# local terrain and does not travel: at ele>=1000 m Montenegro carries 268x Scotland's
+# peaks per square degree, so a threshold tuned on one is meaningless on the other. On
+# prominence the same comparison is 2.8x — which is a real difference in how mountainous
+# the two places are, not an artefact of the measure. OSM's own `prominence` tag is far
+# too sparse to use, so it is derived here.
+#
+# Peaks outside every region bbox keep no `prom` and fall back to elevation in the app.
+SCRIPT_DIR_PK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROM_PY="$INFRA_DIR/.venv/bin/python"
+PROM_IN="$WORK_DIR/peaks-normalized.geojsonl"
+
+if [ ! -x "$PROM_PY" ]; then
+  echo "Missing $PROM_PY — create it with:" >&2
+  echo "  python3 -m venv infra/.venv && infra/.venv/bin/pip install numpy scipy" >&2
+  exit 1
+fi
+
+# 90 m rather than the DEM's native 30 m: GDAL serves it straight from the COG overviews,
+# and Scotland at 30 m would be a 2.7 GB raster for no gain — prominence of a *notable*
+# peak is not a 30 m-scale quantity.
+PROM_RES="${PROM_DEM_RES:-0.000833333}"
+
+while read -r region_id w s e n; do
+  echo "==> prominence: $region_id"
+  dem="$WORK_DIR/dem-$region_id.tif"
+  if ! bash "$SCRIPT_DIR_PK/fetch-dem.sh" "$w" "$s" "$e" "$n" "$dem" "$PROM_RES"; then
+    echo "  ! no DEM for $region_id — its peaks keep no prominence" >&2
+    continue
+  fi
+  "$PROM_PY" "$SCRIPT_DIR_PK/compute-prominence.py" \
+    "$dem" "$PROM_IN" "$WORK_DIR/peaks-prom-$region_id.geojsonl" \
+    --step "${PROM_STEP:-20}" --downsample 1
+  PROM_IN="$WORK_DIR/peaks-prom-$region_id.geojsonl"
+  rm -f "$dem"
+done < <(python3 - "$INFRA_DIR/regions.json" <<'PY_REGIONS'
+import json, sys
+with open(sys.argv[1]) as f:
+    regions = json.load(f)["regions"]
+# Smallest bbox first, so a larger region's pass overwrites a smaller overlapping one.
+# Lochaber and Cairngorms sit inside Scotland; prominence measured in the bigger box is
+# the better value, because a key col near the edge of a small box gets clipped to the
+# box and the peak's prominence is over-stated. Sorting makes that independent of the
+# order regions happen to appear in regions.json.
+for r in sorted(regions, key=lambda r: (r["bbox"][2] - r["bbox"][0]) * (r["bbox"][3] - r["bbox"][1])):
+    w, s, e, n = r["bbox"]
+    print(r["id"], w, s, e, n)
+PY_REGIONS
+)
+
+cp "$PROM_IN" "$WORK_DIR/peaks-final.geojsonl"
+
 # Elevation regression check (plan §4 Phase 1 acceptance): a schema or parsing change that
 # silently breaks `ele` should fail the build here, not be discovered on a mountain.
 # Only asserts summits actually present in the sources being built.
-python3 - "$WORK_DIR/peaks-normalized.geojsonl" <<'PYCHECK'
+python3 - "$WORK_DIR/peaks-final.geojsonl" <<'PYCHECK'
 import json, sys
 
 # Each value read out of a real build's output before being asserted here, not taken from
@@ -116,10 +170,12 @@ if checked == 0:
 PYCHECK
 
 OUT="$DIST_DIR/peaks-global.pmtiles"
+# `prom` is the computed prominence the app's zoom filter ranks on; `prominence` is OSM's
+# own sparse tag, kept for reference.
 tippecanoe -o "$OUT" -zg --drop-densest-as-needed \
-  --include=name --include=ele --include=prominence --include=wikidata \
+  --include=name --include=ele --include=prom --include=prominence --include=wikidata \
   -l peaks -n "ratmap peaks" --force \
-  "$WORK_DIR/peaks-normalized.geojsonl"
+  "$WORK_DIR/peaks-final.geojsonl"
 
 pmtiles show "$OUT"
 echo "Built $OUT"

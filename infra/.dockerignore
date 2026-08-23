@@ -1,5 +1,13 @@
-# Build context is infra/ (see docker/README.md). Keep secrets and multi-GB build output
-# out of the image layers.
+# Build context is infra/ (see docker/README.md). Keep secrets, build output, and the
+# multi-GB source cache out of the image and out of the context upload.
 .env
 dist/
 docker/README.md
+
+# cached_osm_extract's default location (lib.sh). On a machine that has run the scripts
+# natively this is tens of GB of continent extracts — uploading it as build context would
+# make every `docker compose build` crawl. The image points OSM_CACHE_DIR at /work anyway.
+.cache/
+
+# A host virtualenv is built for the host's OS and interpreter; the image builds its own.
+.venv/

@@ -208,3 +208,23 @@ so a z13 cutout generalises almost all of them away — decoding a z13 tile over
 turned up exactly one path feature. On a walking map that is the wrong thing to drop, and
 the extra detail is cheap (4.9 MB → 14 MB for Lochaber). z15 is also the source archive's
 own maximum.
+
+## Peak prominence
+
+`build-peaks.sh` computes topographic prominence per region bbox and writes it as `prom`;
+the app's zoom filter ranks on that. Needs the venv:
+
+```sh
+python3 -m venv infra/.venv && infra/.venv/bin/pip install numpy scipy
+```
+
+Why not elevation: at `ele >= 1000 m` Montenegro carries 268x Scotland's peaks per square
+degree, so a threshold readable in one is an unreadable wall in the other. On prominence
+the same comparison is 2.8x. It also separates a massif — Bobotov Kuk scores 1457 m
+against Savin kuk's 81 m though they stand 2523 m and 2313 m.
+
+Accuracy was checked against published figures rather than assumed: median error 19 m
+across ten well-known Scottish summits, inside the 20 m quantisation step. Read
+`compute-prominence.py`'s docstring before treating any value as authoritative — notably,
+the highest peak in a bbox is over-ranked when the true high ground belongs to a peak
+outside the OSM extract (Montenegro's box clips higher Albanian terrain).

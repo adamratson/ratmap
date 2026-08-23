@@ -18,6 +18,13 @@ export interface PeakProperties {
   name?: string;
   /** Metres, already normalized to a number at build time. Absent if unparseable. */
   ele?: number;
+  /**
+   * Topographic prominence in metres, computed from the DEM at build time and quantised
+   * to 20 m. Absent for peaks outside every built region. This is what the zoom filter
+   * ranks on — see PEAKS_NOTABILITY_FILTER.
+   */
+  prom?: number;
+  /** OSM's own prominence tag. Sparse; kept for reference, not used for filtering. */
   prominence?: string | number;
   wikidata?: string;
 }
@@ -28,25 +35,31 @@ export function formatElevation(ele: unknown): string | null {
 }
 
 /**
- * Zoom-dependent notability filter. Without it every tagged bump renders at once and a
- * country-level view is a solid mass of overlapping dots — verified at z6 over Scotland.
+ * Zoom-dependent notability filter. Without it every tagged bump renders at once and the
+ * map is a solid mass of overlapping labels.
  *
- * Two ways to qualify, per the plan's guidance:
- *  - height, via a zoom-stepped `ele` threshold, and
- *  - `wikidata` presence as a notability proxy. (`prominence` would be the cartographically
- *    correct measure but is far too sparsely tagged in OSM to filter on.)
+ * Ranks on **topographic prominence**, not elevation. Elevation encodes an assumption
+ * about local terrain and does not travel between regions: measured 2026-08-23, at
+ * `ele >= 1000` Montenegro carries 268x Scotland's peaks per square degree, so any
+ * threshold readable in one is unusable in the other. On prominence the same comparison
+ * is 2.8x — which is a genuine difference in how mountainous the two places are, rather
+ * than an artefact of the measure.
  *
- * A named 900 m peak and an unnamed 900 m bump are equally "notable" here; refining that
- * needs real cartographic judgement on target regions (§8.3, still open).
+ * `prom` is computed from the DEM at build time (infra/scripts/compute-prominence.py);
+ * OSM's own `prominence` tag is far too sparse to filter on. Prominence also separates a
+ * massif properly where elevation cannot: on Durmitor, Bobotov Kuk scores 1483 m against
+ * Savin kuk's 93 m, though their elevations are 2523 m and 2313 m.
  */
 export const PEAKS_NOTABILITY_FILTER = [
   'any',
-  // Height is the primary gate. -1000 as the coalesce/final-step value is a sentinel
-  // meaning "no floor": peaks with no `ele` at all only appear at z11+.
+  // Prominence is the primary gate. -1 is a sentinel for "no computed prominence" —
+  // peaks outside every built region. The final step is -1, not 0, so those still appear
+  // at the highest zoom: with a floor of 0 the sentinel never clears it and such peaks
+  // would vanish from the map at every zoom rather than merely ranking last.
   [
     '>=',
-    ['coalesce', ['get', 'ele'], -1000],
-    ['step', ['zoom'], 1000, 7, 800, 9, 500, 11, -1000],
+    ['coalesce', ['get', 'prom'], -1],
+    ['step', ['zoom'], 600, 9, 300, 11, 120, 13, 30, 15, -1],
   ],
   // `wikidata` is a tiebreaker from z9, not an override at every zoom. Applying it
   // globally floods country-level views in well-catalogued walking regions — verified

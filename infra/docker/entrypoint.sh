@@ -52,13 +52,25 @@ doctor() {
   printf '  %-12s %s\n' sqlite3     "$(sqlite3 --version 2>&1 | awk '{print $1}')"
   printf '  %-12s %s\n' aws         "$(aws --version 2>&1 | head -1)"
   printf '  %-12s %s\n' curl        "$(curl --version 2>&1 | head -1 | cut -d' ' -f1-2)"
+  # build-peaks.sh's prominence pass runs on this interpreter, not the system one.
+  if [ -x "$INFRA_DIR/.venv/bin/python" ]; then
+    printf '  %-12s %s\n' prominence \
+      "$("$INFRA_DIR/.venv/bin/python" -c 'import numpy, scipy; print("numpy", numpy.__version__, "scipy", scipy.__version__)' 2>&1 | head -1)"
+  else
+    printf '  %-12s %s\n' prominence "MISSING $INFRA_DIR/.venv — build-peaks.sh will fail"
+  fi
 
   echo
-  echo "== ogr2ogr SQLite dialect (build-contours.sh index tagging) =="
-  if ogr2ogr --formats 2>/dev/null | grep -qi 'GeoJSONSeq'; then
+  echo "== ogr2ogr GeoJSONSeq driver (build-contours.sh index tagging) =="
+  # NOT `grep -q`: it exits on the first match, which SIGPIPEs ogr2ogr, which under
+  # `set -o pipefail` fails the whole pipeline and reports a present driver as missing.
+  # Plain grep drains the input, so the exit status reflects the match and nothing else.
+  if ogr2ogr --formats 2>/dev/null | grep -i 'GeoJSONSeq' >/dev/null; then
     echo "  GeoJSONSeq driver: OK"
   else
-    echo "  GeoJSONSeq driver: MISSING — build-contours.sh will fail" >&2
+    # stdout, not stderr: doctor is a report, and stderr interleaves out of order with
+    # the block-buffered stdout when the output is piped.
+    echo "  GeoJSONSeq driver: MISSING — build-contours.sh will fail"
   fi
 
   echo

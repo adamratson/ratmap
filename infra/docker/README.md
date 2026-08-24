@@ -41,7 +41,7 @@ memory                    >=   4 GB, 8 GB comfortable
 ```
 
 The disk figure: 85 GB of continent extracts held in the cache, plus a working copy of
-the largest one (europe-latest is ~35 GB) while it is being filtered, plus the GeoJSON
+the largest one (europe is ~35 GB) while it is being filtered, plus the GeoJSON
 exports. The cache is worth keeping between runs — re-running the places stage after the
 peaks stage then costs no download at all.
 
@@ -119,7 +119,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 
 | Stage | What it does | Rough cost |
 |---|---|---|
-| `prefetch` | One resumable, md5-verified copy of each continent into `/work/cache/osm` | ~85 GB download, once |
+| `prefetch` | One resumable, md5-verified copy of each continent into `/work/cache/osm`, pinned to a dated snapshot | ~85 GB download, once |
 | `world` | `build-world-catalog.sh` — z0–5 planet basemap extract | minutes, ~15 MB out |
 | `terrain` | `build-terrain.sh` — coarse global hillshade | minutes, ~62 MB out at z4 |
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles` | hours |
@@ -130,7 +130,8 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 
 Stages skip work that already exists; `--force` redoes it. `--dry-run` passes through to
 `build-region.sh` so you can size the region extracts first. `--skip-preflight` overrides
-the resource check if you know better.
+the resource check if you know better. `--repin` throws away the pinned snapshot dates
+and resolves current ones — see below.
 
 ```sh
 docker compose run --rm infra global prefetch peaks places
@@ -165,11 +166,46 @@ the writable layer, and gone when the container exits, so every run re-downloads
 
 Second, `prefetch` warms that same directory up front and checks each file against
 Geofabrik's published `.md5`. `fetch_to` resumes and retries but never verifies, and a
-silently truncated `europe-latest.osm.pbf` would surface as mysteriously missing summits
-rather than as an error. Because `prefetch` writes the exact paths
-`cached_osm_extract` looks for, the build scripts then find everything present and
-download nothing — no second copy. `RATMAP_NO_CACHE=1` skips the verification pass and
-lets the scripts fetch lazily.
+silently truncated europe extract would surface as mysteriously missing summits rather
+than as an error. Because `prefetch` writes the exact paths `cached_osm_extract` looks
+for, the build scripts then find everything present and download nothing — no second
+copy. `RATMAP_NO_CACHE=1` skips the verification pass and lets the scripts fetch lazily.
+
+### Why the sources are pinned to a date
+
+`prefetch` does not download `europe-latest.osm.pbf`. It resolves each continent to the
+newest *dated* snapshot — `europe-260823.osm.pbf` — records the choice in
+`/work/cache/osm/pinned-sources.tsv`, and every later stage reads its source URLs from
+there.
+
+The reason is that `-latest` is a moving target and a planet run is not a quick job.
+Geofabrik regenerates each continent daily; a full run takes days. Checking a file
+downloaded on Tuesday against the digest published on Thursday is a guaranteed mismatch,
+and the pipeline's only available response to a mismatch is to throw away 35 GB and
+fetch it again — a file that was never corrupt. Pinning also means the finished planet
+is one coherent snapshot rather than a smear across however many days the run spanned.
+
+Two details worth knowing:
+
+* **Pins are per continent, not one global date.** The daily rebuilds do not land
+  simultaneously, so during the rollover window some continents have today's file and
+  some only yesterday's. A day of skew between disjoint continent extracts is
+  meaningless; a run that dies because one continent had not rebuilt yet is not.
+* **Pins expire.** Geofabrik keeps roughly a week of daily snapshots (first-of-month
+  ones stick around as archives). Resume a run after longer than that and the pinned
+  file is a 404 — `prefetch` says so and tells you to re-run with `--repin`, which
+  resolves fresh dates and refetches whatever is not already cached.
+
+A `<continent>-latest.osm.pbf` left in the cache by an older run is not wasted: if its
+bytes hash to the pinned snapshot's digest then it *is* that snapshot, and `prefetch`
+adopts it under the dated name instead of re-downloading it.
+
+The dated URLs have a useful side effect. `download.geofabrik.de` 302-redirects the
+larger continents' `-latest` files to a mirror, and the mirror's `.md5` names the file
+it actually holds on disk (`europe-260823.osm.pbf`) while the origin's names it
+`europe-latest.osm.pbf`. That inconsistency is why the verification compares digests
+directly and never uses `md5sum -c`, which matches on the recorded filename. The dated
+URLs are served from the origin and skip the mirror entirely.
 
 A global peaks build is also the first time `build-peaks.sh`'s elevation assertions carry
 their full weight: with every continent present, both Ben Nevis **and** Mont Blanc are in

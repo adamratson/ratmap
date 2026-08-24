@@ -82,7 +82,16 @@ export function loadCachedManifest(): RegionManifest | null {
 }
 
 export async function fetchManifest(signal?: AbortSignal): Promise<RegionManifest> {
-  const response = await fetch(`${R2_BASE_URL}/regions/manifest.json`, { signal });
+  // `no-cache` = revalidate every time, don't skip the cache. The catalogue is the one
+  // piece of app data at a stable URL with no content hash in it, so a cached copy is how
+  // a newly published region stays invisible for however long the bucket's max-age is.
+  // Revalidation costs a conditional GET that answers 304 for a few hundred bytes; the
+  // stronger `no-store` would only throw away the copy that makes that 304 possible.
+  // (Offline, this fetch fails either way and the caller falls back to loadCachedManifest.)
+  const response = await fetch(`${R2_BASE_URL}/regions/manifest.json`, {
+    signal,
+    cache: 'no-cache',
+  });
   if (!response.ok) {
     throw new Error(`Region manifest HTTP ${response.status}`);
   }

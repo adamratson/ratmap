@@ -29,6 +29,9 @@ import {
   type Region,
 } from './regions/manifest';
 import { renderRegionsSheet, restoreDownloadedRegions } from './regions/regions-ui';
+import { downloadsInFlight } from './regions/downloader';
+import { startAppUpdates } from './update';
+import { APP_VERSION } from './version';
 import { RoutePlanner, type RouteSummary } from './routes/route-planner';
 import { renderRoutePanel, renderRoutesSheet } from './routes/routes-ui';
 import { addRouteLayers } from './routes/route-layers';
@@ -238,6 +241,14 @@ function renderDetailLimit(): void {
 const routePanel = document.querySelector<HTMLDivElement>('#route-panel')!;
 
 /**
+ * True while a route is being planned or followed — i.e. while an unannounced reload
+ * would throw away work, or drop someone mid-navigation on a hill. Read by the update
+ * controller below; declared ahead of the planner because `onChange` can fire during
+ * construction.
+ */
+let routeInProgress = false;
+
+/**
  * The planner routes over the `roads` layer inside downloaded region archives and samples
  * elevation from their terrain archives — no engine, no server, no network. Both come from
  * the same registry that backs the map itself, so a route can only be planned where the
@@ -259,7 +270,8 @@ const planner = new RoutePlanner({
   },
   onChange: (summary: RouteSummary) => {
     renderRoutePanel(summary, routesUi);
-    routesBtn.classList.toggle('active', summary.active || summary.following);
+    routeInProgress = summary.active || summary.following;
+    routesBtn.classList.toggle('active', routeInProgress);
   },
   onStatus: (message, kind) => showStatus(message, kind),
 });
@@ -624,6 +636,38 @@ async function renderStorageStatus(): Promise<void> {
       : 'This browser will not guarantee offline storage. Downloads stay blocked (C1).',
     'warn',
   );
+}
+
+// --- App updates --------------------------------------------------------------------
+
+// Debug handle, same convention as __ratmapMap above: "which build is this?" is the first
+// question worth asking whenever the app behaves like an older one, and until now nothing
+// could answer it.
+(window as unknown as { __ratmapVersion: string }).__ratmapVersion = APP_VERSION;
+
+// Dev builds have no generated worker, so registering one would only 404. Everything
+// under test here — precaching, the update swap — exists solely in a real build, which is
+// also what `vite preview` and the e2e suite run.
+if (import.meta.env.PROD) {
+  startAppUpdates({
+    swUrl: `${import.meta.env.BASE_URL}sw.js`,
+    scope: import.meta.env.BASE_URL,
+    isBusy: () => downloadsInFlight() > 0 || routeInProgress,
+    onUpdateHeld: (apply) => {
+      // Reached only when the update was held back, so it always has a concrete reason —
+      // worth naming, because "update available" with no explanation of why it is not
+      // being applied reads as a stuck app.
+      const reason =
+        downloadsInFlight() > 0 ? 'when the download finishes' : 'when you finish your route';
+      const card = showStatus(`New version ready — it will load ${reason}.`, 'ok');
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Reload now';
+      button.addEventListener('click', apply);
+      card.append(button);
+    },
+  });
 }
 
 // --- Status panel -------------------------------------------------------------------

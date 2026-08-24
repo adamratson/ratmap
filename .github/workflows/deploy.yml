@@ -26,8 +26,12 @@ jobs:
           node-version: 25
           cache: npm
       - run: npm ci
-      - run: npm test
+      # Build before testing, not after: test/service-worker.test.ts checks the generated
+      # service worker's update behaviour, which only exists in build output — with no
+      # dist/ it skips itself and the guard is worthless in CI. `npm run build` runs tsc
+      # first, so a type error still fails the job straight away.
       - run: npm run build
+      - run: npm test
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

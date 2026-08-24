@@ -8,12 +8,14 @@
 #
 # What this adds over calling the build-*.sh scripts by hand:
 #
-#  1. A *verified* source cache. lib.sh's cached_osm_extract already keeps each extract
-#     across runs and shares it between the peaks and places builds; this points it at
-#     the /work volume (OSM_CACHE_DIR) so it survives the container, and warms it up
-#     front checking each file against Geofabrik's published md5 — fetch_to resumes and
-#     retries but never verifies, and a truncated europe-latest would show up as missing
-#     summits rather than as an error.
+#  1. A *verified, pinned* source cache. lib.sh's cached_osm_extract already keeps each
+#     extract across runs and shares it between the peaks and places builds; this points
+#     it at the /work volume (OSM_CACHE_DIR) so it survives the container, and warms it
+#     up front checking each file against Geofabrik's published md5 — fetch_to resumes
+#     and retries but never verifies, and a truncated europe extract would show up as
+#     missing summits rather than as an error. The continents are pinned to dated
+#     snapshots (europe-260823.osm.pbf, not europe-latest.osm.pbf) so that a run
+#     spanning days is one coherent planet rather than a smear across several.
 #
 #  2. A preflight. This run takes days and hundreds of GB; finding out that /work has
 #     40 GB free, or that the container is capped at 8 GB of RAM, belongs at minute one
@@ -72,6 +74,7 @@ FORCE=""
 DRY_RUN=""
 SKIP_PREFLIGHT=""
 PREFLIGHT_ONLY=""
+REPIN=""
 stages=()
 
 for arg in "$@"; do
@@ -80,6 +83,7 @@ for arg in "$@"; do
     --dry-run)         DRY_RUN="--dry-run" ;;
     --skip-preflight)  SKIP_PREFLIGHT=1 ;;
     --preflight-only)  PREFLIGHT_ONLY=1 ;;
+    --repin)           REPIN=1 ;;
     all)               stages=("${ALL_STAGES[@]}") ;;
     prefetch|world|terrain|peaks|places|regions|contours|manifest) stages+=("$arg") ;;
     -*)  echo "Unknown flag: $arg" >&2; exit 2 ;;
@@ -172,40 +176,185 @@ preflight() {
 ########################################################################
 # prefetch — one resumable, checksum-verified copy of each continent
 ########################################################################
-fetch_continent() {
-  local name="$1"
-  local url="$GEOFABRIK_BASE/${name}-latest.osm.pbf"
-  local dest="$OSM_CACHE/${name}-latest.osm.pbf"
-  local md5_path="${dest}.md5"
+# How far back to look when pinning, and the file the resolved pins live in. The pin
+# file sits in the cache next to the extracts it names, because that is exactly the
+# scope it is valid for: throw the cache away and the pins mean nothing.
+PIN_LOOKBACK_DAYS="${RATMAP_PIN_LOOKBACK_DAYS:-8}"
+PIN_FILE="$OSM_CACHE/pinned-sources.tsv"
 
-  curl -fsS --retry 5 --retry-delay 10 --retry-all-errors -o "$md5_path" "${url}.md5" || return 1
+snapshot_date() {  # snapshot_date <days-ago> -> YYMMDD
+  # GNU date in the image; the BSD fallback is for running this on a Mac by hand.
+  date -u -d "$1 days ago" +%y%m%d 2>/dev/null || date -u -v-"$1"d +%y%m%d
+}
 
-  if [ -f "$dest" ] && (cd "$OSM_CACHE" && md5sum -c --status "$(basename "$md5_path")"); then
-    log "  $name: cached and verified ($(du -h "$dest" | cut -f1))"
+# Echoes the md5 digest at a Geofabrik .md5 URL; non-zero if the URL did not serve a
+# readable one.
+#
+# Deliberately not `md5sum -c`: -c matches on the *filename* recorded in the .md5, and
+# that name is not stable across Geofabrik's hosts. The origin rewrites it to
+# "europe-latest.osm.pbf"; the mirror it redirects the big continents to serves the file
+# it actually has on disk, "europe-260823.osm.pbf". -c would go looking for that dated
+# name in the cache, not find it, and condemn a perfectly good 35 GB download.
+published_md5() {
+  local md5_url="$1" md5_path="$2" want
+  # -L is not optional. download.geofabrik.de 302s the larger continents (europe and
+  # north-america at the time of writing) to ftp5.gwdg.de, and -f does not fail on a 3xx,
+  # so without -L curl writes the redirect's HTML body into the .md5 and every check
+  # afterwards dies with "no properly formatted checksum lines found".
+  # --retry-connrefused, deliberately NOT --retry-all-errors. resolve_pin calls this to
+  # probe dates that may not exist, and --retry-all-errors retries 404s: measured at
+  # 51.7s to establish that a snapshot is missing, against 0.29s here. Transient and 5xx
+  # failures still retry, which is the case that actually wants retrying.
+  curl -fsSL --retry 5 --retry-delay 10 --retry-connrefused -o "$md5_path" "$md5_url" || return 1
+  want="$(awk 'NR == 1 { print $1 }' "$md5_path" 2>/dev/null)"
+  case "$want" in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]\
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]\
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]\
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+    *) return 1 ;;
+  esac
+  printf '%s' "$want"
+}
+
+file_md5_is() {  # file_md5_is <path> <expected-hex>
+  [ -f "$1" ] && [ "$(md5sum < "$1" | cut -d' ' -f1)" = "$2" ]
+}
+
+# Resolve one continent to a dated Geofabrik snapshot. Echoes "<basename>\t<md5>".
+#
+# Why dated rather than "-latest": Geofabrik regenerates <continent>-latest.osm.pbf
+# every day, and keeps the dated files for about a week (measured 2026-08-24: six days
+# back, then 404; first-of-month snapshots stick around far longer as archives). A
+# planet run takes days. Verifying against "-latest" therefore means
+# checking yesterday's bytes against today's digest — a guaranteed mismatch partway
+# through the run, and a 35 GB refetch of a file that was never corrupt. Pinning once,
+# up front, makes the whole run one coherent snapshot of the planet instead of a
+# smear across however many days the run happens to span.
+#
+# Resolved per continent, not once globally: the daily rebuilds do not land
+# simultaneously, so inside the rollover window some continents have today's file and
+# some still only have yesterday's. A day of skew between disjoint continent extracts
+# is meaningless; a run that dies because one continent had not rebuilt yet is not.
+#
+# The dated URLs are also served from the origin rather than 302'd to a mirror, so
+# pinning sidesteps the mirror inconsistency that made this necessary in the first place.
+resolve_pin() {
+  local name="$1" d dt base want
+  for (( d = 0; d < PIN_LOOKBACK_DAYS; d++ )); do
+    dt="$(snapshot_date "$d")"
+    base="${name}-${dt}.osm.pbf"
+    # A 200 on the .md5 proves the snapshot exists *and* hands us its digest, so this
+    # is one request, not a probe followed by a fetch.
+    # Quiet: today's snapshot legitimately does not exist yet for part of every day, so
+    # a 404 here is the normal path, not a fault. A real failure is reported by the
+    # "no dated snapshot" line once the whole window has been tried.
+    if want="$(published_md5 "$GEOFABRIK_BASE/${base}.md5" "$OSM_CACHE/${base}.md5" 2>/dev/null)"; then
+      printf '%s\t%s' "$base" "$want"
+      return 0
+    fi
+    rm -f "$OSM_CACHE/${base}.md5"
+  done
+  echo "  $name: no dated snapshot in the last $PIN_LOOKBACK_DAYS days at $GEOFABRIK_BASE" >&2
+  return 1
+}
+
+pin_lookup() {  # pin_lookup <continent> -> "<basename>\t<md5>"
+  [ -f "$PIN_FILE" ] || return 1
+  awk -F'\t' -v c="$1" '$1 == c { printf "%s\t%s", $2, $3; found = 1 } END { exit !found }' "$PIN_FILE"
+}
+
+pin_for() {  # pin_for <continent> -> "<basename>\t<md5>", resolving and recording once
+  local name="$1" pin
+  if pin="$(pin_lookup "$name")"; then
+    printf '%s' "$pin"
     return 0
+  fi
+  pin="$(resolve_pin "$name")" || return 1
+  printf '%s\t%s\n' "$name" "$pin" >> "$PIN_FILE"
+  printf '%s' "$pin"
+}
+
+url_exists() { curl -fsSL --retry 3 --retry-delay 5 -o /dev/null -r 0-0 "$1"; }
+
+fetch_continent() {
+  local name="$1" pin base want url dest
+
+  pin="$(pin_for "$name")" || return 1
+  base="${pin%%$'\t'*}"
+  want="${pin##*$'\t'}"
+  url="$GEOFABRIK_BASE/$base"
+  dest="$OSM_CACHE/$base"
+
+  if file_md5_is "$dest" "$want"; then
+    log "  $name: cached and verified — $base ($(du -h "$dest" | cut -f1))"
+    return 0
+  fi
+
+  # Reclaim a "-latest" download from before this script pinned dates, or from a
+  # RATMAP_NO_CACHE run where the build scripts fetched lazily. If the bytes hash to the
+  # pinned snapshot's digest then they *are* that snapshot, whatever the file is called,
+  # and adopting it saves re-downloading up to 35 GB to arrive at the same file.
+  local legacy="$OSM_CACHE/${name}-latest.osm.pbf"
+  if [ ! -f "$dest" ] && [ -f "$legacy" ]; then
+    log "  $name: checking cached ${name}-latest.osm.pbf against $base"
+    if file_md5_is "$legacy" "$want"; then
+      log "  $name: adopted it as $base — no re-download needed"
+      mv -f "$legacy" "$dest"
+      return 0
+    fi
+    log "  $name: it is a different snapshot; leaving it alone"
+  fi
+
+  # An aged-out pin is a 404, not a slow download. Catch it here so it reads as "re-pin"
+  # rather than as two mystifying failed attempts at a file that is simply gone.
+  if [ ! -f "$dest" ] && ! url_exists "$url"; then
+    echo "  $name: $base is no longer on the server." >&2
+    echo "    Geofabrik keeps roughly a week of daily snapshots and this pin has aged out." >&2
+    echo "    Re-run the prefetch stage with --repin to pin a current one." >&2
+    return 1
   fi
 
   local attempt
   for attempt in 1 2; do
     log "  $name: downloading (attempt $attempt) $url"
-    # -C - resumes a partial from an interrupted run. A stale partial left over from a
-    # *previous* planet build fails the md5 below; attempt 2 starts clean.
     # curl's default meter emits a progress table line per second, which turns a 35 GB
     # download into thousands of lines of `docker logs`. Silent unless asked.
     local progress=--no-progress-meter
     [ -n "${RATMAP_CURL_PROGRESS:-}" ] && progress=--progress-bar
-    curl -fL --retry 5 --retry-delay 10 --retry-all-errors \
-      "$progress" -C - -o "$dest" "$url"
 
-    if (cd "$OSM_CACHE" && md5sum -c --status "$(basename "$md5_path")"); then
+    # -C - resumes a partial from an interrupted run, which is worth having on a 35 GB
+    # continent — and now that the target is a dated file rather than "-latest", the
+    # resume is always resuming the same bytes it started on. A refusal (a leftover
+    # already >= the current length draws `curl: (33) ... Cannot resume`) falls straight
+    # through to a clean download rather than eating a whole attempt.
+    if [ -f "$dest" ]; then
+      curl -fL --retry 2 --retry-delay 5 --retry-all-errors \
+        "$progress" -C - -o "$dest" "$url" \
+        || { log "  $name: cannot resume the cached partial — restarting from scratch"; rm -f "$dest"; }
+    fi
+    if [ ! -f "$dest" ]; then
+      curl -fL --retry 5 --retry-delay 10 --retry-all-errors \
+        "$progress" -o "$dest" "$url"
+    fi
+
+    if file_md5_is "$dest" "$want"; then
       log "  $name: verified ($(du -h "$dest" | cut -f1))"
       return 0
     fi
-    log "  $name: md5 mismatch — discarding and refetching from scratch"
-    rm -f "$dest"
+    if [ "$attempt" = 1 ]; then
+      log "  $name: md5 mismatch — discarding and refetching from scratch"
+      rm -f "$dest"
+    fi
   done
 
+  # Keep the bytes rather than rm them. This is up to 35 GB and, on a domestic line,
+  # several hours; renaming it aside leaves it for inspection (`osmium fileinfo`, a
+  # manual md5sum against a different mirror) while still making sure the next run's
+  # `-C -` cannot resume on top of a file we already know is wrong.
+  mv -f "$dest" "${dest}.unverified" 2>/dev/null || true
   echo "  $name: failed md5 twice, giving up" >&2
+  echo "    kept the last download as ${dest}.unverified" >&2
   return 1
 }
 
@@ -221,6 +370,11 @@ stage_prefetch() {
     log "  the build scripts will still cache lazily into $OSM_CACHE, just unverified"
     return 0
   fi
+  if [ -n "$REPIN" ] && [ -f "$PIN_FILE" ]; then
+    log "--repin: discarding the existing pins in $PIN_FILE"
+    rm -f "$PIN_FILE"
+  fi
+
   local c
   for c in "${CONTINENTS[@]}"; do
     # Explicit || return: these stage functions run as the condition of an `if` in the
@@ -228,15 +382,46 @@ stage_prefetch() {
     # continent would be logged and the run would carry on to build a partial planet.
     fetch_continent "$c" || return 1
   done
+
+  # Worth printing in full: every later stage reads these pins, and when someone comes
+  # back to a three-day-old log asking "which planet is this build of?", this is the
+  # answer.
+  log "pinned snapshots ($PIN_FILE):"
+  awk -F'\t' '{ printf "    %-20s %s\n", $1, $2 }' "$PIN_FILE"
   log "cache total: $(du -sh "$OSM_CACHE" | cut -f1)"
+
+  # Repinning does not delete the previous snapshot's extracts, and at ~85 GB a set that
+  # is disk is the binding constraint on this whole run (see preflight). Flag orphans
+  # rather than letting a later stage die of ENOSPC with no explanation.
+  local orphans
+  orphans="$(cd "$OSM_CACHE" && ls -1 ./*.osm.pbf 2>/dev/null | sed 's|^\./||' \
+    | grep -vxF -f <(cut -f2 "$PIN_FILE") || true)"
+  if [ -n "$orphans" ]; then
+    log "extracts in the cache that no current pin refers to — safe to delete:"
+    printf '%s\n' "$orphans" | sed 's/^/    /'
+    log "  $(printf '%s\n' "$orphans" | sed "s|^|$OSM_CACHE/|" | xargs du -ch 2>/dev/null | tail -1 | cut -f1) reclaimable"
+  fi
 }
 
 # The source list handed to build-peaks.sh / build-places.sh. Both iterate it unquoted
 # and word-split on whitespace, so newline-separated is what they want.
+#
+# These are the *pinned* dated URLs, which matters for more than consistency:
+# cached_osm_extract derives its cache filename from the URL's basename, so handing it
+# the same dated URL prefetch downloaded is what makes it find the file already there
+# and fetch nothing. Hand it "-latest" instead and it would download a second, differently
+# named copy of every continent — another 85 GB, and a different snapshot to boot.
+#
+# Falls back to "-latest" only when there are no pins at all, i.e. prefetch was skipped
+# (RATMAP_NO_CACHE) or never run, which is the documented unverified-lazy-fetch path.
 osm_source_urls() {
-  local c
+  local c pin
   for c in "${CONTINENTS[@]}"; do
-    echo "$GEOFABRIK_BASE/${c}-latest.osm.pbf"
+    if pin="$(pin_lookup "$c")"; then
+      echo "$GEOFABRIK_BASE/${pin%%$'\t'*}"
+    else
+      echo "$GEOFABRIK_BASE/${c}-latest.osm.pbf"
+    fi
   done
 }
 

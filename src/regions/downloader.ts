@@ -127,6 +127,21 @@ async function downloadArtifact(
 }
 
 /**
+ * How many region downloads are running right now.
+ *
+ * Read by the app-update controller (src/update.ts) to hold a reload back. A reload here
+ * aborts an in-flight multi-hundred-MB transfer, and C12 means nothing carries it on in
+ * the background — on iOS there is no Background Fetch and no Background Sync. Resume
+ * would recover the bytes already on disk, but interrupting someone's download to ship a
+ * routine deploy is not a trade worth making.
+ */
+let inFlight = 0;
+
+export function downloadsInFlight(): number {
+  return inFlight;
+}
+
+/**
  * Download every artifact a region declares. Resumes from whatever is already in OPFS.
  * Iterates `region.artifacts` rather than known names, so a new artifact kind needs no
  * change here (C16).
@@ -135,6 +150,7 @@ export async function downloadRegion(
   region: Region,
   options: { signal: AbortSignal; onProgress?: ProgressListener },
 ): Promise<void> {
+  inFlight += 1;
   const wakeLock = new WakeLock();
   await wakeLock.acquire();
 
@@ -166,6 +182,7 @@ export async function downloadRegion(
     progress.done = true;
     options.onProgress?.({ ...progress });
   } finally {
+    inFlight -= 1;
     await wakeLock.release();
   }
 }

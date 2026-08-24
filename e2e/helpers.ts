@@ -51,8 +51,9 @@ export async function waitForServiceWorkerControl(page: Page): Promise<void> {
       navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), {
         once: true,
       });
-      // registerType is 'autoUpdate' (skipWaiting), so this normally fires promptly;
-      // resolve anyway so a already-controlled edge case can't hang the suite.
+      // The worker is built with clientsClaim, so on a first install it claims this page
+      // as soon as it activates and this fires promptly. Resolve anyway so an
+      // already-controlled edge case can't hang the suite.
       if (registration.active && navigator.serviceWorker.controller) resolve();
       setTimeout(resolve, 10_000);
     });

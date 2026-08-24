@@ -161,6 +161,84 @@ describe('PathGraph.snap', () => {
   });
 });
 
+describe('PathGraph.routeBetween connectivity-aware snap', () => {
+  it('skips an isolated stub for a connected node a little further out', () => {
+    const graph = new PathGraph(WORLD);
+
+    // A short dead-end lane, ~4 m from the tapped point — nothing routes from it.
+    const tap: LngLat = [-5.005, 56.79];
+    const stub: LngLat = [-5.00495, 56.79002];
+    graph.addLine(line([stub, [-5.0049, 56.79004]]));
+    expect(distanceMetres(tap, stub)).toBeLessThan(5);
+
+    // The real network, further away but still well within the snap radius.
+    const real1: LngLat = [-5.0035, 56.79];
+    const real2: LngLat = [-5.0005, 56.79];
+    graph.addLine(line([real1, real2]));
+    expect(distanceMetres(tap, real1)).toBeLessThan(150);
+
+    // Plain nearest-vertex snap would land on the stub and find nothing.
+    const nearest = graph.snap(tap, 150)!;
+    expect(distanceMetres(graph.nodeLngLat(nearest), stub)).toBeLessThan(1);
+
+    const leg = graph.routeBetween(tap, real2, { maxSnapM: 150 });
+    expect(leg).not.toBeNull();
+  });
+
+  it('picks the pair with the shortest route, not the pair with the shortest snap', () => {
+    const graph = new PathGraph(WORLD);
+
+    // The single nearest candidate to `tap` only reaches the junction by a ~5 km detour.
+    const tap: LngLat = [-5.005, 56.79];
+    const nodeA: LngLat = [-5.00495, 56.79002];
+    const detour1: LngLat = [-4.98, 56.8];
+    const detour2: LngLat = [-4.97, 56.79];
+    const junction: LngLat = [-5.003, 56.7902];
+    graph.addLine(line([nodeA, detour1, detour2, junction]));
+    expect(distanceMetres(tap, nodeA)).toBeLessThan(5);
+
+    // A candidate ~13 m further from `tap` reaches the same junction directly, in ~110 m.
+    const nodeB: LngLat = [-5.0048, 56.7901];
+    graph.addLine(line([nodeB, junction]));
+    expect(distanceMetres(tap, nodeB)).toBeLessThan(20);
+    expect(distanceMetres(nodeB, junction)).toBeLessThan(150);
+
+    const target: LngLat = [-5.0029, 56.7902];
+    const leg = graph.routeBetween(tap, target, { maxSnapM: 150 })!;
+    expect(leg).not.toBeNull();
+    // The detour route is ~5 km; picking the direct one keeps this well under 1 km.
+    expect(leg.distanceM).toBeLessThan(1000);
+  });
+});
+
+describe('PathGraph gap bridging', () => {
+  it('links two features a genuine mapping gap apart into one route', () => {
+    const graph = new PathGraph(WORLD);
+    // Two lanes traced independently that end a few metres short of touching —
+    // the same shape as a driveway that never got a shared vertex with its street.
+    const gapEnd: LngLat = [-5.0, 56.79005];
+    const acrossGap: LngLat = [-5.0, 56.78997];
+    expect(distanceMetres(gapEnd, acrossGap)).toBeLessThan(20);
+
+    graph.addLine(line([A, gapEnd]));
+    graph.addLine(line([acrossGap, C]));
+
+    expect(graph.route(0, 3)).not.toBeNull();
+  });
+
+  it('does not bridge a gap wide enough to be a genuinely different road', () => {
+    const graph = new PathGraph(WORLD);
+    const farEnd: LngLat = [-5.0, 56.795];
+    const farAcross: LngLat = [-5.0, 56.7965];
+    expect(distanceMetres(farEnd, farAcross)).toBeGreaterThan(20);
+
+    graph.addLine(line([A, farEnd]));
+    graph.addLine(line([farAcross, C]));
+
+    expect(graph.route(0, 3)).toBeNull();
+  });
+});
+
 describe('global unit conversion', () => {
   it('round-trips a coordinate', () => {
     const [gx, gy] = lngLatToGlobal(-5.0037, 56.7969, WORLD);

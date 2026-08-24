@@ -194,6 +194,32 @@ describe('addRegionToMap', () => {
     expect(ids.indexOf('region-lochaber-contours-labels')).toBeLessThan(firstRegionLabel);
   });
 
+  it('does not draw the region at zooms where its tiles cover a continent', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, region);
+
+    // `pmtiles extract --bbox` keeps whole upstream tiles instead of re-clipping them, so
+    // a region's low-zoom tiles are planet tiles that merely intersect it. Montenegro's z5
+    // basemap tile spans Vienna to Athens; drawing it painted that rectangle over Romania
+    // and Bulgaria. Lochaber is 1.0 deg wide, so its tiles stop out-sizing it at z9.
+    for (const layer of map.layers) {
+      expect(Number(layer.minzoom)).toBeGreaterThanOrEqual(9);
+    }
+  });
+
+  it('scales the cutoff to the region, rather than assuming one size', async () => {
+    const map = fakeMap();
+    // Scotland spans 8 deg — its tiles are region-sized three zoom levels earlier than
+    // Lochaber's, and holding it back to Lochaber's cutoff would hide detail it has.
+    const scotland: Region = { ...region, id: 'scotland', bbox: [-8.7, 54.6, -0.7, 61.0] };
+
+    await addRegionToMap(map as unknown as MLMap, registry, scotland);
+
+    const hillshade = map.layers.find((l) => String(l.id).endsWith('terrain-hillshade'))!;
+    expect(hillshade.minzoom).toBe(6);
+  });
+
   it('skips artifacts that are not actually in OPFS yet', async () => {
     getArtifactFileMock.mockImplementation(async (name: string) =>
       name.includes('contours') ? null : new File([new Uint8Array(4)], name),

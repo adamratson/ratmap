@@ -61,9 +61,10 @@ function beneathLabels(map: MLMap, regionId: string): string | undefined {
  *
  * Styling call, not a settled decision — §8.3 is still open.
  */
-function addPathLayers(map: MLMap, sourceId: string): void {
+function addPathLayers(map: MLMap, sourceId: string, regionMin: number): void {
   const isPath: unknown = ['==', ['get', 'kind'], 'path'];
   const before = map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined;
+  const minzoom = Math.max(12, regionMin);
 
   // Casing first, so the dashes above sit in a light channel and stay legible against
   // dark relief.
@@ -74,7 +75,7 @@ function addPathLayers(map: MLMap, sourceId: string): void {
       source: sourceId,
       'source-layer': 'roads',
       filter: isPath as FilterSpecification,
-      minzoom: 12,
+      minzoom,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': 'rgba(255,255,255,0.85)',
@@ -91,7 +92,7 @@ function addPathLayers(map: MLMap, sourceId: string): void {
       source: sourceId,
       'source-layer': 'roads',
       filter: isPath as FilterSpecification,
-      minzoom: 12,
+      minzoom,
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': '#8a3d2e',
@@ -117,6 +118,29 @@ function addPathLayers(map: MLMap, sourceId: string): void {
   );
 }
 
+/**
+ * The zoom below which a region's own layers must not draw.
+ *
+ * `pmtiles extract --bbox` keeps whole upstream tiles rather than re-clipping their
+ * contents, so a region archive's low-zoom tiles are ordinary planet tiles that merely
+ * *intersect* the region. Montenegro's z5 basemap tile spans 11.25° x 7.9° — Vienna to
+ * Athens — and 85 of its 88 place labels fall outside the region (verified 2026-08-24 by
+ * decoding it). Drawing it over the global catalog painted exactly that rectangle onto
+ * the map: a hard-edged box across Romania and Bulgaria, with the region's opaque fills
+ * burying the global hillshade inside it and the region's own hillshade doubling up.
+ *
+ * Suppressing them costs no detail. These tiles come from the same two upstream archives
+ * the global catalog and global terrain are themselves extracted from, so below this
+ * threshold the region is showing a duplicate of what is already on screen.
+ *
+ * The threshold is where a source tile stops being wider than the region, which bounds
+ * the overhang to about one region-width instead of a continent.
+ */
+function regionMinZoom([west, south, east, north]: Region['bbox']): number {
+  const span = Math.max(east - west, north - south);
+  return Math.ceil(Math.log2(360 / span));
+}
+
 function regionLayerIds(map: MLMap, regionId: string): string[] {
   return map
     .getStyle()
@@ -133,6 +157,8 @@ export async function addRegionToMap(
   registry: TileSourceRegistry,
   region: Region,
 ): Promise<void> {
+  const minzoom = regionMinZoom(region.bbox);
+
   for (const artifact of region.artifacts) {
     const file = await getArtifactFile(artifact.filename);
     if (!file) continue;
@@ -157,6 +183,7 @@ export async function addRegionToMap(
           id: `${sourceId}-hillshade`,
           type: 'hillshade',
           source: sourceId,
+          minzoom,
           paint: {
             // Region terrain tops out around z11 while the basemap and contours go to
             // z13/z14, so at hiking zoom the DEM is being stretched and turns into dark
@@ -193,11 +220,15 @@ export async function addRegionToMap(
       const generated = basemapLayers(sourceId, namedFlavor('light'), { lang: 'en' });
       for (const layer of generated) {
         if (!('source' in layer) || !layer.source) continue;
-        const scoped = { ...layer, id: `${sourceId}-${layer.id}` };
+        const scoped = {
+          ...layer,
+          id: `${sourceId}-${layer.id}`,
+          minzoom: Math.max(layer.minzoom ?? 0, minzoom),
+        };
         map.addLayer(scoped, map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined);
       }
 
-      addPathLayers(map, sourceId);
+      addPathLayers(map, sourceId, minzoom);
     } else if (artifact.kind === 'contours') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
       map.addLayer(
@@ -206,6 +237,7 @@ export async function addRegionToMap(
           type: 'line',
           source: sourceId,
           'source-layer': 'contours',
+          minzoom,
           paint: {
             'line-color': 'rgba(120, 85, 55, 0.55)',
             // Index contours (every 5th) are drawn heavier, as on a paper map.
@@ -222,7 +254,7 @@ export async function addRegionToMap(
         beneathLabels(map, region.id),
       );
 
-      addContourLabels(map, sourceId, region.id);
+      addContourLabels(map, sourceId, region.id, minzoom);
     }
   }
 }
@@ -237,7 +269,12 @@ export async function addRegionToMap(
  *
  * Styling call, not a settled decision — §8.3 is still open.
  */
-function addContourLabels(map: MLMap, sourceId: string, regionId: string): void {
+function addContourLabels(
+  map: MLMap,
+  sourceId: string,
+  regionId: string,
+  regionMin: number,
+): void {
   map.addLayer(
     {
       id: `${sourceId}-labels`,
@@ -247,7 +284,7 @@ function addContourLabels(map: MLMap, sourceId: string, regionId: string): void 
       filter: ['==', ['get', 'idx'], 1] as unknown as FilterSpecification,
       // Below this the index lines are close enough together that labels collide more
       // than they inform; contour tiles themselves only start at z11.
-      minzoom: 13,
+      minzoom: Math.max(13, regionMin),
       layout: {
         // Bare number, no unit: the convention on hill maps, and on a sheet already
         // covered in contours the unit is never ambiguous. Peak labels keep "m" because

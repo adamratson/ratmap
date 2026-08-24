@@ -29,6 +29,9 @@ import {
   type Region,
 } from './regions/manifest';
 import { renderRegionsSheet, restoreDownloadedRegions } from './regions/regions-ui';
+import { RoutePlanner, type RouteSummary } from './routes/route-planner';
+import { renderRoutePanel, renderRoutesSheet } from './routes/routes-ui';
+import { addRouteLayers } from './routes/route-layers';
 
 // C17: the registry is the single owner of addProtocol/Protocol.add for the whole app.
 const registry = TileSourceRegistry.install();
@@ -46,7 +49,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <button id="locate-btn" type="button" title="Show my location">Locate</button>
     <button id="places-btn" type="button" title="Saved places">Saved</button>
     <button id="regions-btn" type="button" title="Offline regions">Offline</button>
+    <button id="routes-btn" type="button" title="Routes">Routes</button>
   </div>
+  <div id="route-panel" hidden></div>
   <div id="detail-notice" hidden></div>
   <div id="status-panel"></div>
   <div id="sheet" hidden></div>
@@ -149,15 +154,28 @@ map.on('error', (e) => {
 
 map.on('load', () => {
   addPeaksLayer(map, registry);
+  // Added at load rather than lazily on first use: adding a source before the style is
+  // ready throws, and the planner can be opened at any moment after this point.
+  addRouteLayers(map);
   // Downloaded regions are restored without any user action, so a cold offline launch
   // renders from OPFS immediately (Phase 3 acceptance).
   void restoreRegions();
 });
 
+/**
+ * Regions whose archives are actually present in OPFS.
+ *
+ * The route planner reads its network and its elevation data straight out of these
+ * archives (Phase 4), so it needs to know which ones are live — not which ones the
+ * catalogue lists.
+ */
+let downloadedRegions: Region[] = [];
+
 async function restoreRegions(): Promise<void> {
   try {
     const manifest = await fetchManifest();
     const restored = await restoreDownloadedRegions(map, registry, manifest.regions);
+    downloadedRegions = restored;
     applyAvailableDetail(restored);
   } catch {
     // Offline with no cached catalogue is normal and not an error worth surfacing:
@@ -186,6 +204,7 @@ async function restoreFromOpfsWithoutManifest(): Promise<void> {
   const cached = loadCachedManifest();
   if (!cached) return;
   const restored = await restoreDownloadedRegions(map, registry, cached.regions);
+  downloadedRegions = restored;
   applyAvailableDetail(restored);
 }
 
@@ -214,9 +233,64 @@ function renderDetailLimit(): void {
   detailNotice.title = state.detail ?? '';
 }
 
+// --- Route planning (Phase 4) --------------------------------------------------------
+
+const routePanel = document.querySelector<HTMLDivElement>('#route-panel')!;
+
+/**
+ * The planner routes over the `roads` layer inside downloaded region archives and samples
+ * elevation from their terrain archives — no engine, no server, no network. Both come from
+ * the same registry that backs the map itself, so a route can only be planned where the
+ * map has real data, which is the honest boundary.
+ */
+const planner = new RoutePlanner({
+  map,
+  registry,
+  downloadedRegions: () => downloadedRegions,
+  // A tap that lands on a summit makes it a named waypoint, so a route reads
+  // "Achintee → Ben Nevis" rather than as a list of coordinates.
+  describePoint: (event) => {
+    const peak = peakAt(map, event.point);
+    if (!peak) return null;
+    return {
+      ...(peak.name ? { name: peak.name } : {}),
+      ...(typeof peak.ele === 'number' ? { ele: peak.ele } : {}),
+    };
+  },
+  onChange: (summary: RouteSummary) => {
+    renderRoutePanel(summary, routesUi);
+    routesBtn.classList.toggle('active', summary.active || summary.following);
+  },
+  onStatus: (message, kind) => showStatus(message, kind),
+});
+
+const routesBtn = document.querySelector<HTMLButtonElement>('#routes-btn')!;
+
+const routesUi = {
+  planner,
+  panel: routePanel,
+  sheet,
+  onStatus: (message: string, kind: 'ok' | 'warn' | 'error') => {
+    showStatus(message, kind);
+  },
+};
+
+routesBtn.addEventListener('click', () => {
+  void renderRoutesSheet(routesUi);
+});
+
+// Debug handle, same convention as __ratmapMap above: it lets the e2e suite assert on the
+// real planner state — leg kinds, computed ascent — rather than reading it back out of the
+// rendered DOM. Read-only; nothing in the app reads it.
+(window as unknown as { __ratmapPlanner: RoutePlanner }).__ratmapPlanner = planner;
+
 // --- Peak detail sheet -------------------------------------------------------------
 
 map.on('click', (e) => {
+  // While planning, a tap places a waypoint instead of opening a summit — including a tap
+  // on a summit, which becomes a named waypoint rather than a detail sheet.
+  if (planner.handleMapClick(e)) return;
+
   const peak = peakAt(map, e.point);
   if (peak) {
     showPeakSheet(peak, e.lngLat);
@@ -226,6 +300,8 @@ map.on('click', (e) => {
 });
 
 map.on('mousemove', (e) => {
+  // Planning mode owns the cursor (crosshair); don't fight it over summits.
+  if (planner.isActive()) return;
   map.getCanvas().style.cursor = peakAt(map, e.point) ? 'pointer' : '';
 });
 
@@ -289,7 +365,11 @@ document.querySelector('#regions-btn')!.addEventListener('click', () => {
       showStatus(message, kind);
       // A completed download (or a delete) changes what detail is available, so
       // re-derive the ceiling from what is actually on disk rather than assuming.
-      void restoreRegions();
+      void restoreRegions().then(() => {
+        // The router caches decoded tiles per archive, including "there is nothing here".
+        // A new region would otherwise stay unroutable until a reload.
+        planner.invalidateRegions();
+      });
     },
   });
 });
@@ -459,6 +539,14 @@ map.on('dragstart', () => location.cancelFollow());
 
 function renderLocationState(state: LocationState): void {
   locateBtn.classList.toggle('active', location.isFollowing());
+
+  // Route following runs off the same watch as the location dot rather than starting a
+  // second one: two concurrent watchPosition calls double the GPS wake-ups for no extra
+  // information, and battery is the binding constraint on a long day out.
+  if (state.status === 'tracking') {
+    planner.updatePosition([state.position.coords.longitude, state.position.coords.latitude]);
+  }
+
   switch (state.status) {
     case 'locating':
       locateBtn.textContent = 'Locating…';

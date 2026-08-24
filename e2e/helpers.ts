@@ -118,3 +118,79 @@ export async function styleLayers(page: Page): Promise<Array<{ id: string; type:
     return map.getStyle().layers.map((l) => ({ id: l.id, type: l.type }));
   });
 }
+
+/**
+ * Click the map at a geographic position.
+ *
+ * Projected through the live map rather than taking pixel coordinates, so a test says
+ * where on the ground it is tapping and stays correct if the default view changes.
+ */
+export async function clickMapAt(page: Page, lng: number, lat: number): Promise<void> {
+  const point = await page.evaluate(
+    ([lngValue, latValue]) => {
+      const map = (window as unknown as { __ratmapMap: MLMap }).__ratmapMap;
+      const projected = map.project([lngValue, latValue]);
+      return { x: projected.x, y: projected.y };
+    },
+    [lng, lat] as const,
+  );
+
+  await page.mouse.click(point.x, point.y);
+}
+
+/** Point the map at a bounding box, so subsequent clicks land where intended. */
+export async function showArea(
+  page: Page,
+  bbox: [number, number, number, number],
+): Promise<void> {
+  await page.evaluate((box) => {
+    const map = (window as unknown as { __ratmapMap: MLMap }).__ratmapMap;
+    map.fitBounds(
+      [
+        [box[0], box[1]],
+        [box[2], box[3]],
+      ],
+      { padding: 80, duration: 0 },
+    );
+  }, bbox);
+  await page.waitForTimeout(300);
+}
+
+export interface PlannerProbe {
+  waypoints: number;
+  legKinds: Array<'snapped' | 'straight'>;
+  distanceM: number;
+  pending: number;
+  ascentM: number | null;
+  coverage: number | null;
+  coordCount: number;
+}
+
+/** Read the planner's real state, rather than parsing it back out of the panel. */
+export async function plannerState(page: Page): Promise<PlannerProbe> {
+  return page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const planner = (window as any).__ratmapPlanner;
+    const draft = planner.getDraft();
+    const profile = planner.getProfile();
+    return {
+      waypoints: draft.waypointCount,
+      legKinds: draft
+        .getLegs()
+        .filter((leg: unknown) => leg !== null)
+        .map((leg: { kind: 'snapped' | 'straight' }) => leg.kind),
+      distanceM: draft.totalDistanceM,
+      pending: draft.pendingLegs().length,
+      ascentM: profile ? profile.ascentM : null,
+      coverage: profile ? profile.coverage : null,
+      coordCount: draft.coordinates().length,
+    };
+  });
+}
+
+/** Open the routes sheet and start a fresh route. */
+export async function startNewRoute(page: Page): Promise<void> {
+  await page.locator('#routes-btn').click();
+  await page.locator('.routes-toolbar button', { hasText: 'New route' }).click();
+  await page.locator('#route-panel').waitFor({ state: 'visible' });
+}

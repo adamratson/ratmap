@@ -18,7 +18,10 @@ export default defineConfig(({ command, isPreview }) => ({
   base: command === 'build' || isPreview ? GH_PAGES_BASE : '/',
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.ts'],
+    // `test/` holds the node-side tests — the ones that read built artifacts off disk.
+    // They are typechecked by tsconfig.e2e.json, which is the config that has node types;
+    // the app's own tsconfig deliberately does not.
+    include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
   },
   plugins: [
     VitePWA({

@@ -487,3 +487,302 @@ body {
 .maplibregl-ctrl-attrib {
   font-size: 11px;
 }
+
+/* --- Route planning (Phase 4) ------------------------------------------------------ */
+
+/* The planning panel sits above the sheet's slot but below it in z-order, so opening the
+   routes list covers the panel rather than fighting it for the same corner. */
+#route-panel {
+  position: absolute;
+  left: calc(0.5rem + env(safe-area-inset-left));
+  right: calc(0.5rem + env(safe-area-inset-right));
+  bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  z-index: 2;
+  max-width: 30rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
+}
+
+#route-panel[hidden] {
+  display: none;
+}
+
+.route-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.route-panel-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.route-costing {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.route-costing button {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: var(--slate-900);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.route-costing button.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.route-hint,
+.route-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.route-note.warn {
+  color: #b45309;
+}
+
+.route-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.5rem;
+  margin: 0.6rem 0 0;
+}
+
+.route-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.route-stats dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.route-stats dd {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The chart stretches to the panel width; its viewBox uses preserveAspectRatio="none", so
+   the drawing is scaled rather than re-laid-out. Distance and height are on unrelated
+   scales anyway — a profile is never drawn to a true aspect ratio. */
+.profile-chart {
+  display: block;
+  width: 100%;
+  height: 5.5rem;
+  margin-top: 0.6rem;
+  overflow: visible;
+}
+
+.profile-area {
+  fill: rgba(37, 99, 235, 0.15);
+  stroke: none;
+}
+
+.profile-line {
+  fill: none;
+  stroke: #1d4ed8;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.route-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.route-actions button {
+  padding: 0.45rem 0.7rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: #e2e8f0;
+  color: var(--slate-900);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.route-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.route-progress {
+  height: 0.4rem;
+  margin-top: 0.5rem;
+  border-radius: 0.2rem;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.route-progress-fill {
+  height: 100%;
+  background: #2563eb;
+}
+
+.route-save-form {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.route-save-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.route-save-form button {
+  padding: 0.4rem 0.7rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Waypoint markers. Numbered rather than plain pins: on a route that doubles back, two
+   markers can sit almost on top of each other and the order is the only thing that
+   distinguishes them. */
+.route-waypoint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: grab;
+  /* The browser's own long-press menu would pre-empt the contextmenu handler that removes
+     a waypoint, and text selection makes a drag select the number instead. */
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.route-waypoint.start {
+  background: #15803d;
+}
+
+.route-waypoint.end {
+  background: #b91c1c;
+}
+
+.routes-toolbar {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+
+.routes-toolbar button,
+.route-import {
+  padding: 0.45rem 0.8rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.route-import {
+  background: #e2e8f0;
+  color: var(--slate-900);
+}
+
+/* The file input is driven by its label; hiding it with `display: none` would take it out
+   of the accessibility tree along with its keyboard focus. */
+.route-import input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.routes-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.route-open {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.25rem 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.route-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--slate-900);
+}
+
+.route-meta {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.route-row-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.route-row-actions button {
+  padding: 0.3rem 0.5rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: #e2e8f0;
+  color: var(--slate-900);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}

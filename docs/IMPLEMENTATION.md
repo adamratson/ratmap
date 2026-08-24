@@ -150,8 +150,10 @@ is the only place `Protocol.add()` is called. Remote archives use `FetchSource` 
 registered under a unique key (C3). Basemap, terrain and contours all route through it.
 Build in Phase 2; every later phase reuses it.
 
-**Runtime servers: zero through Phase 3.** Valhalla appears in Phase 4 for route
-computation only.
+**Runtime servers: zero. Full stop.** This originally read "zero through Phase 3", with
+Valhalla arriving in Phase 4 for route computation. That is no longer true — Phase 4 was
+built without a routing engine (see below), so the serverless posture now holds across
+every phase that has shipped.
 
 ---
 
@@ -463,28 +465,81 @@ any account or sync (§8.5 still says local-only). Bagging is a private log.
 
 ### Phase 4 — Route planning
 
-- Engine: **Valhalla** behind an async cancellable interface. Hosted or small VPS.
-- `/route` with `pedestrian` / `bicycle` costing.
-- `/trace_route` for snap-to-path (C11 — snapping deferred, not required).
-- **Elevation profile computed locally via `map.queryTerrainElevation()`** against the
-  terrain source, with total ascent/descent. This works offline — no `/height` call, no
-  server round-trip. *This is the capability the React Native binding lacks.*
-- Tap to add waypoint, drag to reroute, insert mid-route, undo.
-- Local-first persistence (C10), then GPX + GeoJSON import/export, and Web Share API.
+**Decision, 2026-08-23: there is no routing engine.** This phase originally specified
+Valhalla behind an async cancellable interface, hosted or on a small VPS, with `/route`
+and `/trace_route`, and accepted that route *computation* would be online-only while
+following and the elevation profile worked offline. Adam's call was that an offline-first
+mountain map should not have an online-only planner at its centre — so routing was built
+on-device instead, and Valhalla is gone from the plan entirely rather than deferred.
+
+**What replaced it.** The network is read straight out of the `roads` layer inside the
+region basemap archive the user already downloaded in Phase 3. No new artifact, no new
+build step, no server, and nothing to keep in sync — the network we draw the map from is
+the network we route over. Verified before building on it (2026-08-23): the Ben Nevis
+Mountain Path is present in `lochaber-basemap.pmtiles` at z15 as `kind=path,
+kind_detail=path`, with its name.
+
+- **`src/routes/path-tiles.ts`** — decodes one vector tile into walkable lines. Works in
+  *global tile units* (`tile.x * extent + localX`), an integer grid shared by every tile
+  at a zoom, and clips each tile's geometry to its **exact** bounds, discarding the
+  rendering buffer. That clip is what makes the graph stitch: two tiles' buffered copies
+  of a crossing way end at different points, and joined naively they leave a hole at every
+  tile seam — a router that silently refuses to cross a boundary, which only shows up on
+  long routes, which is to say in the field.
+- **`src/routes/path-graph.ts`** — every vertex is a node (a junction in tile geometry
+  *is* a shared vertex, so contracting them would have to reconstruct what it discarded),
+  with a sub-metre merge tolerance for the seam case, and Dijkstra over cost multipliers
+  per `kind`/`kind_detail`. `walking` and `cycling` weightings, replacing what Valhalla's
+  `pedestrian`/`bicycle` costing was for.
+- **`src/routes/router.ts`** — keeps the interface the Valhalla client was going to have:
+  async, cancellable by `AbortSignal`, and free to fail. C11 is the reason it never
+  rejects for a routing failure — an unroutable leg comes back as an explicitly-marked
+  straight one, drawn dashed and called out in the panel, never passed off as a path.
+- **Elevation profile: `src/routes/terrain-sampler.ts`, not `queryTerrainElevation()`.**
+  The spec named MapLibre's call and it is genuinely the reason this project is a PWA — but
+  reading its implementation before relying on it (maplibre-gl v5, `src/render/terrain.ts`)
+  showed two disqualifying properties for a *route* profile: `getDEMElevation()` returns
+  **0, not null**, for any DEM tile not currently loaded, and tiles load only for the
+  current viewport — so a profile for a route that does not fit on screen reads as sea
+  level over half its length, indistinguishable from genuinely being at sea level. It also
+  multiplies by the terrain exaggeration. Sampling the region's terrarium tiles directly is
+  viewport-independent, exaggeration-independent, returns null where there is no data, and
+  needs no `setTerrain()`. Ascent is threshold-filtered at 5 m: summing raw sample-to-sample
+  differences turns DEM noise into hundreds of metres of phantom climb.
+- Tap to add a waypoint, tap the line to insert one mid-route, drag to move, long-press to
+  remove, undo. Placement always commits first (C11).
+- Local-first persistence (C10), GPX + GeoJSON import/export, Web Share API where files
+  can be shared and a download where they cannot.
 
 **Offline route *following* ships in this phase** and needs no engine: view saved routes
-offline, follow against the GPS dot, off-route distance, GPX import. Foreground only.
+offline, follow against the GPS dot, off-route distance with two thresholds so it cannot
+flap at the boundary, GPX import. Foreground only, and the panel says so (§7).
 
-**Acceptance:** plan a route online, Airplane Mode, view and follow it over an offline
-region with a working elevation profile.
+**What this costs, honestly.** On-device routing over tile geometry is not Valhalla. It has
+no turn restrictions, no one-way handling, no ferry or barrier logic, no access-time
+conditions, and no idea about surface or gradient beyond what `kind_detail` carries. It
+routes within **one** downloaded region — a leg spanning two regions falls back to a
+straight line rather than stitching two archives. For a hill map, where the question is
+"which path goes up this mountain", that is the right trade; for street navigation it
+would not be. §7 gains this as a stated limitation, not a footnote.
+
+**Acceptance:** with a region downloaded and Airplane Mode on throughout — plan a route
+that follows real paths, read a correct ascent total, save it, force-quit, relaunch, and
+follow it against the GPS dot.
 
 ### Phase 5 — Deferred
 
 Much smaller than the native plan — offline elevation and 3D terrain are already done.
 
-- **Offline routing.** The one genuinely hard remaining item. Valhalla tiles per region
-  plus a WASM build; immature. Routing tiles rival or exceed the basemap per region
-  (Germany ~4.6 GB), so opt-in with per-artifact sizes shown.
+- ~~**Offline routing.**~~ **Shipped in Phase 4**, by a different route than this entry
+  imagined. It assumed offline routing meant Valhalla tiles per region (Germany ~4.6 GB)
+  plus an immature WASM build, and priced it as the one genuinely hard remaining item.
+  Routing over the `roads` layer already inside the basemap archive costs **zero extra
+  bytes** and no new build step. What that does *not* buy is Valhalla's road model — turn
+  restrictions, one-way handling, barriers, access conditions, cross-region routing. If a
+  use case ever needs those, this entry comes back with its original scope; nothing in
+  Phase 4 forecloses it, since the router sits behind the same async cancellable interface
+  a Valhalla client would have used.
 - **Trail rendering** — if Protomaps path coverage is inadequate at high zoom, custom
   `tippecanoe` from OSM extracts. Verify coverage during Phase 1.
 
@@ -520,7 +575,7 @@ Small, compared to the native path — no review, no store, no privacy manifest.
 | Cloudflare Pages hosting | Free tier |
 | Domain | ~$10–15 / year |
 | Workers / search / app stores | $0 — not used |
-| Valhalla (Phase 4 only) | Hosted free tier or small VPS |
+| Routing engine | **$0 — none.** Phase 4 routes on-device over the region tiles already in the bucket |
 
 **~$3/month plus a domain, with zero compute.** No $99/yr Apple fee, no $25 Play fee.
 Cost tracks stored bytes, not users.
@@ -559,6 +614,15 @@ State these plainly in the product, not just here.
   there. Android gets Background Fetch (C12).
 - **iOS install friction.** No install prompt; Share → Add to Home Screen manually — and it
   gates persistence (C2). Android has a real install button.
+- **Routing is a hill-path router, not a road router.** Phase 4 routes on-device over the
+  path network inside a downloaded region. It has no turn restrictions, no one-way
+  handling, no barrier or ferry logic and no access-time conditions, and it works within a
+  single region — a leg spanning two falls back to an explicitly-marked straight line.
+  Good for "which path goes up this mountain"; not a substitute for street navigation.
+- **Routing and the elevation profile need the region downloaded.** With only the
+  worldwide catalogue there is no path network to route over, and the global terrain layer
+  is a z0-4 extract — roughly 5 km per pixel — so the app draws no profile rather than a
+  smooth curve that means nothing.
 
 ### Platform matrix
 
@@ -599,6 +663,9 @@ them yet.
 2. ~~Planet or catalog-only?~~ **Decided 2026-08-21: catalog-only.** Low-zoom world extract
    plus on-demand regions (Phase 3), not the ~120 GB planet. See §3.
 3. Contour interval and styling — needs a cartographic call on real target regions.
+   The routing cost multipliers in `src/routes/path-graph.ts` are the same kind of open
+   call: they decide which of two parallel ways a route prefers, never whether a route
+   exists, and the current values are defensible defaults rather than a tuned model.
    **Partly resolved 2026-08-23:** peak *selection* no longer needs per-region tuning.
    It ranks on topographic prominence computed from the DEM at build time
    (`infra/scripts/compute-prominence.py`) rather than absolute elevation, which encoded

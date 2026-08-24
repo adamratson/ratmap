@@ -191,15 +191,18 @@ export async function addRegionToMap(
             // it becomes unreliable and let contours carry the elevation story, which is
             // what a paper hill map does anyway.
             //
+            // Both stops dialled down 10% (0.5→0.45, 0.15→0.135) — the relief was
+            // competing with the contour lines even before the smearing kicks in.
+            //
             // Styling call, not a settled decision — §8.3 is still open.
             'hillshade-exaggeration': [
               'interpolate',
               ['linear'],
               ['zoom'],
               10,
-              0.5,
+              0.45,
               14,
-              0.15,
+              0.135,
             ],
           },
         },
@@ -231,13 +234,37 @@ export async function addRegionToMap(
       addPathLayers(map, sourceId, minzoom);
     } else if (artifact.kind === 'contours') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+
+      // z11-z13 preview: index contours only (every 5th — see the `idx` note below),
+      // giving a coarse sense of relief before full 10 m detail arrives. `maxzoom` is
+      // exclusive in the style spec, so this hands off to the full layer below at exactly
+      // z13 with no overlap between the two.
+      map.addLayer(
+        {
+          id: `${sourceId}-lines-index`,
+          type: 'line',
+          source: sourceId,
+          'source-layer': 'contours',
+          filter: ['==', ['get', 'idx'], 1] as unknown as FilterSpecification,
+          // The archive's own data starts at z11 (build-contours.sh's CONTOUR_MINZOOM).
+          minzoom: Math.max(minzoom, 11),
+          maxzoom: 13,
+          paint: {
+            'line-color': 'rgba(120, 85, 55, 0.55)',
+            'line-width': 1.2,
+          },
+        },
+        beneathLabels(map, region.id),
+      );
+
       map.addLayer(
         {
           id: `${sourceId}-lines`,
           type: 'line',
           source: sourceId,
           'source-layer': 'contours',
-          minzoom,
+          // Picks up exactly where the index-only layer above stops (its maxzoom: 13).
+          minzoom: Math.max(minzoom, 13),
           paint: {
             'line-color': 'rgba(120, 85, 55, 0.55)',
             // Index contours (every 5th) are drawn heavier, as on a paper map.
@@ -283,8 +310,10 @@ function addContourLabels(
       'source-layer': 'contours',
       filter: ['==', ['get', 'idx'], 1] as unknown as FilterSpecification,
       // Below this the index lines are close enough together that labels collide more
-      // than they inform; contour tiles themselves only start at z11.
-      minzoom: Math.max(13, regionMin),
+      // than they inform. Kept 2 zoom levels above z13, where full-detail contours (and
+      // this layer's own `-lines` sibling) take over — the sparser z11-z13 index-only
+      // preview doesn't get labels at all, it's read as a bare relief band.
+      minzoom: Math.max(15, regionMin),
       layout: {
         // Bare number, no unit: the convention on hill maps, and on a sheet already
         // covered in contours the unit is never ambiguous. Peak labels keep "m" because

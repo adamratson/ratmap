@@ -104,7 +104,14 @@ const map = new maplibregl.Map({
     },
     layers: [
       ...layers('basemap', namedFlavor('light'), { lang: 'en' }),
-      { id: 'hillshade', type: 'hillshade', source: 'terrain' },
+      {
+        id: 'hillshade',
+        type: 'hillshade',
+        source: 'terrain',
+        // Style-spec default is 0.5; dialled down 10% to match the region hillshade's own
+        // reduction in region-layers.ts.
+        paint: { 'hillshade-exaggeration': 0.45 },
+      },
     ],
   },
 });

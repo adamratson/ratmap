@@ -45,7 +45,9 @@ CONTOUR_INTERVAL="${CONTOUR_INTERVAL:-10}"
 INDEX_EVERY="${INDEX_EVERY:-50}"
 
 # Contours are meaningless when zoomed out and enormous if tiled that far down, so they
-# start at z11. z14 is the practical detail ceiling for 30 m-resolution source data.
+# start at z11 — that's as far out as the client (region-layers.ts) ever draws them, as a
+# sparse index-only (every 5th line) preview from z11-z13 before full 10 m detail takes
+# over at z13. z14 is the practical detail ceiling for 30 m-resolution source data.
 CONTOUR_MINZOOM="${CONTOUR_MINZOOM:-11}"
 CONTOUR_MAXZOOM="${CONTOUR_MAXZOOM:-14}"
 

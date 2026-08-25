@@ -165,9 +165,16 @@ The dot answers "where am I"; on a mountain the more urgent question is "which w
 facing." `LocationController` ([location.ts](../src/location.ts)) renders a plain
 circle with an accuracy halo, no bearing.
 
-Fix: add a heading cone from `deviceorientation`. Review how MapLibre's own
-`GeolocateControl` (`showUserHeading`) handles the iOS motion-permission prompt and the
-`webkitCompassHeading` fallback before reimplementing it in the custom controller.
+Fix: add a heading cone from `deviceorientation`.
+
+**Correction (2026-08-25):** this finding originally said to review MapLibre's own
+`GeolocateControl` (`showUserHeading`) first. That option does not exist in MapLibre —
+it is Mapbox GL JS. Checked against the installed v5 bundle: `GeolocateControlOptions`
+has no such field and the bundle contains no reference to `deviceorientation` at all.
+There is nothing upstream to borrow, so this has to be written from scratch, handling
+Safari's `webkitCompassHeading` (already true-north referenced) and Chromium's absolute
+`alpha` (which runs the opposite way) separately, plus the iOS motion-permission prompt,
+which must be raised from a user gesture. Implemented in `src/heading.ts`.
 
 **C3. No dark mode.**
 `color-scheme: light` is hard-coded ([style.css](../src/style.css)), the basemap is

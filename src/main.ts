@@ -30,6 +30,11 @@ import {
   loadCachedManifest,
   type Region,
 } from './regions/manifest';
+import {
+  regionAt,
+  renderFootprints,
+  type Footprint,
+} from './regions/region-footprints';
 import { renderRegionsSheet, restoreDownloadedRegions } from './regions/regions-ui';
 import { downloadsInFlight } from './regions/downloader';
 import { BottomSheet, type Detent } from './sheet';
@@ -49,7 +54,7 @@ if (!USE_FALLBACK_TERRAIN) registry.addRemote(TERRAIN_PMTILES_URL);
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div id="map"></div>
   <div id="conditions" hidden></div>
-  <div id="detail-notice" hidden></div>
+  <button id="detail-notice" type="button" hidden></button>
   <div id="rail">
     <button id="locate-btn" type="button" aria-label="Show my location">
       <span class="rail-icon" aria-hidden="true">◎</span>
@@ -344,12 +349,22 @@ map.on('load', () => {
  */
 let downloadedRegions: Region[] = [];
 
+/**
+ * Everything the catalogue offers, downloaded or not.
+ *
+ * Kept alongside {@link downloadedRegions} so the map can show where detail *could* come
+ * from, not only where it already has some.
+ */
+let catalogue: Region[] = [];
+
 async function restoreRegions(): Promise<void> {
   try {
     const manifest = await fetchManifest();
     const restored = await restoreDownloadedRegions(map, registry, manifest.regions);
     downloadedRegions = restored;
+    catalogue = manifest.regions;
     applyAvailableDetail(restored);
+    drawFootprints();
   } catch {
     // Offline with no cached catalogue is normal and not an error worth surfacing:
     // any already-downloaded region still needs restoring from OPFS.
@@ -378,12 +393,30 @@ async function restoreFromOpfsWithoutManifest(): Promise<void> {
   if (!cached) return;
   const restored = await restoreDownloadedRegions(map, registry, cached.regions);
   downloadedRegions = restored;
+  catalogue = cached.regions;
   applyAvailableDetail(restored);
+  drawFootprints();
+}
+
+/** Current coverage, downloaded state and all. */
+function footprints(): Footprint[] {
+  const have = new Set(downloadedRegions.map((region) => region.id));
+  return catalogue.map((region) => ({ region, downloaded: have.has(region.id) }));
+}
+
+function drawFootprints(): void {
+  // The style has to exist first — this runs from a restore that can finish before the
+  // map has loaded, and addSource throws on a style that is not ready.
+  if (!map.isStyleLoaded()) {
+    map.once('load', drawFootprints);
+    return;
+  }
+  renderFootprints(map, footprints());
 }
 
 // --- Detail-limit notice (§8.2 catalog-only makes this reachable) --------------------
 
-const detailNotice = document.querySelector<HTMLDivElement>('#detail-notice')!;
+const detailNotice = document.querySelector<HTMLButtonElement>('#detail-notice')!;
 
 // Raised once a downloaded region is loaded: the notice must reflect the best data
 // actually available, not the global catalogue's ceiling, or it would keep claiming
@@ -397,12 +430,23 @@ let maxDataZoom = BASEMAP_MAX_ZOOM;
 map.on('zoom', renderDetailLimit);
 map.on('load', renderDetailLimit);
 
+detailNotice.addEventListener('click', () => openRegionsView());
+
 function renderDetailLimit(): void {
   const state = describeDetailLimit(map.getZoom(), maxDataZoom);
   detailNotice.hidden = !state.overzoomed;
   if (!state.overzoomed) return;
 
-  detailNotice.textContent = state.label;
+  // Naming the region turns a complaint into an instruction. The notice reports that the
+  // map is stretched here; the thing that fixes it is a specific download, and until now
+  // nothing connected the two — you had to open a list of four names and work out for
+  // yourself which one you were looking at.
+  const centre = map.getCenter();
+  const covering = regionAt(footprints(), [centre.lng, centre.lat], { downloaded: false });
+
+  detailNotice.textContent = covering
+    ? `Limited detail here — get ${covering.name}`
+    : (state.label ?? '');
   detailNotice.title = state.detail ?? '';
 }
 

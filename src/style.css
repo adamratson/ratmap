@@ -123,14 +123,26 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* Fixed, not `height: 100%`. A percentage height resolves against the initial containing
-   block, which iOS sizes from the *small* viewport when a Home Screen app launches
-   fullscreen under `viewport-fit=cover` — the map then ends short of the bottom of the
-   screen and leaves a strip of page background above the home indicator. A fixed inset-0
-   box is sized from the layout viewport and covers the screen on every platform. */
+/* Fixed, not `height: 100%` — a percentage height resolves against the initial
+   containing block, which iOS sizes from the *small* viewport when a Home Screen app
+   launches fullscreen under `viewport-fit=cover`.
+
+   Explicit height, not `inset: 0`. That was this app's second attempt at this same bug
+   (the first used `height: 100%`) and it is *also* wrong on some real devices: measured
+   on an iPhone with a Dynamic Island, `position: fixed; bottom: 0` resolved 59pt short of
+   the true screen bottom — exactly `screen.height` minus the top safe-area inset — while
+   `top: 0` on the same element landed correctly. `inset: 0`'s implicit height inherits
+   whatever `bottom: 0` resolves against, so it inherited the same 59pt shortfall. Height
+   is instead set explicitly in pixels by src/viewport.ts, from `screen.height` — the one
+   number in this whole picture that is OS-level rather than page-level, and so does not
+   share whatever WebKit quirk produces the innerHeight bug. See that file for the full
+   account, including why `top`/`left`/`right: 0` remain safe to trust here (proven
+   correct by the same on-device test) while `bottom: 0` is not. */
 #app {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
 }
 
 #map {

@@ -35,6 +35,12 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances 
       return true;
     }
     easeTo(): void {}
+    getBearing(): number {
+      return 0;
+    }
+    getPitch(): number {
+      return 0;
+    }
     zoom = 6;
     getZoom(): number {
       return this.zoom;
@@ -68,13 +74,14 @@ vi.mock('maplibre-gl', () => ({
   default: {
     Map: MapMock,
     Marker: MarkerMock,
-    NavigationControl: vi.fn(),
+    NavigationControl: navigationControlSpy,
     ScaleControl: vi.fn(),
     addProtocol: addProtocolSpy,
   },
   Marker: MarkerMock,
 }));
 
+const navigationControlSpy = vi.hoisted(() => vi.fn());
 const bootstrapStorageMock = vi.hoisted(() => vi.fn());
 const isStandaloneMock = vi.hoisted(() => vi.fn());
 vi.mock('./storage', () => ({
@@ -118,7 +125,9 @@ async function loadMainQuietly(): Promise<void> {
 }
 
 beforeEach(() => {
+  vi.unstubAllGlobals();
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  navigationControlSpy.mockClear();
   vi.resetModules();
   mapCtorSpy.mockClear();
   addProtocolSpy.mockClear();
@@ -263,6 +272,57 @@ describe('app bootstrap', () => {
     expect(document.body.textContent ?? '').not.toMatch(/no connection/i);
   });
 
+  it('keeps the destinations in reach at rest, and reports which one is open', async () => {
+    // These were four buttons floating over the bottom-right of the map. The planning
+    // panel covered them outright, so they could not report anything at all.
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    const chips = [...document.querySelectorAll('#chips .chip')].map((c) => c.textContent);
+    expect(chips).toEqual(['Routes', 'Offline', 'Saved']);
+
+    const sheet = document.querySelector<HTMLElement>('#sheet')!;
+    expect(sheet.classList.contains('at-peek')).toBe(true);
+
+    document.querySelector<HTMLButtonElement>('#chips .chip')!.click();
+
+    expect(sheet.classList.contains('at-peek')).toBe(false);
+    expect(document.querySelector('#chips .chip')!.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('gives every destination its own way back to the map', async () => {
+    // Each panel used to carry its own × in its own corner. Tapping the chip that opened
+    // a view now closes it, and so does dragging the sheet down from anywhere.
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    const sheet = document.querySelector<HTMLElement>('#sheet')!;
+    const chip = (): HTMLButtonElement => document.querySelector<HTMLButtonElement>('#chips .chip')!;
+
+    chip().click();
+    expect(sheet.classList.contains('at-peek')).toBe(false);
+
+    chip().click();
+    expect(sheet.classList.contains('at-peek')).toBe(true);
+    expect(sheet.querySelector('.sheet-body')!.innerHTML).toBe('');
+  });
+
+  it('drops the zoom cluster on a touch screen, where pinch already does the job', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(pointer: coarse)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+
+    await loadMainQuietly();
+
+    expect(navigationControlSpy).not.toHaveBeenCalled();
+    // The compass replaces the only part of it a finger actually needs.
+    expect(document.querySelector('#compass-btn')).not.toBeNull();
+  });
+
   it('walks iOS users through Add to Home Screen when storage is not persisted (C2)', async () => {
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: false });
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
@@ -280,7 +340,7 @@ describe('app bootstrap', () => {
     condition.querySelector<HTMLButtonElement>('.condition-action')!.click();
 
     const sheet = document.querySelector<HTMLElement>('#sheet')!;
-    expect(sheet.hidden).toBe(false);
+    expect(sheet.classList.contains('at-peek')).toBe(false);
     expect(sheet.textContent).toMatch(/evicted|guarantee/i);
     expect(sheet.querySelectorAll('.install-steps li').length).toBeGreaterThan(0);
   });

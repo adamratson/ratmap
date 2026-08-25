@@ -104,7 +104,7 @@ export async function clearConditions(page: Page): Promise<void> {
 
 /** Open the offline-regions sheet and wait for the catalogue to load. */
 export async function openRegionsSheet(page: Page): Promise<void> {
-  await page.locator('#regions-btn').click();
+  await openChip(page, 'Offline');
   await page.locator('.regions-list .region-row').first().waitFor({ state: 'visible' });
 }
 
@@ -197,9 +197,15 @@ export async function plannerState(page: Page): Promise<PlannerProbe> {
   });
 }
 
+/** Open one of the sheet's destinations from its peek row. */
+export async function openChip(page: Page, label: string): Promise<void> {
+  await page.locator('#chips .chip', { hasText: label }).click();
+  await page.locator('#sheet.at-half, #sheet.at-full').waitFor();
+}
+
 /** Open the routes sheet and start a fresh route. */
 export async function startNewRoute(page: Page): Promise<void> {
-  await page.locator('#routes-btn').click();
+  await openChip(page, 'Routes');
   await page.locator('.routes-toolbar button', { hasText: 'New route' }).click();
-  await page.locator('#route-panel').waitFor({ state: 'visible' });
+  await page.locator('.route-panel-title').waitFor({ state: 'visible' });
 }

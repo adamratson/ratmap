@@ -4,6 +4,7 @@ import {
   waitForServiceWorkerControl,
   clickMapAt,
   clearConditions,
+  openChip,
   downloadFirstRegion,
   gotoApp,
   openRegionsSheet,
@@ -144,7 +145,7 @@ test.describe('route planning', () => {
     await page.locator('#map').waitFor();
     await clearConditions(page);
 
-    await page.locator('#routes-btn').click();
+    await openChip(page, 'Routes');
     await expect(page.locator('.route-name')).toContainText('Ben Nevis test route');
 
     await page.locator('.route-open').first().click();
@@ -153,7 +154,7 @@ test.describe('route planning', () => {
 
   test('imports a GPX file and opens it for following', async ({ page }) => {
     await showArea(page, BEN_NEVIS_AREA);
-    await page.locator('#routes-btn').click();
+    await openChip(page, 'Routes');
 
     const gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">

@@ -551,8 +551,14 @@ export class RoutePlanner {
     return 'Untitled route';
   }
 
-  private emit(): void {
-    this.onChange({
+  /**
+   * The planner's current state.
+   *
+   * Public because the UI has to be able to *redraw* itself — reopening the sheet, say —
+   * without an edit having happened to push a summary at it.
+   */
+  summary(): RouteSummary {
+    return {
       active: this.active,
       costing: this.draft.costing,
       waypointCount: this.draft.waypointCount,
@@ -564,6 +570,10 @@ export class RoutePlanner {
       profileNote: this.profileNote,
       follow: this.followState,
       following: this.follower !== null,
-    });
+    };
+  }
+
+  private emit(): void {
+    this.onChange(this.summary());
   }
 }

@@ -22,6 +22,7 @@ import { bootstrapStorage, isStandalone } from './storage';
 import { listPlaces, savePlace, deletePlace, type SavedPlace } from './saved-places';
 import { PlacesSearch, type SearchResult } from './search';
 import { describeDetailLimit } from './detail-limit';
+import { isCoarsePointer } from './pointer';
 import {
   bestAvailableZoom,
   fetchManifest,
@@ -30,11 +31,12 @@ import {
 } from './regions/manifest';
 import { renderRegionsSheet, restoreDownloadedRegions } from './regions/regions-ui';
 import { downloadsInFlight } from './regions/downloader';
+import { BottomSheet, type Detent } from './sheet';
 import { StatusCentre } from './status';
 import { startAppUpdates } from './update';
 import { APP_VERSION } from './version';
 import { RoutePlanner, type RouteSummary } from './routes/route-planner';
-import { renderRoutePanel, renderRoutesSheet } from './routes/routes-ui';
+import { renderRoutePanel, renderRoutesSheet, type RoutesUiDeps } from './routes/routes-ui';
 import { addRouteLayers } from './routes/route-layers';
 
 // C17: the registry is the single owner of addProtocol/Protocol.add for the whole app.
@@ -44,25 +46,19 @@ if (!USE_FALLBACK_TERRAIN) registry.addRemote(TERRAIN_PMTILES_URL);
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div id="map"></div>
-  <div id="search">
-    <input id="search-input" type="search" placeholder="Search places and summits"
-           autocomplete="off" autocorrect="off" spellcheck="false" />
-    <ul id="search-results" hidden></ul>
-  </div>
-  <div id="hud">
-    <button id="locate-btn" type="button" title="Show my location">Locate</button>
-    <button id="places-btn" type="button" title="Saved places">Saved</button>
-    <button id="regions-btn" type="button" title="Offline regions">Offline</button>
-    <button id="routes-btn" type="button" title="Routes">Routes</button>
-  </div>
-  <div id="route-panel" hidden></div>
-  <div id="detail-notice" hidden></div>
   <div id="conditions" hidden></div>
-  <div id="sheet" hidden></div>
+  <div id="detail-notice" hidden></div>
+  <div id="rail">
+    <button id="locate-btn" type="button" aria-label="Show my location">
+      <span class="rail-icon" aria-hidden="true">◎</span>
+    </button>
+    <button id="compass-btn" type="button" aria-label="Point the map north" hidden>
+      <span class="rail-icon compass-needle" aria-hidden="true">▲</span>
+    </button>
+  </div>
   <div id="toasts"></div>
+  <div id="sheet"></div>
 `;
-
-const sheet = document.querySelector<HTMLDivElement>('#sheet')!;
 
 const status = new StatusCentre({
   toasts: document.querySelector<HTMLDivElement>('#toasts')!,
@@ -73,28 +69,114 @@ const status = new StatusCentre({
 // put it there?" is otherwise only answerable by reading the source.
 (window as unknown as { __ratmapStatus: StatusCentre }).__ratmapStatus = status;
 
-// Toasts sit at the bottom so an "Undo" lands in thumb reach, which means they have to
-// clear whatever else is down there. The sheet and the planning panel are the only two,
-// and both change height as their content does — so measure rather than guess.
-const bottomSurfaces = [sheet, document.querySelector<HTMLDivElement>('#route-panel')!];
-const measureBottomSurfaces = (): void => {
-  const tallest = Math.max(
-    0,
-    ...bottomSurfaces.map((el) => (el.hidden ? 0 : el.getBoundingClientRect().height)),
-  );
-  document.documentElement.style.setProperty('--bottom-surface', `${tallest}px`);
-};
-const bottomObserver = new ResizeObserver(measureBottomSurfaces);
-for (const el of bottomSurfaces) {
-  bottomObserver.observe(el);
-  // ResizeObserver reports a hidden element as 0x0 on some engines and not at all on
-  // others, so the `hidden` flag is watched directly rather than inferred from a resize.
-  new MutationObserver(measureBottomSurfaces).observe(el, {
-    attributes: true,
-    attributeFilter: ['hidden'],
-  });
+// --- The sheet ----------------------------------------------------------------------
+
+const sheet = new BottomSheet({
+  element: document.querySelector<HTMLDivElement>('#sheet')!,
+  onLayout: () => {
+    // Everything positioned above the sheet reads this: the map attribution (which is
+    // legally required and must never sit underneath it), toasts, and the detail notice.
+    document.documentElement.style.setProperty('--sheet-visible', `${sheet.visibleHeight()}px`);
+    renderChips();
+  },
+});
+
+(window as unknown as { __ratmapSheet: BottomSheet }).__ratmapSheet = sheet;
+
+sheet.peek.innerHTML = `
+  <div id="search">
+    <input id="search-input" type="search" placeholder="Search places and summits"
+           autocomplete="off" autocorrect="off" spellcheck="false" />
+    <ul id="search-results" hidden></ul>
+  </div>
+  <div id="chips" role="tablist"></div>
+`;
+
+/** What the sheet body is currently showing. `null` is the resting state. */
+type View = 'peak' | 'places' | 'regions' | 'routes' | 'plan' | 'install';
+
+let view: View | null = null;
+
+/**
+ * Show something in the sheet.
+ *
+ * The detent is only set when the view *changes*. A view that re-renders — the planner
+ * does so on every waypoint drag — must not haul the sheet back up over a map the user
+ * has just dragged it off.
+ */
+function openView(name: View, render: (body: HTMLElement) => void, detent: Detent = 'half'): void {
+  const entering = view !== name;
+  view = name;
+  render(sheet.body);
+  if (entering) {
+    sheet.body.scrollTop = 0;
+    sheet.open(detent);
+  }
+  renderChips();
 }
-measureBottomSurfaces();
+
+function closeView(): void {
+  if (view === null) return;
+  view = null;
+  sheet.body.innerHTML = '';
+  sheet.collapse();
+  renderChips();
+}
+
+/**
+ * The peek row's destinations.
+ *
+ * These are what the four-button HUD used to be, moved off the map and into the one
+ * surface — and now they also report which view is open, which the HUD could not do
+ * because the planning panel covered it.
+ */
+const CHIPS: { view: View; label: string; open: () => void }[] = [
+  { view: 'routes', label: 'Routes', open: () => void openRoutesView() },
+  { view: 'regions', label: 'Offline', open: () => openRegionsView() },
+  { view: 'places', label: 'Saved', open: () => void openPlacesView() },
+];
+
+const chipsHost = sheet.peek.querySelector<HTMLDivElement>('#chips')!;
+
+function renderChips(): void {
+  chipsHost.innerHTML = '';
+
+  // Planning is a mode, not a destination: it is entered from the routes list and left
+  // with Done, so its chip only exists while it is on. Without it the mode is invisible
+  // at peek, and a tap on the map silently means something different.
+  if (view === 'plan') {
+    const chip = chipEl('Planning', true, () =>
+      sheet.detent() === 'peek' ? sheet.open('half') : sheet.collapse(),
+    );
+    chip.classList.add('chip-mode');
+    chipsHost.append(chip);
+  }
+
+  for (const entry of CHIPS) {
+    const active = view === entry.view;
+    chipsHost.append(
+      chipEl(entry.label, active, () => {
+        // Tapping the open one puts the map back, so every chip is its own way out.
+        if (active && sheet.detent() !== 'peek') closeView();
+        else entry.open();
+      }),
+    );
+  }
+}
+
+sheet.open('peek');
+
+function chipEl(label: string, active: boolean, onSelect: () => void): HTMLButtonElement {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'chip';
+  chip.setAttribute('role', 'tab');
+  chip.setAttribute('aria-selected', String(active));
+  chip.classList.toggle('active', active);
+  chip.textContent = label;
+  chip.addEventListener('click', onSelect);
+  return chip;
+}
 
 const terrainSource: maplibregl.SourceSpecification = USE_FALLBACK_TERRAIN
   ? {
@@ -149,8 +231,35 @@ const map = new maplibregl.Map({
   },
 });
 
-map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
+// NavigationControl only on a mouse. Its buttons are 29px, they sit in the top corner —
+// the furthest point on the screen from a thumb — and on a touch screen they duplicate a
+// pinch that already works at full-screen size. What a finger actually needs from it is
+// "put north back", which the rail's compass button does, at 44px, in reach.
+if (!isCoarsePointer()) {
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
+}
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }));
+
+// --- Compass ------------------------------------------------------------------------
+
+const compassBtn = document.querySelector<HTMLButtonElement>('#compass-btn')!;
+const compassNeedle = compassBtn.querySelector<HTMLElement>('.compass-needle')!;
+
+compassBtn.addEventListener('click', () => {
+  map.easeTo({ bearing: 0, pitch: 0, duration: 300 });
+});
+
+// Only present when it has something to undo. A permanent compass on a map that is always
+// north-up is a control that never does anything, taking up the scarcest space there is.
+function renderCompass(): void {
+  const bearing = map.getBearing();
+  compassBtn.hidden = Math.abs(bearing) < 1 && map.getPitch() < 1;
+  compassNeedle.style.transform = `rotate(${-bearing}deg)`;
+}
+
+map.on('rotate', renderCompass);
+map.on('pitch', renderCompass);
+renderCompass();
 
 // Debug handle. Lets the e2e suite assert on real style state (which layers and sources
 // actually exist) rather than inferring it from screenshots, and is genuinely useful from
@@ -288,7 +397,6 @@ function renderDetailLimit(): void {
 
 // --- Route planning (Phase 4) --------------------------------------------------------
 
-const routePanel = document.querySelector<HTMLDivElement>('#route-panel')!;
 
 /**
  * True while a route is being planned or followed — i.e. while an unannounced reload
@@ -324,30 +432,36 @@ const planner = new RoutePlanner({
     };
   },
   onChange: (summary: RouteSummary) => {
-    renderRoutePanel(summary, routesUi);
     routeInProgress = summary.active || summary.following;
-    routesBtn.classList.toggle('active', routeInProgress);
+
+    if (routeInProgress) {
+      // openView only moves the sheet when the view *changes*, so the re-render fired by
+      // every waypoint drag redraws the panel without hauling the sheet back over a map
+      // the user has just dragged it off.
+      openView('plan', (body) => renderRoutePanel(summary, routesUi(body)));
+    } else if (view === 'plan') {
+      closeView();
+    }
   },
   onStatus: (message, kind) => status.toast(message, { kind }),
 });
 
-const routesBtn = document.querySelector<HTMLButtonElement>('#routes-btn')!;
-
-const routesUi = {
-  planner,
-  panel: routePanel,
-  sheet,
-  onStatus: (message: string, kind: 'ok' | 'warn' | 'error') => {
-    status.toast(message, { kind });
-  },
-  onUndoableStatus: (message: string, action: { label: string; onSelect(): void }) => {
-    status.toast(message, { action });
-  },
-};
-
-routesBtn.addEventListener('click', () => {
-  void renderRoutesSheet(routesUi);
-});
+/**
+ * The routes UI's dependencies, bound to wherever it is being asked to draw.
+ *
+ * A function rather than a constant because the planner and the saved-routes list share
+ * the sheet body, and each render is handed the container it should use.
+ */
+function routesUi(container: HTMLElement = sheet.body): RoutesUiDeps {
+  return {
+    planner,
+    container,
+    onPlanStarted: () => openView('plan', (body) => renderRoutePanel(planner.summary(), routesUi(body))),
+    onPlanFinished: () => planner.deactivate(),
+    onStatus: (message, kind) => status.toast(message, { kind }),
+    onUndoableStatus: (message, action) => status.toast(message, { action }),
+  };
+}
 
 // Debug handle, same convention as __ratmapMap above: it lets the e2e suite assert on the
 // real planner state — leg kinds, computed ascent — rather than reading it back out of the
@@ -383,71 +497,80 @@ function showPeakSheet(peak: PeakProperties, lngLat: maplibregl.LngLat): void {
   const ele = formatElevation(peak.ele);
   const wikidata = peak.wikidata;
 
-  sheet.innerHTML = `
-    <button class="sheet-close" type="button" aria-label="Close">×</button>
-    <h2></h2>
-    <p class="sheet-ele"></p>
-    <p class="sheet-coords"></p>
-    <div class="sheet-actions">
-      <button class="sheet-save" type="button">Save place</button>
-      ${wikidata ? `<a class="sheet-link" target="_blank" rel="noreferrer">Wikidata</a>` : ''}
-    </div>
-  `;
-  // textContent, not interpolation: names come from OSM, which is user-editable data.
-  sheet.querySelector('h2')!.textContent = name;
-  sheet.querySelector('.sheet-ele')!.textContent = ele ?? 'Elevation unknown';
-  sheet.querySelector('.sheet-coords')!.textContent =
-    `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
-  if (wikidata) {
-    const link = sheet.querySelector<HTMLAnchorElement>('.sheet-link')!;
-    link.href = `https://www.wikidata.org/wiki/${encodeURIComponent(wikidata)}`;
-  }
+  openView('peak', (body) => {
+    body.innerHTML = `
+      <h2></h2>
+      <p class="sheet-ele"></p>
+      <p class="sheet-coords"></p>
+      <div class="sheet-actions">
+        <button class="sheet-save" type="button">Save place</button>
+        ${wikidata ? `<a class="sheet-link" target="_blank" rel="noreferrer">Wikidata</a>` : ''}
+      </div>
+    `;
+    // textContent, not interpolation: names come from OSM, which is user-editable data.
+    body.querySelector('h2')!.textContent = name;
+    body.querySelector('.sheet-ele')!.textContent = ele ?? 'Elevation unknown';
+    body.querySelector('.sheet-coords')!.textContent =
+      `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
+    if (wikidata) {
+      const link = body.querySelector<HTMLAnchorElement>('.sheet-link')!;
+      link.href = `https://www.wikidata.org/wiki/${encodeURIComponent(wikidata)}`;
+    }
 
-  sheet.querySelector('.sheet-close')!.addEventListener('click', hideSheet);
-  sheet.querySelector('.sheet-save')!.addEventListener('click', () => {
-    void savePlace({
-      name,
-      lng: lngLat.lng,
-      lat: lngLat.lat,
-      ...(typeof peak.ele === 'number' ? { ele: peak.ele } : {}),
-    })
-      .then(() => status.toast(`Saved “${name}”`))
-      .catch((err: Error) =>
-        status.toast(`Could not save “${name}”: ${err.message}`, { kind: 'error' }),
-      );
+    body.querySelector('.sheet-save')!.addEventListener('click', () => {
+      void savePlace({
+        name,
+        lng: lngLat.lng,
+        lat: lngLat.lat,
+        ...(typeof peak.ele === 'number' ? { ele: peak.ele } : {}),
+      })
+        .then(() => status.toast(`Saved “${name}”`))
+        .catch((err: Error) =>
+          status.toast(`Could not save “${name}”: ${err.message}`, { kind: 'error' }),
+        );
+    });
   });
-
-  sheet.hidden = false;
 }
 
+/**
+ * A summit sheet is a detail card, not a destination: it should not swallow half the map
+ * you tapped it on.
+ */
 function hideSheet(): void {
-  sheet.hidden = true;
-  sheet.innerHTML = '';
+  if (view === 'peak') closeView();
 }
 
-// --- Saved places ------------------------------------------------------------------
+// --- Sheet destinations --------------------------------------------------------------
 
-document.querySelector('#places-btn')!.addEventListener('click', () => {
-  void showPlacesSheet();
-});
-
-document.querySelector('#regions-btn')!.addEventListener('click', () => {
-  void renderRegionsSheet({
-    map,
-    registry,
-    container: sheet,
-    onStatus: (message, kind) => {
-      status.toast(message, { kind });
-      // A completed download (or a delete) changes what detail is available, so
-      // re-derive the ceiling from what is actually on disk rather than assuming.
-      void restoreRegions().then(() => {
-        // The router caches decoded tiles per archive, including "there is nothing here".
-        // A new region would otherwise stay unroutable until a reload.
-        planner.invalidateRegions();
-      });
-    },
+function openRegionsView(): void {
+  openView('regions', (body) => {
+    void renderRegionsSheet({
+      map,
+      registry,
+      container: body,
+      onStatus: (message, kind) => {
+        status.toast(message, { kind });
+        // A completed download (or a delete) changes what detail is available, so
+        // re-derive the ceiling from what is actually on disk rather than assuming.
+        void restoreRegions().then(() => {
+          // The router caches decoded tiles per archive, including "there is nothing
+          // here". A new region would otherwise stay unroutable until a reload.
+          planner.invalidateRegions();
+        });
+      },
+    });
   });
-});
+}
+
+async function openRoutesView(): Promise<void> {
+  openView('routes', () => {});
+  await renderRoutesSheet(routesUi());
+}
+
+async function openPlacesView(): Promise<void> {
+  openView('places', () => {});
+  await showPlacesSheet();
+}
 
 async function showPlacesSheet(): Promise<void> {
   let places: SavedPlace[];
@@ -458,14 +581,12 @@ async function showPlacesSheet(): Promise<void> {
     return;
   }
 
-  sheet.innerHTML = `
-    <button class="sheet-close" type="button" aria-label="Close">×</button>
+  sheet.body.innerHTML = `
     <h2>Saved places</h2>
     <ul class="places-list"></ul>
   `;
-  sheet.querySelector('.sheet-close')!.addEventListener('click', hideSheet);
 
-  const list = sheet.querySelector<HTMLUListElement>('.places-list')!;
+  const list = sheet.body.querySelector<HTMLUListElement>('.places-list')!;
   if (places.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'places-empty';
@@ -483,7 +604,9 @@ async function showPlacesSheet(): Promise<void> {
     goto.textContent = ele ? `${place.name} · ${ele}` : place.name;
     goto.addEventListener('click', () => {
       map.easeTo({ center: [place.lng, place.lat], zoom: Math.max(map.getZoom(), 10) });
-      hideSheet();
+      // Out of the way, but still one drag from the list — going to a place is usually
+      // the first of several.
+      sheet.collapse();
     });
 
     const remove = document.createElement('button');
@@ -510,7 +633,6 @@ async function showPlacesSheet(): Promise<void> {
     list.append(item);
   }
 
-  sheet.hidden = false;
 }
 
 // --- Search (C9: local FTS5, no geocoding API) --------------------------------------
@@ -636,31 +758,35 @@ function renderLocationState(state: LocationState): void {
   // A location failure is a state, not an event: it stays true until the permission or
   // the fix changes, and watchPosition re-reports it on every retry. As a toast that
   // meant a new banner every few seconds.
+  // The rail button is an icon, and its state is carried by a class rather than by
+  // rewriting its label — a control that changes width as it changes state shifts
+  // everything next to it, and this one sits under a thumb.
+  locateBtn.classList.toggle('locating', state.status === 'locating');
+  locateBtn.setAttribute(
+    'aria-label',
+    location.isFollowing() ? 'Stop following my location' : 'Show my location',
+  );
+
   switch (state.status) {
     case 'locating':
-      locateBtn.textContent = 'Locating…';
       status.setCondition('location', null);
       break;
     case 'tracking':
-      locateBtn.textContent = location.isFollowing() ? 'Following' : 'Locate';
       status.setCondition('location', null);
       break;
     case 'denied':
-      locateBtn.textContent = 'Locate';
       status.setCondition('location', {
         message: 'ratmap cannot see your location. Allow it in your browser settings.',
         kind: 'warn',
       });
       break;
     case 'unavailable':
-      locateBtn.textContent = 'Locate';
       status.setCondition('location', {
         message: `No position fix yet: ${state.message}`,
         kind: 'warn',
       });
       break;
     default:
-      locateBtn.textContent = 'Locate';
       status.setCondition('location', null);
   }
 }
@@ -730,23 +856,21 @@ async function renderStorageStatus(): Promise<void> {
 }
 
 function showInstallSheet(): void {
-  sheet.innerHTML = `
-    <button class="sheet-close" type="button" aria-label="Close">×</button>
-    <h2>Add ratmap to your Home Screen</h2>
-    <p class="sheet-lede"></p>
-    <ol class="install-steps"></ol>
-  `;
-  sheet.querySelector('.sheet-close')!.addEventListener('click', hideSheet);
-  sheet.querySelector('.sheet-lede')!.textContent = INSTALL_RATIONALE;
+  openView('install', (body) => {
+    body.innerHTML = `
+      <h2>Add ratmap to your Home Screen</h2>
+      <p class="sheet-lede"></p>
+      <ol class="install-steps"></ol>
+    `;
+    body.querySelector('.sheet-lede')!.textContent = INSTALL_RATIONALE;
 
-  const steps = sheet.querySelector<HTMLOListElement>('.install-steps')!;
-  for (const step of IOS_INSTALL_STEPS) {
-    const item = document.createElement('li');
-    item.textContent = step;
-    steps.append(item);
-  }
-
-  sheet.hidden = false;
+    const steps = body.querySelector<HTMLOListElement>('.install-steps')!;
+    for (const step of IOS_INSTALL_STEPS) {
+      const item = document.createElement('li');
+      item.textContent = step;
+      steps.append(item);
+    }
+  });
 }
 
 // --- App updates --------------------------------------------------------------------

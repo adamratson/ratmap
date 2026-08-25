@@ -14,10 +14,15 @@ import type { RoutePlanner, RouteSummary } from './route-planner';
 
 export interface RoutesUiDeps {
   planner: RoutePlanner;
-  /** The panel over the map. */
-  panel: HTMLElement;
-  /** The shared bottom sheet. */
-  sheet: HTMLElement;
+  /**
+   * Where both the planner and the saved-routes list draw: the one sheet's body. Which
+   * of them is showing is the caller's decision, not this module's.
+   */
+  container: HTMLElement;
+  /** Switch the sheet to the planner — opening a saved route, or starting a new one. */
+  onPlanStarted(): void;
+  /** Leave the planner and put the map back. */
+  onPlanFinished(): void;
   onStatus(message: string, kind: 'ok' | 'warn' | 'error'): void;
   /**
    * Report something the user can take back. Distinct from {@link onStatus} because an
@@ -29,18 +34,10 @@ export interface RoutesUiDeps {
 // --- Planning panel -------------------------------------------------------------------
 
 export function renderRoutePanel(summary: RouteSummary, deps: RoutesUiDeps): void {
-  const { panel, planner, onStatus } = deps;
+  const { container, planner, onStatus } = deps;
 
-  if (!summary.active && !summary.following) {
-    panel.hidden = true;
-    panel.innerHTML = '';
-    return;
-  }
-
-  panel.hidden = false;
-  panel.innerHTML = '';
-
-  panel.append(
+  container.innerHTML = '';
+  container.append(
     summary.following
       ? followSection(summary, planner)
       : planSection(summary, planner, deps, onStatus),
@@ -75,7 +72,7 @@ function planSection(
       el(
         'p',
         'route-hint',
-        'Tap the map to drop waypoints. Tap the line to add one in between, drag a marker to move it, press and hold one to remove it.',
+        'Tap the map to drop waypoints. Tap the line to add one in between, drag a marker to move it, press and hold one to remove it. Drag this sheet down to see more map.',
       ),
     );
   }
@@ -107,24 +104,38 @@ function planSection(
     );
   }
 
+  // Five identically-styled grey pills, with Clear sitting immediately beside Done, made
+  // finishing and destroying look like the same kind of thing. Now: one primary action,
+  // and Clear pushed to the far end and coloured as a destructive one.
   const actions = el('div', 'route-actions');
+  const ready = summary.waypointCount >= 2 && summary.pendingLegs === 0;
 
   const undo = buttonEl('Undo', () => planner.undo());
   undo.disabled = !summary.canUndo;
   actions.append(undo);
 
   const save = buttonEl('Save', () => openSaveForm(section, planner, deps, onStatus));
-  save.disabled = summary.waypointCount < 2 || summary.pendingLegs > 0;
+  save.disabled = !ready;
   actions.append(save);
 
+  // Following is what a planned route is *for*, so it is the one action that leads.
   const follow = buttonEl('Follow', () => planner.startFollowing());
-  follow.disabled = summary.waypointCount < 2 || summary.pendingLegs > 0;
+  follow.disabled = !ready;
+  follow.classList.add('primary');
   actions.append(follow);
 
-  actions.append(buttonEl('Clear', () => planner.clear()));
-  actions.append(buttonEl('Done', () => planner.deactivate()));
+  // The mode exit. It has to stay: while planning, a tap on the map means "waypoint"
+  // rather than "open this summit", and there must be an obvious way back.
+  actions.append(buttonEl('Done', () => deps.onPlanFinished()));
 
   section.append(actions);
+
+  const clear = buttonEl('Clear route', () => planner.clear());
+  clear.disabled = summary.waypointCount === 0;
+  const destroy = el('div', 'route-destroy');
+  destroy.append(clear);
+  section.append(destroy);
+
   return section;
 }
 
@@ -277,30 +288,25 @@ async function persist(
 // --- Saved routes sheet ---------------------------------------------------------------
 
 export async function renderRoutesSheet(deps: RoutesUiDeps): Promise<void> {
-  const { sheet, planner, onStatus } = deps;
+  const { container, planner, onStatus } = deps;
 
-  sheet.innerHTML = `
-    <button class="sheet-close" type="button" aria-label="Close">×</button>
+  container.innerHTML = `
     <h2>Routes</h2>
     <div class="routes-toolbar"></div>
     <ul class="routes-list"></ul>
   `;
-  sheet.querySelector('.sheet-close')!.addEventListener('click', () => {
-    sheet.hidden = true;
-  });
-  sheet.hidden = false;
 
-  const toolbar = sheet.querySelector<HTMLDivElement>('.routes-toolbar')!;
+  const toolbar = container.querySelector<HTMLDivElement>('.routes-toolbar')!;
   toolbar.append(
     buttonEl('New route', () => {
       planner.clear();
       planner.activate();
-      sheet.hidden = true;
+      deps.onPlanStarted();
     }),
   );
   toolbar.append(importControl(deps));
 
-  const list = sheet.querySelector<HTMLUListElement>('.routes-list')!;
+  const list = container.querySelector<HTMLUListElement>('.routes-list')!;
 
   let routes: SavedRoute[];
   try {
@@ -319,7 +325,7 @@ export async function renderRoutesSheet(deps: RoutesUiDeps): Promise<void> {
 }
 
 function routeRow(route: SavedRoute, deps: RoutesUiDeps): HTMLLIElement {
-  const { planner, sheet, onStatus } = deps;
+  const { planner, onStatus } = deps;
   const item = document.createElement('li');
   item.className = 'route-row';
 
@@ -344,7 +350,7 @@ function routeRow(route: SavedRoute, deps: RoutesUiDeps): HTMLLIElement {
       costing: route.costing,
     });
     planner.activate();
-    sheet.hidden = true;
+    deps.onPlanStarted();
   });
   item.append(open);
 
@@ -398,7 +404,7 @@ function importControl(deps: RoutesUiDeps): HTMLElement {
           waypoints: imported.waypoints,
         });
         deps.planner.activate();
-        deps.sheet.hidden = true;
+        deps.onPlanStarted();
         deps.onStatus(`Opened “${imported.name}”`, 'ok');
       })
       .catch((err: Error) => deps.onStatus(`Could not import: ${err.message}`, 'error'))

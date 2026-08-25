@@ -51,62 +51,111 @@ body {
   pointer-events: none;
 }
 
-/* Respect the iOS notch/home indicator — the app runs fullscreen when installed. */
-#hud {
+/* --- The control rail ---------------------------------------------------------------
+   Two buttons on the right edge, positioned down the screen where a thumb actually
+   reaches — not in a top corner, and never underneath the sheet. The four-button HUD this
+   replaces sat at the bottom right and was covered outright whenever the planning panel
+   opened, which is exactly when someone wants to tap Locate. */
+#rail {
   position: absolute;
-  right: calc(0.5rem + env(safe-area-inset-right));
-  bottom: calc(1.5rem + env(safe-area-inset-bottom));
-  z-index: 2;
+  right: calc(0.6rem + env(safe-area-inset-right));
+  /* Pinned just above the sheet and moving with it, rather than at a fixed height. That
+     is what makes "you cannot tap Locate while planning a route" impossible rather than
+     merely fixed: there is no sheet position that can cover the rail. */
+  bottom: calc(var(--sheet-visible, 0px) + 0.75rem);
+  transition: bottom 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 3;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
-#hud button {
-  min-width: 5rem;
-  padding: 0.6rem 0.75rem;
+#rail button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 44px. Not negotiable — this is the control you use with cold hands. */
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: 50%;
   background: #fff;
   color: var(--slate-900);
-  font-size: 0.85rem;
-  font-weight: 600;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
   cursor: pointer;
 }
 
-#hud button.active {
+#rail button[hidden] {
+  display: none;
+}
+
+#rail button.active {
   background: #2563eb;
   color: #fff;
 }
 
+.rail-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+/* Spins while waiting for the first fix, so a slow GPS looks like waiting rather than
+   like a dead button. */
+#locate-btn.locating .rail-icon {
+  animation: locating 1.4s linear infinite;
+}
+
+@keyframes locating {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.compass-needle {
+  color: #b91c1c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #locate-btn.locating .rail-icon {
+    animation: none;
+  }
+
+  #rail {
+    transition: none;
+  }
+}
+
+/* --- Search ------------------------------------------------------------------------
+   Lives in the sheet's peek row now. It used to sit 8px from the top of an 812px screen —
+   the control reached for first, placed the furthest from the thumb, with the keyboard
+   rising 700px below it. */
 #search {
-  position: absolute;
-  top: calc(0.5rem + env(safe-area-inset-top));
-  left: calc(0.5rem + env(safe-area-inset-left));
-  z-index: 4;
-  /* The 4.25rem reserves the top-right column MapLibre's zoom/compass control occupies
-     (29px of button plus its 10px margin) on top of the 1rem of side gutters. Without it
-     the field grows to full width at phone sizes and sits on top of the zoom buttons —
-     it has the higher z-index, so they become untappable rather than just overlapped. */
-  width: min(22rem, calc(100% - 4.25rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  position: relative;
 }
 
 #search-input {
   width: 100%;
-  padding: 0.6rem 0.75rem;
+  /* 44px tall. */
+  padding: 0.65rem 0.85rem;
   border: 0;
-  border-radius: 0.5rem;
-  background: #fff;
+  border-radius: 0.6rem;
+  background: #f1f5f9;
+  color: var(--slate-900);
   /* Never below 16px. iOS Safari zooms the page in when a field with smaller text takes
      focus and does not zoom back out afterwards, leaving the map scaled and panned with
      the controls pushed off-screen — which looks like a broken layout, not a zoom. */
   font-size: 1rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
+/* Results open *upward* out of the peek row: the field is at the bottom of the screen,
+   so a list below it would be off-screen or under the keyboard. */
 #search-results {
-  margin: 0.35rem 0 0;
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  margin: 0;
   padding: 0;
   list-style: none;
   max-height: 40vh;
@@ -161,7 +210,7 @@ body {
    rather than by being cleared. */
 #detail-notice {
   position: absolute;
-  bottom: calc(1.6rem + env(safe-area-inset-bottom));
+  bottom: calc(var(--sheet-visible, 0px) + 0.75rem);
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
@@ -185,11 +234,10 @@ body {
    the twentieth failed tile does not add a twentieth banner. */
 #conditions {
   position: absolute;
-  top: calc(3.6rem + env(safe-area-inset-top));
-  left: calc(0.5rem + env(safe-area-inset-left));
-  /* Same top-right reservation as #search: a full-width line at phone sizes would sit
-     over the zoom control, which is exactly what someone reaches for when the map has
-     gone blank. */
+  top: calc(0.6rem + env(safe-area-inset-top));
+  left: calc(0.6rem + env(safe-area-inset-left));
+  /* Reserves the top-right corner for MapLibre's zoom cluster, which is still there on a
+     mouse — and is exactly what someone reaches for when the map has gone blank. */
   right: calc(3.75rem + env(safe-area-inset-right));
   z-index: 2;
   display: flex;
@@ -263,13 +311,12 @@ body {
    whichever of the sheet and the planning panel is currently open. */
 #toasts {
   position: absolute;
-  left: calc(0.5rem + env(safe-area-inset-left));
-  /* Stops short of the HUD column (0.5rem gutter + its 5rem buttons). A toast is at the
-     bottom of the screen precisely because that is where the thumb is — which is also
-     where the HUD lives, so one of them has to give way, and it is not the toast that
-     has an expiring "Undo" on it. */
-  right: calc(6rem + env(safe-area-inset-right));
-  bottom: calc(var(--bottom-surface, 0px) + 1rem + env(safe-area-inset-bottom));
+  left: calc(0.6rem + env(safe-area-inset-left));
+  /* Clear of the rail, which is the only other thing on this edge. */
+  right: calc(4rem + env(safe-area-inset-right));
+  /* Above the sheet, and above the rail that also sits there. --sheet-visible is set from
+     the sheet's own geometry as it moves, so these travel with it. */
+  bottom: calc(var(--sheet-visible, 0px) + 4.25rem);
   z-index: 6;
   display: flex;
   flex-direction: column-reverse;
@@ -347,64 +394,155 @@ body {
   margin-bottom: 0.4rem;
 }
 
-/* Bottom sheet — peak detail and saved places. */
+/* --- The sheet ----------------------------------------------------------------------
+   The app's one non-map surface. Full height, translated down so only the chosen detent
+   shows — a transform rather than an animated height, so a drag tracks the finger on the
+   compositor instead of relaying out its contents every frame. */
 #sheet {
   position: absolute;
-  left: calc(0.5rem + env(safe-area-inset-left));
-  right: calc(0.5rem + env(safe-area-inset-right));
-  bottom: calc(0.5rem + env(safe-area-inset-bottom));
-  z-index: 3;
-  max-width: 30rem;
-  max-height: 55vh;
-  overflow-y: auto;
-  padding: 0.9rem 1rem;
-  border-radius: 0.75rem;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Sized for its tallest detent; the transform does the rest. */
+  height: 92vh;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  border-radius: 1rem 1rem 0 0;
   background: #fff;
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.2);
+  /* The sheet owns vertical gestures inside itself; without this the browser tries to
+     scroll the page and the drag stutters or dies. */
+  touch-action: none;
+  will-change: transform;
 }
 
-#sheet[hidden] {
+/* Applied only while snapping, so a drag itself is never animated — an eased transform
+   during a drag lags the finger. */
+#sheet.sheet-animating {
+  transition: transform 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sheet.sheet-animating {
+    transition: none;
+  }
+}
+
+.sheet-grip {
+  flex-shrink: 0;
+  /* Generous: this is the handle for the app's primary gesture. */
+  padding: 0.6rem 0;
+  cursor: grab;
+}
+
+.sheet-grip::before {
+  content: '';
+  display: block;
+  width: 2.25rem;
+  height: 0.25rem;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+/* Always visible, whatever the detent. */
+.sheet-peek {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* The resting row sits at the very bottom of the screen, so it has to clear the home
+     indicator itself — nothing else is down there to do it for it. */
+  padding: 0 0.9rem calc(0.9rem + env(safe-area-inset-bottom));
+}
+
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 1rem calc(1rem + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-body:empty {
+  padding: 0;
+}
+
+/* At rest the body is off-screen anyway; hiding it keeps its contents out of the tab
+   order and away from a screen reader. */
+#sheet.at-peek .sheet-body {
+  visibility: hidden;
+}
+
+#chips {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+#chips::-webkit-scrollbar {
   display: none;
 }
 
-#sheet h2 {
-  margin: 0 1.5rem 0.35rem 0;
-  font-size: 1.05rem;
-}
-
-#sheet p {
-  margin: 0 0 0.25rem;
+.chip {
+  flex-shrink: 0;
+  /* 36px — smaller than the 44px rail buttons because these sit in a row with generous
+     horizontal padding, which is where a mis-tap actually happens. */
+  min-height: 2.25rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--slate-900);
   font-size: 0.85rem;
-  color: #475569;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.sheet-close {
-  position: absolute;
-  top: 0.4rem;
-  right: 0.5rem;
-  border: 0;
-  background: transparent;
-  font-size: 1.4rem;
-  line-height: 1;
-  color: #64748b;
-  cursor: pointer;
+.chip.active {
+  background: var(--slate-900);
+  border-color: var(--slate-900);
+  color: #fff;
+}
+
+/* The planning chip is a mode, not a destination — coloured to say so, and to make the
+   mode visible even when the sheet is at rest. */
+.chip.chip-mode.active {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.sheet-body h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.sheet-body p {
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  color: #475569;
 }
 
 .sheet-actions {
   display: flex;
   gap: 0.5rem;
   align-items: center;
-  margin-top: 0.75rem;
+  margin-top: 0.9rem;
 }
 
 .sheet-actions button,
 .sheet-actions a {
-  padding: 0.45rem 0.8rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
   border: 0;
-  border-radius: 0.4rem;
+  border-radius: 0.5rem;
   background: #2563eb;
   color: #fff;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
@@ -557,9 +695,20 @@ body {
   top: env(safe-area-inset-top);
 }
 
+/* Lifted above the sheet. Attribution is legally required (ODbL) and the sheet's resting
+   height would otherwise sit right on top of it — "visible if you drag the UI away" is
+   not attribution. --sheet-visible is measured in main.ts as the sheet is dragged. */
 .maplibregl-ctrl-bottom-left,
 .maplibregl-ctrl-bottom-right {
-  bottom: env(safe-area-inset-bottom);
+  bottom: calc(var(--sheet-visible, 0px) + env(safe-area-inset-bottom));
+  transition: bottom 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maplibregl-ctrl-bottom-left,
+  .maplibregl-ctrl-bottom-right {
+    transition: none;
+  }
 }
 
 .maplibregl-ctrl-top-left,
@@ -579,26 +728,7 @@ body {
 
 /* --- Route planning (Phase 4) ------------------------------------------------------ */
 
-/* The planning panel sits above the sheet's slot but below it in z-order, so opening the
-   routes list covers the panel rather than fighting it for the same corner. */
-#route-panel {
-  position: absolute;
-  left: calc(0.5rem + env(safe-area-inset-left));
-  right: calc(0.5rem + env(safe-area-inset-right));
-  bottom: calc(0.5rem + env(safe-area-inset-bottom));
-  z-index: 2;
-  max-width: 30rem;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 0.75rem 0.9rem;
-  border-radius: 0.75rem;
-  background: #fff;
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
-}
-
-#route-panel[hidden] {
-  display: none;
-}
+/* --- Route planning ---------------------------------------------------------------- */
 
 .route-panel-header {
   display: flex;
@@ -618,7 +748,8 @@ body {
 }
 
 .route-costing button {
-  padding: 0.3rem 0.6rem;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.75rem;
   border: 1px solid #cbd5e1;
   border-radius: 0.4rem;
   background: #fff;
@@ -703,14 +834,49 @@ body {
 }
 
 .route-actions button {
-  padding: 0.45rem 0.7rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.9rem;
   border: 0;
-  border-radius: 0.4rem;
+  border-radius: 0.5rem;
   background: #e2e8f0;
   color: var(--slate-900);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* One primary action, so finishing and destroying no longer look identical. Only while it
+   is actually available — a disabled button has no business advertising itself as the
+   thing to do next. */
+.route-actions button.primary:not(:disabled) {
+  background: #2563eb;
+  color: #fff;
+}
+
+/* Clear wipes the route and used to sit immediately beside Done in a row of five
+   identical grey pills. Now on its own line, at the opposite end, looking like what it
+   is rather than like another way to finish. */
+.route-destroy {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+.route-destroy button {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #b91c1c;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.route-destroy button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .route-actions button:disabled {

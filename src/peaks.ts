@@ -5,6 +5,7 @@ import type {
   PointLike,
 } from 'maplibre-gl';
 import { OSM_ATTRIBUTION, PEAKS_MAX_ZOOM, PEAKS_PMTILES_URL } from './config';
+import { isCoarsePointer } from './pointer';
 import type { TileSourceRegistry } from './tile-source-registry';
 
 // Summits overlay, backed by our own peaks-global.pmtiles — Protomaps v4 dropped `ele`
@@ -170,7 +171,7 @@ export const COARSE_TAP_PADDING_PX = 22;
  * the cursor is visibly not over — so this is a touch accommodation, not a global one.
  */
 export function tapPadding(): number {
-  return globalThis.matchMedia?.('(pointer: coarse)').matches ? COARSE_TAP_PADDING_PX : 0;
+  return isCoarsePointer() ? COARSE_TAP_PADDING_PX : 0;
 }
 
 function screenXY(point: PointLike): { x: number; y: number } {

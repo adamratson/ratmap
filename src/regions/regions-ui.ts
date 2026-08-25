@@ -37,16 +37,14 @@ export async function restoreDownloadedRegions(
 export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   const { container, map, registry, onStatus } = deps;
 
+  // No close button: the sheet's own chip toggles this view, and dragging the sheet down
+  // works from anywhere. A per-panel × was the only way out when each panel owned its own
+  // corner of the screen.
   container.innerHTML = `
-    <button class="sheet-close" type="button" aria-label="Close">×</button>
     <h2>Offline regions</h2>
     <p class="regions-intro"></p>
     <ul class="regions-list"></ul>
   `;
-  container.querySelector('.sheet-close')!.addEventListener('click', () => {
-    container.hidden = true;
-  });
-  container.hidden = false;
 
   const intro = container.querySelector<HTMLParagraphElement>('.regions-intro')!;
   const list = container.querySelector<HTMLUListElement>('.regions-list')!;

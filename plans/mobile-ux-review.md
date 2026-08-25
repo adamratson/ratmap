@@ -10,6 +10,35 @@ Rendered version with wireframes: https://claude.ai/code/artifact/7b2853e0-5b3b-
 
 ---
 
+## Status — 2026-08-25
+
+All seven steps in §4 are implemented on branch `mobile-ux`. Findings A1–A3, B1–B6 and
+C1–C5 are addressed; §3's redesign is in place.
+
+Two things worth carrying forward:
+
+- **A1 is still unconfirmed on a real device.** The iOS `contextmenu` behaviour is
+  documented upstream, not device-tested. The replacement gesture (a pointer-event
+  press-and-hold, `src/routes/press-hold.ts`) works on every platform regardless, so
+  this is a matter of closing the finding rather than of the fix being at risk.
+- **The region footprints (C4) were never seen in a browser.** The remote tile host
+  stopped responding to the dev session partway through, so the map style never finished
+  loading. The geometry, nesting and render wiring are covered by
+  `src/regions/region-footprints.test.ts`; the on-map appearance is not.
+
+Two corrections to this document are marked inline: the `showUserHeading` claim under C2,
+and B4's suggestion that `Done` become a downward drag — it stayed as a button, because
+while planning a map tap means "waypoint" rather than "open this summit" and the mode
+needs an obvious exit.
+
+Measured after the change, at 375×812, as a fraction of the screen the sheet covers:
+15% at rest, 27% for a summit or the saved-places list, 29% for the planner, 38% for the
+region catalogue — against the 34% the old planning panel took and could not give back.
+In landscape the sheet becomes a left-hand side panel, so the map keeps the full
+right-hand side rather than a 150px band.
+
+---
+
 ## 0. Measured baseline
 
 Sampling occluded screen area against the live DOM at 375×812:
@@ -127,6 +156,12 @@ beside `Done` with no visual distinction between finishing and destroying.
 
 Fix: one primary action (state-dependent: `Follow` or `Save`), `Undo` as an icon,
 `Clear` moved to an overflow. `Done` becomes a downward drag on the sheet (§3).
+
+**Correction (2026-08-25):** `Done` stayed a button. Dragging the sheet down reveals the
+map but does not leave planning mode, and while planning a tap on the map means
+"waypoint" rather than "open this summit" — so the mode needs an exit that is visibly an
+exit. `Clear` moved to its own row instead, at the opposite end and coloured
+destructively.
 
 **B5. Search results don't show distance.**
 Results are ordered by distance from the viewport centre

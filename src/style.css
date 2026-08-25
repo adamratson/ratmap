@@ -164,8 +164,11 @@ body {
   right: calc(0.6rem + env(safe-area-inset-right));
   /* Pinned just above the sheet and moving with it, rather than at a fixed height. That
      is what makes "you cannot tap Locate while planning a route" impossible rather than
-     merely fixed: there is no sheet position that can cover the rail. */
-  bottom: calc(var(--sheet-visible, 0px) + 0.75rem);
+     merely fixed: there is no sheet position that can cover the rail.
+
+     The 2.25rem clears the attribution line, which shares this corner and is legally
+     required — of the two, it is the rail that gives way. */
+  bottom: calc(var(--sheet-visible, 0px) + 2.25rem);
   transition: bottom 0.26s cubic-bezier(0.32, 0.72, 0, 1);
   z-index: 3;
   display: flex;
@@ -423,7 +426,7 @@ body {
   right: calc(4rem + env(safe-area-inset-right));
   /* Above the sheet, and above the rail that also sits there. --sheet-visible is set from
      the sheet's own geometry as it moves, so these travel with it. */
-  bottom: calc(var(--sheet-visible, 0px) + 4.25rem);
+  bottom: calc(var(--sheet-visible, 0px) + 5.75rem);
   z-index: 6;
   display: flex;
   flex-direction: column-reverse;
@@ -1335,4 +1338,46 @@ body {
      only control on the screen. */
   min-height: 3.25rem;
   font-size: 1rem;
+}
+
+/* --- Landscape ----------------------------------------------------------------------
+   A bottom sheet is a portrait idea. On a phone held sideways there are only ~375px of
+   height to divide, and a sheet that takes 60% of it leaves a strip of map too shallow to
+   read a ridge line off — which is the reason to turn the phone sideways in the first
+   place.
+
+   So in landscape it becomes a side panel: same vertical drag, same detents, but it only
+   ever covers the left of the screen and the map keeps the whole right-hand side. */
+@media (max-height: 26rem) and (orientation: landscape) {
+  #sheet {
+    right: auto;
+    width: min(24rem, 55vw);
+    border-radius: 0 1rem 0 0;
+    padding-left: env(safe-area-inset-left);
+  }
+
+  /* Nothing on the right is under the sheet any more, so these stop dodging it. */
+  .maplibregl-ctrl-bottom-right,
+  .maplibregl-ctrl-bottom-left {
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
+  #rail {
+    /* Same rule as portrait: above the attribution, not on top of it. */
+    bottom: calc(2.75rem + env(safe-area-inset-bottom));
+  }
+
+  .maplibregl-ctrl-bottom-left {
+    left: calc(min(24rem, 55vw) + env(safe-area-inset-left));
+  }
+
+  #toasts,
+  #detail-notice {
+    bottom: calc(2.75rem + env(safe-area-inset-bottom));
+  }
+
+  #toasts {
+    left: calc(min(24rem, 55vw) + 0.6rem);
+    right: calc(4rem + env(safe-area-inset-right));
+  }
 }

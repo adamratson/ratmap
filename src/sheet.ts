@@ -33,6 +33,19 @@ const CONTENT_MIN_FRACTION = 0.24;
 const CONTENT_MAX_FRACTION = 0.62;
 
 /**
+ * The cap in landscape, where the sheet is a side panel (see the media query in
+ * style.css) and so costs the map width rather than height. It can take more of the
+ * screen's height there precisely because it is no longer taking all of its width.
+ */
+const CONTENT_MAX_FRACTION_LANDSCAPE = 0.88;
+
+function contentMaxFraction(): number {
+  return globalThis.matchMedia?.('(max-height: 26rem) and (orientation: landscape)').matches
+    ? CONTENT_MAX_FRACTION_LANDSCAPE
+    : CONTENT_MAX_FRACTION;
+}
+
+/**
  * How far ahead of itself a flick is projected before snapping.
  *
  * Snapping to the nearest detent alone ignores intent: a fast flick that has only
@@ -188,7 +201,7 @@ export class BottomSheet {
       height -
         Math.min(
           Math.max(wanted, viewport * CONTENT_MIN_FRACTION),
-          viewport * CONTENT_MAX_FRACTION,
+          viewport * contentMaxFraction(),
         ),
     );
 

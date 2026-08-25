@@ -115,6 +115,15 @@ export class BottomSheet {
   private readonly element: HTMLElement;
   private readonly onLayout?: (detent: Detent) => void;
   private current: Detent = 'peek';
+  /**
+   * The offset last actually written to the transform, or null before the first call.
+   *
+   * Distinct from `current`: two calls to `applyDetent('peek', …)` in a row can compute
+   * the *same* offset — a ResizeObserver firing for an unrelated mutation while the sheet
+   * hasn't otherwise moved — and that case has to be a no-op. See the guard in
+   * `applyDetent` for why.
+   */
+  private appliedOffset: number | null = null;
 
   private dragging = false;
   private pointerId: number | null = null;
@@ -224,9 +233,24 @@ export class BottomSheet {
    */
   private applyDetent(detent: Detent, animate: boolean, notify = true): void {
     this.current = detent;
+    const offset = this.offsets()[detent];
 
-    this.element.classList.toggle('sheet-animating', animate);
-    this.element.style.transform = `translateY(${this.offsets()[detent]}px)`;
+    // A recompute that lands on the offset already declared must not touch the
+    // transform or the animation class, even when the values are identical. Toggling
+    // `sheet-animating` off *while a transition toward that same offset is still in
+    // flight* freezes the sheet wherever it happens to be that frame rather than letting
+    // it finish — CSS commits the current interpolated value as the resting one the
+    // moment `transition` stops applying. That is exactly what an unrelated
+    // ResizeObserver firing (for a sibling content mutation, landing on the same detent)
+    // did here: it turned "sheet.open('peek') animating in on load" into "sheet stuck
+    // part-way open," visible as dead space below the peek row — timing-dependent, so it
+    // reproduced on a real device and not on a fast dev machine.
+    if (this.appliedOffset === null || Math.round(offset) !== Math.round(this.appliedOffset)) {
+      this.appliedOffset = offset;
+      this.element.classList.toggle('sheet-animating', animate);
+      this.element.style.transform = `translateY(${offset}px)`;
+    }
+
     for (const candidate of DETENTS) {
       this.element.classList.toggle(`at-${candidate}`, candidate === detent);
     }

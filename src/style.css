@@ -670,8 +670,28 @@ body {
 
 /* Waypoint markers. Numbered rather than plain pins: on a route that doubles back, two
    markers can sit almost on top of each other and the order is the only thing that
-   distinguishes them. */
+   distinguishes them.
+
+   The outer element is a transparent 44px square — Apple's minimum touch target, and what
+   MapLibre positions, hit-tests and drags. The visible pin inside it stays 1.4rem so it
+   does not blot out the path it sits on. */
 .route-waypoint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  cursor: grab;
+  /* The browser's own long-press menu would pre-empt the press-and-hold that removes a
+     waypoint, and text selection makes a drag select the number instead. */
+  -webkit-touch-callout: none;
+  user-select: none;
+  /* Stops the browser claiming a press-and-hold as the start of a pan or a zoom, which
+     would cancel the removal gesture before it completes. */
+  touch-action: none;
+}
+
+.route-waypoint-pin {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -685,19 +705,28 @@ body {
   font-weight: 700;
   line-height: 1;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-  cursor: grab;
-  /* The browser's own long-press menu would pre-empt the contextmenu handler that removes
-     a waypoint, and text selection makes a drag select the number instead. */
-  -webkit-touch-callout: none;
-  user-select: none;
+  /* Grows under a press-and-hold so the gesture has visible progress rather than feeling
+     like nothing is happening — see PRESS_HOLD_MS in route-planner.ts. */
+  transition: transform 0.12s ease-out;
 }
 
-.route-waypoint.start {
+.route-waypoint.start .route-waypoint-pin {
   background: #15803d;
 }
 
-.route-waypoint.end {
+.route-waypoint.end .route-waypoint-pin {
   background: #b91c1c;
+}
+
+/* Held long enough to count: the pin swells, so releasing now is understood to delete. */
+.route-waypoint.holding .route-waypoint-pin {
+  transform: scale(1.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-waypoint-pin {
+    transition: none;
+  }
 }
 
 .routes-toolbar {

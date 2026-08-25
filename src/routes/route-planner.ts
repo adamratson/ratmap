@@ -15,6 +15,7 @@ import {
 import { buildProfile, profileSampleCoords, type ElevationProfile } from './profile';
 import { TerrainSampler } from './terrain-sampler';
 import { RouteFollower, type FollowState } from './follow';
+import { onPressHold } from './press-hold';
 import type { Region } from '../regions/manifest';
 import type { TileSourceRegistry } from '../tile-source-registry';
 
@@ -68,6 +69,15 @@ export interface RoutePlannerOptions {
   onStatus?: (message: string, kind: 'ok' | 'warn' | 'error') => void;
 }
 
+/**
+ * How long after a press-and-hold a map click is ignored.
+ *
+ * Long enough to cover the click the browser dispatches when the pressed element is
+ * removed underneath the pointer, short enough that a deliberate tap straight afterwards
+ * still registers.
+ */
+const CLICK_SUPPRESSION_MS = 400;
+
 export class RoutePlanner {
   private readonly map: MLMap;
   private readonly registry: TileSourceRegistry;
@@ -79,6 +89,14 @@ export class RoutePlanner {
   private readonly router: OfflineRouter;
   private draft = new RouteDraft();
   private markers: maplibregl.Marker[] = [];
+  /** Torn down with the markers they belong to; see renderMarkers. */
+  private markerDisposers: (() => void)[] = [];
+  /**
+   * Markers live in the same container MapLibre binds its own handlers to, so a press on
+   * one also reaches the map as a click. After a press-and-hold removes a waypoint we
+   * would otherwise immediately add a new one in its place.
+   */
+  private suppressClickUntil = 0;
 
   private active = false;
   private inflight: AbortController | null = null;
@@ -170,6 +188,17 @@ export class RoutePlanner {
    */
   handleMapClick(event: MapMouseEvent): boolean {
     if (!this.active) return false;
+
+    // A tap that landed on an existing waypoint is about that waypoint, not about adding
+    // another one on top of it. Both checks are needed: the target guard covers a plain
+    // tap, and the timer covers a press-and-hold, where the element has already been
+    // removed by the time the click is dispatched.
+    if (Date.now() < this.suppressClickUntil) {
+      this.suppressClickUntil = 0;
+      return true;
+    }
+    const target = event.originalEvent.target;
+    if (target instanceof Element && target.closest('.route-waypoint')) return true;
 
     const point: LngLat = [event.lngLat.lng, event.lngLat.lat];
     const meta = this.describePoint?.(event) ?? {};
@@ -453,17 +482,27 @@ export class RoutePlanner {
    * the wrong waypoint and move something the user did not touch.
    */
   private renderMarkers(): void {
+    for (const dispose of this.markerDisposers) dispose();
+    this.markerDisposers = [];
     for (const marker of this.markers) marker.remove();
     this.markers = [];
 
     const waypoints = this.draft.getWaypoints();
     waypoints.forEach((waypoint, index) => {
+      // Two elements, not one: the pin stays small enough to read a map through, while
+      // the element MapLibre positions and drags around it is a 44px touch target. A
+      // 22px drag handle on a surface that pans when you miss it is not usable with a
+      // finger.
       const element = document.createElement('div');
       element.className = 'route-waypoint';
       if (index === 0) element.classList.add('start');
       else if (index === waypoints.length - 1) element.classList.add('end');
-      element.textContent = String(index + 1);
       element.title = waypoint.name ?? `Waypoint ${index + 1}`;
+
+      const pin = document.createElement('span');
+      pin.className = 'route-waypoint-pin';
+      pin.textContent = String(index + 1);
+      element.append(pin);
 
       const marker = new maplibregl.Marker({ element, draggable: this.active })
         .setLngLat([waypoint.lng, waypoint.lat])
@@ -476,12 +515,29 @@ export class RoutePlanner {
       });
 
       // Removing a waypoint has to be reachable without a list: on a phone the map is the
-      // interface. Long-press or right-click is the conventional "remove this pin".
+      // interface. Right-click is the desktop convention and still works...
       element.addEventListener('contextmenu', (event) => {
         event.preventDefault();
         if (!this.active) return;
         this.removeWaypoint(waypoint.id);
       });
+
+      // ...but it is dead on iOS (see press-hold.ts), so the touch gesture is built on
+      // pointer events instead. The class swells the pin while the timer runs, which is
+      // also the only discoverability this gesture has: rest a finger on a waypoint and
+      // it visibly responds.
+      this.markerDisposers.push(
+        onPressHold(element, {
+          onStart: () => element.classList.add('holding'),
+          onCancel: () => element.classList.remove('holding'),
+          onHold: () => {
+            element.classList.remove('holding');
+            if (!this.active) return;
+            this.suppressClickUntil = Date.now() + CLICK_SUPPRESSION_MS;
+            this.removeWaypoint(waypoint.id);
+          },
+        }),
+      );
 
       this.markers.push(marker);
     });

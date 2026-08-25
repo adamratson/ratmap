@@ -268,11 +268,16 @@ const planner = new RoutePlanner({
   // A tap that lands on a summit makes it a named waypoint, so a route reads
   // "Achintee → Ben Nevis" rather than as a list of coordinates.
   describePoint: (event) => {
-    const peak = peakAt(map, event.point);
-    if (!peak) return null;
+    const hit = peakAt(map, event.point);
+    if (!hit) return null;
+    const { properties, lngLat } = hit;
     return {
-      ...(peak.name ? { name: peak.name } : {}),
-      ...(typeof peak.ele === 'number' ? { ele: peak.ele } : {}),
+      ...(properties.name ? { name: properties.name } : {}),
+      ...(typeof properties.ele === 'number' ? { ele: properties.ele } : {}),
+      // Snapped to the summit, not to the tap. RouteDraft.add spreads this over the
+      // tapped coordinates, so a waypoint called "Ben Nevis" is on Ben Nevis rather than
+      // up to a tap-box away from it.
+      ...(lngLat ? { lng: lngLat[0], lat: lngLat[1] } : {}),
     };
   },
   onChange: (summary: RouteSummary) => {
@@ -310,9 +315,12 @@ map.on('click', (e) => {
   // on a summit, which becomes a named waypoint rather than a detail sheet.
   if (planner.handleMapClick(e)) return;
 
-  const peak = peakAt(map, e.point);
-  if (peak) {
-    showPeakSheet(peak, e.lngLat);
+  const hit = peakAt(map, e.point);
+  if (hit) {
+    // The summit's own position, falling back to the tap only if the feature somehow
+    // carried no geometry — otherwise the sheet reports, and "Save place" stores, the
+    // spot the finger landed on rather than the summit.
+    showPeakSheet(hit.properties, hit.lngLat ? new maplibregl.LngLat(...hit.lngLat) : e.lngLat);
   } else {
     hideSheet();
   }

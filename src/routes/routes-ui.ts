@@ -70,7 +70,7 @@ function planSection(
       el(
         'p',
         'route-hint',
-        'Tap the map to drop waypoints. Tap the line to add one in between, drag a marker to move it, long-press one to remove it.',
+        'Tap the map to drop waypoints. Tap the line to add one in between, drag a marker to move it, press and hold one to remove it.',
       ),
     );
   }

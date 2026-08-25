@@ -1,4 +1,9 @@
-import type { FilterSpecification, Map as MLMap, PointLike } from 'maplibre-gl';
+import type {
+  FilterSpecification,
+  MapGeoJSONFeature,
+  Map as MLMap,
+  PointLike,
+} from 'maplibre-gl';
 import { OSM_ATTRIBUTION, PEAKS_MAX_ZOOM, PEAKS_PMTILES_URL } from './config';
 import type { TileSourceRegistry } from './tile-source-registry';
 
@@ -135,20 +140,116 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
 }
 
 /**
- * Properties of the topmost peak at a screen point, or null if none is there.
+ * A summit the user hit, and where that summit actually is.
+ *
+ * `lngLat` is the peak's own position, never the tapped position. They can be far apart:
+ * the tap box below is 22 px wide, which is 50 m at hiking zoom and kilometres at z6 — so
+ * saving a place or naming a waypoint from the tap point put it somewhere the summit is
+ * not.
+ */
+export interface PeakHit {
+  properties: PeakProperties;
+  /** Null only if the feature arrived without point geometry, which should not happen. */
+  lngLat: [number, number] | null;
+}
+
+/**
+ * Half-width, in pixels, of the box a tap searches for a summit.
+ *
+ * A finger is not a pixel. The rendered marker is a 2.5-4 px circle, and querying the
+ * single tapped pixel gave an effective target of about 18 px including the label —
+ * measured in the running app, where a probe 18 px from a peak's centre already returned
+ * nothing. Apple's minimum is 44 pt, so half of that is the floor.
+ */
+export const COARSE_TAP_PADDING_PX = 22;
+
+/**
+ * Zero for a mouse, {@link COARSE_TAP_PADDING_PX} for a finger.
+ *
+ * A mouse pointer really is one pixel and padding it would make a click select a summit
+ * the cursor is visibly not over — so this is a touch accommodation, not a global one.
+ */
+export function tapPadding(): number {
+  return globalThis.matchMedia?.('(pointer: coarse)').matches ? COARSE_TAP_PADDING_PX : 0;
+}
+
+function screenXY(point: PointLike): { x: number; y: number } {
+  return Array.isArray(point) ? { x: point[0], y: point[1] } : { x: point.x, y: point.y };
+}
+
+function pointCoordinates(feature: MapGeoJSONFeature): [number, number] | null {
+  const geometry = feature.geometry;
+  if (geometry?.type !== 'Point') return null;
+  const [lng, lat] = geometry.coordinates;
+  return typeof lng === 'number' && typeof lat === 'number' ? [lng, lat] : null;
+}
+
+function toHit(feature: MapGeoJSONFeature): PeakHit {
+  return { properties: feature.properties as PeakProperties, lngLat: pointCoordinates(feature) };
+}
+
+/**
+ * The hit whose summit renders closest to the tap.
+ *
+ * Not `hits[0]`: `queryRenderedFeatures` returns features in render order, which for a
+ * symbol layer is label placement order and has nothing to do with the tap. Measured in
+ * the running app, a box query near Ben Chonzie returned Ben Lawers first — so taking the
+ * first would open the wrong summit precisely when two are close enough to need the box.
+ */
+function nearest(map: MLMap, hits: MapGeoJSONFeature[], x: number, y: number): MapGeoJSONFeature {
+  let best = hits[0];
+  let bestDistance = Infinity;
+
+  for (const hit of hits) {
+    const coordinates = pointCoordinates(hit);
+    // A feature with no usable geometry cannot be measured, so it can only win by being
+    // the sole candidate — which `best` already covers.
+    if (!coordinates) continue;
+    const projected = map.project(coordinates);
+    const distance = (projected.x - x) ** 2 + (projected.y - y) ** 2;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = hit;
+    }
+  }
+
+  return best;
+}
+
+/**
+ * The summit at a screen point, or null if none is there.
  *
  * Queries only layers that currently exist: `queryRenderedFeatures` *throws* on an unknown
  * layer id rather than returning nothing. The peaks layers are added on the map's `load`
  * event, but pointer handlers are live from construction — so any mouse movement before
  * load (or after a style reload drops them) would otherwise raise "The layer
  * 'peaks-symbol' does not exist in the map's style and cannot be queried for features".
+ *
+ * @param paddingPx half-width of the search box. Defaults to {@link tapPadding}; pass an
+ *   explicit value to override the pointer-type heuristic.
  */
-export function peakAt(map: MLMap, point: PointLike): PeakProperties | null {
+export function peakAt(map: MLMap, point: PointLike, paddingPx = tapPadding()): PeakHit | null {
   const layers = [PEAKS_LAYER_ID, `${PEAKS_LAYER_ID}-marker`].filter((id) =>
     Boolean(map.getLayer(id)),
   );
   if (layers.length === 0) return null;
 
-  const hits = map.queryRenderedFeatures(point, { layers });
-  return hits.length > 0 ? (hits[0].properties as PeakProperties) : null;
+  // A mouse queries the bare point, exactly as before — no box, and so no projection work
+  // and no chance of selecting something the cursor is not on.
+  if (paddingPx <= 0) {
+    const hits = map.queryRenderedFeatures(point, { layers });
+    return hits.length > 0 ? toHit(hits[0]) : null;
+  }
+
+  const { x, y } = screenXY(point);
+  const hits = map.queryRenderedFeatures(
+    [
+      [x - paddingPx, y - paddingPx],
+      [x + paddingPx, y + paddingPx],
+    ],
+    { layers },
+  );
+  if (hits.length === 0) return null;
+
+  return toHit(nearest(map, hits, x, y));
 }

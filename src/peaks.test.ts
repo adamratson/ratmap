@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Map as MLMap } from 'maplibre-gl';
+import type { Map as MLMap, PointLike } from 'maplibre-gl';
 import {
   addPeaksLayer,
   formatElevation,
@@ -161,7 +161,10 @@ describe('peakAt', () => {
       ]),
     } as unknown as MLMap;
 
-    expect(peakAt(map, [10, 10])).toEqual({ name: 'Ben Nevis', ele: 1345 });
+    expect(peakAt(map, [10, 10])).toEqual({
+      properties: { name: 'Ben Nevis', ele: 1345 },
+      lngLat: null,
+    });
   });
 
   it('returns null when nothing is under the point', () => {
@@ -198,4 +201,90 @@ describe('peakAt', () => {
 
     expect(queryRenderedFeatures).toHaveBeenCalledWith([10, 10], { layers: [PEAKS_LAYER_ID] });
   });
+
+  it('reports the summit position, not the queried point', () => {
+    const map = {
+      getLayer: layersReady(),
+      queryRenderedFeatures: vi
+        .fn()
+        .mockReturnValue([peakFeature('Ben Nevis', [-5.0037, 56.7969])]),
+    } as unknown as MLMap;
+
+    expect(peakAt(map, [10, 10])?.lngLat).toEqual([-5.0037, 56.7969]);
+  });
 });
+
+describe('peakAt on a touch screen', () => {
+  const layersReady = () => vi.fn().mockReturnValue({});
+
+  it('queries a box around the tap rather than the single tapped pixel', () => {
+    const queryRenderedFeatures = vi.fn().mockReturnValue([]);
+    const map = { getLayer: layersReady(), queryRenderedFeatures } as unknown as MLMap;
+
+    peakAt(map, [100, 200], 22);
+
+    expect(queryRenderedFeatures).toHaveBeenCalledWith(
+      [
+        [78, 178],
+        [122, 222],
+      ],
+      { layers: [PEAKS_LAYER_ID, `${PEAKS_LAYER_ID}-marker`] },
+    );
+  });
+
+  it('accepts a Point object as well as a tuple', () => {
+    const queryRenderedFeatures = vi.fn().mockReturnValue([]);
+    const map = { getLayer: layersReady(), queryRenderedFeatures } as unknown as MLMap;
+
+    peakAt(map, { x: 100, y: 200 } as unknown as PointLike, 22);
+
+    expect(queryRenderedFeatures.mock.calls[0][0]).toEqual([
+      [78, 178],
+      [122, 222],
+    ]);
+  });
+
+  it('picks the summit nearest the tap, not the first feature returned', () => {
+    // Reproduces what the running app does: queryRenderedFeatures returns features in
+    // render order, so the far peak can come back first.
+    const far = peakFeature('Ben Lawers', [-4.22, 56.54]);
+    const near = peakFeature('Ben Chonzie', [-3.99, 56.45]);
+
+    const map = {
+      getLayer: layersReady(),
+      queryRenderedFeatures: vi.fn().mockReturnValue([far, near]),
+      project: vi.fn((coordinates: [number, number]) =>
+        coordinates[0] === -4.22 ? { x: 118, y: 200 } : { x: 104, y: 203 },
+      ),
+    } as unknown as MLMap;
+
+    expect(peakAt(map, [100, 200], 22)?.properties.name).toBe('Ben Chonzie');
+  });
+
+  it('still answers when the nearest candidate carries no geometry', () => {
+    const map = {
+      getLayer: layersReady(),
+      queryRenderedFeatures: vi.fn().mockReturnValue([{ properties: { name: 'Ben Nevis' } }]),
+      project: vi.fn(),
+    } as unknown as MLMap;
+
+    expect(peakAt(map, [100, 200], 22)).toEqual({
+      properties: { name: 'Ben Nevis' },
+      lngLat: null,
+    });
+  });
+
+  it('does not pad a mouse pointer', () => {
+    const queryRenderedFeatures = vi.fn().mockReturnValue([]);
+    const map = { getLayer: layersReady(), queryRenderedFeatures } as unknown as MLMap;
+
+    peakAt(map, [100, 200], 0);
+
+    expect(queryRenderedFeatures.mock.calls[0][0]).toEqual([100, 200]);
+  });
+});
+
+/** A feature shaped the way a vector-tile point layer returns one. */
+function peakFeature(name: string, coordinates: [number, number]) {
+  return { properties: { name }, geometry: { type: 'Point', coordinates } };
+}

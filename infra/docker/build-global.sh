@@ -521,22 +521,37 @@ with open(sys.argv[1]) as f:
             continue
         if pattern and not pattern.search(r["id"]):
             continue
-        print(r["id"])
+        # `id<space>wants-terrain`, so the skip check knows which artifacts to expect.
+        print(r["id"], 0 if r.get("terrain") is False else 1)
 ' "$INFRA_DIR/regions.json" "${1:-}" "${RATMAP_REGION_FILTER:-}"
 }
 
+# One bad region must not end a run of several hundred. A malformed bbox failed on
+# Antarctica after Africa had finished, and took every continent not yet reached with it —
+# hours of downloads abandoned over one region that could have been skipped. Failures are
+# collected and reported at the end; the stage still fails, so nothing downstream treats a
+# partial catalogue as complete.
 stage_regions() {
-  local id
-  while read -r id; do
+  local id wants_terrain
+  local -a failed=()
+  while read -r id wants_terrain; do
     if [ -z "$FORCE" ] && [ -z "$DRY_RUN" ] \
        && [ -f "$DIST_DIR/regions/$id/$id-basemap.pmtiles" ] \
-       && [ -f "$DIST_DIR/regions/$id/$id-terrain.pmtiles" ]; then
+       && { [ "$wants_terrain" = 0 ] || [ -f "$DIST_DIR/regions/$id/$id-terrain.pmtiles" ]; }; then
       log "regions/$id: already built — --force to redo"
       continue
     fi
     log "regions/$id"
-    "$SCRIPTS_DIR/build-region.sh" "$id" $DRY_RUN || return 1
+    if ! "$SCRIPTS_DIR/build-region.sh" "$id" $DRY_RUN; then
+      log "regions/$id FAILED — continuing with the rest"
+      failed+=("$id")
+    fi
   done < <(region_ids)
+
+  if [ "${#failed[@]}" -gt 0 ]; then
+    log "regions: ${#failed[@]} of the catalogue failed: ${failed[*]}"
+    return 1
+  fi
 }
 
 stage_contours() {
@@ -551,14 +566,23 @@ stage_contours() {
   # — and the catalogue now covers the globe. Running this over every region is the
   # planet-contour build the spec says never to attempt (C14, §4 Phase 2), reached by
   # accident rather than by decision.
-  while read -r id; do
+  local -a failed=()
+  while read -r id _; do
     if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-contours.pmtiles" ]; then
       log "contours/$id: already built — --force to redo"
       continue
     fi
     log "contours/$id"
-    "$SCRIPTS_DIR/build-contours.sh" "$id" || return 1
+    if ! "$SCRIPTS_DIR/build-contours.sh" "$id"; then
+      log "contours/$id FAILED — continuing with the rest"
+      failed+=("$id")
+    fi
   done < <(region_ids contours)
+
+  if [ "${#failed[@]}" -gt 0 ]; then
+    log "contours: ${#failed[@]} failed: ${failed[*]}"
+    return 1
+  fi
 }
 
 stage_manifest() {

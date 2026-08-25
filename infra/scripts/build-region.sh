@@ -34,7 +34,15 @@ with open(sys.argv[1]) as f:
 match = next((r for r in regions if r["id"] == sys.argv[2]), None)
 if match is None:
     sys.exit(f"Unknown region '{sys.argv[2]}'. Known: {', '.join(r['id'] for r in regions)}")
+west, south, east, north = match["bbox"]
+if not (west < east and south < north):
+    sys.exit(
+        f"Region '{match['id']}' has an invalid bbox {match['bbox']} "
+        f"(need west<east, south<north). Fix regions.json before building."
+    )
 print(f"REGION_NAME={shlex.quote(match['name'])}")
+# Opt-out, not opt-in: every region gets terrain unless it says otherwise.
+print(f"WANT_TERRAIN={'0' if match.get('terrain') is False else '1'}")
 print(f"BBOX={shlex.quote(','.join(str(c) for c in match['bbox']))}")
 # Empty unless the catalogue caps this region below the defaults below.
 print(f"REGION_BASEMAP_Z={match.get('basemapMaxzoom', '')}")
@@ -72,7 +80,11 @@ mkdir -p "$OUT_DIR"
 
 echo "Region: $REGION_NAME ($REGION_ID)"
 echo "  bbox: $BBOX"
-echo "  basemap maxzoom=$BASEMAP_MAXZOOM, terrain maxzoom=$TERRAIN_MAXZOOM"
+if [ "$WANT_TERRAIN" = 1 ]; then
+  echo "  basemap maxzoom=$BASEMAP_MAXZOOM, terrain maxzoom=$TERRAIN_MAXZOOM"
+else
+  echo "  basemap maxzoom=$BASEMAP_MAXZOOM, terrain skipped"
+fi
 echo
 
 # Extract to a temporary name, verify, and only then move into place.
@@ -102,8 +114,16 @@ extract_verified() {
 echo "==> basemap"
 extract_verified "$BASEMAP_SOURCE" "$OUT_DIR/$REGION_ID-basemap.pmtiles" "$BASEMAP_MAXZOOM"
 
-echo "==> terrain"
-extract_verified "$TERRAIN_SOURCE" "$OUT_DIR/$REGION_ID-terrain.pmtiles" "$TERRAIN_MAXZOOM"
+if [ "$WANT_TERRAIN" = 1 ]; then
+  echo "==> terrain"
+  extract_verified "$TERRAIN_SOURCE" "$OUT_DIR/$REGION_ID-terrain.pmtiles" "$TERRAIN_MAXZOOM"
+else
+  # C16: a region is a set of named artifacts, so basemap-only is a legitimate region and
+  # not a broken one. Antarctica is the case that forced this — its terrain spans every
+  # longitude and measures 101 GB at z11, and still 1.4 GB at z7, which is ~1 km per pixel
+  # and no use to anyone on foot. The global terrain layer still covers it.
+  echo "==> terrain: skipped (regions.json sets terrain: false)"
+fi
 
 if [ -z "$DRY_RUN" ]; then
   echo

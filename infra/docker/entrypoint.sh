@@ -98,6 +98,13 @@ case "$cmd" in
     ls -1 "$SCRIPTS_DIR" | sed 's/^/  /' >&2
     exit 1
     ;;
+  prefetch|world|terrain|peaks|places|regions|contours|manifest|all)
+    # A stage name on its own. Without this it falls through to the catch-all below and
+    # dies as `exec: regions: not found`, which says nothing about the one word missing.
+    echo "\"$cmd\" is a stage of the pipeline, not a command. Run it through 'global':" >&2
+    echo "  docker compose run --rm infra global $cmd $*" >&2
+    exit 2
+    ;;
   *)
     # Anything else is a plain command, so `docker run ... ratmap-infra pmtiles show x`
     # and one-off shell pipelines keep working.

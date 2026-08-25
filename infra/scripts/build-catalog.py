@@ -77,6 +77,9 @@ DEFAULT_MAX_BYTES = 900_000_000
 
 # Two polygon parts further apart than this become separate regions. Hawaii sits 4000 km
 # off the US mainland: one bbox around both is 20,000 square degrees of empty Pacific.
+# Below this, a longitude span is not a region — it is a framing artefact.
+DEGENERATE_DEGREES = 0.01
+
 PART_GAP_DEGREES = 5.0
 
 UNITS = {"B": 1, "kB": 1e3, "MB": 1e6, "GB": 1e9, "TB": 1e12}
@@ -220,8 +223,17 @@ def region_boxes(feature) -> list[tuple[float, float, float, float]]:
     # A part that itself straddles the prime meridian comes out inverted when shifted;
     # such a part can't be crossing the antimeridian, so leave the frame alone.
     inverted = any(s[0] > s[2] for s in shifted)
-    use_shifted = not inverted and (
-        union(shifted)[2] - union(shifted)[0] < union(boxes)[2] - union(boxes)[0]
+    shifted_width = union(shifted)[2] - union(shifted)[0]
+    # A ring that goes all the way round the globe — Antarctica — has longitudes spanning
+    # exactly -180..180, which the shifted frame collapses to zero width. That reads as the
+    # narrowest possible framing and wins, producing `180,-90,180,-60`: a box with no
+    # width at all, which extracts a handful of tiles into an archive that fails
+    # verification an hour into a build. A circumpolar region covers every longitude and
+    # must keep the full-width frame.
+    use_shifted = (
+        not inverted
+        and shifted_width > DEGENERATE_DEGREES
+        and shifted_width < union(boxes)[2] - union(boxes)[0]
     )
     frame = shifted if use_shifted else boxes
 
@@ -243,7 +255,21 @@ def region_boxes(feature) -> list[tuple[float, float, float, float]]:
         else:
             out.append((west, south, east, north))
 
-    return sorted((tuple(round(v, 4) for v in b) for b in out), key=bbox_area, reverse=True)
+    boxes_out = sorted((tuple(round(v, 4) for v in b) for b in out),
+                       key=bbox_area, reverse=True)
+
+    # Checked here rather than trusted downstream. An invalid box costs a download and an
+    # `ls`-plausible archive before `pmtiles verify` rejects it — and that is the good
+    # case, hours into a run. The generator is where it is cheap to notice.
+    for box in boxes_out:
+        west, south, east, north = box
+        if not (west < east and south < north
+                and -180 <= west and east <= 180 and -90 <= south and north <= 90):
+            raise SystemExit(
+                f"FAIL: {feature['properties']['id']} produced an invalid bbox {box}.\n"
+                f"      west<east, south<north, and within [-180,180]/[-90,90]."
+            )
+    return boxes_out
 
 
 COMPASS = [
@@ -481,7 +507,7 @@ def cell_label(box) -> tuple[str, str]:
     )
 
 
-def split_to_fit(boxes, estimator, cap: int, max_depth: int):
+def split_to_fit(boxes, estimator, cap: int, max_depth: int, with_terrain: bool = True):
     """Cut boxes down to cells that fit the cap at full detail.
 
     The hierarchy runs out long before the size problem does: Geofabrik has nothing below
@@ -501,20 +527,18 @@ def split_to_fit(boxes, estimator, cap: int, max_depth: int):
     level = list(boxes)
     done: list = []
     split = False
+    sources = [(BASEMAP_SOURCE, BASEMAP_ZOOMS)]
+    if with_terrain:
+        sources.append((TERRAIN_SOURCE, TERRAIN_ZOOMS))
 
     for depth in range(max_depth + 1):
         estimator.warm(
-            [(source, box, zooms[0])
-             for box in level
-             for source, zooms in ((BASEMAP_SOURCE, BASEMAP_ZOOMS), (TERRAIN_SOURCE, TERRAIN_ZOOMS))]
+            [(source, box, zooms[0]) for box in level for source, zooms in sources]
         )
 
         nxt = []
         for box in level:
-            size = max(
-                estimator.measure(BASEMAP_SOURCE, box, BASEMAP_ZOOMS[0]),
-                estimator.measure(TERRAIN_SOURCE, box, TERRAIN_ZOOMS[0]),
-            )
+            size = max(estimator.measure(source, box, zooms[0]) for source, zooms in sources)
             if depth > 0 and size == 0:
                 continue  # an empty quadrant: ocean, ice, or off the edge of the data
             if size > cap and depth < max_depth:
@@ -538,16 +562,22 @@ def build_regions(index, accepted, estimator, max_bytes: int, caps: dict[str, in
     # several hundred dry runs one at a time.
     estimator.warm(
         [(TERRAIN_SOURCE, box, TERRAIN_ZOOMS[0])
-         for gid in accepted for box in boxes_by_region[gid]]
+         for gid in accepted for box in boxes_by_region[gid]
+         if safe_id(gid) not in {rid for rid, o in overrides().items()
+                                 if o.get("terrain") is False}]
     )
 
     # Then cut anything still too big into cells. This is where the regions Geofabrik has
     # no children for stop being 5 GB downloads.
+    sticky = overrides()
+    skips_terrain = {rid for rid, over in sticky.items() if over.get("terrain") is False}
+
     cells_by_region = {}
     for geofabrik_id in accepted:
         cap = caps.get(safe_id(geofabrik_id), max_bytes)
         cells_by_region[geofabrik_id] = split_to_fit(
-            boxes_by_region[geofabrik_id], estimator, cap, max_depth
+            boxes_by_region[geofabrik_id], estimator, cap, max_depth,
+            with_terrain=safe_id(geofabrik_id) not in skips_terrain,
         )
 
     every_box = [box for cells, _ in cells_by_region.values() for box in cells]
@@ -602,9 +632,12 @@ def build_regions(index, accepted, estimator, max_bytes: int, caps: dict[str, in
             basemap_zoom, basemap_bytes = choose_zoom(
                 estimator, BASEMAP_SOURCE, BASEMAP_ZOOMS, box, cap
             )
-            terrain_zoom, terrain_bytes = choose_zoom(
-                estimator, TERRAIN_SOURCE, TERRAIN_ZOOMS, box, cap
-            )
+            if base_id in skips_terrain:
+                terrain_zoom, terrain_bytes = TERRAIN_ZOOMS[0], 0
+            else:
+                terrain_zoom, terrain_bytes = choose_zoom(
+                    estimator, TERRAIN_SOURCE, TERRAIN_ZOOMS, box, cap
+                )
 
             record = {
                 "id": region_id,
@@ -636,9 +669,10 @@ def build_regions(index, accepted, estimator, max_bytes: int, caps: dict[str, in
 def overrides():
     """Per-region decisions in regions.json that a regeneration must not overwrite.
 
-    Both are human calls the generator has no way to make. `contours` says a region is
-    worth the most expensive artifact in the pipeline; `maxBytes` says it is worth more
-    than the default cap — Switzerland's basemap is 980 MB at z15, and dropping it to z14
+    All three are human calls the generator has no way to make. `contours` says a region
+    is worth the most expensive artifact in the pipeline; `terrain: false` says the
+    opposite about hillshade (Antarctica's is 101 GB at z11, spanning every longitude);
+    `maxBytes` says a region is worth more than the default cap — Switzerland's basemap is 980 MB at z15, and dropping it to z14
     to stay under 900 MB trades away detail over the Alps to save 20% of a download people
     take on wifi before a trip.
     """
@@ -646,7 +680,7 @@ def overrides():
         return {}
     with open(REGIONS_JSON) as f:
         return {
-            r["id"]: {k: r[k] for k in ("contours", "maxBytes") if k in r}
+            r["id"]: {k: r[k] for k in ("contours", "maxBytes", "terrain") if k in r}
             for r in json.load(f)["regions"]
         }
 

@@ -552,11 +552,12 @@
     {
       "id": "antarctica",
       "name": "Antarctica",
-      "bbox": [180.0, -90.0, 180.0, -60.0],
+      "bbox": [-180.0, -90.0, 180.0, -60.0],
       "osmExtract": "https://download.geofabrik.de/antarctica-latest.osm.pbf",
       "group": "Antarctica",
       "geofabrikId": "antarctica",
-      "estimatedBytes": 66213000
+      "estimatedBytes": 423000000,
+      "terrain": false
     },
     {
       "id": "afghanistan",

@@ -45,6 +45,10 @@ services:
       # version that iterates every region in the contours stage would, against today's
       # catalogue, start a 391-region contour build.
       - ./build-global.sh:/usr/local/bin/ratmap-global:ro
+      # And the entrypoint, the last baked file that drifts from the repo on a pulled
+      # image. With these three mounted, the image is what it says it is — the toolchain —
+      # and the pipeline is whatever the working copy says it is.
+      - ./entrypoint.sh:/usr/local/bin/ratmap:ro
       # Writable, unlike the scripts: `build-catalog.py` regenerates this file, and the
       # point of mounting it is that the host's copy is the one that changes.
       - ../regions.json:/opt/ratmap/infra/regions.json

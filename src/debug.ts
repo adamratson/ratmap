@@ -33,12 +33,25 @@ export function setDebugOverlayEnabled(enabled: boolean): void {
  * Prints the sheet's geometry, plus every "how tall is the screen" number this app's
  * layout leans on, so a mismatch between them is visible without doing the transform
  * arithmetic by hand from a screenshot.
+ *
+ * Also draws two pure-CSS marker lines, `bottom: 0` and `top: 0`, with no JS-computed
+ * position at all. Every number this class prints — innerHeight, visualViewport.height,
+ * documentElement.clientHeight, #app's own offsetHeight — comes from *inside* the page,
+ * so if the page's own rendering surface (the WKWebView's frame, as composited onto the
+ * physical screen) is itself shorter than the true screen, every one of those numbers can
+ * agree with each other and still be wrong: the whole page would think it fills the
+ * screen while a strip of screen below or above it is native OS backdrop, not web
+ * content, and nothing measured from JS can see that. The marker lines are the direct
+ * test — if there is still a visible gap between the bottom line and the true bottom of
+ * a screenshot, the problem is outside the page, not in this app's CSS.
  */
 export class DebugOverlay {
   private readonly sheetElement: HTMLElement;
   private readonly box: HTMLElement;
   private readonly probeTop: HTMLElement;
   private readonly probeBottom: HTMLElement;
+  private readonly markerTop: HTMLElement;
+  private readonly markerBottom: HTMLElement;
   private readonly observer: ResizeObserver;
   private readonly onTick = (): void => this.render();
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -59,11 +72,22 @@ export class DebugOverlay {
     this.probeBottom.className = 'debug-probe';
     this.probeBottom.style.paddingBottom = 'env(safe-area-inset-bottom)';
 
+    this.markerTop = document.createElement('div');
+    this.markerTop.className = 'debug-marker debug-marker-top';
+    this.markerBottom = document.createElement('div');
+    this.markerBottom.className = 'debug-marker debug-marker-bottom';
+
     this.observer = new ResizeObserver(this.onTick);
   }
 
   start(): void {
-    document.body.append(this.box, this.probeTop, this.probeBottom);
+    document.body.append(
+      this.box,
+      this.probeTop,
+      this.probeBottom,
+      this.markerTop,
+      this.markerBottom,
+    );
     this.observer.observe(this.sheetElement);
     window.addEventListener('resize', this.onTick);
     window.visualViewport?.addEventListener('resize', this.onTick);
@@ -82,6 +106,8 @@ export class DebugOverlay {
     this.box.remove();
     this.probeTop.remove();
     this.probeBottom.remove();
+    this.markerTop.remove();
+    this.markerBottom.remove();
   }
 
   private render(): void {
@@ -111,6 +137,9 @@ export class DebugOverlay {
       `innerHeight=${innerHeight} dpr=${devicePixelRatio}`,
       `visualViewport height=${vv?.height ?? 'n/a'} offsetTop=${vv?.offsetTop ?? 'n/a'}`,
       `documentElement.clientHeight=${document.documentElement.clientHeight}`,
+      // OS-level, not page-level — independent of anything the WKWebView reports about
+      // its own viewport, so a divergence here points outside the page entirely.
+      `screen.height=${screen.height} screen.availHeight=${screen.availHeight}`,
       `scrollY=${scrollY} documentElement.scrollTop=${document.documentElement.scrollTop}`,
       `safe-area top=${getComputedStyle(this.probeTop).paddingTop} bottom=${getComputedStyle(this.probeBottom).paddingBottom}`,
       '',

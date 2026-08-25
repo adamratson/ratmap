@@ -95,6 +95,22 @@ describe('DebugOverlay', () => {
 
     expect(document.querySelector('.debug-overlay')).toBeNull();
     expect(document.querySelector('.debug-probe')).toBeNull();
+    expect(document.querySelector('.debug-marker')).toBeNull();
+  });
+
+  it('draws top and bottom marker lines with no JS-computed position', () => {
+    // The direct test for whether the page's own rendering surface reaches the true
+    // edges of the screen — every other number this class prints comes from inside the
+    // page and could still be wrong if the WKWebView's own frame is short.
+    const overlay = new DebugOverlay(sheetEl);
+    overlay.start();
+
+    // jsdom does not load style.css, so this checks what the code actually controls —
+    // the classes — rather than the computed position, which the real stylesheet sets.
+    expect(document.querySelector('.debug-marker-top')).not.toBeNull();
+    expect(document.querySelector('.debug-marker-bottom')).not.toBeNull();
+
+    overlay.stop();
   });
 
   it('keeps refreshing on a timer without needing a DOM mutation to trigger it', () => {

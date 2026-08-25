@@ -566,6 +566,32 @@ body {
   pointer-events: none;
 }
 
+/* Pure CSS, no JS-computed offset anywhere in this rule — the direct test for whether
+   the page's own rendering surface reaches the true edges of the screen. If a screenshot
+   still shows a gap between one of these and the true edge, the problem is outside the
+   page (the WKWebView's own frame), not in anything this app's CSS/JS controls. */
+.debug-marker {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 6px;
+  z-index: 99998;
+  background: repeating-linear-gradient(
+    90deg,
+    #22c55e 0 16px,
+    #052e16 16px 32px
+  );
+  pointer-events: none;
+}
+
+.debug-marker-top {
+  top: 0;
+}
+
+.debug-marker-bottom {
+  bottom: 0;
+}
+
 /* --- The sheet ----------------------------------------------------------------------
    The app's one non-map surface. Full height, translated down so only the chosen detent
    shows — a transform rather than an animated height, so a drag tracks the finger on the

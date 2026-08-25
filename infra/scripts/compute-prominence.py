@@ -199,6 +199,8 @@ def main():
     import tempfile
     import os
 
+    factor = max(1, args.downsample)
+
     with tempfile.TemporaryDirectory() as tmp:
         raw = os.path.join(tmp, "dem.img")
         subprocess.run(
@@ -212,12 +214,33 @@ def main():
         )
         w, h = info["size"]
         gt = info["geoTransform"]
-        dem = np.memmap(raw, dtype="float32", mode="r", shape=(h, w))
-        dem = np.asarray(dem)
 
-    factor = max(1, args.downsample)
+        # Take the array off the mapping, and drop the mapping, *before* the directory
+        # is deleted. Both halves matter:
+        #
+        # `np.asarray(memmap)` does not copy — it returns a base-class view whose `.base`
+        # is still the memmap — so an earlier version left `dem.img` mapped after the
+        # block exited and did all of its work against a file the cleanup had just
+        # unlinked. On a local filesystem that quietly works: the unlink succeeds, the
+        # pages stay valid, nothing complains. On any filesystem that renames a still-open
+        # file aside instead of unlinking it — NFS's `.nfsXXXX`, FUSE/VirtioFS's
+        # `.fuse_hiddenXXXX`, and /work is a mounted volume — the rename leaves an entry
+        # behind and TemporaryDirectory's own rmdir dies with `[Errno 39] Directory not
+        # empty` — after the DEM fetch and before a single peak is scored (2026-08-24
+        # planet run, lochaber).
+        #
+        # `del` rather than trusting the end of the block: CPython drops the last
+        # reference here and closes the mapping deterministically, which is the point.
+        mm = np.memmap(raw, dtype="float32", mode="r", shape=(h, w))
+        try:
+            # Copy, not view. At 1x this is one in-RAM array the size of the DEM — small
+            # against what compute() allocates per threshold anyway (a bool mask plus an
+            # int32 label array of the same shape, several hundred times over).
+            dem = np.array(downsample_max(mm, factor))
+        finally:
+            del mm
+
     if factor > 1:
-        dem = downsample_max(dem, factor)
         gt = [gt[0], gt[1] * factor, gt[2], gt[3], gt[4], gt[5] * factor]
 
     peaks = load_peaks(args.peaks_in)

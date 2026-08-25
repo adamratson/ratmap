@@ -164,52 +164,71 @@ function stat(label: string, value: string): HTMLDivElement {
   return group;
 }
 
+/**
+ * Following is the one screen used one-handed, while moving, possibly in rain, and often
+ * glanced at for a second at a time. So it is not a variant of the planning panel: bigger
+ * figures, fewer of them, and dark, which is both easier to read outdoors at low
+ * brightness and kinder to night vision.
+ */
 function followSection(summary: RouteSummary, planner: RoutePlanner): HTMLElement {
-  const section = el('div', 'route-panel-body');
-  section.append(el('h3', 'route-panel-title', 'Following'));
+  const section = el('div', 'route-follow');
 
   const follow = summary.follow;
   if (!follow) {
-    section.append(el('p', 'route-hint', 'Waiting for a position fix…'));
+    section.append(el('p', 'follow-waiting', 'Waiting for a position fix…'));
   } else {
-    const stats = el('dl', 'route-stats');
-    stats.append(
-      stat('Remaining', formatDistance(follow.remainingM)),
-      stat('Done', `${Math.round(follow.fraction * 100)}%`),
+    const figures = el('dl', 'follow-figures');
+    figures.append(
+      followFigure('Remaining', formatDistance(follow.remainingM)),
+      followFigure('Done', `${Math.round(follow.fraction * 100)}%`),
     );
-    section.append(stats);
+    section.append(figures);
 
-    const bar = el('div', 'route-progress');
-    const fill = el('div', 'route-progress-fill');
+    const bar = el('div', 'follow-progress');
+    const fill = el('div', 'follow-progress-fill');
     fill.style.width = `${Math.round(follow.fraction * 100)}%`;
     bar.append(fill);
     section.append(bar);
 
-    section.append(
-      el(
-        'p',
-        follow.isOffRoute ? 'route-note warn' : 'route-note',
-        follow.isOffRoute
-          ? `Off route by ${formatDistance(follow.offRouteM)} — the dashed red line points back.`
-          : `On route, ${formatDistance(follow.offRouteM)} from the line.`,
-      ),
+    // The single most important thing on this screen, so it is the loudest: on a hill in
+    // poor visibility, "am I still on the path" is the whole question.
+    const state = el(
+      'p',
+      follow.isOffRoute ? 'follow-state off' : 'follow-state on',
+      follow.isOffRoute
+        ? `Off route — ${formatDistance(follow.offRouteM)} away`
+        : `On route — ${formatDistance(follow.offRouteM)} from the line`,
     );
+    section.append(state);
+
+    if (follow.isOffRoute) {
+      section.append(el('p', 'follow-note', 'The dashed red line points back to the route.'));
+    }
   }
 
   // §7, stated in the product rather than only in the plan.
   section.append(
     el(
       'p',
-      'route-note',
-      'Following works only while the app is open and the screen is on — no browser on any platform can track you in the background.',
+      'follow-note',
+      'Following needs the app open and the screen on — no browser on any platform can ' +
+        'track you in the background. ratmap keeps the screen awake while you follow.',
     ),
   );
 
   const actions = el('div', 'route-actions');
-  actions.append(buttonEl('Stop following', () => planner.stopFollowing()));
+  const stop = buttonEl('Stop following', () => planner.stopFollowing());
+  stop.classList.add('primary');
+  actions.append(stop);
   section.append(actions);
 
   return section;
+}
+
+function followFigure(label: string, value: string): HTMLDivElement {
+  const group = el('div', 'follow-figure');
+  group.append(el('dt', '', label), el('dd', '', value));
+  return group;
 }
 
 function openSaveForm(

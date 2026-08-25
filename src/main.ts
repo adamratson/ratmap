@@ -98,6 +98,15 @@ type View = 'peak' | 'places' | 'regions' | 'routes' | 'plan' | 'install';
 let view: View | null = null;
 
 /**
+ * Whether the `plan` view is planning or following.
+ *
+ * They are different modes with different rules — one takes map taps as waypoints, the
+ * other does not — so the peek row has to name which one is on, or the mode is invisible
+ * whenever the sheet is at rest.
+ */
+let planMode: 'Planning' | 'Following' = 'Planning';
+
+/**
  * Show something in the sheet.
  *
  * The detent is only set when the view *changes*. A view that re-renders — the planner
@@ -145,7 +154,7 @@ function renderChips(): void {
   // with Done, so its chip only exists while it is on. Without it the mode is invisible
   // at peek, and a tap on the map silently means something different.
   if (view === 'plan') {
-    const chip = chipEl('Planning', true, () =>
+    const chip = chipEl(planMode, true, () =>
       sheet.detent() === 'peek' ? sheet.open('half') : sheet.collapse(),
     );
     chip.classList.add('chip-mode');
@@ -433,6 +442,7 @@ const planner = new RoutePlanner({
   },
   onChange: (summary: RouteSummary) => {
     routeInProgress = summary.active || summary.following;
+    planMode = summary.following ? 'Following' : 'Planning';
 
     if (routeInProgress) {
       // openView only moves the sheet when the view *changes*, so the re-render fired by

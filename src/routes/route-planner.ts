@@ -16,6 +16,7 @@ import { buildProfile, profileSampleCoords, type ElevationProfile } from './prof
 import { TerrainSampler } from './terrain-sampler';
 import { RouteFollower, type FollowState } from './follow';
 import { onPressHold } from './press-hold';
+import { WakeLock } from '../wake-lock';
 import type { Region } from '../regions/manifest';
 import type { TileSourceRegistry } from '../tile-source-registry';
 
@@ -105,6 +106,15 @@ export class RoutePlanner {
 
   private follower: RouteFollower | null = null;
   private followState: FollowState | null = null;
+  /**
+   * Held for as long as a route is being followed.
+   *
+   * §7 states the limitation plainly: no browser on any platform can track you in the
+   * background, so following means the app foregrounded and the screen on. A screen that
+   * sleeps every thirty seconds is not that limitation being respected — it is the
+   * feature not working.
+   */
+  private readonly wakeLock = new WakeLock();
   /** Id of the saved route currently loaded, so Save updates rather than duplicates. */
   private loadedRouteId: string | null = null;
   private loadedName: string | null = null;
@@ -322,6 +332,7 @@ export class RoutePlanner {
     }
     this.follower = new RouteFollower(coords);
     this.followState = null;
+    void this.wakeLock.acquire();
     this.emit();
   }
 
@@ -329,6 +340,7 @@ export class RoutePlanner {
     if (!this.follower) return;
     this.follower = null;
     this.followState = null;
+    void this.wakeLock.release();
     setOffRouteLine(this.map, null, null);
     this.emit();
   }

@@ -1,4 +1,5 @@
 import { artifactUrl, type Region, type RegionArtifact } from './manifest';
+import { WakeLock } from '../wake-lock';
 import { appendToPartial, deleteArtifact, finalizePartial, hasArtifact, partialSize } from './opfs-store';
 
 // C12 baseline: chunked, resumable, holds a Screen Wake Lock while running.
@@ -29,41 +30,6 @@ export class DownloadCancelled extends Error {
   constructor() {
     super('Download cancelled');
     this.name = 'DownloadCancelled';
-  }
-}
-
-/**
- * Keeps the screen awake for the duration of a download (C12).
- *
- * Re-acquires on visibilitychange: the lock is released automatically whenever the page
- * is hidden, so without this a user who glances away loses it permanently and the screen
- * sleeps mid-download — which on iOS also stops the download.
- */
-class WakeLock {
-  private sentinel: WakeLockSentinel | null = null;
-  private readonly onVisibilityChange = () => {
-    if (document.visibilityState === 'visible') void this.acquire();
-  };
-
-  async acquire(): Promise<void> {
-    if (!('wakeLock' in navigator)) return;
-    try {
-      this.sentinel = await navigator.wakeLock.request('screen');
-      document.addEventListener('visibilitychange', this.onVisibilityChange);
-    } catch {
-      // Denied (low battery, unsupported): downloads still work, they just need the
-      // screen kept on manually. Not worth failing the download over.
-    }
-  }
-
-  async release(): Promise<void> {
-    document.removeEventListener('visibilitychange', this.onVisibilityChange);
-    try {
-      await this.sentinel?.release();
-    } catch {
-      // Already released.
-    }
-    this.sentinel = null;
   }
 }
 

@@ -5,7 +5,7 @@ import {
   clickMapAt,
   clearConditions,
   openChip,
-  downloadFirstRegion,
+  downloadTestRegion,
   gotoApp,
   openRegionsSheet,
   plannerState,
@@ -60,7 +60,7 @@ test.describe('route planning', () => {
 
   test('routes along real paths from the downloaded region', async ({ page }) => {
     await openRegionsSheet(page);
-    await downloadFirstRegion(page);
+    await downloadTestRegion(page);
     await clearConditions(page);
 
     await showArea(page, BEN_NEVIS_AREA);
@@ -89,7 +89,7 @@ test.describe('route planning', () => {
     // terrarium decode, the tile maths and the ascent filter all have to be right at once
     // for this number to land. Ben Nevis is 1345 m from a start near sea level.
     await openRegionsSheet(page);
-    await downloadFirstRegion(page);
+    await downloadTestRegion(page);
     await clearConditions(page);
 
     await showArea(page, BEN_NEVIS_AREA);
@@ -212,7 +212,7 @@ test.describe('route planning', () => {
     // The Phase 4 acceptance test, end to end: no engine, no server, and no network at
     // all — only the archives already in OPFS.
     await openRegionsSheet(page);
-    await downloadFirstRegion(page);
+    await downloadTestRegion(page);
     await waitForServiceWorkerControl(page);
     await context.setOffline(true);
 

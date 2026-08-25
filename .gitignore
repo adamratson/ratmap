@@ -38,3 +38,4 @@ infra/.cache
 
 # Python venv for the prominence step (numpy/scipy)
 infra/.venv
+__pycache__/

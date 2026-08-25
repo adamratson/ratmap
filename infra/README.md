@@ -147,6 +147,96 @@ Region definitions live in `regions.json` (`id`, display `name`, `bbox`). The id
 part of every artifact filename, which is also the OPFS key and the TileSourceRegistry key
 — so ids must stay unique and stable (C3).
 
+### The catalogue is generated, not hand-written
+
+`regions.json` *is* the catalogue: nothing in the pipeline discovers regions, and
+`ratmap global regions` builds exactly the ids that file defines. Covering the globe
+therefore means several hundred definitions, which is `scripts/build-catalog.py`'s job.
+
+```sh
+./scripts/build-catalog.py --no-estimate --print   # rough shape of the catalogue, seconds
+./scripts/build-catalog.py --print                 # measured; first run takes an hour or two
+./scripts/build-catalog.py                         # same, and writes regions.json
+```
+
+It reads Geofabrik's `index-v1.json` — the same hierarchy the OSM extracts come from — and
+walks down it, so every region has a name people recognise rather than a grid reference.
+Three things it does that a straight dump of that file does not:
+
+- **Sizes every candidate with `pmtiles extract --dry-run`** rather than guessing from
+  bbox area, because area is a bad proxy: a square degree of Switzerland is 108 MB of
+  basemap and a square degree of Montenegro is 31 MB. Anything over `--max-bytes` is
+  subdivided into its Geofabrik children; anything with no children left to split gets a
+  lower zoom ceiling (`basemapMaxzoom`/`terrainMaxzoom`, which `build-region.sh` reads)
+  instead of becoming a download nobody can finish. Measurements are cached in
+  `.cache/catalog-estimates.json`, so a re-run is free and an interrupted one resumes.
+- **Cuts up what the hierarchy cannot.** Geofabrik has nothing below the Siberian Federal
+  District, Greenland or Nunavut's Qikiqtaaluk region, and each is several GB even after
+  the zoom ladder has taken two levels of detail away. Those get quartered instead
+  (`--max-depth`, default 3, so up to 64 cells), recursively and on measurements rather
+  than area — an empty quadrant measures zero and is dropped, which is most of what a
+  quadtree over the Arctic produces. Cells are named for their centre
+  (`siberian-fed-district-n62e082`, "Siberian Federal District (62°N 82°E)") rather than
+  numbered: numbering means one new cell renumbers every cell after it, and C3 makes those
+  names the OPFS keys of archives people have already downloaded.
+- **Fixes the bboxes that would otherwise be planet-wide.** A bbox taken from a country
+  polygon is `[-180, …, 180, …]` for the US, Russia, New Zealand, Fiji, Kiribati and
+  Alaska — they cross the antimeridian, and `pmtiles extract` cannot wrap. Distant parts
+  become separate regions (Hawaii is not a corner of Alaska's bounding box) and a genuine
+  crossing is emitted as two.
+- **Leaves out what `EXCLUDED_IDS` names**, with everything beneath it — currently
+  `russia`, `us` and `south-america`. A decision about what is worth building, not a
+  technical limit, and printed on every run so a hole in world coverage is a line in the
+  output rather than something someone finds on a hill. Note the global peaks and places
+  artifacts still cover that ground (they are built from the continent extracts), so
+  search and summits work there while no region is downloadable — the world basemap is
+  what those users get.
+- **Drops Geofabrik's convenience aggregates** (`alps`, `dach`, `britain-and-ireland`,
+  `sea`, the `us-*` groupings), which are unions of regions published separately. It also
+  reads the US state extracts as children of `us` rather than as siblings, which is how
+  the index actually lists them — taken at face value the catalogue would publish the
+  whole United States *and* all 53 state extracts.
+
+Hand-written regions survive regeneration: anything without a `geofabrikId` is preserved
+verbatim, which is what keeps Lochaber and the Cairngorms — curated areas Geofabrik has no
+equivalent for, and already published — in the catalogue. So do the two per-region
+decisions the generator cannot make for itself:
+
+- `"contours": true` — this region is worth the most expensive artifact in the pipeline.
+- `"maxBytes": 1200000000` — this region is worth more than the default cap. Switzerland
+  carries it: its basemap is 980 MB at z15, and the 900 MB default would drop it to z14,
+  trading detail over the Alps for 20% of a download people take on wifi before a trip.
+  Raising the cap for one region beats raising `--max-bytes` for all 469.
+
+### Contours are opt-in
+
+`ratmap global contours` builds only regions carrying `"contours": true`. Contours are by
+far the most expensive artifact (roughly 300 MB of intermediate GeoJSON per square degree)
+and there are now hundreds of regions; running the stage over all of them is the global
+contour build C14 says never to attempt, arrived at by accident.
+
+### Building a global catalogue
+
+`RATMAP_REGION_FILTER` (an extended regexp over ids) splits the work up, which matters
+when the whole set is a multi-day run:
+
+```sh
+RATMAP_REGION_FILTER='^(france|germany|switzerland|austria|italy)' \
+  docker compose run --rm infra global regions manifest
+./scripts/upload.sh
+```
+
+`upload.sh` skips archives already in the bucket at the same size, so re-running it after
+each slice costs a few hundred HEAD requests rather than re-pushing everything. Set
+`FORCE_UPLOAD=1` to re-push regardless.
+
+Two numbers worth knowing before starting. The upstream archives are **134.8 GB**
+(Protomaps planet, z0–15) and **705.9 GB** (Mapterhorn planet, z0–12) — measured, not
+estimated — and a catalogue of region cutouts at the default ceilings adds up to a large
+fraction of the first plus roughly a quarter of the second. At R2's $0.015/GB-month that
+is single-digit dollars a month with free egress; the cost that bites is the days of
+extraction, which is why the build is resumable at every level.
+
 ```sh
 ./scripts/build-region.sh lochaber --dry-run   # size it first
 ./scripts/build-region.sh lochaber             # extract basemap + terrain
@@ -187,6 +277,7 @@ Measured sizes (2026-08-21/22), useful for choosing maxzooms:
 | Region | area | basemap | terrain | contours |
 |---|---|---|---|---|
 | lochaber | 0.6 sq° | z13 → 4.9 MB, z14 → 8.4 MB, **z15 → 14 MB** | z11 → 18 MB | z11–14 → 21 MB |
+| switzerland | 9 sq° | z15 → 980 MB | z11 → 269 MB | untested |
 | montenegro | 3.6 sq° | z15 → 113 MB | z11 → 67 MB | z11–14 → see below |
 | scotland | 51 sq° | z12 → 84 MB, z13 → 175 MB | z10 → 107 MB, z11 → 340 MB, z12 → 1.1 GB | untested, expect large |
 

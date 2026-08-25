@@ -45,6 +45,25 @@ function area(bbox: Region['bbox']): number {
   return Math.abs(bbox[2] - bbox[0]) * Math.abs(bbox[3] - bbox[1]);
 }
 
+/**
+ * Which footprints belong on the map: the ones on this device, plus the single region
+ * currently being offered.
+ *
+ * Not the whole catalogue. Outlining everything answered "where could detail come from",
+ * which was a real question while the catalogue was four areas of Scotland and one of
+ * Montenegro. Now that it covers the globe the answer is "everywhere", and drawing it
+ * tints the whole map with information nobody can act on — while burying the two things
+ * that do matter: where you already have detail, and what the notice is offering you here.
+ */
+export function visibleFootprints(
+  footprints: Footprint[],
+  offeredId: string | null,
+): Footprint[] {
+  return footprints.filter(
+    ({ region, downloaded }) => downloaded || region.id === offeredId,
+  );
+}
+
 export function footprintCollection(footprints: Footprint[]): FeatureCollection {
   return {
     type: 'FeatureCollection',

@@ -736,6 +736,27 @@ body {
   margin-bottom: 0.5rem !important;
 }
 
+/* The catalogue covers the globe, so the sheet opens on the ground you are looking at and
+   everything else is behind this field. */
+.regions-search {
+  width: 100%;
+  /* 44px tall, matching #search-input. */
+  padding: 0.65rem 0.85rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: var(--surface-sunken);
+  color: var(--text);
+  /* Never below 16px — iOS Safari zooms the page in on a smaller field and does not zoom
+     back out, which reads as a broken layout rather than as a zoom. */
+  font-size: 1rem;
+}
+
+.regions-hint {
+  margin: 0.5rem 0 0 !important;
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
 .regions-list {
   margin: 0;
   padding: 0;

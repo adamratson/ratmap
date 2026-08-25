@@ -116,8 +116,39 @@ mem_limit_gb() {
   awk -v b="$bytes" 'BEGIN {printf "%.0f", b/1073741824}'
 }
 
+# GB the regions stage still has to write, from the catalogue's own estimates.
+#
+# MIN_DIST_GB's default of 20 was written when the catalogue was four regions. It is now
+# several hundred, and dist/ is a bind mount onto the host's disk — so the failure this
+# guards against is a twenty-hour run dying of ENOSPC somewhere in the middle, with no
+# way to tell how far it got. Counts only regions whose basemap is not already built, so
+# a resumed run asks for what it still needs rather than for the whole catalogue again.
+catalogue_dist_gb() {
+  python3 -c '
+import json, pathlib, sys
+dist = pathlib.Path(sys.argv[2]) / "regions"
+total = 0
+with open(sys.argv[1]) as f:
+    for r in json.load(f)["regions"]:
+        rid = r["id"]
+        if (dist / rid / (rid + "-basemap.pmtiles")).exists():
+            continue
+        total += r.get("estimatedBytes", 0)
+# 10% headroom: the estimates are two significant figures, and contours are not in them.
+print(int(total * 1.1 / 1e9))
+' "$INFRA_DIR/regions.json" "$DIST_DIR"
+}
+
 preflight() {
   local work_gb dist_gb mem_gb cpus fail=0
+
+  # Only when this run is actually building regions — a peaks-only run must not be told
+  # it needs 250 GB of output space.
+  if printf '%s\n' "${stages[@]}" | grep -qx regions; then
+    local need_dist
+    need_dist="$(catalogue_dist_gb)"
+    [ "${need_dist:-0}" -gt "$MIN_DIST_GB" ] && MIN_DIST_GB="$need_dist"
+  fi
   work_gb="$(gb_free "$WORK_DIR")"
   dist_gb="$(gb_free "$DIST_DIR")"
   mem_gb="$(mem_limit_gb)"
@@ -473,13 +504,25 @@ stage_places() {
   log "  (upload.sh deliberately skips it; see infra/README.md)"
 }
 
+# Region ids from the catalogue. With an argument, only those opting into that key —
+# used by the contours stage, which must not run over the whole catalogue.
+#
+# RATMAP_REGION_FILTER is an extended-regexp over ids, so a global build can be done a
+# continent at a time (`RATMAP_REGION_FILTER='^(fr|de|ch|at|it)' ratmap global regions`)
+# rather than as one multi-day block that has to succeed all at once.
 region_ids() {
   python3 -c '
-import json, sys
+import json, re, sys
+flag = sys.argv[2] if len(sys.argv) > 2 else None
+pattern = re.compile(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else None
 with open(sys.argv[1]) as f:
     for r in json.load(f)["regions"]:
+        if flag and not r.get(flag):
+            continue
+        if pattern and not pattern.search(r["id"]):
+            continue
         print(r["id"])
-' "$INFRA_DIR/regions.json"
+' "$INFRA_DIR/regions.json" "${1:-}" "${RATMAP_REGION_FILTER:-}"
 }
 
 stage_regions() {
@@ -503,6 +546,11 @@ stage_contours() {
   # contours ship per downloaded region rather than as a global artifact.
   [ -n "$DRY_RUN" ] && { log "contours: no dry-run mode, skipping"; return 0; }
   local id
+  # Only regions that opt in with "contours": true. Contours are the most expensive
+  # artifact by a wide margin — roughly 300 MB of intermediate GeoJSON per square degree
+  # — and the catalogue now covers the globe. Running this over every region is the
+  # planet-contour build the spec says never to attempt (C14, §4 Phase 2), reached by
+  # accident rather than by decision.
   while read -r id; do
     if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-contours.pmtiles" ]; then
       log "contours/$id: already built — --force to redo"
@@ -510,7 +558,7 @@ stage_contours() {
     fi
     log "contours/$id"
     "$SCRIPTS_DIR/build-contours.sh" "$id" || return 1
-  done < <(region_ids)
+  done < <(region_ids contours)
 }
 
 stage_manifest() {

@@ -40,6 +40,13 @@ export function bestAvailableZoom(regions: Region[], fallback: number): number {
 export interface Region {
   id: string;
   name: string;
+  /**
+   * Continent the region is listed under — for grouping and disambiguation in the
+   * catalogue, which once it spans the globe contains Georgia twice.
+   *
+   * Optional: manifests published before the catalogue went global do not carry it.
+   */
+  group?: string;
   /** [west, south, east, north] */
   bbox: [number, number, number, number];
   totalBytes: number;

@@ -124,8 +124,8 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `terrain` | `build-terrain.sh` — coarse global hillshade | minutes, ~62 MB out at z4 |
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles` | hours |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
-| `regions` | `build-region.sh` for every id in `regions.json` | hours |
-| `contours` | `build-contours.sh` for every id in `regions.json` | the slowest by far |
+| `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
+| `contours` | `build-contours.sh` for the ids opting in with `"contours": true` | the slowest by far |
 | `manifest` | `build-manifest.py` — always regenerated, always last | minutes (sha256s everything) |
 
 Stages skip work that already exists; `--force` redoes it. `--dry-run` passes through to
@@ -213,11 +213,29 @@ the extract, so both assertions actually run instead of printing "not in this ex
 
 ### Contours are deliberately not global
 
-`contours` runs per region, over the ids in `regions.json` — there is no planet contour
-build and this image doesn't pretend otherwise. The intermediate GeoJSON is ~300 MB per
-square degree and the planet's land surface is on the order of 15,000 square degrees.
-That is exactly the scratch-space problem C14 is about; contours ship per downloaded
-region.
+`contours` runs per region, and only for regions that opt in with `"contours": true` in
+`regions.json` — there is no planet contour build and this image doesn't pretend
+otherwise. The intermediate GeoJSON is ~300 MB per square degree and the planet's land
+surface is on the order of 15,000 square degrees. That is exactly the scratch-space
+problem C14 is about; contours ship per downloaded region.
+
+The opt-in became load-bearing when the catalogue went global: iterating every region in
+`regions.json` used to mean four of them and now means several hundred, so the stage would
+have walked into the planet contour build without anyone deciding to.
+
+### A global region build, in slices
+
+`RATMAP_REGION_FILTER` is an extended regexp over region ids, so the `regions` stage can be
+run a continent or a country at a time rather than as one run that has to survive for
+days:
+
+```sh
+RATMAP_REGION_FILTER='^(france|germany|switzerland|austria|italy)' \
+  docker compose run --rm infra global regions manifest
+```
+
+`upload.sh` skips archives already in the bucket at the same size, so uploading after each
+slice is cheap.
 
 ## Upload
 

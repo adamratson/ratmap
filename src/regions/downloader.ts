@@ -1,6 +1,14 @@
 import { artifactUrl, type Region, type RegionArtifact } from './manifest';
 import { WakeLock } from '../wake-lock';
-import { appendToPartial, deleteArtifact, finalizePartial, hasArtifact, partialSize } from './opfs-store';
+import {
+  appendToPartial,
+  deleteArtifact,
+  finalizePartial,
+  hasArtifact,
+  listArtifactNames,
+  partialName,
+  partialSize,
+} from './opfs-store';
 
 // C12 baseline: chunked, resumable, holds a Screen Wake Lock while running.
 //
@@ -159,18 +167,34 @@ export async function deleteRegion(region: Region): Promise<void> {
   }
 }
 
-export async function regionStatus(
-  region: Region,
-): Promise<'absent' | 'partial' | 'downloaded'> {
-  let present = 0;
+export type RegionState = 'absent' | 'partial' | 'downloaded';
+
+/**
+ * The state of many regions from a single directory listing.
+ *
+ * The per-region form below is the same question asked once per artifact; across a global
+ * catalogue that is thousands of OPFS lookups, run on the startup path. Callers holding a
+ * list — the catalogue sheet, the startup restore — should ask here instead.
+ */
+export async function regionStatuses(regions: Region[]): Promise<Map<string, RegionState>> {
+  const present = await listArtifactNames();
+  return new Map(regions.map((region) => [region.id, statusFrom(region, present)]));
+}
+
+function statusFrom(region: Region, present: Set<string>): RegionState {
+  let complete = 0;
   let partial = 0;
 
   for (const artifact of region.artifacts) {
-    if (await hasArtifact(artifact.filename)) present += 1;
-    else if ((await partialSize(artifact.filename)) > 0) partial += 1;
+    if (present.has(artifact.filename)) complete += 1;
+    else if (present.has(partialName(artifact.filename))) partial += 1;
   }
 
-  if (present === region.artifacts.length) return 'downloaded';
-  if (present > 0 || partial > 0) return 'partial';
+  if (complete === region.artifacts.length) return 'downloaded';
+  if (complete > 0 || partial > 0) return 'partial';
   return 'absent';
+}
+
+export async function regionStatus(region: Region): Promise<RegionState> {
+  return (await regionStatuses([region])).get(region.id)!;
 }

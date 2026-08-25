@@ -115,6 +115,8 @@ def build(dist_dir, regions_json, dest):
             {
                 "id": region_id,
                 "name": meta["name"],
+                # Absent on hand-written regions; the app treats it as optional.
+                **({"group": meta["group"]} if meta.get("group") else {}),
                 "bbox": meta["bbox"],
                 "totalBytes": sum(a["bytes"] for a in artifacts),
                 "artifacts": artifacts,

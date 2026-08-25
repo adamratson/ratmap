@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   clearOpfs,
   clearConditions,
-  downloadFirstRegion,
+  downloadTestRegion,
   listOpfs,
   openRegionsSheet,
   gotoApp,
@@ -25,7 +25,7 @@ test.describe('offline regions', () => {
     // background on top of the global basemap and painted flat #cccccc over everything
     // outside the region — the map appeared to go grey after a successful download.
     await openRegionsSheet(page);
-    await downloadFirstRegion(page);
+    await downloadTestRegion(page);
 
     const layers = await styleLayers(page);
     const regionLayers = layers.filter((l) => l.id.startsWith('region-'));
@@ -42,7 +42,7 @@ test.describe('offline regions', () => {
     // on top of the last. Artifacts load basemap → contours → terrain, so the hillshade
     // ended up over the basemap's own labels and washed out gully and corrie names.
     await openRegionsSheet(page);
-    await downloadFirstRegion(page);
+    await downloadTestRegion(page);
 
     const layers = await styleLayers(page);
     const ids = layers.map((l) => l.id);
@@ -60,7 +60,7 @@ test.describe('offline regions', () => {
 
   test('downloads every artifact the manifest declares, into OPFS', async ({ page }) => {
     await openRegionsSheet(page);
-    await downloadFirstRegion(page);
+    await downloadTestRegion(page);
 
     const files = await listOpfs(page);
 
@@ -82,7 +82,7 @@ test.describe('offline regions', () => {
     // Regression: an interrupted OPFS write stranded Chromium's "<name>.N.crswap" swap
     // file, leaking megabytes into the exact storage this feature exists to manage.
     await openRegionsSheet(page);
-    await downloadFirstRegion(page);
+    await downloadTestRegion(page);
 
     const files = await listOpfs(page);
     expect(files.filter((f) => f.includes('.crswap'))).toEqual([]);
@@ -91,7 +91,7 @@ test.describe('offline regions', () => {
 
   test('renders the region from OPFS after an offline cold start', async ({ context, page }) => {
     await openRegionsSheet(page);
-    await downloadFirstRegion(page);
+    await downloadTestRegion(page);
 
     // The app shell has to be cached and the worker in control before the network goes,
     // or the offline navigation has nothing serving it.

@@ -30,17 +30,41 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 1
 fi
 
+# Skip what is already up there, byte-for-byte.
+#
+# A global catalogue is hundreds of GB across hundreds of archives, and it is not built in
+# one sitting: every run of this script after the first would otherwise re-push everything
+# that had not changed. Size is the check because pmtiles upload is a multipart upload,
+# whose ETag is not the file's md5 and cannot be compared to anything local. An archive
+# rebuilt at the same size is possible in principle, so FORCE_UPLOAD=1 re-pushes.
+require_cmd aws
+
+remote_size() {
+  AWS_DEFAULT_REGION=auto aws s3api head-object \
+    --bucket "$R2_BUCKET" --key "$1" \
+    --endpoint-url "https://${R2_ENDPOINT_HOST}" \
+    --query ContentLength --output text 2>/dev/null || echo "absent"
+}
+
+uploaded=0
+skipped=0
 for key in "${files[@]}"; do
+  if [ "${FORCE_UPLOAD:-}" != "1" ] && \
+     [ "$(remote_size "$key")" = "$(wc -c < "$DIST_DIR/$key" | tr -d ' ')" ]; then
+    skipped=$((skipped + 1))
+    continue
+  fi
   echo "Uploading $key"
   pmtiles upload "$DIST_DIR/$key" "$key" --bucket="$BUCKET_URL"
+  uploaded=$((uploaded + 1))
 done
+
+echo "$uploaded uploaded, $skipped already present"
 
 # The manifest must go up *after* the archives it describes: a client that reads a
 # manifest listing artifacts which aren't uploaded yet would offer a download that 404s.
 MANIFEST="$DIST_DIR/regions/manifest.json"
 if [ -f "$MANIFEST" ]; then
-  require_cmd aws
-
   # Refuse to silently unpublish a region.
   #
   # The manifest describes whatever is in dist/, and dist/ is disposable scratch — one

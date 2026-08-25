@@ -37,7 +37,17 @@ services:
       # Iterate on the pipeline scripts without rebuilding the image. Comment out to run
       # strictly what was baked in at build time.
       - ../scripts:/opt/ratmap/infra/scripts:ro
-      - ../regions.json:/opt/ratmap/infra/regions.json:ro
+
+      # The driver, for the same reason — and it matters more than it looks. It is
+      # installed *outside* the infra tree (as /usr/local/bin/ratmap-global) so that the
+      # scripts mount above cannot hide it, which also means a pulled image keeps running
+      # its own baked copy while the repo moves on. That mismatch is not academic: the
+      # version that iterates every region in the contours stage would, against today's
+      # catalogue, start a 391-region contour build.
+      - ./build-global.sh:/usr/local/bin/ratmap-global:ro
+      # Writable, unlike the scripts: `build-catalog.py` regenerates this file, and the
+      # point of mounting it is that the host's copy is the one that changes.
+      - ../regions.json:/opt/ratmap/infra/regions.json
 
     # R2 credentials for upload.sh. Optional: absent, every stage except upload still
     # runs. Injected as environment rather than bind-mounted, because a bind mount of a

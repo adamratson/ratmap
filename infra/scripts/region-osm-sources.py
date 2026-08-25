@@ -26,4 +26,16 @@ for region in regions:
     if url not in seen:
         seen.append(url)
 
+# Once the catalogue is global its regions point at continent extracts, and this union is
+# Geofabrik's whole planet — 85 GB of source and days of processing. That is the correct
+# input for a global peaks/places build and a very expensive accident on a laptop, so say
+# which it is going to be before the first byte moves.
+if len(seen) > 2:
+    print(
+        f"! {len(seen)} source extracts — this is a continental or planet-scale build.\n"
+        f"  Expect tens of GB of downloads and hours to days of processing.\n"
+        f"  Override with PEAKS_SOURCE_URLS / PLACES_SOURCE_URLS for a smaller run.",
+        file=sys.stderr,
+    )
+
 print("\n".join(seen))

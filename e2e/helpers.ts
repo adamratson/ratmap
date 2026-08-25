@@ -109,10 +109,26 @@ export async function openRegionsSheet(page: Page): Promise<void> {
 }
 
 /**
- * Download the first region and wait for completion, i.e. the action button becoming
- * "Delete". Assumes the regions sheet is already open.
+ * The region these tests download. Small (~54 MB) and contains Ben Nevis, which the route
+ * and peak tests need.
  */
-export async function downloadFirstRegion(page: Page): Promise<void> {
+export const TEST_REGION = 'Lochaber';
+
+/**
+ * Download {@link TEST_REGION} and wait for completion, i.e. the action button becoming
+ * "Delete". Assumes the regions sheet is already open.
+ *
+ * Searched for by name rather than taken as the first row: the catalogue is ordered by
+ * what is near the map, and covers the globe, so "the first row" is a lottery whose
+ * losing tickets are several hundred megabytes over the wire.
+ */
+export async function downloadTestRegion(page: Page): Promise<void> {
+  const search = page.locator('.regions-search');
+  if (await search.isVisible()) {
+    await search.fill(TEST_REGION);
+    await page.locator('.regions-list .region-row').first().waitFor({ state: 'visible' });
+  }
+
   const action = page.locator('.region-action').first();
   if ((await action.textContent())?.trim() === 'Delete') return;
   await action.click();

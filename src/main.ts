@@ -34,6 +34,7 @@ import {
 import {
   regionAt,
   renderFootprints,
+  visibleFootprints,
   type Footprint,
 } from './regions/region-footprints';
 import { renderRegionsSheet, restoreDownloadedRegions } from './regions/regions-ui';
@@ -511,6 +512,14 @@ function footprints(): Footprint[] {
   return catalogue.map((region) => ({ region, downloaded: have.has(region.id) }));
 }
 
+/**
+ * The one region the detail notice is currently offering, if any.
+ *
+ * Drawn alongside the downloaded ones so "get Lochaber" has a visible extent — otherwise
+ * the notice names a place without showing how much of the screen it would cover.
+ */
+let offeredRegionId: string | null = null;
+
 function drawFootprints(): void {
   // The style has to exist first — this runs from a restore that can finish before the
   // map has loaded, and addSource throws on a style that is not ready.
@@ -518,7 +527,7 @@ function drawFootprints(): void {
     map.once('load', drawFootprints);
     return;
   }
-  renderFootprints(map, footprints());
+  renderFootprints(map, visibleFootprints(footprints(), offeredRegionId));
 }
 
 // --- Detail-limit notice (§8.2 catalog-only makes this reachable) --------------------
@@ -555,6 +564,13 @@ function renderDetailLimit(): void {
     ? `Limited detail here — get ${covering.name}`
     : (state.label ?? '');
   detailNotice.title = state.detail ?? '';
+
+  // Only when it changes: this runs on every zoom frame, and re-feeding the source on
+  // each one would be work for an identical result.
+  if ((covering?.id ?? null) !== offeredRegionId) {
+    offeredRegionId = covering?.id ?? null;
+    drawFootprints();
+  }
 }
 
 // --- Route planning (Phase 4) --------------------------------------------------------

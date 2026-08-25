@@ -256,6 +256,24 @@ checked in a real browser (headless Chromium against the production build). Note
 - App: chunked resumable downloader writing into OPFS, with Wake Lock, progress, storage
   accounting, delete (C12). Re-register archives with `TileSourceRegistry` on completion.
 - Show `estimate()` vs region size before starting; refuse if it won't fit.
+- **The catalogue is generated, and covers the globe** (2026-08-25). `regions.json` is the
+  catalogue — nothing discovers regions — so it is built by `infra/scripts/build-catalog.py`
+  from Geofabrik's `index-v1.json` rather than written by hand. Every candidate is sized
+  with `pmtiles extract --dry-run` and subdivided into its children while it exceeds the
+  per-artifact cap. A region with nothing left to split into — Greenland, the Siberian
+  Federal District, Qikiqtaaluk — is quartered on a measured quadtree instead, keeping full
+  zoom and dropping the empty cells, which is most of them in the Arctic. Cells are named
+  for their centre, never numbered: C3 makes the id an OPFS key, and numbering renumbers
+  every cell after an insertion. Only where even that bottoms out does a region ship at a
+  lower zoom ceiling, carried per-region in the catalogue and recorded per-artifact in the
+  manifest — which is what lets the app's detail notice keep telling the truth about it.
+- **Contours stay opt-in** (`"contours": true`). Per square degree they cost ~300 MB of
+  intermediate GeoJSON; across a global catalogue that is the planet contour build this
+  spec says never to attempt, reached by iterating a loop rather than by deciding to.
+- At catalogue scale the app has to stop treating the region list as a list: statuses come
+  from one OPFS directory listing rather than two lookups per artifact, and the sheet opens
+  on downloaded regions plus what covers the current view, with everything else behind a
+  search field.
 
 **Acceptance:** download a region, force-quit, Airplane Mode, relaunch → pan at full zoom
 with hillshade and contours rendering entirely from OPFS. Kill the app mid-download and
@@ -661,7 +679,12 @@ them yet.
 1. **App name:** `ratmap` (decided Phase 0). **Domain:** still open, but no longer blocking
    — app hosting uses GitHub Pages' free subdomain, R2 uses `*.r2.dev`. Revisit at Phase 6.
 2. ~~Planet or catalog-only?~~ **Decided 2026-08-21: catalog-only.** Low-zoom world extract
-   plus on-demand regions (Phase 3), not the ~120 GB planet. See §3.
+   plus on-demand regions (Phase 3), not the ~120 GB planet. See §3. **Extended 2026-08-25:**
+   the catalogue itself now covers the globe — a few hundred generated regions rather than
+   four hand-written ones. That does not reopen this decision: what the bucket holds is
+   still per-region cutouts, and what the app downloads is still one region at a time. The
+   upstream archives it cuts from are 134.8 GB (Protomaps planet, z0–15) and 705.9 GB
+   (Mapterhorn planet, z0–12), measured; neither is hosted or hotlinked (C15).
 3. Contour interval and styling — needs a cartographic call on real target regions.
    The routing cost multipliers in `src/routes/path-graph.ts` are the same kind of open
    call: they decide which of two parallel ways a route prefers, never whether a route

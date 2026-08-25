@@ -1,12 +1,30 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import { fetchManifest, formatBytes, type Region } from './manifest';
-import { deleteRegion, downloadRegion, regionStatus, DownloadCancelled } from './downloader';
+import {
+  deleteRegion,
+  downloadRegion,
+  regionStatuses,
+  DownloadCancelled,
+  type RegionState,
+} from './downloader';
 import { addRegionToMap, removeRegionFromMap } from './region-layers';
 import { evaluateGate, readStorage } from './storage-budget';
 import type { TileSourceRegistry } from '../tile-source-registry';
 
 /** How long a delete stays armed before reverting to its safe label. */
 const ARM_TIMEOUT_MS = 5000;
+
+/**
+ * How many nearby regions to offer before the user has typed anything.
+ *
+ * The catalogue covers the whole globe, so listing it is not a list — it is a wall. What
+ * someone opening this sheet almost always wants is the ground they are looking at, which
+ * is what the map is already centred on.
+ */
+const NEARBY_COUNT = 6;
+
+/** Cap on search results: a one-letter query matches half the planet. */
+const MAX_RESULTS = 40;
 
 export interface RegionsUiDeps {
   map: MLMap;
@@ -25,9 +43,13 @@ export async function restoreDownloadedRegions(
   registry: TileSourceRegistry,
   regions: Region[],
 ): Promise<Region[]> {
+  // One directory listing for the whole catalogue, not two OPFS lookups per artifact:
+  // this runs before the map can show a downloaded region, on a phone, at startup.
+  const statuses = await regionStatuses(regions);
+
   const restored: Region[] = [];
   for (const region of regions) {
-    if ((await regionStatus(region)) !== 'downloaded') continue;
+    if (statuses.get(region.id) !== 'downloaded') continue;
     await addRegionToMap(map, registry, region);
     restored.push(region);
   }
@@ -40,13 +62,23 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   // No close button: the sheet's own chip toggles this view, and dragging the sheet down
   // works from anywhere. A per-panel × was the only way out when each panel owned its own
   // corner of the screen.
+  // A download or a delete re-renders this whole sheet. Losing what someone had typed at
+  // that moment would throw them back to the nearby list with their region no longer in
+  // it — the one search they had already done, undone by finishing.
+  const previousQuery = container.querySelector<HTMLInputElement>('.regions-search')?.value ?? '';
+
   container.innerHTML = `
     <h2>Offline regions</h2>
     <p class="regions-intro"></p>
+    <input class="regions-search" type="search" enterkeyhint="search" autocomplete="off"
+           placeholder="Search regions" aria-label="Search regions" />
+    <p class="regions-hint" aria-live="polite"></p>
     <ul class="regions-list"></ul>
   `;
 
   const intro = container.querySelector<HTMLParagraphElement>('.regions-intro')!;
+  const hint = container.querySelector<HTMLParagraphElement>('.regions-hint')!;
+  const search = container.querySelector<HTMLInputElement>('.regions-search')!;
   const list = container.querySelector<HTMLUListElement>('.regions-list')!;
 
   const storage = await readStorage();
@@ -61,11 +93,8 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
     // Offline with nothing cached is the common case here — say so plainly rather than
     // showing an empty list that looks like "no regions exist".
     intro.textContent = `Region catalogue unavailable: ${(err as Error).message}`;
+    search.hidden = true;
     return;
-  }
-
-  for (const region of manifest.regions) {
-    list.append(await renderRegionRow(region, deps, () => void renderRegionsSheet(deps)));
   }
 
   if (manifest.regions.length === 0) {
@@ -73,18 +102,150 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
     empty.className = 'places-empty';
     empty.textContent = 'No regions published yet.';
     list.append(empty);
+    search.hidden = true;
+    return;
   }
 
-  void map;
+  const statuses = await regionStatuses(manifest.regions);
+  const refresh = (): void => void renderRegionsSheet(deps);
+
+  const draw = (query: string): void => {
+    const matches = query.trim() ? searchRegions(manifest.regions, query) : null;
+    const shown = matches ?? nearbySelection(manifest.regions, statuses, centreOf(map));
+
+    hint.textContent = describe(shown.length, matches?.total ?? null, manifest.regions.length);
+    list.replaceChildren(
+      ...shown.map((region) =>
+        renderRegionRow(region, statuses.get(region.id) ?? 'absent', deps, refresh),
+      ),
+    );
+  };
+
+  // No debounce: filtering a few hundred strings is not work, and a delay on a search
+  // that already has an answer is felt as lag.
+  search.addEventListener('input', () => draw(search.value));
+  search.value = previousQuery;
+  draw(previousQuery);
+
   void registry;
   void onStatus;
 }
 
-async function renderRegionRow(
+/**
+ * What to show before anything is typed: everything already on the device, then the
+ * regions covering where the map is pointed.
+ *
+ * A downloaded region belongs at the top wherever it is in the world — it is the one row
+ * whose button does something destructive, and hunting for it through a search box to
+ * free up space would be absurd.
+ */
+function nearbySelection(
+  regions: Region[],
+  statuses: Map<string, RegionState>,
+  centre: [number, number] | null,
+): Region[] {
+  const held = regions.filter((region) => (statuses.get(region.id) ?? 'absent') !== 'absent');
+  const heldIds = new Set(held.map((region) => region.id));
+  const rest = regions.filter((region) => !heldIds.has(region.id));
+
+  if (centre === null) return [...held, ...rest.slice(0, NEARBY_COUNT)];
+
+  const near = rest
+    .map((region) => ({ region, distance: distanceTo(region.bbox, centre) }))
+    // Ties happen constantly — nested regions all contain the centre and score 0 — so
+    // break them on size: the smaller region is the cheaper download and the more
+    // specific answer to "what covers this valley".
+    .sort((a, b) => a.distance - b.distance || bboxArea(a.region.bbox) - bboxArea(b.region.bbox))
+    .slice(0, NEARBY_COUNT)
+    .map((scored) => scored.region);
+
+  return [...held, ...near];
+}
+
+interface SearchResult extends Array<Region> {
+  total: number;
+}
+
+/**
+ * Name and group matches, prefix matches first.
+ *
+ * Group is searchable because the catalogue has genuine name collisions once it covers
+ * the globe — Georgia the country and Georgia the state — and the continent is what
+ * tells them apart.
+ */
+function searchRegions(regions: Region[], query: string): SearchResult {
+  const needle = fold(query);
+  const scored: { region: Region; rank: number }[] = [];
+
+  for (const region of regions) {
+    const name = fold(region.name);
+    const group = fold(region.group ?? '');
+    if (name.startsWith(needle)) scored.push({ region, rank: 0 });
+    else if (name.includes(needle)) scored.push({ region, rank: 1 });
+    else if (group.includes(needle)) scored.push({ region, rank: 2 });
+  }
+
+  scored.sort((a, b) => a.rank - b.rank || a.region.name.localeCompare(b.region.name));
+
+  const results = scored.slice(0, MAX_RESULTS).map((s) => s.region) as SearchResult;
+  results.total = scored.length;
+  return results;
+}
+
+/** Lower-case and strip accents, so "polynesie" finds "Polynésie française". */
+function fold(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function describe(shown: number, matched: number | null, total: number): string {
+  if (matched === null) {
+    const rest = total - shown;
+    // A catalogue smaller than the nearby cap is the normal state early on, and telling
+    // someone to search for "the other 0" reads as a bug.
+    return rest > 0
+      ? `Nearest regions — search to reach any of the other ${rest}.`
+      : 'Every published region is listed.';
+  }
+  if (matched === 0) return 'No region matches that name.';
+  if (matched > shown) return `${matched} matches — showing the first ${shown}.`;
+  return matched === 1 ? '1 match.' : `${matched} matches.`;
+}
+
+/**
+ * Where the map is pointed, or null before it has a centre.
+ *
+ * Null is a real state, not just a test convenience: this sheet can be opened from a
+ * cold start before the style has loaded.
+ */
+function centreOf(map: MLMap): [number, number] | null {
+  const centre = map.getCenter?.();
+  return centre ? [centre.lng, centre.lat] : null;
+}
+
+/** Rough degrees from a point to a bbox — 0 inside it. Only used for ordering. */
+function distanceTo(bbox: Region['bbox'], [lng, lat]: [number, number]): number {
+  const dx = Math.max(bbox[0] - lng, 0, lng - bbox[2]);
+  const dy = Math.max(bbox[1] - lat, 0, lat - bbox[3]);
+  // Longitude degrees shrink towards the poles; without this a region due north scores
+  // worse than one far to the east.
+  const scale = Math.cos((lat * Math.PI) / 180);
+  return Math.hypot(dx * scale, dy);
+}
+
+function bboxArea(bbox: Region['bbox']): number {
+  return Math.abs(bbox[2] - bbox[0]) * Math.abs(bbox[3] - bbox[1]);
+}
+
+function renderRegionRow(
   region: Region,
+  status: RegionState,
   deps: RegionsUiDeps,
   refresh: () => void,
-): Promise<HTMLLIElement> {
+): HTMLLIElement {
   const item = document.createElement('li');
   item.className = 'region-row';
 
@@ -97,9 +258,11 @@ async function renderRegionRow(
 
   const meta = document.createElement('span');
   meta.className = 'region-meta';
-  const status = await regionStatus(region);
   const kinds = region.artifacts.map((a) => a.kind).join(' + ');
-  meta.textContent = `${formatBytes(region.totalBytes)} · ${kinds}`;
+  // The group disambiguates the collisions a global catalogue creates — Georgia the
+  // country and Georgia the state are otherwise the same row twice.
+  const where = region.group ? `${region.group} · ` : '';
+  meta.textContent = `${where}${formatBytes(region.totalBytes)} · ${kinds}`;
 
   info.append(name, meta);
 

@@ -8,6 +8,7 @@ import {
   regionAt,
   removeFootprints,
   renderFootprints,
+  visibleFootprints,
   type Footprint,
 } from './region-footprints';
 import type { Region } from './manifest';
@@ -129,5 +130,25 @@ describe('renderFootprints', () => {
 
     expect(sources.size).toBe(0);
     expect(layers.size).toBe(0);
+  });
+});
+
+describe('what gets outlined once the catalogue covers the globe', () => {
+  const catalogue: Footprint[] = [
+    { region: LOCHABER, downloaded: true },
+    { region: region('cairngorms', [-4.4, 56.8, -2.8, 57.4]), downloaded: false },
+    { region: region('greenland', [-73, 59, -12, 84]), downloaded: false },
+  ];
+
+  it('draws what is on the device and what is being offered, and nothing else', () => {
+    // A global catalogue outlined in full is a tint over every pixel of the map, which
+    // says nothing: everywhere is available.
+    const drawn = visibleFootprints(catalogue, 'cairngorms').map((f) => f.region.id);
+
+    expect(drawn).toEqual(['lochaber', 'cairngorms']);
+  });
+
+  it('draws only downloaded regions when nothing is being offered', () => {
+    expect(visibleFootprints(catalogue, null).map((f) => f.region.id)).toEqual(['lochaber']);
   });
 });

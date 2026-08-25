@@ -40,6 +40,28 @@ export async function hasArtifact(filename: string): Promise<boolean> {
   return (await tryGetFile(filename)) !== null;
 }
 
+/**
+ * Every file currently in OPFS, by name — complete downloads and `.part` files alike.
+ *
+ * One directory read answers the whole catalogue. Asking per artifact costs two lookups
+ * each, which was nothing across four regions and is several thousand round trips now
+ * that the catalogue covers the globe — paid at startup, before a downloaded region can
+ * be restored to the map.
+ */
+export async function listArtifactNames(): Promise<Set<string>> {
+  const dir = await root();
+  const names = new Set<string>();
+  for await (const [name, handle] of dir.entries()) {
+    if (handle.kind === 'file') names.add(name);
+  }
+  return names;
+}
+
+/** The name a partial download of `filename` is held under. */
+export function partialName(filename: string): string {
+  return `${filename}${PARTIAL_SUFFIX}`;
+}
+
 /** Bytes already written to a partial download, or 0 if there's nothing to resume. */
 export async function partialSize(filename: string): Promise<number> {
   const file = await tryGetFile(`${filename}${PARTIAL_SUFFIX}`);

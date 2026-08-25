@@ -36,6 +36,9 @@ if match is None:
     sys.exit(f"Unknown region '{sys.argv[2]}'. Known: {', '.join(r['id'] for r in regions)}")
 print(f"REGION_NAME={shlex.quote(match['name'])}")
 print(f"BBOX={shlex.quote(','.join(str(c) for c in match['bbox']))}")
+# Empty unless the catalogue caps this region below the defaults below.
+print(f"REGION_BASEMAP_Z={match.get('basemapMaxzoom', '')}")
+print(f"REGION_TERRAIN_Z={match.get('terrainMaxzoom', '')}")
 PY_INNER
 )"; then
   exit 1
@@ -55,8 +58,14 @@ TERRAIN_SOURCE="${TERRAIN_SOURCE_URL:-https://download.mapterhorn.com/planet.pmt
 # a z13 cutout generalises nearly all of them away — verified by decoding a z13 tile over
 # Ben Nevis, which contained a single path feature. On a hiking map the paths are the
 # point. z15 is also the source archive's own maximum. Cheap: Lochaber goes 4.9 MB → 14 MB.
-BASEMAP_MAXZOOM="${REGION_BASEMAP_MAXZOOM:-15}"
-TERRAIN_MAXZOOM="${REGION_TERRAIN_MAXZOOM:-11}"
+# Precedence: environment override, then the region's own ceiling from regions.json,
+# then these defaults. The per-region ceiling exists because a few regions have nothing
+# left to subdivide into and are simply enormous — Greenland, Alaska, the Far Eastern
+# Federal District. Shipping those at z13/z9 is better than listing a download nobody can
+# finish, and the manifest records each archive's real zoom range, so the app's
+# "limited detail" notice tells the truth about them without any extra plumbing.
+BASEMAP_MAXZOOM="${REGION_BASEMAP_MAXZOOM:-${REGION_BASEMAP_Z:-15}}"
+TERRAIN_MAXZOOM="${REGION_TERRAIN_MAXZOOM:-${REGION_TERRAIN_Z:-11}}"
 
 OUT_DIR="$DIST_DIR/regions/$REGION_ID"
 mkdir -p "$OUT_DIR"

@@ -241,51 +241,6 @@ renderThemeButton();
 
 sheet.open('peek');
 
-// TEMPORARY DIAGNOSTIC — remove once the real-device "dead space below the peek row"
-// bug is understood. Independent of #sheet's own layout (a fixed overlay, not a child
-// of it), so it stays visible even if the thing being measured is broken. Reload the
-// installed app fresh (force-quit, relaunch from the Home Screen icon — not a Safari
-// tab reload) and screenshot what this prints.
-(function debugSheetGeometry() {
-  const box = document.createElement('pre');
-  box.style.cssText =
-    'position:fixed; left:4px; top:4px; z-index:99999; margin:0; padding:6px 8px;' +
-    'background:rgba(220,38,38,0.92); color:#fff; font:10px/1.4 monospace;' +
-    'white-space:pre-wrap; max-width:96vw; pointer-events:none;';
-  document.body.append(box);
-
-  const probe = document.createElement('div');
-  probe.style.cssText = 'position:fixed; visibility:hidden; padding-bottom: env(safe-area-inset-bottom);';
-  document.body.append(probe);
-
-  function render(): void {
-    const el = document.querySelector<HTMLElement>('#sheet')!;
-    const grip = el.querySelector<HTMLElement>('.sheet-grip')!;
-    const peek = el.querySelector<HTMLElement>('.sheet-peek')!;
-    const scrollEl = el.querySelector<HTMLElement>('.sheet-scroll')!;
-    const cs = getComputedStyle(el);
-    const rect = el.getBoundingClientRect();
-    box.textContent = [
-      `standalone=${matchMedia?.('(display-mode: standalone)').matches ?? 'n/a'}`,
-      `innerHeight=${innerHeight} innerWidth=${innerWidth} dpr=${devicePixelRatio}`,
-      `safe-area-bottom=${getComputedStyle(probe).paddingBottom}`,
-      `#sheet class=${el.className}`,
-      `#sheet offsetHeight=${el.offsetHeight} rectTop=${rect.top.toFixed(1)} rectBottom=${rect.bottom.toFixed(1)}`,
-      `#sheet inline-transform=${el.style.transform}`,
-      `#sheet computed-transform=${cs.transform}`,
-      `.sheet-grip offsetHeight=${grip.offsetHeight}`,
-      `.sheet-peek offsetHeight=${peek.offsetHeight}`,
-      `.sheet-scroll offsetHeight=${scrollEl.offsetHeight} visibility=${getComputedStyle(scrollEl).visibility}`,
-      `sheet.detent()=${sheet.detent()} sheet.visibleHeight()=${sheet.visibleHeight().toFixed(1)}`,
-      `--sheet-visible=${getComputedStyle(document.documentElement).getPropertyValue('--sheet-visible')}`,
-    ].join('\n');
-  }
-
-  render();
-  new ResizeObserver(render).observe(document.querySelector('#sheet')!);
-  window.addEventListener('resize', render);
-  setInterval(render, 500);
-})();
 
 function chipEl(label: string, active: boolean, onSelect: () => void): HTMLButtonElement {
   const chip = document.createElement('button');

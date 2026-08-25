@@ -17,7 +17,18 @@ export type Detent = 'peek' | 'content' | 'full';
 /** Ordered shallowest-first, i.e. by how much of the screen the sheet takes. */
 export const DETENTS: readonly Detent[] = ['peek', 'content', 'full'] as const;
 
-/** How much of the viewport the sheet may take when fully open. */
+/**
+ * How much of the screen's height the sheet may take at its fullest detent — leaves a
+ * sliver of map visible even at "full", rather than covering the screen edge to edge.
+ *
+ * Applied as an offset in `offsets()`, against `this.element.offsetHeight` — not baked
+ * into the element's own CSS height. The element's height used to be `92vh` for exactly
+ * this reason, but `vh` and `#app`'s `position: fixed; inset: 0` measured different
+ * viewport references on a real device with a Dynamic Island (see the comment on #sheet
+ * in style.css), so #sheet ended up taller than its own containing block. `inset: 0`
+ * removes the ambiguity — offsetHeight then just *is* the containing block's real
+ * height, whatever that happens to be on a given device.
+ */
 const FULL_FRACTION = 0.92;
 
 /**
@@ -199,8 +210,11 @@ export class BottomSheet {
 
   /** Offset, in px from fully open, for each detent at the current viewport size. */
   private offsets(): Record<Detent, number> {
+    // The one number everything else is measured against. Deliberately not
+    // `window.innerHeight`: on the same real device that exposed the `vh` bug above,
+    // there is no guarantee that number agrees with this element's own containing block
+    // either — offsetHeight is what the box *actually is*, on this device, right now.
     const height = this.element.offsetHeight;
-    const viewport = window.innerHeight;
     const chrome = this.peek.offsetHeight + this.gripHeight();
     const peek = Math.max(0, height - chrome);
 
@@ -209,8 +223,8 @@ export class BottomSheet {
       0,
       height -
         Math.min(
-          Math.max(wanted, viewport * CONTENT_MIN_FRACTION),
-          viewport * contentMaxFraction(),
+          Math.max(wanted, height * CONTENT_MIN_FRACTION),
+          height * contentMaxFraction(),
         ),
     );
 
@@ -219,7 +233,7 @@ export class BottomSheet {
       // Never below the resting position: a view whose content is shorter than the peek
       // row would otherwise open by moving the sheet *down*.
       content: Math.min(content, peek),
-      full: 0,
+      full: Math.max(0, (1 - FULL_FRACTION) * height),
     };
   }
 
@@ -257,7 +271,6 @@ export class BottomSheet {
     // Only scrollable once there is somewhere to scroll: at peek, a scrollable body
     // swallows the drag that is trying to open the sheet.
     this.scroller.style.overflowY = detent === 'peek' ? 'hidden' : 'auto';
-    this.element.style.height = `${FULL_FRACTION * 100}vh`;
 
     if (notify) this.onLayout?.(detent);
   }

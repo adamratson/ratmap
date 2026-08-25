@@ -507,15 +507,21 @@ body {
 /* --- The sheet ----------------------------------------------------------------------
    The app's one non-map surface. Full height, translated down so only the chosen detent
    shows — a transform rather than an animated height, so a drag tracks the finger on the
-   compositor instead of relaying out its contents every frame. */
+   compositor instead of relaying out its contents every frame.
+
+   `inset: 0`, not `height: 92vh`. On an iPhone with a Dynamic Island, measured on a real
+   device: `vh` resolved against the full edge-to-edge screen (852pt) while `#app`'s
+   `position: fixed; inset: 0` — the exact technique the comment above #app describes,
+   chosen for precisely this class of bug — resolved against the safe/layout viewport
+   (793pt). A `92vh` sheet was therefore taller than its containing block by the ~59pt
+   gap between those two references, which is roughly the top safe-area inset on that
+   device. The "8% of map stays visible even at the fullest detent" behaviour that the
+   92vh height gave for free is now computed explicitly in sheet.ts's `offsets()`,
+   against `this.element.offsetHeight` — which, once the box's own height is derived
+   from `inset: 0` rather than a CSS unit, is finally a number worth trusting. */
 #sheet {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  /* Sized for its tallest detent; the transform does the rest. Kept in CSS as well as in
-     sheet.ts so the sheet has a sane height before the first layout pass. */
-  height: 92vh;
+  inset: 0;
   z-index: 4;
   display: flex;
   flex-direction: column;

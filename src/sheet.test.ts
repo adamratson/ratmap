@@ -164,4 +164,41 @@ describe('BottomSheet', () => {
 
     expect(onLayout).toHaveBeenCalledWith('peek');
   });
+
+  it('leaves a sliver of map visible at the fullest detent, computed from offsetHeight', () => {
+    // The sheet used to be a 92vh box, so translateY(0) at "full" only ever covered 92%
+    // of the screen by construction. Its own height is now the containing block's real
+    // height (inset:0, not vh — see the CSS comment on #sheet), so the same 8% sliver
+    // has to be an explicit offset instead.
+    const sheet = new BottomSheet({ element: container });
+    sheet.open('full');
+
+    expect(sheet.visibleHeight()).toBeCloseTo(700 * 0.92, 0);
+  });
+
+  it('does not depend on window.innerHeight at all', () => {
+    // The bug this whole file exists to catch: on a real device, `vh` and
+    // `position: fixed; inset: 0` measured *different* viewport references — a ~59pt
+    // gap on an iPhone with a Dynamic Island. window.innerHeight is exactly the kind of
+    // number that could disagree with this element's own offsetHeight the same way, so
+    // nothing here may read it.
+    const originalInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      get(): number {
+        throw new Error('offsets() must not read window.innerHeight');
+      },
+    });
+
+    try {
+      const sheet = new BottomSheet({ element: container });
+      heights['.sheet-peek'] = 100;
+      sheet.open('peek');
+      sheet.open('content');
+      sheet.open('full');
+      expect(sheet.visibleHeight()).toBeGreaterThan(0);
+    } finally {
+      if (originalInnerHeight) Object.defineProperty(window, 'innerHeight', originalInnerHeight);
+    }
+  });
 });

@@ -135,7 +135,6 @@ export function renderFootprints(map: MLMap, footprints: Footprint[]): void {
   });
 }
 
-/** Take the coverage layer back off. */
 export function removeFootprints(map: MLMap): void {
   for (const id of [FOOTPRINT_FILL_LAYER_ID, FOOTPRINT_LINE_LAYER_ID]) {
     if (map.getLayer(id)) map.removeLayer(id);

@@ -172,9 +172,9 @@ export type RegionState = 'absent' | 'partial' | 'downloaded';
 /**
  * The state of many regions from a single directory listing.
  *
- * The per-region form below is the same question asked once per artifact; across a global
+ * Asking per region is the same question repeated once per artifact; across a global
  * catalogue that is thousands of OPFS lookups, run on the startup path. Callers holding a
- * list — the catalogue sheet, the startup restore — should ask here instead.
+ * list — the catalogue sheet, the startup restore — ask here so the listing is read once.
  */
 export async function regionStatuses(regions: Region[]): Promise<Map<string, RegionState>> {
   const present = await listArtifactNames();
@@ -193,8 +193,4 @@ function statusFrom(region: Region, present: Set<string>): RegionState {
   if (complete === region.artifacts.length) return 'downloaded';
   if (complete > 0 || partial > 0) return 'partial';
   return 'absent';
-}
-
-export async function regionStatus(region: Region): Promise<RegionState> {
-  return (await regionStatuses([region])).get(region.id)!;
 }

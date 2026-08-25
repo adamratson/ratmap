@@ -46,7 +46,3 @@ export async function listPlaces(): Promise<SavedPlace[]> {
 export async function deletePlace(id: string): Promise<void> {
   await tx(PLACES_STORE, 'readwrite', (store) => store.delete(id));
 }
-
-export async function clearPlaces(): Promise<void> {
-  await tx(PLACES_STORE, 'readwrite', (store) => store.clear());
-}

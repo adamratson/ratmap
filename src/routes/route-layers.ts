@@ -124,12 +124,3 @@ export function clearRouteGeometry(map: MLMap): void {
   setRouteGeometry(map, []);
   setOffRouteLine(map, null, null);
 }
-
-export function removeRouteLayers(map: MLMap): void {
-  for (const id of [ROUTE_CASING_LAYER_ID, ROUTE_LINE_LAYER_ID, ROUTE_OFF_ROUTE_LAYER_ID]) {
-    if (map.getLayer(id)) map.removeLayer(id);
-  }
-  for (const id of [ROUTE_SOURCE_ID, ROUTE_OFF_ROUTE_SOURCE_ID]) {
-    if (map.getSource(id)) map.removeSource(id);
-  }
-}

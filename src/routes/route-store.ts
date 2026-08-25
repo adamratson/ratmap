@@ -59,17 +59,6 @@ export async function listRoutes(): Promise<SavedRoute[]> {
   return all.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export async function getRoute(id: string): Promise<SavedRoute | null> {
-  const record = await tx<SavedRoute | undefined>(ROUTES_STORE, 'readonly', (store) =>
-    store.get(id),
-  );
-  return record ?? null;
-}
-
 export async function deleteRoute(id: string): Promise<void> {
   await tx(ROUTES_STORE, 'readwrite', (store) => store.delete(id));
-}
-
-export async function clearRoutes(): Promise<void> {
-  await tx(ROUTES_STORE, 'readwrite', (store) => store.clear());
 }

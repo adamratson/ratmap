@@ -30,7 +30,6 @@ export function distanceMetres(a: LngLat, b: LngLat): number {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-/** Total length of a polyline in metres. */
 export function pathLengthMetres(coords: readonly LngLat[]): number {
   let total = 0;
   for (let i = 1; i < coords.length; i++) total += distanceMetres(coords[i - 1], coords[i]);

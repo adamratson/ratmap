@@ -57,7 +57,6 @@ export async function listArtifactNames(): Promise<Set<string>> {
   return names;
 }
 
-/** The name a partial download of `filename` is held under. */
 export function partialName(filename: string): string {
   return `${filename}${PARTIAL_SUFFIX}`;
 }
@@ -96,7 +95,6 @@ export async function appendToPartial(
   }
 }
 
-/** Promote a completed partial to its final name. */
 export async function finalizePartial(filename: string): Promise<void> {
   const dir = await root();
   const partialName = `${filename}${PARTIAL_SUFFIX}`;
@@ -178,18 +176,4 @@ export async function sweepSwapFiles(): Promise<number> {
     }
   }
   return reclaimed;
-}
-
-/** Total bytes currently used by downloaded + partial region archives. */
-export async function usedBytes(): Promise<number> {
-  const dir = await root();
-  let total = 0;
-  for await (const [, handle] of dir.entries()) {
-    if (handle.kind !== 'file') continue;
-    const file = await (handle as FileSystemFileHandle).getFile();
-    if (file.name.endsWith('.pmtiles') || file.name.endsWith(PARTIAL_SUFFIX)) {
-      total += file.size;
-    }
-  }
-  return total;
 }

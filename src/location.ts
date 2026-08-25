@@ -23,6 +23,8 @@ export class LocationController {
   private watchId: number | null = null;
   private marker: maplibregl.Marker | null = null;
   private accuracyCircleId = 'user-location-accuracy';
+  /** Degrees clockwise from true north, or null when the compass has nothing to say. */
+  private heading: number | null = null;
   /** When true the camera recentres on each fix; any user pan cancels it. */
   private follow = false;
   private state: LocationState = { status: 'idle' };
@@ -71,8 +73,23 @@ export class LocationController {
     this.follow = false;
     this.marker?.remove();
     this.marker = null;
+    this.heading = null;
     this.removeAccuracyCircle();
     this.setState({ status: 'idle' });
+  }
+
+  /**
+   * Point the dot's cone. Null hides it.
+   *
+   * Rendered as a marker rotation with `rotationAlignment: 'map'`, so the cone keeps
+   * pointing at the real bearing when the map itself is rotated — otherwise turning the
+   * map would swing the arrow with it and quietly make it wrong.
+   */
+  setHeading(heading: number | null): void {
+    this.heading = heading;
+    if (!this.marker) return;
+    this.marker.getElement().classList.toggle('has-heading', heading !== null);
+    this.marker.setRotation(heading ?? 0);
   }
 
   /** Stop recentring but keep the dot live — what a user pan should do. */
@@ -111,7 +128,13 @@ export class LocationController {
     if (!this.marker) {
       const el = document.createElement('div');
       el.className = 'user-dot';
-      this.marker = new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(this.map);
+      // The cone is a child rather than a pseudo-element so it can be hidden
+      // independently of the dot, which is always meaningful even when the compass is not.
+      el.innerHTML = '<span class="user-dot-cone" aria-hidden="true"></span>';
+      this.marker = new maplibregl.Marker({ element: el, rotationAlignment: 'map' })
+        .setLngLat(lngLat)
+        .addTo(this.map);
+      this.setHeading(this.heading);
     } else {
       this.marker.setLngLat(lngLat);
     }

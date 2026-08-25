@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   boundsOf,
   bboxContains,
+  compassBearing,
   densify,
   distanceMetres,
   formatDistance,
@@ -193,5 +194,28 @@ describe('formatDistance', () => {
 
   it('does not invent a figure for a non-number', () => {
     expect(formatDistance(NaN)).toBe('—');
+  });
+});
+
+describe('compassBearing', () => {
+  const inverness: LngLat = [-4.22, 57.48];
+
+  it('names the eight points', () => {
+    expect(compassBearing([0, 0], [0, 1])).toBe('N');
+    expect(compassBearing([0, 0], [1, 0])).toBe('E');
+    expect(compassBearing([0, 0], [0, -1])).toBe('S');
+    expect(compassBearing([0, 0], [-1, 0])).toBe('W');
+    expect(compassBearing([0, 0], [1, 1])).toBe('NE');
+    expect(compassBearing([0, 0], [-1, -1])).toBe('SW');
+  });
+
+  it('accounts for longitude converging away from the equator', () => {
+    // A degree of longitude is barely half a degree of latitude up here, so the naive
+    // atan2 of raw degrees would report NE for something that is very nearly due north.
+    expect(compassBearing(inverness, [-4.22 + 0.4, 57.48 + 0.9])).toBe('N');
+  });
+
+  it('says so rather than picking a direction for the same point', () => {
+    expect(compassBearing(inverness, inverness)).toBe('here');
   });
 });

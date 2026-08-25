@@ -676,14 +676,46 @@ body {
   color: #64748b;
 }
 
-/* Location dot. */
+/* Location dot, with a cone for which way the phone is pointing.
+   The dot answers "where am I"; standing at a junction in cloud, the question that
+   decides what you do next is "which way am I facing". */
 .user-dot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 14px;
   height: 14px;
   border-radius: 50%;
   background: #2563eb;
   border: 2px solid #fff;
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.5);
+}
+
+/* Hidden until there is a heading worth drawing — an arrow pointing confidently in an
+   arbitrary direction is worse than no arrow. */
+.user-dot-cone {
+  display: none;
+}
+
+.user-dot.has-heading .user-dot-cone {
+  display: block;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 34px;
+  height: 30px;
+  margin-left: -17px;
+  margin-bottom: 1px;
+  /* A soft wedge rather than a hard arrowhead: a phone magnetometer is good to maybe ±15
+     degrees, and a crisp arrow claims a precision the sensor does not have. */
+  background: radial-gradient(
+    farthest-side at 50% 100%,
+    rgba(37, 99, 235, 0.75),
+    rgba(37, 99, 235, 0)
+  );
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  pointer-events: none;
 }
 
 /* MapLibre pins its own controls to the map container's corners with a flat 10px offset;

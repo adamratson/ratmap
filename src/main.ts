@@ -16,6 +16,7 @@ import {
 } from './config';
 import { TileSourceRegistry } from './tile-source-registry';
 import { addPeaksLayer, formatElevation, peakAt, type PeakProperties } from './peaks';
+import { HeadingWatcher } from './heading';
 import { LocationController, type LocationState } from './location';
 import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS } from './install';
 import { bootstrapStorage, isStandalone } from './storage';
@@ -35,6 +36,7 @@ import { BottomSheet, type Detent } from './sheet';
 import { StatusCentre } from './status';
 import { startAppUpdates } from './update';
 import { APP_VERSION } from './version';
+import { compassBearing, distanceMetres, formatDistance } from './routes/geo';
 import { RoutePlanner, type RouteSummary } from './routes/route-planner';
 import { renderRoutePanel, renderRoutesSheet, type RoutesUiDeps } from './routes/routes-ui';
 import { addRouteLayers } from './routes/route-layers';
@@ -717,8 +719,17 @@ function renderSearchResults(results: SearchResult[]): void {
 
     const meta = document.createElement('span');
     meta.className = 'result-meta';
+    // Distance and direction, not just kind and height. The query already ranks by
+    // distance from the viewport centre, but showing only "peak · 1174 m" hid that
+    // ranking entirely — and Scotland has several Ben Mores, rendered as identical rows.
+    const centre = map.getCenter();
+    const from: [number, number] = [centre.lng, centre.lat];
+    const to: [number, number] = [result.lon, result.lat];
+    const parts = [result.kind];
     const ele = formatElevation(result.ele);
-    meta.textContent = ele ? `${result.kind} · ${ele}` : result.kind;
+    if (ele) parts.push(ele);
+    parts.push(`${formatDistance(distanceMetres(from, to))} ${compassBearing(from, to)}`);
+    meta.textContent = parts.join(' · ');
 
     button.append(name, meta);
     button.addEventListener('click', () => {
@@ -744,11 +755,25 @@ function hideSearchResults(): void {
 const locateBtn = document.querySelector<HTMLButtonElement>('#locate-btn')!;
 const location = new LocationController({ map, onStateChange: renderLocationState });
 
+/**
+ * The compass.
+ *
+ * Started from the button tap rather than at load, because iOS gates device orientation
+ * behind a permission prompt that must be raised from a user gesture — asked for on page
+ * load it is refused outright, and asked for before the user has shown any interest in
+ * their own position it is a prompt with no context.
+ */
+const heading = new HeadingWatcher((degrees) => location.setHeading(degrees));
+
 locateBtn.addEventListener('click', () => {
   if (location.isFollowing()) {
     location.stop();
+    heading.stop();
   } else {
     location.start();
+    // Not awaited and not reported: a missing compass costs the cone and nothing else,
+    // and the dot is the thing that was actually asked for.
+    void heading.start();
   }
 });
 

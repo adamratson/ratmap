@@ -2,10 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
 
 const { MarkerMock, markerInstances } = vi.hoisted(() => {
-  const markerInstances: Array<{ lngLat: unknown; removed: boolean }> = [];
+  const markerInstances: Array<{
+    lngLat: unknown;
+    removed: boolean;
+    rotation: number;
+    element: HTMLElement | null;
+  }> = [];
   class MarkerMock {
-    private record = { lngLat: null as unknown, removed: false };
-    constructor() {
+    private record = {
+      lngLat: null as unknown,
+      removed: false,
+      rotation: 0,
+      element: null as HTMLElement | null,
+    };
+    constructor(options?: { element?: HTMLElement }) {
+      this.record.element = options?.element ?? null;
       markerInstances.push(this.record);
     }
     setLngLat(lngLat: unknown): this {
@@ -17,6 +28,13 @@ const { MarkerMock, markerInstances } = vi.hoisted(() => {
     }
     remove(): void {
       this.record.removed = true;
+    }
+    getElement(): HTMLElement {
+      return this.record.element ?? document.createElement('div');
+    }
+    setRotation(rotation: number): this {
+      this.record.rotation = rotation;
+      return this;
     }
   }
   return { MarkerMock, markerInstances };
@@ -172,5 +190,42 @@ describe('LocationController', () => {
     } as GeolocationPositionError);
 
     expect(controller.getState()).toMatchObject({ status: 'unavailable', message: 'no signal' });
+  });
+});
+
+describe('LocationController heading', () => {
+  it('shows the cone only once there is a heading to show', () => {
+    const { callbacks } = stubGeolocation();
+    const controller = new LocationController({ map: fakeMap() });
+    controller.start();
+    callbacks.success!(position());
+
+    const element = markerInstances[0].element as HTMLElement;
+    expect(element.classList.contains('has-heading')).toBe(false);
+
+    controller.setHeading(45);
+    expect(element.classList.contains('has-heading')).toBe(true);
+    expect(markerInstances[0].rotation).toBe(45);
+
+    // The compass dropping out must take the arrow with it rather than freezing it
+    // pointing wherever it last was.
+    controller.setHeading(null);
+    expect(element.classList.contains('has-heading')).toBe(false);
+  });
+
+  it('applies a heading that arrived before the first fix', () => {
+    // The compass answers faster than the GPS does, so the first reading routinely lands
+    // before there is a marker to put it on.
+    const { callbacks } = stubGeolocation();
+    const controller = new LocationController({ map: fakeMap() });
+    controller.start();
+    controller.setHeading(90);
+
+    callbacks.success!(position());
+
+    expect(markerInstances[0].rotation).toBe(90);
+    expect((markerInstances[0].element as HTMLElement).classList.contains('has-heading')).toBe(
+      true,
+    );
   });
 });

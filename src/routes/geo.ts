@@ -222,3 +222,24 @@ export function formatDistance(metres: number): string {
   if (metres < 1000) return `${Math.round(metres / 10) * 10} m`;
   return `${(metres / 1000).toFixed(metres < 10_000 ? 2 : 1)} km`;
 }
+
+/** Compass points, coarse enough to be useful at a glance and read aloud. */
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
+
+/**
+ * Rough compass direction from `from` to `to`.
+ *
+ * Eight points, not sixteen: this answers "which way is it", and nobody navigates off a
+ * search result. Computed on the equirectangular approximation the search index already
+ * ranks with, which is accurate enough for a bearing over the distances involved.
+ */
+export function compassBearing(from: LngLat, to: LngLat): string {
+  const scale = Math.cos((from[1] * Math.PI) / 180);
+  const east = (to[0] - from[0]) * scale;
+  const north = to[1] - from[1];
+  if (east === 0 && north === 0) return 'here';
+
+  const degrees = (Math.atan2(east, north) * 180) / Math.PI;
+  const index = Math.round(((degrees + 360) % 360) / 45) % COMPASS.length;
+  return COMPASS[index];
+}

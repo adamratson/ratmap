@@ -479,6 +479,17 @@ export class RoutePlanner {
 
   private readonly samplers = new Map<string, TerrainSampler>();
 
+  /**
+   * Put the route back on the map after the style underneath it has been replaced.
+   *
+   * Switching theme swaps the whole style, which takes the route's source and layers with
+   * it. Losing someone's half-built route because they turned the map dark would be its
+   * own bug.
+   */
+  redrawGeometry(): void {
+    this.renderGeometry();
+  }
+
   private renderGeometry(): void {
     if (!this.map.getSource('route-geometry')) addRouteLayers(this.map);
     setRouteGeometry(this.map, this.draft.getLegs());

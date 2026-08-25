@@ -1,7 +1,110 @@
+/* Colour is defined once, here, as tokens — and then again for dark. Nothing below this
+   block names a hex value: a colour whose only definition sits in one theme is how a page
+   ends up rendering one theme's text on the other theme's background.
+
+   Dark is a real second design, not an inversion. Outdoors at dusk the screen is the
+   brightest thing for miles, so the dark surfaces are genuinely dark rather than mid-grey,
+   and the accent is lifted to stay legible against them. */
 :root {
-  --slate-900: #0f172a;
-  --slate-800: #1e293b;
+  --surface: #ffffff;
+  --surface-sunken: #f1f5f9;
+  --surface-raised: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  --text: #0f172a;
+  --text-muted: #475569;
+  --text-faint: #64748b;
+  --text-inverse: #ffffff;
+
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-text: #ffffff;
+
+  --danger: #b91c1c;
+  --success: #15803d;
+
+  --scrim: rgba(0, 0, 0, 0.25);
+  --shadow-strong: rgba(0, 0, 0, 0.3);
+
+  /* Status surfaces. Dark backgrounds in both themes: these sit over the map, which is
+     never dark enough to carry light-on-light text. */
+  --status-neutral: #1e293b;
+  --status-ok: #14532d;
+  --status-warn: #78350f;
+  --status-error: #7f1d1d;
+  --status-text: #ffffff;
+
+  /* The follow screen is dark in both themes — see the comment on .route-follow. */
+  --follow-surface: #0f172a;
+  --follow-text: #f8fafc;
+  --follow-muted: #94a3b8;
+  --follow-track: rgba(255, 255, 255, 0.15);
+  --follow-progress: #38bdf8;
+  --follow-on: #4ade80;
+  --follow-off: #fb7185;
+
+  --marker-start: #15803d;
+  --marker-end: #b91c1c;
+  --marker-mid: #1d4ed8;
+
+  --warn-text: #b45309;
+
+  /* Fades the iOS status bar into the map beneath it. Follows the *map*, not the chrome:
+     the clock is drawn over the map, and a white fade under a dark map is a bright band
+     across the top of the screen. */
+  --statusbar-scrim: rgba(255, 255, 255, 0.9);
+
+  /* MapLibre's own controls — the scale bar and the attribution — ship a light palette.
+     They sit on the map, so they follow the map's theme rather than the chrome's. */
+  --ctrl-surface: rgba(255, 255, 255, 0.75);
+  --ctrl-text: #0f172a;
+  --ctrl-border: rgba(15, 23, 42, 0.6);
+
   color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --surface: #111827;
+  --surface-sunken: #1f2937;
+  --surface-raised: #1a2332;
+  --border: #273244;
+  --border-strong: #3a4658;
+
+  --text: #e8edf5;
+  --text-muted: #a9b6c8;
+  --text-faint: #8493a8;
+  --text-inverse: #0f172a;
+
+  --accent: #60a5fa;
+  --accent-strong: #93c5fd;
+  --accent-text: #0b1220;
+
+  --danger: #f87171;
+  --success: #4ade80;
+
+  --scrim: rgba(0, 0, 0, 0.55);
+  --shadow-strong: rgba(0, 0, 0, 0.6);
+
+  --status-neutral: #1e293b;
+  --status-ok: #14532d;
+  --status-warn: #78350f;
+  --status-error: #7f1d1d;
+  --status-text: #f8fafc;
+
+  --marker-start: #22c55e;
+  --marker-end: #f87171;
+  --marker-mid: #60a5fa;
+
+  --warn-text: #fbbf24;
+
+  --statusbar-scrim: rgba(9, 12, 20, 0.9);
+
+  --ctrl-surface: rgba(9, 12, 20, 0.72);
+  --ctrl-text: #e8edf5;
+  --ctrl-border: rgba(232, 237, 245, 0.55);
+
+  color-scheme: dark;
 }
 
 html,
@@ -16,7 +119,7 @@ body {
   /* Matches the manifest's theme/background colour, so any pixel the map has not covered
      yet — first paint, or while iOS resizes the web view — reads as app chrome instead of
      a white flash. */
-  background: var(--slate-800);
+  background: var(--surface);
   -webkit-text-size-adjust: 100%;
 }
 
@@ -47,7 +150,7 @@ body {
   right: 0;
   height: env(safe-area-inset-top);
   z-index: 5;
-  background: linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+  background: linear-gradient(var(--statusbar-scrim), transparent);
   pointer-events: none;
 }
 
@@ -80,8 +183,8 @@ body {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: #fff;
-  color: var(--slate-900);
+  background: var(--surface);
+  color: var(--text);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
   cursor: pointer;
 }
@@ -91,8 +194,8 @@ body {
 }
 
 #rail button.active {
-  background: #2563eb;
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 .rail-icon {
@@ -113,7 +216,7 @@ body {
 }
 
 .compass-needle {
-  color: #b91c1c;
+  color: var(--danger);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -140,8 +243,8 @@ body {
   padding: 0.65rem 0.85rem;
   border: 0;
   border-radius: 0.6rem;
-  background: #f1f5f9;
-  color: var(--slate-900);
+  background: var(--surface-sunken);
+  color: var(--text);
   /* Never below 16px. iOS Safari zooms the page in when a field with smaller text takes
      focus and does not zoom back out afterwards, leaving the map scaled and panned with
      the controls pushed off-screen — which looks like a broken layout, not a zoom. */
@@ -161,7 +264,7 @@ body {
   max-height: 40vh;
   overflow-y: auto;
   border-radius: 0.5rem;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
 }
 
@@ -170,7 +273,7 @@ body {
 }
 
 #search-results li + li {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border);
 }
 
 #search-results button {
@@ -186,23 +289,23 @@ body {
 }
 
 #search-results button:hover {
-  background: #f1f5f9;
+  background: var(--surface-sunken);
 }
 
 .result-name {
   font-size: 0.9rem;
-  color: var(--slate-900);
+  color: var(--text);
 }
 
 .result-meta {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-faint);
 }
 
 .search-empty {
   padding: 0.6rem 0.75rem;
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--text-faint);
 }
 
 /* Sits bottom-centre, clear of the search box and the HUD buttons. Informational, not a
@@ -217,7 +320,7 @@ body {
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.82);
-  color: #fff;
+  color: #ffffff;
   font-size: 0.75rem;
   white-space: nowrap;
   pointer-events: auto;
@@ -264,8 +367,8 @@ body {
   padding: 0.5rem 0.7rem;
   font-size: 0.85rem;
   line-height: 1.3;
-  color: #fff;
-  background: var(--slate-800);
+  color: var(--status-text);
+  background: var(--status-neutral);
 }
 
 .condition p {
@@ -275,13 +378,13 @@ body {
 }
 
 .condition.ok {
-  background: #14532d;
+  background: var(--status-ok);
 }
 .condition.warn {
-  background: #78350f;
+  background: var(--status-warn);
 }
 .condition.error {
-  background: #7f1d1d;
+  background: var(--status-error);
 }
 
 .condition-action {
@@ -291,8 +394,8 @@ body {
   padding: 0.35rem 0.7rem;
   border: 0;
   border-radius: 0.35rem;
-  background: #fff;
-  color: var(--slate-900);
+  background: #ffffff;
+  color: #0f172a;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -336,8 +439,8 @@ body {
   max-width: 30rem;
   padding: 0.6rem 0.5rem 0.6rem 0.9rem;
   border-radius: 0.6rem;
-  background: var(--slate-900);
-  color: #fff;
+  background: var(--status-neutral);
+  color: var(--status-text);
   font-size: 0.85rem;
   line-height: 1.35;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
@@ -350,10 +453,10 @@ body {
 }
 
 .toast.warn {
-  background: #78350f;
+  background: var(--status-warn);
 }
 .toast.error {
-  background: #7f1d1d;
+  background: var(--status-error);
 }
 
 .toast-action {
@@ -363,7 +466,7 @@ body {
   border: 0;
   border-radius: 0.4rem;
   background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  color: var(--surface);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -391,7 +494,7 @@ body {
   padding-left: 1.2rem;
   font-size: 0.9rem;
   line-height: 1.5;
-  color: #334155;
+  color: var(--text-muted);
 }
 
 .install-steps li {
@@ -413,7 +516,7 @@ body {
   display: flex;
   flex-direction: column;
   border-radius: 1rem 1rem 0 0;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.2);
   /* The sheet owns vertical gestures inside itself; without this the browser tries to
      scroll the page and the drag stutters or dies. */
@@ -447,7 +550,7 @@ body {
   height: 0.25rem;
   margin: 0 auto;
   border-radius: 999px;
-  background: #cbd5e1;
+  background: var(--border-strong);
 }
 
 /* Always visible, whatever the detent. */
@@ -478,7 +581,17 @@ body {
   visibility: hidden;
 }
 
+/* The destinations, and the theme toggle pinned at the end of the row. */
+.peek-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
 #chips {
+  flex: 1;
+  min-width: 0;
   display: flex;
   gap: 0.4rem;
   overflow-x: auto;
@@ -495,27 +608,38 @@ body {
      horizontal padding, which is where a mis-tap actually happens. */
   min-height: 2.25rem;
   padding: 0.4rem 0.9rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: #fff;
-  color: var(--slate-900);
+  background: var(--surface);
+  color: var(--text);
   font-size: 0.85rem;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
 }
 
+/* Square, because it is an icon rather than a word — and so it does not read as another
+   destination in the row it sits at the end of. */
+.chip-icon {
+  flex-shrink: 0;
+  width: 2.25rem;
+  padding: 0;
+  text-align: center;
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .chip.active {
-  background: var(--slate-900);
-  border-color: var(--slate-900);
-  color: #fff;
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
 }
 
 /* The planning chip is a mode, not a destination — coloured to say so, and to make the
    mode visible even when the sheet is at rest. */
 .chip.chip-mode.active {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .sheet-body h2 {
@@ -526,7 +650,7 @@ body {
 .sheet-body p {
   margin: 0 0 0.25rem;
   font-size: 0.9rem;
-  color: #475569;
+  color: var(--text-muted);
 }
 
 .sheet-actions {
@@ -544,8 +668,8 @@ body {
   padding: 0.5rem 1rem;
   border: 0;
   border-radius: 0.5rem;
-  background: #2563eb;
-  color: #fff;
+  background: var(--accent);
+  color: var(--surface);
   font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
@@ -553,8 +677,8 @@ body {
 }
 
 .sheet-actions a {
-  background: #e2e8f0;
-  color: var(--slate-900);
+  background: var(--border);
+  color: var(--text);
 }
 
 .places-list {
@@ -567,7 +691,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
 }
 
 .places-list li:last-child {
@@ -587,7 +711,7 @@ body {
 .place-delete {
   border: 0;
   background: transparent;
-  color: #94a3b8;
+  color: var(--follow-muted);
   font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
@@ -609,7 +733,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 0.55rem 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
 }
 
 .region-row:last-child {
@@ -624,34 +748,34 @@ body {
 
 .region-name {
   font-size: 0.9rem;
-  color: var(--slate-900);
+  color: var(--text);
 }
 
 .region-meta {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-faint);
 }
 
 .region-action {
   padding: 0.4rem 0.75rem;
   border: 0;
   border-radius: 0.4rem;
-  background: #2563eb;
-  color: #fff;
+  background: var(--accent);
+  color: var(--surface);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .region-action.danger {
-  background: #e2e8f0;
-  color: #b91c1c;
+  background: var(--border);
+  color: var(--danger);
 }
 
 /* Armed: the delete now means it, and looks like it. */
 .region-action.armed {
-  background: #b91c1c;
-  color: #fff;
+  background: var(--danger);
+  color: var(--surface);
 }
 
 /* Spans both grid columns so the bar runs the full row width. */
@@ -659,7 +783,7 @@ body {
   grid-column: 1 / -1;
   height: 4px;
   border-radius: 999px;
-  background: #e2e8f0;
+  background: var(--border);
   overflow: hidden;
 }
 
@@ -670,14 +794,14 @@ body {
 .region-progress-bar {
   width: 0%;
   height: 100%;
-  background: #2563eb;
+  background: var(--accent);
   transition: width 0.2s linear;
 }
 
 .places-empty {
   padding: 0.6rem 0;
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--text-faint);
 }
 
 /* Location dot, with a cone for which way the phone is pointing.
@@ -692,7 +816,7 @@ body {
   height: 14px;
   border-radius: 50%;
   background: #2563eb;
-  border: 2px solid #fff;
+  border: 2px solid #ffffff;
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.5);
 }
 
@@ -757,9 +881,24 @@ body {
   right: env(safe-area-inset-right);
 }
 
-/* Attribution is legally required — never let it collapse to nothing. */
-.maplibregl-ctrl-attrib {
+/* Attribution is legally required — never let it collapse to nothing. It only has to
+   stay *readable* against a dark map, which is what the tokens do; nothing here hides or
+   shrinks it. */
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib.maplibregl-compact {
   font-size: 11px;
+  background: var(--ctrl-surface);
+  color: var(--ctrl-text);
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--ctrl-text);
+}
+
+.maplibregl-ctrl-scale {
+  background: var(--ctrl-surface);
+  color: var(--ctrl-text);
+  border-color: var(--ctrl-border);
 }
 
 /* --- Route planning (Phase 4) ------------------------------------------------------ */
@@ -786,29 +925,29 @@ body {
 .route-costing button {
   min-height: 2.25rem;
   padding: 0.4rem 0.75rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 0.4rem;
-  background: #fff;
-  color: var(--slate-900);
+  background: var(--surface);
+  color: var(--text);
   font-size: 0.8rem;
   cursor: pointer;
 }
 
 .route-costing button.active {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface);
 }
 
 .route-hint,
 .route-note {
   margin: 0.5rem 0 0;
   font-size: 0.8rem;
-  color: #475569;
+  color: var(--text-muted);
 }
 
 .route-note.warn {
-  color: #b45309;
+  color: var(--warn-text);
 }
 
 .route-stats {
@@ -828,7 +967,7 @@ body {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b;
+  color: var(--text-faint);
 }
 
 .route-stats dd {
@@ -856,7 +995,7 @@ body {
 
 .profile-line {
   fill: none;
-  stroke: #1d4ed8;
+  stroke: var(--accent-strong);
   stroke-width: 1.5;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -874,8 +1013,8 @@ body {
   padding: 0.5rem 0.9rem;
   border: 0;
   border-radius: 0.5rem;
-  background: #e2e8f0;
-  color: var(--slate-900);
+  background: var(--border);
+  color: var(--text);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -885,8 +1024,8 @@ body {
    is actually available — a disabled button has no business advertising itself as the
    thing to do next. */
 .route-actions button.primary:not(:disabled) {
-  background: #2563eb;
-  color: #fff;
+  background: var(--accent);
+  color: var(--surface);
 }
 
 /* Clear wipes the route and used to sit immediately beside Done in a row of five
@@ -904,7 +1043,7 @@ body {
   border: 0;
   border-radius: 0.5rem;
   background: transparent;
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -930,7 +1069,7 @@ body {
   flex: 1;
   min-width: 0;
   padding: 0.4rem 0.5rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 0.4rem;
   font-size: 0.85rem;
 }
@@ -939,8 +1078,8 @@ body {
   padding: 0.4rem 0.7rem;
   border: 0;
   border-radius: 0.4rem;
-  background: #2563eb;
-  color: #fff;
+  background: var(--accent);
+  color: var(--surface);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -975,10 +1114,10 @@ body {
   justify-content: center;
   width: 1.4rem;
   height: 1.4rem;
-  border: 2px solid #fff;
+  border: 2px solid #ffffff;
   border-radius: 50%;
-  background: #1d4ed8;
-  color: #fff;
+  background: var(--marker-mid);
+  color: #ffffff;
   font-size: 0.7rem;
   font-weight: 700;
   line-height: 1;
@@ -989,11 +1128,11 @@ body {
 }
 
 .route-waypoint.start .route-waypoint-pin {
-  background: #15803d;
+  background: var(--marker-start);
 }
 
 .route-waypoint.end .route-waypoint-pin {
-  background: #b91c1c;
+  background: var(--marker-end);
 }
 
 /* Held long enough to count: the pin swells, so releasing now is understood to delete. */
@@ -1018,16 +1157,16 @@ body {
   padding: 0.45rem 0.8rem;
   border: 0;
   border-radius: 0.4rem;
-  background: #2563eb;
-  color: #fff;
+  background: var(--accent);
+  color: var(--surface);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .route-import {
-  background: #e2e8f0;
-  color: var(--slate-900);
+  background: var(--border);
+  color: var(--text);
 }
 
 /* The file input is driven by its label; hiding it with `display: none` would take it out
@@ -1051,7 +1190,7 @@ body {
   align-items: center;
   gap: 0.4rem;
   padding: 0.35rem 0;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border);
 }
 
 .route-open {
@@ -1070,12 +1209,12 @@ body {
 .route-name {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--slate-900);
+  color: var(--text);
 }
 
 .route-meta {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-faint);
 }
 
 .route-row-actions {
@@ -1087,8 +1226,8 @@ body {
   padding: 0.3rem 0.5rem;
   border: 0;
   border-radius: 0.35rem;
-  background: #e2e8f0;
-  color: var(--slate-900);
+  background: var(--border);
+  color: var(--text);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -1099,10 +1238,10 @@ body {
    in one-second glances, often in rain and often at dusk — so: dark, large figures, and
    only the numbers that change what you do next. */
 .route-follow {
-  margin: -0.25rem -1rem calc(-1rem - env(safe-area-inset-bottom));
+  margin: 0 -1rem calc(-1rem - env(safe-area-inset-bottom));
   padding: 1.1rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
-  background: var(--slate-900);
-  color: #f8fafc;
+  background: var(--follow-surface);
+  color: var(--follow-text);
 }
 
 .follow-figures {
@@ -1121,7 +1260,7 @@ body {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #94a3b8;
+  color: var(--follow-muted);
 }
 
 .follow-figures dd {
@@ -1143,7 +1282,7 @@ body {
 
 .follow-progress-fill {
   height: 100%;
-  background: #38bdf8;
+  background: var(--follow-progress);
 }
 
 /* "Am I still on the path" is the whole question up there, so it is the loudest thing on
@@ -1156,24 +1295,24 @@ body {
 }
 
 .follow-state.on {
-  color: #4ade80;
+  color: var(--follow-on);
 }
 
 .follow-state.off {
-  color: #fb7185;
+  color: var(--follow-off);
 }
 
 .follow-waiting {
   margin: 0;
   font-size: 1.1rem;
-  color: #cbd5e1;
+  color: var(--border-strong);
 }
 
 .follow-note {
   margin: 0.6rem 0 0;
   font-size: 0.8rem;
   line-height: 1.4;
-  color: #94a3b8;
+  color: var(--follow-muted);
 }
 
 .route-follow .route-actions {

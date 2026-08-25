@@ -21,6 +21,10 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances 
     on(event: string, cb: (e: unknown) => void): void {
       (handlers[event] ??= []).push(cb);
     }
+    once(event: string, cb: (e: unknown) => void): void {
+      (handlers[event] ??= []).push(cb);
+    }
+    setStyle(): void {}
     getSource(): undefined {
       return undefined;
     }
@@ -82,6 +86,13 @@ vi.mock('maplibre-gl', () => ({
 }));
 
 const navigationControlSpy = vi.hoisted(() => vi.fn());
+const namedFlavorSpy = vi.hoisted(() => vi.fn((name: string) => ({ name })));
+const store = vi.hoisted(() => new Map<string, string>());
+
+vi.mock('@protomaps/basemaps', () => ({
+  layers: () => [],
+  namedFlavor: namedFlavorSpy,
+}));
 const bootstrapStorageMock = vi.hoisted(() => vi.fn());
 const isStandaloneMock = vi.hoisted(() => vi.fn());
 vi.mock('./storage', () => ({
@@ -128,6 +139,16 @@ beforeEach(() => {
   vi.unstubAllGlobals();
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   navigationControlSpy.mockClear();
+  namedFlavorSpy.mockClear();
+  // jsdom's localStorage is not always usable in this runner, and the theme controller
+  // deliberately survives storage being unavailable — so give it a real one to assert on.
+  store.clear();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+    clear: () => store.clear(),
+  });
   vi.resetModules();
   mapCtorSpy.mockClear();
   addProtocolSpy.mockClear();
@@ -321,6 +342,41 @@ describe('app bootstrap', () => {
     expect(navigationControlSpy).not.toHaveBeenCalled();
     // The compass replaces the only part of it a finger actually needs.
     expect(document.querySelector('#compass-btn')).not.toBeNull();
+  });
+
+  it('paints the theme before the map, so first paint is not a white flash', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-color-scheme: dark)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+
+    await loadMainQuietly();
+
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    // The basemap flavour has to follow, or a dark UI frames a white map.
+    expect(namedFlavorSpy).toHaveBeenCalledWith('dark');
+  });
+
+  it('lets the user override the device, and remembers it', async () => {
+    // People turn the map dark before they turn the phone dark: dusk on a hill arrives
+    // long before the phone's schedule thinks it has.
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    const button = document.querySelector<HTMLButtonElement>('#theme-btn')!;
+    button.click();
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(button.getAttribute('aria-label')).toMatch(/light/i);
+
+    button.click();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(store.get('ratmap.theme')).toBe('dark');
+
+    button.click();
+    expect(store.get('ratmap.theme')).toBe('system');
   });
 
   it('walks iOS users through Add to Home Screen when storage is not persisted (C2)', async () => {

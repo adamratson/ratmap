@@ -23,6 +23,7 @@ import { bootstrapStorage, isStandalone } from './storage';
 import { listPlaces, savePlace, deletePlace, type SavedPlace } from './saved-places';
 import { PlacesSearch, type SearchResult } from './search';
 import { describeDetailLimit } from './detail-limit';
+import { ThemeController, nextPreference, type Theme, type ThemePreference } from './theme';
 import { isCoarsePointer } from './pointer';
 import {
   bestAvailableZoom,
@@ -67,6 +68,11 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div id="sheet"></div>
 `;
 
+// Constructed before anything reads it: it stamps `data-theme` on the document in its
+// constructor, so the first paint is already the right theme rather than a white flash
+// that corrects itself.
+const theme = new ThemeController();
+
 const status = new StatusCentre({
   toasts: document.querySelector<HTMLDivElement>('#toasts')!,
   conditions: document.querySelector<HTMLDivElement>('#conditions')!,
@@ -96,7 +102,10 @@ sheet.peek.innerHTML = `
            autocomplete="off" autocorrect="off" spellcheck="false" />
     <ul id="search-results" hidden></ul>
   </div>
-  <div id="chips" role="tablist"></div>
+  <div class="peek-row">
+    <div id="chips" role="tablist"></div>
+    <button id="theme-btn" type="button" class="chip chip-icon"></button>
+  </div>
 `;
 
 /** What the sheet body is currently showing. `null` is the resting state. */
@@ -180,6 +189,36 @@ function renderChips(): void {
   }
 }
 
+// --- Theme ---------------------------------------------------------------------------
+
+const themeBtn = sheet.peek.querySelector<HTMLButtonElement>('#theme-btn')!;
+
+const THEME_ICON: Record<ThemePreference, string> = { system: '◐', light: '☀', dark: '☾' };
+const THEME_LABEL: Record<ThemePreference, string> = {
+  system: 'Map theme: follows your device',
+  light: 'Map theme: light',
+  dark: 'Map theme: dark',
+};
+
+themeBtn.addEventListener('click', () => {
+  theme.set(nextPreference(theme.getPreference()));
+  renderThemeButton();
+});
+
+// Also on system changes, which move the effective theme without touching the preference.
+theme.onChange(() => renderThemeButton());
+
+function renderThemeButton(): void {
+  const preference = theme.getPreference();
+  themeBtn.textContent = THEME_ICON[preference];
+  // The label says the current state rather than the next one: a control that announces
+  // what it will become is unreadable when you are trying to work out where you are.
+  themeBtn.setAttribute('aria-label', THEME_LABEL[preference]);
+  themeBtn.title = THEME_LABEL[preference];
+}
+
+renderThemeButton();
+
 sheet.open('peek');
 
 function chipEl(label: string, active: boolean, onSelect: () => void): HTMLButtonElement {
@@ -213,14 +252,16 @@ const terrainSource: maplibregl.SourceSpecification = USE_FALLBACK_TERRAIN
       attribution: TERRAIN_ATTRIBUTION,
     };
 
-const map = new maplibregl.Map({
-  container: 'map',
-  center: [-4.5, 56.8],
-  zoom: 6,
-  // Attribution is legally required (ODbL) and must not be auto-hidden without user
-  // action — so it stays expanded rather than collapsing to an "i" on narrow screens.
-  attributionControl: { compact: false },
-  style: {
+/**
+ * The base style, for a given theme.
+ *
+ * A function rather than a literal because the theme is switchable at runtime and
+ * Protomaps ships the flavours as whole layer sets — there is no per-layer paint property
+ * to flip. Only the basemap and the terrain live here; everything the app adds on top
+ * (peaks, routes, downloaded regions, coverage) is re-installed by installAppLayers.
+ */
+function buildStyle(theme: Theme): maplibregl.StyleSpecification {
+  return {
     version: 8,
     glyphs: GLYPHS_URL,
     sprite: SPRITE_URL,
@@ -234,7 +275,7 @@ const map = new maplibregl.Map({
       terrain: terrainSource,
     },
     layers: [
-      ...layers('basemap', namedFlavor('light'), { lang: 'en' }),
+      ...layers('basemap', namedFlavor(theme), { lang: 'en' }),
       {
         id: 'hillshade',
         type: 'hillshade',
@@ -244,7 +285,26 @@ const map = new maplibregl.Map({
         paint: { 'hillshade-exaggeration': 0.45 },
       },
     ],
-  },
+  };
+}
+
+const map = new maplibregl.Map({
+  container: 'map',
+  center: [-4.5, 56.8],
+  zoom: 6,
+  // Attribution is legally required (ODbL) and must not be auto-hidden without user
+  // action — so it stays expanded rather than collapsing to an "i" on narrow screens.
+  attributionControl: { compact: false },
+  style: buildStyle(theme.get()),
+});
+
+theme.onChange((next) => {
+  // Protomaps flavours are whole layer sets, so switching means replacing the style —
+  // which drops every source and layer the app added on top of it. `styledata` is the
+  // signal that the replacement has landed; MapLibre has no `style.load` (that is Mapbox
+  // GL JS), checked against the installed typings.
+  map.setStyle(buildStyle(next));
+  map.once('styledata', () => installAppLayers());
 });
 
 // NavigationControl only on a mouse. Its buttons are 29px, they sit in the top corner —
@@ -330,15 +390,28 @@ map.on('sourcedata', (e) => {
   if (e.isSourceLoaded) status.setCondition('offline', null);
 });
 
-map.on('load', () => {
+/**
+ * Everything the app puts on top of the base style.
+ *
+ * Runs on first load *and* after every theme swap, because replacing the style throws all
+ * of it away. Each of these is idempotent against an existing source, so re-running is
+ * safe even if a style event arrives twice.
+ */
+function installAppLayers(): void {
   addPeaksLayer(map, registry);
-  // Added at load rather than lazily on first use: adding a source before the style is
+  // Added here rather than lazily on first use: adding a source before the style is
   // ready throws, and the planner can be opened at any moment after this point.
   addRouteLayers(map);
   // Downloaded regions are restored without any user action, so a cold offline launch
-  // renders from OPFS immediately (Phase 3 acceptance).
+  // renders from OPFS immediately (Phase 3 acceptance). This also redraws the coverage
+  // footprints.
   void restoreRegions();
-});
+  // A route being planned or followed has to survive a theme change — losing someone's
+  // half-built route because they turned the map dark would be its own bug.
+  planner.redrawGeometry();
+}
+
+map.on('load', () => installAppLayers());
 
 /**
  * Regions whose archives are actually present in OPFS.

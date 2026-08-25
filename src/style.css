@@ -504,6 +504,68 @@ body {
   margin-bottom: 0.4rem;
 }
 
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.6rem 0;
+  cursor: pointer;
+}
+
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-row-note {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.settings-row input[type='checkbox'] {
+  /* 44px, matching every other real control in this app — a checkbox this size is not
+     one you miss with a thumb. */
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 1.6rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* --- The debug overlay ---------------------------------------------------------------
+   Opt-in (Settings → Debug overlay), off by default. Prints the sheet's own geometry
+   over the map — see src/debug.ts for why. */
+.debug-overlay {
+  position: fixed;
+  left: 4px;
+  top: calc(4px + env(safe-area-inset-top));
+  z-index: 99999;
+  margin: 0;
+  padding: 6px 8px;
+  background: rgba(220, 38, 38, 0.92);
+  color: #fff;
+  font: 10px/1.4 monospace;
+  white-space: pre-wrap;
+  max-width: 96vw;
+  pointer-events: none;
+}
+
+.debug-probe {
+  position: fixed;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* --- The sheet ----------------------------------------------------------------------
    The app's one non-map surface. Full height, translated down so only the chosen detent
    shows — a transform rather than an animated height, so a drag tracks the finger on the

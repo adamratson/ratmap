@@ -24,6 +24,7 @@ import { listPlaces, savePlace, deletePlace, type SavedPlace } from './saved-pla
 import { PlacesSearch, type SearchResult } from './search';
 import { describeDetailLimit } from './detail-limit';
 import { ThemeController, nextPreference, type Theme, type ThemePreference } from './theme';
+import { DebugOverlay, isDebugOverlayEnabled, setDebugOverlayEnabled } from './debug';
 import { isCoarsePointer } from './pointer';
 import {
   bestAvailableZoom,
@@ -106,11 +107,12 @@ sheet.peek.innerHTML = `
   <div class="peek-row">
     <div id="chips"></div>
     <button id="theme-btn" type="button" class="chip chip-icon"></button>
+    <button id="settings-btn" type="button" class="chip chip-icon" aria-label="Settings">⚙</button>
   </div>
 `;
 
 /** What the sheet body is currently showing. `null` is the resting state. */
-type View = 'peak' | 'places' | 'regions' | 'routes' | 'plan' | 'install';
+type View = 'peak' | 'places' | 'regions' | 'routes' | 'plan' | 'install' | 'settings';
 
 let view: View | null = null;
 
@@ -190,6 +192,8 @@ function renderChips(): void {
       }),
     );
   }
+
+  settingsBtn.classList.toggle('active', view === 'settings');
 }
 
 /**
@@ -240,6 +244,59 @@ function renderThemeButton(): void {
 
 renderThemeButton();
 
+// --- Settings --------------------------------------------------------------------------
+
+const settingsBtn = sheet.peek.querySelector<HTMLButtonElement>('#settings-btn')!;
+settingsBtn.addEventListener('click', () => {
+  // Same rule as every destination chip: tapping the one that's already open closes it.
+  if (view === 'settings' && sheet.detent() !== 'peek') closeView();
+  else openSettingsView();
+});
+
+/**
+ * Debug overlay lifecycle. Created and destroyed with the setting, not just hidden — it
+ * holds a ResizeObserver and a 500ms timer that have no reason to run for the far more
+ * common case of the setting being off.
+ */
+let debugOverlay: DebugOverlay | null = null;
+
+function syncDebugOverlay(): void {
+  const enabled = isDebugOverlayEnabled();
+  if (enabled && !debugOverlay) {
+    debugOverlay = new DebugOverlay(document.querySelector<HTMLElement>('#sheet')!);
+    debugOverlay.start();
+  } else if (!enabled && debugOverlay) {
+    debugOverlay.stop();
+    debugOverlay = null;
+  }
+}
+
+syncDebugOverlay();
+
+function openSettingsView(): void {
+  openView('settings', (body) => {
+    body.innerHTML = `
+      <h2>Settings</h2>
+      <label class="settings-row">
+        <span class="settings-row-text">
+          <span class="settings-row-label">Debug overlay</span>
+          <span class="settings-row-note">
+            Prints the sheet's on-screen geometry over the map — for tracking down
+            layout bugs that only show up on a real device.
+          </span>
+        </span>
+        <input id="debug-overlay-toggle" type="checkbox" />
+      </label>
+    `;
+    const toggle = body.querySelector<HTMLInputElement>('#debug-overlay-toggle')!;
+    toggle.checked = isDebugOverlayEnabled();
+    toggle.addEventListener('change', () => {
+      setDebugOverlayEnabled(toggle.checked);
+      syncDebugOverlay();
+    });
+  });
+}
+
 sheet.open('peek');
 
 
@@ -266,6 +323,7 @@ const VIEW_LABEL: Record<View, string> = {
   routes: 'Routes',
   plan: 'Route planner',
   install: 'Add to Home Screen',
+  settings: 'Settings',
 };
 
 const terrainSource: maplibregl.SourceSpecification = USE_FALLBACK_TERRAIN

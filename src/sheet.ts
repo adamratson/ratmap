@@ -99,7 +99,7 @@ export class BottomSheet {
     this.element.innerHTML = `
       <div class="sheet-grip" aria-hidden="true"></div>
       <div class="sheet-peek"></div>
-      <div class="sheet-body"></div>
+      <div class="sheet-body" id="sheet-body" role="region" tabindex="-1"></div>
     `;
     this.peek = this.element.querySelector<HTMLElement>('.sheet-peek')!;
     this.body = this.element.querySelector<HTMLElement>('.sheet-body')!;

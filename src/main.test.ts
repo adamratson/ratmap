@@ -308,7 +308,7 @@ describe('app bootstrap', () => {
     document.querySelector<HTMLButtonElement>('#chips .chip')!.click();
 
     expect(sheet.classList.contains('at-peek')).toBe(false);
-    expect(document.querySelector('#chips .chip')!.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('#chips .chip')!.getAttribute('aria-expanded')).toBe('true');
   });
 
   it('gives every destination its own way back to the map', async () => {
@@ -342,6 +342,31 @@ describe('app bootstrap', () => {
     expect(navigationControlSpy).not.toHaveBeenCalled();
     // The compass replaces the only part of it a finger actually needs.
     expect(document.querySelector('#compass-btn')).not.toBeNull();
+  });
+
+  it('gives a keyboard user a way out, now that the panels have no close buttons', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    const sheet = document.querySelector<HTMLElement>('#sheet')!;
+    document.querySelector<HTMLButtonElement>('#chips .chip')!.click();
+    expect(sheet.classList.contains('at-peek')).toBe(false);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(sheet.classList.contains('at-peek')).toBe(true);
+  });
+
+  it('names the sheet contents, so it is not announced as an unlabelled region', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    const body = document.querySelector<HTMLElement>('.sheet-body')!;
+    expect(body.getAttribute('role')).toBe('region');
+    expect(body.hasAttribute('aria-label')).toBe(false);
+
+    document.querySelector<HTMLButtonElement>('#chips .chip')!.click();
+    expect(body.getAttribute('aria-label')).toBe('Routes');
   });
 
   it('paints the theme before the map, so first paint is not a white flash', async () => {

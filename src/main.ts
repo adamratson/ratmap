@@ -100,10 +100,10 @@ sheet.peek.innerHTML = `
   <div id="search">
     <input id="search-input" type="search" placeholder="Search places and summits"
            autocomplete="off" autocorrect="off" spellcheck="false" />
-    <ul id="search-results" hidden></ul>
+    <ul id="search-results" aria-label="Search results" hidden></ul>
   </div>
   <div class="peek-row">
-    <div id="chips" role="tablist"></div>
+    <div id="chips"></div>
     <button id="theme-btn" type="button" class="chip chip-icon"></button>
   </div>
 `;
@@ -132,6 +132,7 @@ let planMode: 'Planning' | 'Following' = 'Planning';
 function openView(name: View, render: (body: HTMLElement) => void, detent: Detent = 'half'): void {
   const entering = view !== name;
   view = name;
+  sheet.body.setAttribute('aria-label', VIEW_LABEL[name]);
   render(sheet.body);
   if (entering) {
     sheet.body.scrollTop = 0;
@@ -143,6 +144,7 @@ function openView(name: View, render: (body: HTMLElement) => void, detent: Deten
 function closeView(): void {
   if (view === null) return;
   view = null;
+  sheet.body.removeAttribute('aria-label');
   sheet.body.innerHTML = '';
   sheet.collapse();
   renderChips();
@@ -189,6 +191,24 @@ function renderChips(): void {
   }
 }
 
+/**
+ * Escape puts the map back.
+ *
+ * The one thing every dismissible surface owes a keyboard user, and the sheet swallowed
+ * it: with no per-panel close button left, there was otherwise no key that closed
+ * anything. Search results take it first, because there Escape means "abandon this
+ * search", not "close the sheet I am typing into".
+ */
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (!searchResults.hidden) {
+    hideSearchResults();
+    return;
+  }
+  if (view !== null) closeView();
+  else if (sheet.detent() !== 'peek') sheet.collapse();
+});
+
 // --- Theme ---------------------------------------------------------------------------
 
 const themeBtn = sheet.peek.querySelector<HTMLButtonElement>('#theme-btn')!;
@@ -225,13 +245,26 @@ function chipEl(label: string, active: boolean, onSelect: () => void): HTMLButto
   const chip = document.createElement('button');
   chip.type = 'button';
   chip.className = 'chip';
-  chip.setAttribute('role', 'tab');
-  chip.setAttribute('aria-selected', String(active));
+  // A disclosure, not a tab. Tabs imply a panel that is always showing one of a set;
+  // here the sheet is usually showing nothing at all, and each chip both opens and
+  // closes its own view.
+  chip.setAttribute('aria-expanded', String(active));
+  chip.setAttribute('aria-controls', 'sheet-body');
   chip.classList.toggle('active', active);
   chip.textContent = label;
   chip.addEventListener('click', onSelect);
   return chip;
 }
+
+/** What a screen reader should call the sheet's contents, per view. */
+const VIEW_LABEL: Record<View, string> = {
+  peak: 'Summit details',
+  places: 'Saved places',
+  regions: 'Offline regions',
+  routes: 'Routes',
+  plan: 'Route planner',
+  install: 'Add to Home Screen',
+};
 
 const terrainSource: maplibregl.SourceSpecification = USE_FALLBACK_TERRAIN
   ? {

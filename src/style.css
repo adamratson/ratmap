@@ -110,7 +110,22 @@
 html,
 body {
   margin: 0;
-  height: 100%;
+  /* `100vh`, not `100%` — the actual root cause of the real-device "chin gap" bug chased
+     across several earlier attempts at #app/#sheet sizing. Confirmed against a specific,
+     independently-reproduced report (two unrelated people hit the identical ~59px gap and
+     fixed it the same way): with `viewport-fit=cover` and
+     `apple-mobile-web-app-status-bar-style=black-translucent` (both already in use here,
+     for legitimate reasons — edge-to-edge content and a translucent status bar), iOS
+     shifts the page's content down behind the status bar but does not grow `height: 100%`
+     to compensate, since percentage resolution doesn't account for that shift. The result
+     is a viewport that is short by exactly the status-bar height on every element that
+     derives its size from it — including `#app`'s own `position: fixed; inset: 0` below,
+     since `position: fixed` establishes its containing block from the *page's* viewport,
+     and that reference was corrupted before #app ever got a chance to measure it. `100vh`
+     reads the true viewport height directly and isn't subject to this percentage-specific
+     resolution bug.
+     https://www.reddit.com/r/PWA/comments/1sdhsbu/pwa_on_ios_fighting_the_chin_gap/ */
+  height: 100vh;
   font-family: system-ui, -apple-system, sans-serif;
   /* The map owns the whole screen and nothing here scrolls. Without this, iOS rubber-band
      scrolling drags the map off the top of the screen and exposes the page behind it. */
@@ -123,11 +138,11 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* Fixed, not `height: 100%`. A percentage height resolves against the initial containing
-   block, which iOS sizes from the *small* viewport when a Home Screen app launches
-   fullscreen under `viewport-fit=cover` — the map then ends short of the bottom of the
-   screen and leaves a strip of page background above the home indicator. A fixed inset-0
-   box is sized from the layout viewport and covers the screen on every platform. */
+/* Fixed, not `height: 100%` — the same percentage-resolution trap the html/body rule
+   above now avoids with `100vh`, and this element can't use that fix (`100vh` on a
+   non-root element has its own iOS quirks). `inset: 0` sizes #app directly from the
+   viewport, sidestepping percentage resolution entirely rather than trying to name the
+   right unit for it. */
 #app {
   position: fixed;
   inset: 0;

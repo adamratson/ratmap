@@ -30,6 +30,7 @@ import {
 } from './regions/manifest';
 import { renderRegionsSheet, restoreDownloadedRegions } from './regions/regions-ui';
 import { downloadsInFlight } from './regions/downloader';
+import { StatusCentre } from './status';
 import { startAppUpdates } from './update';
 import { APP_VERSION } from './version';
 import { RoutePlanner, type RouteSummary } from './routes/route-planner';
@@ -56,12 +57,44 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
   <div id="route-panel" hidden></div>
   <div id="detail-notice" hidden></div>
-  <div id="status-panel"></div>
+  <div id="conditions" hidden></div>
   <div id="sheet" hidden></div>
+  <div id="toasts"></div>
 `;
 
-const statusPanel = document.querySelector<HTMLDivElement>('#status-panel')!;
 const sheet = document.querySelector<HTMLDivElement>('#sheet')!;
+
+const status = new StatusCentre({
+  toasts: document.querySelector<HTMLDivElement>('#toasts')!,
+  conditions: document.querySelector<HTMLDivElement>('#conditions')!,
+});
+
+// Debug handle, same convention as __ratmapMap below: "why is that banner up, and what
+// put it there?" is otherwise only answerable by reading the source.
+(window as unknown as { __ratmapStatus: StatusCentre }).__ratmapStatus = status;
+
+// Toasts sit at the bottom so an "Undo" lands in thumb reach, which means they have to
+// clear whatever else is down there. The sheet and the planning panel are the only two,
+// and both change height as their content does — so measure rather than guess.
+const bottomSurfaces = [sheet, document.querySelector<HTMLDivElement>('#route-panel')!];
+const measureBottomSurfaces = (): void => {
+  const tallest = Math.max(
+    0,
+    ...bottomSurfaces.map((el) => (el.hidden ? 0 : el.getBoundingClientRect().height)),
+  );
+  document.documentElement.style.setProperty('--bottom-surface', `${tallest}px`);
+};
+const bottomObserver = new ResizeObserver(measureBottomSurfaces);
+for (const el of bottomSurfaces) {
+  bottomObserver.observe(el);
+  // ResizeObserver reports a hidden element as 0x0 on some engines and not at all on
+  // others, so the `hidden` flag is watched directly rather than inferred from a resize.
+  new MutationObserver(measureBottomSurfaces).observe(el, {
+    attributes: true,
+    attributeFilter: ['hidden'],
+  });
+}
+measureBottomSurfaces();
 
 const terrainSource: maplibregl.SourceSpecification = USE_FALLBACK_TERRAIN
   ? {
@@ -146,20 +179,30 @@ map.on('error', (e) => {
   console.error('MapLibre error', e.error);
 
   // MapLibre raises one error per failed tile, so an offline map produces dozens within a
-  // second. Reporting each as its own card buried the map behind a wall of identical
-  // banners — observed during the Phase 3 offline test, hence the dedupe keys.
+  // second. As a condition rather than a message, re-reporting is free: the twentieth
+  // failed tile replaces the first instead of stacking a twentieth banner.
   //
-  // Losing signal is an expected state for this app, not a fault: say it once, plainly.
+  // Losing signal is an expected state for this app, not a fault: say it once, plainly,
+  // and take it back down when tiles start arriving again.
   if (isNetworkFailure(e.error)) {
-    showStatus(
-      'No connection — showing downloaded maps only. Areas without a downloaded region will be blank.',
-      'warn',
-      'offline-tiles',
-    );
+    status.setCondition('offline', {
+      message: 'No connection. Downloaded areas still work; everywhere else is blank.',
+      kind: 'warn',
+    });
     return;
   }
 
-  showStatus(`Map error: ${e.error?.message ?? 'unknown'} — see console`, 'error', 'map-error');
+  status.setCondition('map-error', {
+    message: `Something went wrong drawing the map: ${e.error?.message ?? 'unknown error'}`,
+    kind: 'error',
+  });
+});
+
+// Tiles arriving again is the only reliable signal that the connection is back:
+// `navigator.onLine` reports the OS link state and stays true behind a dead uplink, which
+// is exactly this app's situation (see isNetworkFailure above).
+map.on('sourcedata', (e) => {
+  if (e.isSourceLoaded) status.setCondition('offline', null);
 });
 
 map.on('load', () => {
@@ -285,7 +328,7 @@ const planner = new RoutePlanner({
     routeInProgress = summary.active || summary.following;
     routesBtn.classList.toggle('active', routeInProgress);
   },
-  onStatus: (message, kind) => showStatus(message, kind),
+  onStatus: (message, kind) => status.toast(message, { kind }),
 });
 
 const routesBtn = document.querySelector<HTMLButtonElement>('#routes-btn')!;
@@ -295,7 +338,10 @@ const routesUi = {
   panel: routePanel,
   sheet,
   onStatus: (message: string, kind: 'ok' | 'warn' | 'error') => {
-    showStatus(message, kind);
+    status.toast(message, { kind });
+  },
+  onUndoableStatus: (message: string, action: { label: string; onSelect(): void }) => {
+    status.toast(message, { action });
   },
 };
 
@@ -365,8 +411,10 @@ function showPeakSheet(peak: PeakProperties, lngLat: maplibregl.LngLat): void {
       lat: lngLat.lat,
       ...(typeof peak.ele === 'number' ? { ele: peak.ele } : {}),
     })
-      .then(() => showStatus(`Saved “${name}”`, 'ok'))
-      .catch((err: Error) => showStatus(`Could not save: ${err.message}`, 'error'));
+      .then(() => status.toast(`Saved “${name}”`))
+      .catch((err: Error) =>
+        status.toast(`Could not save “${name}”: ${err.message}`, { kind: 'error' }),
+      );
   });
 
   sheet.hidden = false;
@@ -389,7 +437,7 @@ document.querySelector('#regions-btn')!.addEventListener('click', () => {
     registry,
     container: sheet,
     onStatus: (message, kind) => {
-      showStatus(message, kind);
+      status.toast(message, { kind });
       // A completed download (or a delete) changes what detail is available, so
       // re-derive the ceiling from what is actually on disk rather than assuming.
       void restoreRegions().then(() => {
@@ -406,7 +454,7 @@ async function showPlacesSheet(): Promise<void> {
   try {
     places = await listPlaces();
   } catch (err) {
-    showStatus(`Could not read saved places: ${(err as Error).message}`, 'error');
+    status.toast(`Could not open saved places: ${(err as Error).message}`, { kind: 'error' });
     return;
   }
 
@@ -444,7 +492,18 @@ async function showPlacesSheet(): Promise<void> {
     remove.setAttribute('aria-label', `Delete ${place.name}`);
     remove.textContent = '×';
     remove.addEventListener('click', () => {
-      void deletePlace(place.id).then(() => showPlacesSheet());
+      // Deleted immediately, with a way back — rather than a confirmation dialog in front
+      // of every delete. savePlace takes an explicit id and savedAt, so undo restores the
+      // same record rather than a copy of it.
+      void deletePlace(place.id).then(() => {
+        void showPlacesSheet();
+        status.toast(`Deleted “${place.name}”`, {
+          action: {
+            label: 'Undo',
+            onSelect: () => void savePlace(place).then(() => void showPlacesSheet()),
+          },
+        });
+      });
     });
 
     item.append(goto, remove);
@@ -470,7 +529,7 @@ searchInput.addEventListener('input', () => {
 // the index, and the map should render first.
 searchInput.addEventListener('focus', () => {
   void search.load().catch((err: Error) => {
-    showStatus(`Search unavailable: ${err.message}`, 'warn');
+    status.toast(`Search is unavailable: ${err.message}`, { kind: 'warn' });
   });
 });
 
@@ -490,7 +549,7 @@ async function runSearch(query: string): Promise<void> {
   try {
     await search.load();
   } catch (err) {
-    showStatus(`Search unavailable: ${(err as Error).message}`, 'warn');
+    status.toast(`Search is unavailable: ${(err as Error).message}`, { kind: 'warn' });
     return;
   }
 
@@ -574,26 +633,35 @@ function renderLocationState(state: LocationState): void {
     planner.updatePosition([state.position.coords.longitude, state.position.coords.latitude]);
   }
 
+  // A location failure is a state, not an event: it stays true until the permission or
+  // the fix changes, and watchPosition re-reports it on every retry. As a toast that
+  // meant a new banner every few seconds.
   switch (state.status) {
     case 'locating':
       locateBtn.textContent = 'Locating…';
+      status.setCondition('location', null);
       break;
     case 'tracking':
       locateBtn.textContent = location.isFollowing() ? 'Following' : 'Locate';
+      status.setCondition('location', null);
       break;
     case 'denied':
       locateBtn.textContent = 'Locate';
-      showStatus(
-        'Location permission denied. Enable it in browser settings to see your position.',
-        'warn',
-      );
+      status.setCondition('location', {
+        message: 'ratmap cannot see your location. Allow it in your browser settings.',
+        kind: 'warn',
+      });
       break;
     case 'unavailable':
       locateBtn.textContent = 'Locate';
-      showStatus(`Location unavailable: ${state.message}`, 'warn');
+      status.setCondition('location', {
+        message: `No position fix yet: ${state.message}`,
+        kind: 'warn',
+      });
       break;
     default:
       locateBtn.textContent = 'Locate';
+      status.setCondition('location', null);
   }
 }
 
@@ -604,15 +672,21 @@ installWatcher.onChange(() => void renderStorageStatus());
 void renderStorageStatus();
 
 async function renderStorageStatus(): Promise<void> {
-  const status = await bootstrapStorage();
+  const storage = await bootstrapStorage();
 
-  if (status.supported && status.persisted) {
-    showStatus('Persistent storage granted — offline maps are safe to download.', 'ok');
+  // Nothing to say when it works. This used to announce "Persistent storage granted" on
+  // every single launch, which is a banner over the map for a state the user never has to
+  // do anything about.
+  if (storage.supported && storage.persisted) {
+    status.setCondition('storage', null);
     return;
   }
 
-  if (!status.supported) {
-    showStatus('Storage API unsupported — offline maps cannot be guaranteed here (C1).', 'warn');
+  if (!storage.supported) {
+    status.setCondition('storage', {
+      message: 'This browser can’t promise to keep downloaded maps, so downloads are off.',
+      kind: 'warn',
+    });
     return;
   }
 
@@ -620,37 +694,59 @@ async function renderStorageStatus(): Promise<void> {
   const capability = installWatcher.capability();
 
   if (capability.kind === 'prompt') {
-    const card = showStatus(`Install ratmap to keep offline maps. ${INSTALL_RATIONALE}`, 'warn');
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = 'Install';
-    button.addEventListener('click', () => {
-      void capability.prompt().then((outcome) => {
-        if (outcome === 'accepted') void renderStorageStatus();
-      });
+    status.setCondition('storage', {
+      message: 'Install ratmap to download maps for offline use.',
+      kind: 'warn',
+      action: {
+        label: 'Install',
+        onSelect: () => {
+          void capability.prompt().then((outcome) => {
+            if (outcome === 'accepted') void renderStorageStatus();
+          });
+        },
+      },
     });
-    card.append(button);
     return;
   }
 
   if (capability.kind === 'manual-ios') {
-    const card = showStatus(`Add ratmap to your Home Screen. ${INSTALL_RATIONALE}`, 'warn');
-    const steps = document.createElement('ol');
-    for (const step of IOS_INSTALL_STEPS) {
-      const li = document.createElement('li');
-      li.textContent = step;
-      steps.append(li);
-    }
-    card.append(steps);
+    status.setCondition('storage', {
+      message: 'Add ratmap to your Home Screen to download maps.',
+      kind: 'warn',
+      // The three Share-sheet steps are too long for a line over the map, and they used to
+      // sit there permanently as an ordered list. Behind a button they are available when
+      // wanted and gone the rest of the time.
+      action: { label: 'How', onSelect: showInstallSheet },
+    });
     return;
   }
 
-  showStatus(
-    isStandalone()
-      ? 'Installed, but the browser has not granted persistent storage. Downloads stay blocked (C1).'
-      : 'This browser will not guarantee offline storage. Downloads stay blocked (C1).',
-    'warn',
-  );
+  status.setCondition('storage', {
+    message: isStandalone()
+      ? 'Your browser hasn’t granted ratmap permanent storage yet, so downloads are off.'
+      : 'Downloads are off until ratmap is installed — a browser tab can’t keep maps safely.',
+    kind: 'warn',
+  });
+}
+
+function showInstallSheet(): void {
+  sheet.innerHTML = `
+    <button class="sheet-close" type="button" aria-label="Close">×</button>
+    <h2>Add ratmap to your Home Screen</h2>
+    <p class="sheet-lede"></p>
+    <ol class="install-steps"></ol>
+  `;
+  sheet.querySelector('.sheet-close')!.addEventListener('click', hideSheet);
+  sheet.querySelector('.sheet-lede')!.textContent = INSTALL_RATIONALE;
+
+  const steps = sheet.querySelector<HTMLOListElement>('.install-steps')!;
+  for (const step of IOS_INSTALL_STEPS) {
+    const item = document.createElement('li');
+    item.textContent = step;
+    steps.append(item);
+  }
+
+  sheet.hidden = false;
 }
 
 // --- App updates --------------------------------------------------------------------
@@ -674,66 +770,11 @@ if (import.meta.env.PROD) {
       // being applied reads as a stuck app.
       const reason =
         downloadsInFlight() > 0 ? 'when the download finishes' : 'when you finish your route';
-      const card = showStatus(`New version ready — it will load ${reason}.`, 'ok');
-
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = 'Reload now';
-      button.addEventListener('click', apply);
-      card.append(button);
+      status.setCondition('update', {
+        message: `A new version is ready. It will load ${reason}.`,
+        kind: 'ok',
+        action: { label: 'Reload now', onSelect: apply },
+      });
     },
   });
-}
-
-// --- Status panel -------------------------------------------------------------------
-
-/**
- * @param dedupeKey when given, repeat calls reuse the existing card and show a repeat
- *   count instead of stacking duplicates. Needed because MapLibre emits one error per
- *   failed tile — without this, going offline buries the map under identical banners.
- */
-function showStatus(
-  message: string,
-  kind: 'ok' | 'warn' | 'error',
-  dedupeKey?: string,
-): HTMLDivElement {
-  if (dedupeKey) {
-    const existing = statusPanel.querySelector<HTMLDivElement>(
-      `.status-card[data-key="${dedupeKey}"]`,
-    );
-    if (existing) {
-      const count = Number(existing.dataset.count ?? '1') + 1;
-      existing.dataset.count = String(count);
-      existing.querySelector('.status-count')!.textContent = `×${count}`;
-      return existing;
-    }
-  }
-
-  const el = document.createElement('div');
-  el.className = `status-card ${kind}`;
-  if (dedupeKey) {
-    el.dataset.key = dedupeKey;
-    el.dataset.count = '1';
-  }
-
-  const text = document.createElement('p');
-  text.textContent = message;
-  el.append(text);
-
-  if (dedupeKey) {
-    const count = document.createElement('span');
-    count.className = 'status-count';
-    el.append(count);
-  }
-
-  const dismiss = document.createElement('button');
-  dismiss.type = 'button';
-  dismiss.className = 'status-dismiss';
-  dismiss.setAttribute('aria-label', 'Dismiss');
-  dismiss.textContent = '×';
-  dismiss.addEventListener('click', () => el.remove());
-  el.append(dismiss);
-
-  statusPanel.prepend(el);
-  return el;
 }

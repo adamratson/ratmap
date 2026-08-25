@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   clearOpfs,
-  dismissStatusCards,
+  clearConditions,
   downloadFirstRegion,
   listOpfs,
   openRegionsSheet,
@@ -16,7 +16,7 @@ test.describe('offline regions', () => {
     await simulateInstalledPwa(context);
     await gotoApp(page);
     await clearOpfs(page);
-    await dismissStatusCards(page);
+    await clearConditions(page);
   });
 
   test('a downloaded region does not black out the rest of the map', async ({ page }) => {
@@ -119,8 +119,10 @@ test.describe('offline regions', () => {
     await gotoApp(cold);
 
     // MapLibre raises one error per failed tile; without deduping these buried the map.
-    const offlineCards = cold.locator('.status-card.warn', { hasText: /no connection/i });
-    await expect(offlineCards).toHaveCount(1, { timeout: 30_000 });
+    // As a keyed condition, the twentieth failure replaces the first rather than adding
+    // a twentieth banner.
+    const offline = cold.locator('#conditions .condition', { hasText: /no connection/i });
+    await expect(offline).toHaveCount(1, { timeout: 30_000 });
 
     await cold.close();
   });

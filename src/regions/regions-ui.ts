@@ -5,6 +5,9 @@ import { addRegionToMap, removeRegionFromMap } from './region-layers';
 import { evaluateGate, readStorage } from './storage-budget';
 import type { TileSourceRegistry } from '../tile-source-registry';
 
+/** How long a delete stays armed before reverting to its safe label. */
+const ARM_TIMEOUT_MS = 5000;
+
 export interface RegionsUiDeps {
   map: MLMap;
   registry: TileSourceRegistry;
@@ -114,13 +117,36 @@ async function renderRegionRow(
   progress.append(bar);
 
   if (status === 'downloaded') {
+    // Two taps, not one. This button sits in the same slot every other row uses for
+    // "Download", and the mistake costs a re-download of the whole region — which on a
+    // hill is not a mistake you can undo. The second tap names the size so the cost is
+    // visible at the moment of confirming.
     action.textContent = 'Delete';
     action.classList.add('danger');
+
+    let armTimer: ReturnType<typeof setTimeout> | null = null;
+    const disarm = (): void => {
+      if (armTimer !== null) clearTimeout(armTimer);
+      armTimer = null;
+      action.textContent = 'Delete';
+      action.classList.remove('armed');
+    };
+
     action.addEventListener('click', () => {
+      if (armTimer === null) {
+        action.textContent = `Delete ${formatBytes(region.totalBytes)}?`;
+        action.classList.add('armed');
+        // Reverts on its own: an armed delete left sitting there is a trap for the next
+        // tap, and the next tap is often someone scrolling back to this row.
+        armTimer = setTimeout(disarm, ARM_TIMEOUT_MS);
+        return;
+      }
+
+      disarm();
       void (async () => {
         removeRegionFromMap(deps.map, region);
         await deleteRegion(region);
-        deps.onStatus(`Deleted ${region.name}`, 'ok');
+        deps.onStatus(`Deleted ${region.name}. Download it again whenever you need it.`, 'ok');
         refresh();
       })();
     });

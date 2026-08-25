@@ -19,6 +19,11 @@ export interface RoutesUiDeps {
   /** The shared bottom sheet. */
   sheet: HTMLElement;
   onStatus(message: string, kind: 'ok' | 'warn' | 'error'): void;
+  /**
+   * Report something the user can take back. Distinct from {@link onStatus} because an
+   * undo has to outlive an ordinary confirmation and needs somewhere to put its button.
+   */
+  onUndoableStatus?(message: string, action: { label: string; onSelect(): void }): void;
 }
 
 // --- Planning panel -------------------------------------------------------------------
@@ -351,8 +356,16 @@ function routeRow(route: SavedRoute, deps: RoutesUiDeps): HTMLLIElement {
 
   const remove = buttonEl('×', () => {
     void deleteRoute(route.id).then(
-      () => void renderRoutesSheet(deps),
-      (err: Error) => onStatus(`Could not delete: ${err.message}`, 'error'),
+      () => {
+        void renderRoutesSheet(deps);
+        // saveRoute takes an explicit id and createdAt, so this restores the record
+        // rather than writing a duplicate of it.
+        deps.onUndoableStatus?.(`Deleted “${route.name}”`, {
+          label: 'Undo',
+          onSelect: () => void saveRoute(route).then(() => void renderRoutesSheet(deps)),
+        });
+      },
+      (err: Error) => onStatus(`Could not delete “${route.name}”: ${err.message}`, 'error'),
     );
   });
   remove.className = 'place-delete';

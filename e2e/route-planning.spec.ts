@@ -3,7 +3,7 @@ import {
   clearOpfs,
   waitForServiceWorkerControl,
   clickMapAt,
-  dismissStatusCards,
+  clearConditions,
   downloadFirstRegion,
   gotoApp,
   openRegionsSheet,
@@ -28,7 +28,7 @@ test.describe('route planning', () => {
     await simulateInstalledPwa(context);
     await gotoApp(page);
     await clearOpfs(page);
-    await dismissStatusCards(page);
+    await clearConditions(page);
   });
 
   test('places waypoints and draws a route with no region downloaded', async ({ page }) => {
@@ -60,7 +60,7 @@ test.describe('route planning', () => {
   test('routes along real paths from the downloaded region', async ({ page }) => {
     await openRegionsSheet(page);
     await downloadFirstRegion(page);
-    await dismissStatusCards(page);
+    await clearConditions(page);
 
     await showArea(page, BEN_NEVIS_AREA);
     await startNewRoute(page);
@@ -89,7 +89,7 @@ test.describe('route planning', () => {
     // for this number to land. Ben Nevis is 1345 m from a start near sea level.
     await openRegionsSheet(page);
     await downloadFirstRegion(page);
-    await dismissStatusCards(page);
+    await clearConditions(page);
 
     await showArea(page, BEN_NEVIS_AREA);
     await startNewRoute(page);
@@ -136,13 +136,13 @@ test.describe('route planning', () => {
     await nameField.fill('Ben Nevis test route');
     await page.locator('.route-save-form button').click();
 
-    await expect(page.locator('.status-card.ok')).toContainText('Ben Nevis test route');
+    await expect(page.locator('.toast')).toContainText('Ben Nevis test route');
 
     // Reopen from a fresh page: the record has to stand alone (C10), with no in-memory
     // state and no network.
     await page.reload();
     await page.locator('#map').waitFor();
-    await dismissStatusCards(page);
+    await clearConditions(page);
 
     await page.locator('#routes-btn').click();
     await expect(page.locator('.route-name')).toContainText('Ben Nevis test route');
@@ -170,7 +170,7 @@ test.describe('route planning', () => {
       buffer: Buffer.from(gpx),
     });
 
-    await expect(page.locator('.status-card.ok')).toContainText('Imported walk');
+    await expect(page.locator('.toast')).toContainText('Imported walk');
     await expect.poll(async () => (await plannerState(page)).coordCount).toBe(3);
 
     // An import must not be re-routed — the imported geometry is the route (C10).
@@ -218,7 +218,7 @@ test.describe('route planning', () => {
     // A fresh page, not a reload: this is the force-quit-and-relaunch case.
     const cold = await context.newPage();
     await gotoApp(cold);
-    await dismissStatusCards(cold);
+    await clearConditions(cold);
     await showArea(cold, BEN_NEVIS_AREA);
 
     await startNewRoute(cold);

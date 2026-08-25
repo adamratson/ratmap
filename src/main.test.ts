@@ -89,15 +89,36 @@ vi.mock('./saved-places', () => ({
   deletePlace: vi.fn().mockResolvedValue(undefined),
 }));
 
+/**
+ * jsdom ships no ResizeObserver. main.ts uses one to keep toasts clear of whichever
+ * bottom panel is open; the measurement itself is a layout concern jsdom cannot report on
+ * anyway, so a no-op stub is the honest stand-in.
+ */
+class ResizeObserverStub {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
 async function loadMain(): Promise<void> {
   document.body.innerHTML = '<div id="app"></div>';
   await import('./main');
   await vi.waitFor(() => {
-    if (!document.querySelector('.status-card')) throw new Error('status not rendered yet');
+    if (!document.querySelector('.condition')) throw new Error('status not rendered yet');
+  });
+}
+
+/** For the cases where storage is fine and so reports nothing at all. */
+async function loadMainQuietly(): Promise<void> {
+  document.body.innerHTML = '<div id="app"></div>';
+  await import('./main');
+  await vi.waitFor(() => {
+    if (!document.querySelector('#toasts')) throw new Error('app not mounted yet');
   });
 }
 
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   vi.resetModules();
   mapCtorSpy.mockClear();
   addProtocolSpy.mockClear();
@@ -157,19 +178,31 @@ describe('app bootstrap', () => {
     await loadMain();
     handlers.error?.[0]?.({ error: new Error('boom') });
 
-    expect(document.querySelector('.status-card.error')?.textContent).toContain('boom');
+    expect(document.querySelector('.condition.error')?.textContent).toContain('boom');
   });
 
-  it.each([
-    [{ supported: false }, /unsupported/i],
-    [{ supported: true, persisted: true }, /granted/i],
-  ] as const)('storage status %j -> banner matches %s', async (status, expected) => {
-    bootstrapStorageMock.mockResolvedValue(status);
+  it('says plainly that downloads are off when the browser cannot keep them', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: false });
 
     await loadMain();
 
-    const banner = document.querySelector('.status-card.warn, .status-card.ok');
-    expect(banner?.textContent).toMatch(expected);
+    const condition = document.querySelector('.condition.warn');
+    expect(condition?.textContent).toMatch(/downloads are off/i);
+    // Constraint ids belong in the spec, not over someone's map.
+    expect(condition?.textContent).not.toMatch(/\(C\d+\)/);
+  });
+
+  it('says nothing at all once storage is persistent', async () => {
+    // The working case used to announce itself on every launch, which is a banner over
+    // the map for a state nobody has to act on.
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+
+    await loadMainQuietly();
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('#conditions')?.hasAttribute('hidden')).toBe(true);
+    });
+    expect(document.querySelectorAll('.toast')).toHaveLength(0);
   });
 
   it('surfaces the catalog-only zoom ceiling instead of silently showing a stretched map', async () => {
@@ -200,10 +233,22 @@ describe('app bootstrap', () => {
       handlers.error?.[0]?.({ error: new TypeError('Failed to fetch') });
     }
 
-    const cards = document.querySelectorAll('.status-card.warn');
-    const offlineCards = [...cards].filter((c) => /no connection/i.test(c.textContent ?? ''));
-    expect(offlineCards).toHaveLength(1);
-    expect(offlineCards[0].querySelector('.status-count')?.textContent).toBe('×12');
+    const offline = [...document.querySelectorAll('.condition')].filter((c) =>
+      /no connection/i.test(c.textContent ?? ''),
+    );
+    expect(offline).toHaveLength(1);
+  });
+
+  it('takes the offline notice back down once tiles load again', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    handlers.error?.[0]?.({ error: new TypeError('Failed to fetch') });
+    expect(document.querySelector('.condition.warn')?.textContent).toMatch(/no connection/i);
+
+    handlers.sourcedata?.[0]?.({ isSourceLoaded: true });
+
+    expect(document.querySelector('#conditions')?.hasAttribute('hidden')).toBe(true);
   });
 
   it('distinguishes a real map fault from lost connection', async () => {
@@ -214,10 +259,8 @@ describe('app bootstrap', () => {
     // real faults behind a reassuring message.
     handlers.error?.[0]?.({ error: new TypeError("layer 'x' does not exist") });
 
-    expect(document.querySelector('.status-card.error')?.textContent).toMatch(/does not exist/);
-    expect(document.querySelector('.status-card.warn')?.textContent ?? '').not.toMatch(
-      /no connection/i,
-    );
+    expect(document.querySelector('.condition.error')?.textContent).toMatch(/does not exist/);
+    expect(document.body.textContent ?? '').not.toMatch(/no connection/i);
   });
 
   it('walks iOS users through Add to Home Screen when storage is not persisted (C2)', async () => {
@@ -228,11 +271,17 @@ describe('app bootstrap', () => {
 
     await loadMain();
 
-    const banner = document.querySelector('.status-card.warn');
-    expect(banner?.textContent).toMatch(/Home Screen/i);
-    // The rationale must be present: install is what *gates* the storage guarantee,
-    // so the UI has to say why rather than nagging.
-    expect(banner?.textContent).toMatch(/evicted|guarantee/i);
-    expect(banner?.querySelectorAll('ol li').length).toBeGreaterThan(0);
+    const condition = document.querySelector('.condition.warn')!;
+    expect(condition.textContent).toMatch(/Home Screen/i);
+
+    // The three Share-sheet steps no longer sit permanently over the map, so they have to
+    // be one tap away — and the rationale has to come with them, because install is what
+    // *gates* the storage guarantee and the UI must say why rather than nagging.
+    condition.querySelector<HTMLButtonElement>('.condition-action')!.click();
+
+    const sheet = document.querySelector<HTMLElement>('#sheet')!;
+    expect(sheet.hidden).toBe(false);
+    expect(sheet.textContent).toMatch(/evicted|guarantee/i);
+    expect(sheet.querySelectorAll('.install-steps li').length).toBeGreaterThan(0);
   });
 });

@@ -87,10 +87,18 @@ export async function clearOpfs(page: Page): Promise<void> {
   });
 }
 
-/** Status cards cover the map and the HUD; clear them before interacting. */
-export async function dismissStatusCards(page: Page): Promise<void> {
+/**
+ * Clear whatever is currently over the map.
+ *
+ * Toasts expire on their own, so this only has to deal with conditions — which are
+ * declared by the app rather than dismissed by the user, and so are cleared through the
+ * status centre rather than by clicking anything.
+ */
+export async function clearConditions(page: Page): Promise<void> {
   await page.evaluate(() => {
-    document.querySelectorAll<HTMLButtonElement>('.status-dismiss').forEach((b) => b.click());
+    document.querySelectorAll<HTMLElement>('#conditions .condition').forEach((el) => el.remove());
+    const host = document.querySelector<HTMLElement>('#conditions');
+    if (host) host.hidden = true;
   });
 }
 

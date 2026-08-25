@@ -510,7 +510,8 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  /* Sized for its tallest detent; the transform does the rest. */
+  /* Sized for its tallest detent; the transform does the rest. Kept in CSS as well as in
+     sheet.ts so the sheet has a sane height before the first layout pass. */
   height: 92vh;
   z-index: 4;
   display: flex;
@@ -564,11 +565,16 @@ body {
   padding: 0 0.9rem calc(0.9rem + env(safe-area-inset-bottom));
 }
 
-.sheet-body {
+.sheet-scroll {
   flex: 1;
   min-height: 0;
-  padding: 0 1rem calc(1rem + env(safe-area-inset-bottom));
   -webkit-overflow-scrolling: touch;
+}
+
+/* The content itself, at its natural height — which is what the middle detent is sized
+   from, so it must not be the element that stretches. */
+.sheet-body {
+  padding: 0 1rem calc(1rem + env(safe-area-inset-bottom));
 }
 
 .sheet-body:empty {
@@ -577,7 +583,7 @@ body {
 
 /* At rest the body is off-screen anyway; hiding it keeps its contents out of the tab
    order and away from a screen reader. */
-#sheet.at-peek .sheet-body {
+#sheet.at-peek .sheet-scroll {
   visibility: hidden;
 }
 
@@ -884,18 +890,21 @@ body {
 /* Attribution is legally required — never let it collapse to nothing. It only has to
    stay *readable* against a dark map, which is what the tokens do; nothing here hides or
    shrinks it. */
-.maplibregl-ctrl-attrib,
-.maplibregl-ctrl-attrib.maplibregl-compact {
+/* Two class names, not one: MapLibre's own rule is `.maplibregl-ctrl.maplibregl-ctrl-attrib`,
+   which outranks a single-class selector. Getting this wrong left the attribution's colour
+   themed and its background not — light text on a white box, i.e. the legally required
+   credit rendered invisible in dark mode. */
+.maplibregl-ctrl.maplibregl-ctrl-attrib {
   font-size: 11px;
   background: var(--ctrl-surface);
   color: var(--ctrl-text);
 }
 
-.maplibregl-ctrl-attrib a {
+.maplibregl-ctrl.maplibregl-ctrl-attrib a {
   color: var(--ctrl-text);
 }
 
-.maplibregl-ctrl-scale {
+.maplibregl-ctrl.maplibregl-ctrl-scale {
   background: var(--ctrl-surface);
   color: var(--ctrl-text);
   border-color: var(--ctrl-border);

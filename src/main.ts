@@ -129,13 +129,13 @@ let planMode: 'Planning' | 'Following' = 'Planning';
  * does so on every waypoint drag — must not haul the sheet back up over a map the user
  * has just dragged it off.
  */
-function openView(name: View, render: (body: HTMLElement) => void, detent: Detent = 'half'): void {
+function openView(name: View, render: (body: HTMLElement) => void, detent: Detent = 'content'): void {
   const entering = view !== name;
   view = name;
   sheet.body.setAttribute('aria-label', VIEW_LABEL[name]);
   render(sheet.body);
   if (entering) {
-    sheet.body.scrollTop = 0;
+    sheet.scrollToTop();
     sheet.open(detent);
   }
   renderChips();
@@ -173,7 +173,7 @@ function renderChips(): void {
   // at peek, and a tap on the map silently means something different.
   if (view === 'plan') {
     const chip = chipEl(planMode, true, () =>
-      sheet.detent() === 'peek' ? sheet.open('half') : sheet.collapse(),
+      sheet.detent() === 'peek' ? sheet.open('content') : sheet.collapse(),
     );
     chip.classList.add('chip-mode');
     chipsHost.append(chip);

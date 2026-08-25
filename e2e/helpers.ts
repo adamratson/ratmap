@@ -200,7 +200,7 @@ export async function plannerState(page: Page): Promise<PlannerProbe> {
 /** Open one of the sheet's destinations from its peek row. */
 export async function openChip(page: Page, label: string): Promise<void> {
   await page.locator('#chips .chip', { hasText: label }).click();
-  await page.locator('#sheet.at-half, #sheet.at-full').waitFor();
+  await page.locator('#sheet.at-content, #sheet.at-full').waitFor();
 }
 
 /** Open the routes sheet and start a fresh route. */

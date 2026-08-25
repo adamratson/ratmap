@@ -12,13 +12,25 @@
 // controls you reach for first, which also moves them from the top of the screen into
 // thumb reach. Dragging down always gives the map back — the gesture people already try.
 
-export type Detent = 'peek' | 'half' | 'full';
+export type Detent = 'peek' | 'content' | 'full';
 
 /** Ordered shallowest-first, i.e. by how much of the screen the sheet takes. */
-export const DETENTS: readonly Detent[] = ['peek', 'half', 'full'] as const;
+export const DETENTS: readonly Detent[] = ['peek', 'content', 'full'] as const;
 
-/** Fraction of the viewport each detent shows. `peek` is measured, not fixed. */
-const DETENT_FRACTION: Record<Exclude<Detent, 'peek'>, number> = { half: 0.5, full: 0.92 };
+/** How much of the viewport the sheet may take when fully open. */
+const FULL_FRACTION = 0.92;
+
+/**
+ * Bounds on the middle detent, as fractions of the viewport.
+ *
+ * It is sized to its content rather than fixed at half the screen. A fixed half was worse
+ * than the panels it replaced for the common case — a summit's name, height and
+ * coordinates need about a fifth of a phone screen, and taking half of it to show them is
+ * the same mistake the old layout made, just in a nicer wrapper. The cap stops a long
+ * list from opening as a near-fullscreen wall.
+ */
+const CONTENT_MIN_FRACTION = 0.24;
+const CONTENT_MAX_FRACTION = 0.62;
 
 /**
  * How far ahead of itself a flick is projected before snapping.
@@ -75,8 +87,17 @@ export interface BottomSheetOptions {
 export class BottomSheet {
   /** Always visible. Holds the controls that must never be more than a glance away. */
   readonly peek: HTMLElement;
-  /** Scrollable. Whatever the sheet is currently showing. */
+  /** Whatever the sheet is currently showing. Callers render into this. */
   readonly body: HTMLElement;
+
+  /**
+   * The scrolling box around {@link body}.
+   *
+   * Separate, because the middle detent is sized from how tall the content actually is —
+   * and a `flex: 1` element reports its own stretched box, not its content, so measuring
+   * the scroller would peg every view to the cap.
+   */
+  private readonly scroller: HTMLElement;
 
   private readonly element: HTMLElement;
   private readonly onLayout?: (detent: Detent) => void;
@@ -99,14 +120,20 @@ export class BottomSheet {
     this.element.innerHTML = `
       <div class="sheet-grip" aria-hidden="true"></div>
       <div class="sheet-peek"></div>
-      <div class="sheet-body" id="sheet-body" role="region" tabindex="-1"></div>
+      <div class="sheet-scroll">
+        <div class="sheet-body" id="sheet-body" role="region" tabindex="-1"></div>
+      </div>
     `;
     this.peek = this.element.querySelector<HTMLElement>('.sheet-peek')!;
+    this.scroller = this.element.querySelector<HTMLElement>('.sheet-scroll')!;
     this.body = this.element.querySelector<HTMLElement>('.sheet-body')!;
 
-    // The peek row's height is content-driven — it changes when the planner adds a chip —
-    // and it defines the resting position, so it has to be re-measured rather than fixed.
-    new ResizeObserver(() => this.applyDetent(this.current, false)).observe(this.peek);
+    // Both rows are content-driven. The peek row changes when the planner adds a chip;
+    // the body changes on every render, and the middle detent is sized from it — so a
+    // route that grows an elevation profile has to be able to grow the sheet with it.
+    const remeasure = new ResizeObserver(() => this.applyDetent(this.current, false));
+    remeasure.observe(this.peek);
+    remeasure.observe(this.body);
     window.addEventListener('resize', () => this.applyDetent(this.current, false));
 
     this.element.addEventListener('pointerdown', (event) => this.onPointerDown(event));
@@ -138,6 +165,11 @@ export class BottomSheet {
     this.applyDetent(detent, true);
   }
 
+  /** Scroll the sheet's contents back to the top — a new view starts at its beginning. */
+  scrollToTop(): void {
+    this.scroller.scrollTop = 0;
+  }
+
   /** Back to resting. There is no "closed": the peek row is the app's main controls. */
   collapse(): void {
     this.open('peek');
@@ -146,10 +178,25 @@ export class BottomSheet {
   /** Offset, in px from fully open, for each detent at the current viewport size. */
   private offsets(): Record<Detent, number> {
     const height = this.element.offsetHeight;
-    const peekHeight = this.peek.offsetHeight + this.gripHeight();
+    const viewport = window.innerHeight;
+    const chrome = this.peek.offsetHeight + this.gripHeight();
+    const peek = Math.max(0, height - chrome);
+
+    const wanted = chrome + this.body.offsetHeight;
+    const content = Math.max(
+      0,
+      height -
+        Math.min(
+          Math.max(wanted, viewport * CONTENT_MIN_FRACTION),
+          viewport * CONTENT_MAX_FRACTION,
+        ),
+    );
+
     return {
-      peek: Math.max(0, height - peekHeight),
-      half: Math.max(0, height - window.innerHeight * DETENT_FRACTION.half),
+      peek,
+      // Never below the resting position: a view whose content is shorter than the peek
+      // row would otherwise open by moving the sheet *down*.
+      content: Math.min(content, peek),
       full: 0,
     };
   }
@@ -172,7 +219,8 @@ export class BottomSheet {
     }
     // Only scrollable once there is somewhere to scroll: at peek, a scrollable body
     // swallows the drag that is trying to open the sheet.
-    this.body.style.overflowY = detent === 'peek' ? 'hidden' : 'auto';
+    this.scroller.style.overflowY = detent === 'peek' ? 'hidden' : 'auto';
+    this.element.style.height = `${FULL_FRACTION * 100}vh`;
 
     if (notify) this.onLayout?.(detent);
   }
@@ -187,7 +235,7 @@ export class BottomSheet {
   private canDragFrom(target: EventTarget | null): boolean {
     if (!(target instanceof Element)) return false;
     if (target.closest('input, button, a, select, textarea, label')) return false;
-    if (this.body.contains(target) && this.body.scrollTop > 0) return false;
+    if (this.scroller.contains(target) && this.scroller.scrollTop > 0) return false;
     return true;
   }
 

@@ -25,7 +25,6 @@ import { PlacesSearch, type SearchResult } from './search';
 import { describeDetailLimit } from './detail-limit';
 import { ThemeController, nextPreference, type Theme, type ThemePreference } from './theme';
 import { DebugOverlay, isDebugOverlayEnabled, setDebugOverlayEnabled } from './debug';
-import { syncTrueHeight } from './viewport';
 import { isCoarsePointer } from './pointer';
 import {
   bestAvailableZoom,
@@ -55,15 +54,7 @@ const registry = TileSourceRegistry.install();
 registry.addRemote(BASEMAP_PMTILES_URL);
 if (!USE_FALLBACK_TERRAIN) registry.addRemote(TERRAIN_PMTILES_URL);
 
-const app = document.querySelector<HTMLDivElement>('#app')!;
-
-// Gives #app an explicit, correct height instead of trusting `bottom: 0`/`inset: 0`'s own
-// resolution — proven wrong by 59pt on a real device. Before anything below measures
-// #app or #sheet, or draws the map to whatever height #app currently has. See
-// src/viewport.ts for the full account.
-syncTrueHeight(app);
-
-app.innerHTML = `
+document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div id="map"></div>
   <div id="conditions" hidden></div>
   <button id="detail-notice" type="button" hidden></button>

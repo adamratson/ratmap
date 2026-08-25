@@ -245,26 +245,6 @@ describe('RouteDraft.coordinates', () => {
   });
 });
 
-describe('RouteDraft.setCosting', () => {
-  it('invalidates every leg, because that is the point', () => {
-    const draft = new RouteDraft();
-    draft.add(A);
-    draft.add(B);
-    computeAll(draft);
-    draft.setCosting('cycling');
-    expect(draft.pendingLegs()).toEqual([0]);
-  });
-
-  it('does nothing when set to the mode already in use', () => {
-    const draft = new RouteDraft();
-    draft.add(A);
-    draft.add(B);
-    computeAll(draft);
-    draft.setCosting('walking');
-    expect(draft.pendingLegs()).toEqual([]);
-  });
-});
-
 describe('RouteDraft state round-trip', () => {
   it('restores to an independent copy', () => {
     const draft = new RouteDraft();

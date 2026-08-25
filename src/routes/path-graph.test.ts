@@ -113,19 +113,9 @@ describe('PathGraph.route', () => {
     graph.addLine(line([A, detourNorth, C], { kind: 'path', kindDetail: 'path' }));
     graph.addLine(line([A, B, C], { kind: 'major_road', kindDetail: null }));
 
-    const leg = graph.routeBetween(A, C, { costing: 'walking' })!;
+    const leg = graph.routeBetween(A, C)!;
     expect(leg).not.toBeNull();
     expect(leg.distanceM).toBeGreaterThan(distanceMetres(A, C));
-  });
-
-  it('prefers the road over a footway on a bike', () => {
-    const graph = new PathGraph(WORLD);
-    const detourNorth: LngLat = [-5.0, 56.7925];
-    graph.addLine(line([A, detourNorth, C], { kind: 'path', kindDetail: 'footway' }));
-    graph.addLine(line([A, B, C], { kind: 'minor_road', kindDetail: null }));
-
-    const leg = graph.routeBetween(A, C, { costing: 'cycling' })!;
-    expect(leg.distanceM).toBeCloseTo(distanceMetres(A, B) + distanceMetres(B, C), 0);
   });
 
   it('reports the names of the ways used', () => {

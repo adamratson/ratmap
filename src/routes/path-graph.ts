@@ -12,15 +12,12 @@ import { globalToLngLat, lngLatToGlobal, type PathLine } from './path-tiles';
 // At the scale this runs at (one route leg, a few hundred tiles) plain Dijkstra over
 // every vertex is fast enough to not be worth the complexity.
 
-/** How the network is weighted. Straight distance is the same either way. */
-export type Costing = 'walking' | 'cycling';
-
 /**
  * Cost multipliers on ground distance, by Protomaps `kind` / `kind_detail`.
  *
  * These are travel *preferences*, not impossibilities — a route may use anything in the
  * graph if that is genuinely the only way through. Walking prefers paths and tolerates
- * lanes; cycling inverts most of that and treats steps as something you carry a bike up.
+ * lanes.
  *
  * Defensible defaults rather than a settled model — the same status as the contour and
  * path styling in `region-layers.ts` (§8.3). Tuning them changes which of two parallel
@@ -40,22 +37,8 @@ const WALKING_COST: Record<string, number> = {
   major_road: 2.2,
 };
 
-const CYCLING_COST: Record<string, number> = {
-  cycleway: 0.85,
-  track: 1.2,
-  bridleway: 1.4,
-  path: 1.6,
-  footway: 2.5,
-  // Not barred: a short flight between two rideable sections is a normal thing to push up.
-  steps: 6,
-  minor_road: 1,
-  medium_road: 1.2,
-  major_road: 1.8,
-};
-
-function costMultiplier(kind: string, detail: string | null, costing: Costing): number {
-  const table = costing === 'cycling' ? CYCLING_COST : WALKING_COST;
-  return table[detail ?? ''] ?? table[kind] ?? 1.5;
+function costMultiplier(kind: string, detail: string | null): number {
+  return WALKING_COST[detail ?? ''] ?? WALKING_COST[kind] ?? 1.5;
 }
 
 /**
@@ -381,20 +364,20 @@ export class PathGraph {
    * leaves the downloaded region are genuinely unconnected in this graph, and the planner
    * answers that with a straight-line leg (C11) rather than refusing the waypoint.
    */
-  route(startNode: number, endNode: number, costing: Costing = 'walking'): RouteLeg | null {
+  route(startNode: number, endNode: number): RouteLeg | null {
     this.bridgeGaps();
 
     if (startNode === endNode) {
       return { coords: [this.nodeLngLat(startNode)], distanceM: 0, wayNames: [] };
     }
 
-    const { cost, cameFromEdge } = this.dijkstra(startNode, costing, endNode);
+    const { cost, cameFromEdge } = this.dijkstra(startNode, endNode);
     if (!Number.isFinite(cost[endNode])) return null;
     return this.reconstructPath(startNode, endNode, cameFromEdge);
   }
 
   /**
-   * Single-source Dijkstra from `startNode`, weighted by `costing`.
+   * Single-source Dijkstra from `startNode`.
    *
    * Returns the full shortest-path tree (cost to every reached node, plus the edge each
    * arrived by) rather than one distance — `routeBetween` needs to compare several
@@ -404,7 +387,6 @@ export class PathGraph {
    */
   private dijkstra(
     startNode: number,
-    costing: Costing,
     target?: number,
   ): { cost: Float64Array; cameFromEdge: Int32Array } {
     const cost = new Float64Array(this.nodeX.length).fill(Infinity);
@@ -427,8 +409,7 @@ export class PathGraph {
 
         const nextCost =
           cost[node] +
-          this.edgeLengthM[edge] *
-            costMultiplier(this.edgeKind[edge], this.edgeDetail[edge], costing);
+          this.edgeLengthM[edge] * costMultiplier(this.edgeKind[edge], this.edgeDetail[edge]);
 
         if (nextCost < cost[next]) {
           cost[next] = nextCost;
@@ -482,16 +463,11 @@ export class PathGraph {
    * pair produced a 2.4 km route between two points 200 m apart, and a pair 12 m worse on
    * snap distance produced the 190 m route that was obviously the right one.
    */
-  routeBetween(
-    from: LngLat,
-    to: LngLat,
-    options: { costing?: Costing; maxSnapM?: number } = {},
-  ): RouteLeg | null {
+  routeBetween(from: LngLat, to: LngLat, options: { maxSnapM?: number } = {}): RouteLeg | null {
     // Must happen before the component check below, not just inside route(): bridging can
     // merge the very components this method is about to compare.
     this.bridgeGaps();
 
-    const costing = options.costing ?? 'walking';
     const maxSnapM = options.maxSnapM ?? 150;
     const startCandidates = this.nearestCandidates(from, maxSnapM, SNAP_CANDIDATE_LIMIT);
     const endCandidates = this.nearestCandidates(to, maxSnapM, SNAP_CANDIDATE_LIMIT);
@@ -505,7 +481,7 @@ export class PathGraph {
       // running Dijkstra just to find every distance is Infinity.
       if (!endCandidates.some((e) => this.find(e.id) === startRoot)) continue;
 
-      const { cost, cameFromEdge } = this.dijkstra(s.id, costing);
+      const { cost, cameFromEdge } = this.dijkstra(s.id);
       for (const e of endCandidates) {
         const routeCostM = cost[e.id];
         if (!Number.isFinite(routeCostM)) continue;

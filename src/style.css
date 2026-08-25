@@ -1059,28 +1059,6 @@ body {
   font-size: 1rem;
 }
 
-.route-costing {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.route-costing button {
-  min-height: 2.25rem;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 0.4rem;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.route-costing button.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--surface);
-}
-
 .route-hint,
 .route-note {
   margin: 0.5rem 0 0;

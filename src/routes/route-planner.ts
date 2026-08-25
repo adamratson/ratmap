@@ -1,7 +1,6 @@
 import maplibregl, { type Map as MLMap, type MapMouseEvent } from 'maplibre-gl';
 import type { LngLat } from './geo';
 import { boundsOf, formatDistance, pathLengthMetres } from './geo';
-import type { Costing } from './path-graph';
 import { OfflineRouter } from './router';
 import { RouteDraft, type LegSlot, type Waypoint } from './route-model';
 import {
@@ -29,7 +28,6 @@ import type { TileSourceRegistry } from '../tile-source-registry';
 
 export interface RouteSummary {
   active: boolean;
-  costing: Costing;
   waypointCount: number;
   distanceM: number;
   /** Legs still being computed. Non-zero means the figures below are partial. */
@@ -57,7 +55,6 @@ export interface LoadableRoute {
   coords: LngLat[];
   waypoints?: Waypoint[];
   legs?: LegSlot[];
-  costing?: Costing;
 }
 
 export interface RoutePlannerOptions {
@@ -230,11 +227,6 @@ export class RoutePlanner {
     return true;
   }
 
-  setCosting(costing: Costing): void {
-    this.draft.setCosting(costing);
-    this.afterEdit();
-  }
-
   undo(): void {
     if (!this.draft.undo()) return;
     this.afterEdit();
@@ -268,7 +260,6 @@ export class RoutePlanner {
       this.draft = new RouteDraft({
         waypoints: route.waypoints!,
         legs: route.legs!,
-        costing: route.costing ?? 'walking',
       });
     } else {
       // No editing state — an import, or a record written before legs were stored. The
@@ -298,7 +289,6 @@ export class RoutePlanner {
             wayNames: [],
           },
         ],
-        costing: route.costing ?? 'walking',
       });
     }
 
@@ -380,7 +370,6 @@ export class RoutePlanner {
         if (!ends) break;
 
         const leg = await this.router.computeLeg(ends[0], ends[1], {
-          costing: this.draft.costing,
           signal: controller.signal,
         });
 
@@ -583,7 +572,6 @@ export class RoutePlanner {
   summary(): RouteSummary {
     return {
       active: this.active,
-      costing: this.draft.costing,
       waypointCount: this.draft.waypointCount,
       distanceM: this.draft.totalDistanceM,
       pendingLegs: this.draft.pendingLegs().length,

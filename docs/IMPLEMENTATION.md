@@ -7,8 +7,8 @@ Each one exists because the obvious approach fails, usually silently.
 pointing at it. (Original copy: `plans/harmonic-booping-sprout.md`.)
 
 **Product:** offline-first OpenStreetMap mountain map, delivered as an installable PWA for
-iOS and Android. Map viewer → offline region download → hiking/cycling route planner with
-GPX. Not turn-by-turn navigation, not background track recording (see §7).
+iOS and Android. Map viewer → offline region download → hiking route planner with GPX. Not
+turn-by-turn navigation, not background track recording (see §7).
 
 **Why PWA over native:** MapLibre GL JS is the reference implementation and ahead of
 Native; PMTiles in a browser is the format's native habitat; `queryTerrainElevation`
@@ -507,8 +507,8 @@ kind_detail=path`, with its name.
 - **`src/routes/path-graph.ts`** — every vertex is a node (a junction in tile geometry
   *is* a shared vertex, so contracting them would have to reconstruct what it discarded),
   with a sub-metre merge tolerance for the seam case, and Dijkstra over cost multipliers
-  per `kind`/`kind_detail`. `walking` and `cycling` weightings, replacing what Valhalla's
-  `pedestrian`/`bicycle` costing was for.
+  per `kind`/`kind_detail`, replacing what Valhalla's `pedestrian` costing was for. Walking
+  is the only mode — a `cycling` table existed briefly and was removed (2026-08-25).
 - **`src/routes/router.ts`** — keeps the interface the Valhalla client was going to have:
   async, cancellable by `AbortSignal`, and free to fail. C11 is the reason it never
   rejects for a routing failure — an unroutable leg comes back as an explicitly-marked

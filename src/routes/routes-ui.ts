@@ -52,27 +52,12 @@ function planSection(
 ): HTMLElement {
   const section = el('div', 'route-panel-body');
 
-  const header = el('div', 'route-panel-header');
-  header.append(el('h3', 'route-panel-title', 'Plan a route'));
-
-  const modes = el('div', 'route-costing');
-  for (const [costing, label] of [
-    ['walking', 'Walk'],
-    ['cycling', 'Bike'],
-  ] as const) {
-    const button = buttonEl(label, () => planner.setCosting(costing));
-    button.classList.toggle('active', summary.costing === costing);
-    modes.append(button);
-  }
-  header.append(modes);
-  section.append(header);
-
   if (summary.waypointCount === 0) {
     section.append(
       el(
         'p',
         'route-hint',
-        'Tap the map to drop waypoints. Tap the line to add one in between, drag a marker to move it, press and hold one to remove it. Drag this sheet down to see more map.',
+        'Tap the map to drop waypoints. Tap the line to add one in between, drag a marker to move it, press and hold one to remove it.',
       ),
     );
   }
@@ -278,7 +263,6 @@ async function persist(
   const saved = await saveRoute({
     ...(planner.getLoadedRouteId() ? { id: planner.getLoadedRouteId()! } : {}),
     name,
-    costing: draft.costing,
     // C10: the complete coordinate array, not a reference to anything that would have to
     // be recomputed to render it.
     coords: draft.coordinates(),
@@ -298,7 +282,6 @@ async function persist(
     coords: saved.coords,
     waypoints: saved.waypoints,
     legs: saved.legs,
-    costing: saved.costing,
   });
   void deps;
   return saved;
@@ -366,7 +349,6 @@ function routeRow(route: SavedRoute, deps: RoutesUiDeps): HTMLLIElement {
       coords: route.coords,
       waypoints: route.waypoints,
       legs: route.legs,
-      costing: route.costing,
     });
     planner.activate();
     deps.onPlanStarted();

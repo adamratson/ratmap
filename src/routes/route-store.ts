@@ -1,6 +1,5 @@
 import { newId, ROUTES_STORE, tx } from '../db';
 import type { LngLat } from './geo';
-import type { Costing } from './path-graph';
 import type { LegSlot, Waypoint } from './route-model';
 
 // Saved routes, local-first (C10).
@@ -20,7 +19,6 @@ import type { LegSlot, Waypoint } from './route-model';
 export interface SavedRoute {
   id: string;
   name: string;
-  costing: Costing;
   /** The complete route geometry, start to finish (C10). Never derived at read time. */
   coords: LngLat[];
   distanceM: number;

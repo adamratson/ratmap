@@ -1,6 +1,5 @@
 import { distanceMetres, nearestPointOnPath, type LngLat } from './geo';
 import type { ComputedLeg } from './router';
-import type { Costing } from './path-graph';
 
 // The route being edited, as plain data. No map, no router, no storage — so the editing
 // rules (what a drag invalidates, what undo restores, where an inserted waypoint goes) are
@@ -32,7 +31,6 @@ export type LegSlot = ComputedLeg | null;
 export interface RouteDraftState {
   waypoints: Waypoint[];
   legs: LegSlot[];
-  costing: Costing;
 }
 
 /** How many edits can be undone. Deep snapshots, so this is a memory bound too. */
@@ -47,23 +45,10 @@ export function newWaypointId(): string {
 export class RouteDraft {
   private waypoints: Waypoint[] = [];
   private legs: LegSlot[] = [];
-  private costingMode: Costing = 'walking';
   private readonly undoStack: RouteDraftState[] = [];
 
   constructor(state?: Partial<RouteDraftState>) {
-    if (state) this.restore({ waypoints: [], legs: [], costing: 'walking', ...state });
-  }
-
-  get costing(): Costing {
-    return this.costingMode;
-  }
-
-  /** Changing costing invalidates every leg — the whole point is that it reroutes. */
-  setCosting(costing: Costing): void {
-    if (costing === this.costingMode) return;
-    this.snapshot();
-    this.costingMode = costing;
-    this.legs = this.legs.map(() => null);
+    if (state) this.restore({ waypoints: [], legs: [], ...state });
   }
 
   getWaypoints(): Waypoint[] {
@@ -217,7 +202,6 @@ export class RouteDraft {
     if (!previous) return false;
     this.waypoints = previous.waypoints;
     this.legs = previous.legs;
-    this.costingMode = previous.costing;
     return true;
   }
 
@@ -253,7 +237,6 @@ export class RouteDraft {
     return {
       waypoints: this.getWaypoints(),
       legs: this.legs.map((leg) => (leg ? { ...leg, coords: leg.coords.map(copyCoord) } : null)),
-      costing: this.costingMode,
     };
   }
 
@@ -262,7 +245,6 @@ export class RouteDraft {
     this.legs = state.legs.map((leg) =>
       leg ? { ...leg, coords: leg.coords.map(copyCoord) } : null,
     );
-    this.costingMode = state.costing;
   }
 
   private invalidateAround(index: number): void {

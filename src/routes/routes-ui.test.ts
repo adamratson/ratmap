@@ -14,7 +14,6 @@ function deps(container: HTMLElement) {
 
 const BASE: RouteSummary = {
   active: true,
-  costing: 'walking',
   waypointCount: 2,
   distanceM: 8200,
   pendingLegs: 0,

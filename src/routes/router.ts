@@ -1,6 +1,6 @@
 import type { PMTiles } from 'pmtiles';
 import { boundsOf, distanceMetres, pathLengthMetres, type Bbox, type LngLat } from './geo';
-import { PathGraph, type Costing, type RouteLeg } from './path-graph';
+import { PathGraph, type RouteLeg } from './path-graph';
 import { decodePathLines, tilesForBbox, type PathLine, type TileCoord } from './path-tiles';
 import type { Region } from '../regions/manifest';
 import type { TileSourceRegistry } from '../tile-source-registry';
@@ -64,7 +64,6 @@ export interface ComputedLeg {
 }
 
 export interface RouteRequest {
-  costing?: Costing;
   signal?: AbortSignal;
 }
 
@@ -123,10 +122,7 @@ export class OfflineRouter {
     }
 
     const graph = await this.buildGraph(archive, region, tiles, request.signal);
-    const leg = graph.routeBetween(from, to, {
-      costing: request.costing ?? 'walking',
-      maxSnapM: MAX_SNAP_M,
-    });
+    const leg = graph.routeBetween(from, to, { maxSnapM: MAX_SNAP_M });
 
     if (!leg) {
       return straight('No connected path between these points in the downloaded map.');

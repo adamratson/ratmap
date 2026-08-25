@@ -75,7 +75,7 @@ describe.skipIf(!existsSync(ARCHIVE))('routing over a real region archive', () =
 
     expect(graph.nodeCount).toBeGreaterThan(100);
 
-    const leg = graph.routeBetween(ACHINTEE, SUMMIT, { costing: 'walking' })!;
+    const leg = graph.routeBetween(ACHINTEE, SUMMIT)!;
     expect(leg).not.toBeNull();
 
     // The pony track is about 7.5 km each way. A route materially shorter than the

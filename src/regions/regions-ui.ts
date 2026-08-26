@@ -3,6 +3,7 @@ import { fetchManifest, formatBytes, type Region } from './manifest';
 import {
   deleteRegion,
   downloadRegion,
+  downloadsInFlight,
   regionStatuses,
   DownloadCancelled,
   type RegionState,
@@ -25,6 +26,15 @@ const NEARBY_COUNT = 6;
 
 /** Cap on search results: a one-letter query matches half the planet. */
 const MAX_RESULTS = 40;
+
+/**
+ * Detaches the previous render's map listener.
+ *
+ * The sheet re-renders itself after every download and delete, and each render subscribes
+ * to the map — without this they would stack up, every one of them redrawing the same
+ * list on every pan.
+ */
+let stopFollowingMap: (() => void) | null = null;
 
 export interface RegionsUiDeps {
   map: MLMap;
@@ -109,9 +119,20 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   const statuses = await regionStatuses(manifest.regions);
   const refresh = (): void => void renderRegionsSheet(deps);
 
+  // What the list is currently showing. Panning across a region's interior produces the
+  // same answer over and over, and rebuilding the rows each time would fight the thumb
+  // that is scrolling them.
+  let drawn: string | null = null;
+
   const draw = (query: string): void => {
     const matches = query.trim() ? searchRegions(manifest.regions, query) : null;
     const shown = matches ?? nearbySelection(manifest.regions, statuses, centreOf(map));
+
+    // The total is part of the key because it is part of the hint: two queries can select
+    // the same first 40 rows out of different numbers of matches.
+    const key = `${matches ? matches.total : 'near'}:${shown.map((region) => region.id).join(' ')}`;
+    if (key === drawn) return;
+    drawn = key;
 
     hint.textContent = describe(shown.length, matches?.total ?? null, manifest.regions.length);
     list.replaceChildren(
@@ -126,6 +147,26 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   search.addEventListener('input', () => draw(search.value));
   search.value = previousQuery;
   draw(previousQuery);
+
+  // The nearby list answers "what covers the ground I am looking at", so it has to follow
+  // the map. Otherwise it keeps answering for wherever the map happened to be when the
+  // sheet was opened — and panning to the valley you want to download changes nothing.
+  stopFollowingMap?.();
+  const onMoveEnd = (): void => {
+    if (!list.isConnected) {
+      // The sheet was closed, or a later render replaced this one: nothing here owns a
+      // list any more.
+      map.off?.('moveend', onMoveEnd);
+      return;
+    }
+    // A search answers by name, not by where you are. And a redraw mid-download would
+    // throw away the progress bar and the Cancel button of a row that is still working,
+    // leaving a Download button that starts the whole thing a second time.
+    if (search.value.trim() || downloadsInFlight() > 0) return;
+    draw('');
+  };
+  map.on?.('moveend', onMoveEnd);
+  stopFollowingMap = () => map.off?.('moveend', onMoveEnd);
 
   void registry;
   void onStatus;

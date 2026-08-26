@@ -7,6 +7,7 @@ const regionStatusesMock = vi.hoisted(() => vi.fn());
 const deleteRegionMock = vi.hoisted(() => vi.fn());
 const removeRegionFromMapMock = vi.hoisted(() => vi.fn());
 const readStorageMock = vi.hoisted(() => vi.fn());
+const downloadsInFlightMock = vi.hoisted(() => vi.fn(() => 0));
 
 vi.mock('./manifest', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./manifest')>()),
@@ -17,6 +18,7 @@ vi.mock('./downloader', () => ({
   regionStatuses: regionStatusesMock,
   deleteRegion: deleteRegionMock,
   downloadRegion: vi.fn(),
+  downloadsInFlight: downloadsInFlightMock,
   DownloadCancelled: class DownloadCancelled extends Error {},
 }));
 
@@ -138,6 +140,26 @@ describe('a catalogue that covers the globe', () => {
   const centredOn = (lng: number, lat: number): Partial<MLMap> =>
     ({ getCenter: () => ({ lng, lat }) }) as unknown as Partial<MLMap>;
 
+  /** The same stub, but pannable — and reporting whether the sheet is still listening. */
+  const pannable = (lng: number, lat: number) => {
+    let centre = { lng, lat };
+    const listeners = new Set<() => void>();
+    return {
+      map: {
+        getCenter: () => centre,
+        on: (_event: string, fn: () => void) => listeners.add(fn),
+        off: (_event: string, fn: () => void) => listeners.delete(fn),
+      } as unknown as Partial<MLMap>,
+      panTo(toLng: number, toLat: number): void {
+        centre = { lng: toLng, lat: toLat };
+        for (const fn of [...listeners]) fn();
+      },
+      get listenerCount(): number {
+        return listeners.size;
+      },
+    };
+  };
+
   const names = (container: HTMLElement): string[] =>
     [...container.querySelectorAll('.region-name')].map((el) => el.textContent!);
 
@@ -186,6 +208,49 @@ describe('a catalogue that covers the globe', () => {
     const container = await openSheet(centredOn(-4.5, 56.8));
 
     expect(names(container)[0]).toBe('Polynésie française');
+  });
+
+  it('follows the map, because the nearby list is about where you are looking', async () => {
+    const gps = pannable(-4.5, 56.8);
+    const container = await openSheet(gps.map);
+    expect(names(container)[0]).toBe('Scotland');
+
+    gps.panTo(43, 42);
+
+    expect(names(container)[0]).toBe('Georgia');
+  });
+
+  it('leaves a search alone while the map moves', async () => {
+    const gps = pannable(-4.5, 56.8);
+    const container = await openSheet(gps.map);
+    type(container, 'polynesie');
+
+    gps.panTo(43, 42);
+
+    expect(names(container)).toEqual(['Polynésie française']);
+  });
+
+  it('does not redraw over a running download', async () => {
+    // The redraw would replace the Cancel button and progress bar of a row that is still
+    // working with a Download button that starts the whole thing again.
+    downloadsInFlightMock.mockReturnValue(1);
+    const gps = pannable(-4.5, 56.8);
+    const container = await openSheet(gps.map);
+
+    gps.panTo(43, 42);
+
+    expect(names(container)[0]).toBe('Scotland');
+    downloadsInFlightMock.mockReturnValue(0);
+  });
+
+  it('stops listening once the sheet is gone', async () => {
+    const gps = pannable(-4.5, 56.8);
+    const container = await openSheet(gps.map);
+    container.innerHTML = '';
+
+    gps.panTo(43, 42);
+
+    expect(gps.listenerCount).toBe(0);
   });
 
   it('finds a region by name', async () => {

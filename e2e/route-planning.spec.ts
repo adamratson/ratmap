@@ -190,7 +190,10 @@ test.describe('route planning', () => {
     await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
 
     await page.locator('.route-actions button', { hasText: 'Follow' }).click();
-    await expect(page.locator('.route-panel-title')).toHaveText('Following');
+    // The mode is named in the peek row, where it stays readable with the sheet at rest —
+    // a tap on the map means something different in each mode, so it must never be silent.
+    await expect(page.locator('#chips .chip-mode')).toHaveText('Following');
+    await expect(page.locator('.route-follow')).toBeVisible();
 
     // Feed a fix roughly on the line: the follower is fed from the location watch in the
     // app, so drive it the same way the watch would.
@@ -199,12 +202,12 @@ test.describe('route planning', () => {
       (window as any).__ratmapPlanner.updatePosition([-5.04, 56.803]);
     });
 
-    await expect(page.locator('.route-stats')).toContainText('Remaining');
-    await expect(page.locator('.route-progress-fill')).toBeVisible();
+    await expect(page.locator('.follow-figures')).toContainText('Remaining');
+    await expect(page.locator('.follow-progress-fill')).toBeVisible();
 
     // §7 has to be stated in the product, not only in the plan.
     await expect(
-      page.locator('.route-note').filter({ hasText: /screen is on/i }),
+      page.locator('.follow-note').filter({ hasText: /screen on/i }),
     ).toBeVisible();
   });
 
@@ -240,7 +243,7 @@ test.describe('route planning', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).__ratmapPlanner.updatePosition([-5.04, 56.803]);
     });
-    await expect(cold.locator('.route-stats')).toContainText('Remaining');
+    await expect(cold.locator('.follow-figures')).toContainText('Remaining');
 
     await cold.close();
   });

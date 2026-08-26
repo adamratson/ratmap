@@ -396,6 +396,10 @@ theme.onChange((next) => {
   // which drops every source and layer the app added on top of it. `styledata` is the
   // signal that the replacement has landed; MapLibre has no `style.load` (that is Mapbox
   // GL JS), checked against the installed typings.
+  //
+  // Nothing may add a layer between these two lines: the old style's layers are already
+  // gone and the new one is not installed yet.
+  styleReady = false;
   map.setStyle(buildStyle(next));
   map.once('styledata', () => installAppLayers());
 });
@@ -484,6 +488,18 @@ map.on('sourcedata', (e) => {
 });
 
 /**
+ * Whether the style is installed, i.e. whether it will accept sources and layers.
+ *
+ * Deliberately not `map.isStyleLoaded()`: that is also false while *tiles* are still
+ * arriving, which is the normal state for a second or so after every pan, zoom and
+ * download. Anything that gated on it and then deferred to `map.once('load', …)` was
+ * waiting for an event that had already fired — see drawFootprints, where that combination
+ * meant the coverage outlines were never drawn at all on a cold start. What `addSource`
+ * actually requires is a ready style, which is precisely when this runs.
+ */
+let styleReady = false;
+
+/**
  * Everything the app puts on top of the base style.
  *
  * Runs on first load *and* after every theme swap, because replacing the style throws all
@@ -491,6 +507,7 @@ map.on('sourcedata', (e) => {
  * safe even if a style event arrives twice.
  */
 function installAppLayers(): void {
+  styleReady = true;
   addPeaksLayer(map, registry);
   // Added here rather than lazily on first use: adding a source before the style is
   // ready throws, and the planner can be opened at any moment after this point.
@@ -581,8 +598,11 @@ let offeredRegionId: string | null = null;
 function drawFootprints(): void {
   // The style has to exist first — this runs from a restore that can finish before the
   // map has loaded, and addSource throws on a style that is not ready.
-  if (!map.isStyleLoaded()) {
-    map.once('load', drawFootprints);
+  if (!styleReady) {
+    // `styledata` rather than `load`: it fires on the way to a ready style *and* on every
+    // theme swap, so a retry registered after load has already gone by still gets its
+    // chance. Re-entering here simply re-arms it.
+    map.once('styledata', drawFootprints);
     return;
   }
   renderFootprints(map, visibleFootprints(footprints(), offeredRegionId));

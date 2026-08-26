@@ -223,5 +223,202 @@ export async function openChip(page: Page, label: string): Promise<void> {
 export async function startNewRoute(page: Page): Promise<void> {
   await openChip(page, 'Routes');
   await page.locator('.routes-toolbar button', { hasText: 'New route' }).click();
-  await page.locator('.route-panel-title').waitFor({ state: 'visible' });
+  await page.locator('.route-panel-body').waitFor({ state: 'visible' });
+}
+
+/**
+ * Empty the local record stores — saved places and saved routes.
+ *
+ * The stores are cleared rather than the database deleted: the app holds an open
+ * connection from startup, and `deleteDatabase` against a live connection blocks
+ * indefinitely rather than failing, which would hang the suite instead of failing it.
+ */
+export async function clearSavedData(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      // Same name and version as src/db.ts. Opening at a *lower* version than the app
+      // uses would throw; opening at the same one just joins the existing database.
+      const request = indexedDB.open('ratmap', 2);
+      // This usually runs before the app has opened the database at all, and creating it
+      // empty would leave the app holding a v2 connection with no stores in it — every
+      // read and write then fails with NotFoundError and no upgrade is ever triggered to
+      // repair it. So mirror src/db.ts's schema here.
+      request.onupgradeneeded = () => {
+        const created = request.result;
+        for (const [store, index] of [
+          ['saved-places', 'savedAt'],
+          ['routes', 'updatedAt'],
+        ] as const) {
+          if (created.objectStoreNames.contains(store)) continue;
+          created.createObjectStore(store, { keyPath: 'id' }).createIndex(index, index);
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    const stores = [...db.objectStoreNames].filter((name) =>
+      ['saved-places', 'routes'].includes(name),
+    );
+    if (stores.length > 0) {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(stores, 'readwrite');
+        for (const store of stores) transaction.objectStore(store).clear();
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }
+    db.close();
+  });
+}
+
+/** Where the map is pointed right now. */
+export async function mapView(page: Page): Promise<{ lng: number; lat: number; zoom: number }> {
+  return page.evaluate(() => {
+    const map = (window as unknown as { __ratmapMap: MLMap }).__ratmapMap;
+    const centre = map.getCenter();
+    return { lng: centre.lng, lat: centre.lat, zoom: map.getZoom() };
+  });
+}
+
+/** Move the map without a fitBounds, for tests about what a given zoom shows. */
+export async function jumpTo(
+  page: Page,
+  centre: [number, number],
+  zoom: number,
+): Promise<void> {
+  await page.evaluate(
+    ([lng, lat, z]) => {
+      const map = (window as unknown as { __ratmapMap: MLMap }).__ratmapMap;
+      map.jumpTo({ center: [lng, lat], zoom: z });
+    },
+    [centre[0], centre[1], zoom] as const,
+  );
+}
+
+export interface PeakOnScreen {
+  name: string;
+  /** Metres, or null for a summit the archive carries no usable elevation for. */
+  ele: number | null;
+  lng: number;
+  lat: number;
+  /** Where that summit currently projects to, in CSS pixels. */
+  x: number;
+  y: number;
+}
+
+/**
+ * A named summit currently drawn on the map, and where it is on screen.
+ *
+ * Found from the live style rather than hardcoded, so these tests say "tap a summit" and
+ * stay true when the peaks archive is rebuilt — the notability filter decides which hills
+ * render at a given zoom, and pinning a test to one of them makes a rebuild look like a
+ * regression.
+ *
+ * Queried on the circle layer, not the labels: a symbol is only returned once its label
+ * has actually been placed, and `text-allow-overlap: false` means a summit in a crowded
+ * corrie has a marker you can tap and no label at all.
+ */
+export async function waitForPeak(page: Page): Promise<PeakOnScreen> {
+  const handle = await page.waitForFunction(
+    () => {
+      const map = (window as unknown as { __ratmapMap?: MLMap }).__ratmapMap;
+      if (!map?.getLayer('peaks-symbol-marker')) return null;
+
+      const canvas = map.getCanvas();
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+
+      for (const feature of map.queryRenderedFeatures({ layers: ['peaks-symbol-marker'] })) {
+        const name = feature.properties?.name;
+        if (typeof name !== 'string' || name.length === 0) continue;
+        if (feature.geometry?.type !== 'Point') continue;
+
+        const [lng, lat] = feature.geometry.coordinates as [number, number];
+        const point = map.project([lng, lat]);
+        // Keep clear of the furniture: the sheet along the bottom, and the detail notice
+        // and rail at the top — a tap there hits a control rather than the map.
+        if (point.x < 80 || point.x > width - 80) continue;
+        if (point.y < 100 || point.y > height * 0.5) continue;
+
+        const ele = feature.properties?.ele;
+        return {
+          name,
+          ele: typeof ele === 'number' ? ele : null,
+          lng,
+          lat,
+          x: point.x,
+          y: point.y,
+        };
+      }
+      return null;
+    },
+    null,
+    { timeout: 30_000 },
+  );
+
+  const peak = await handle.jsonValue();
+  // `waitForFunction` only resolves once the predicate returns something truthy, so this
+  // is unreachable — it narrows the type rather than handling a real case.
+  if (!peak) throw new Error('no summit rendered on screen');
+  return peak;
+}
+
+/** Tap a summit and return which one was tapped. */
+export async function clickPeak(page: Page): Promise<PeakOnScreen> {
+  const peak = await waitForPeak(page);
+  await page.mouse.click(peak.x, peak.y);
+  return peak;
+}
+
+/**
+ * Type into the search field and wait for it to answer.
+ *
+ * Focused first because the index loads on focus — the app deliberately does not pull
+ * the SQLite runtime at startup, so a test that only fills the field races the load.
+ */
+export async function searchFor(page: Page, query: string): Promise<void> {
+  const input = page.locator('#search-input');
+  await input.click();
+  await input.fill(query);
+  await page.locator('#search-results:not([hidden])').waitFor({ timeout: 30_000 });
+}
+
+/**
+ * Make exports take the download path rather than the OS share sheet.
+ *
+ * `shareOrDownload` prefers `navigator.share` where it can share files, which is right on
+ * a phone and untestable here: a native share sheet has nothing on the other side of it
+ * in a headless browser, and the promise never settles. Removing the API exercises the
+ * same function's documented fallback rather than a special case built for tests.
+ */
+export async function preferFileDownloads(context: BrowserContext): Promise<void> {
+  await context.addInitScript(`
+    delete navigator.canShare;
+    delete navigator.share;
+  `);
+}
+
+/** How much of the screen the sheet is currently taking, in px. */
+export async function sheetHeight(page: Page): Promise<number> {
+  return page.evaluate(() =>
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-visible')),
+  );
+}
+
+/**
+ * The layers a *downloaded region's own archives* put on the map.
+ *
+ * Not simply everything whose id starts with `region-`: the coverage outlines are
+ * `region-footprints-*` and are drawn for regions nobody has downloaded, so counting those
+ * would make "the region is on the map" true before any download and still true after a
+ * delete. Archive layers are `region-<id>-<kind>-…`.
+ */
+export async function regionArchiveLayers(
+  page: Page,
+): Promise<Array<{ id: string; type: string }>> {
+  const layers = await styleLayers(page);
+  return layers.filter(
+    (layer) => layer.id.startsWith('region-') && !layer.id.startsWith('region-footprints-'),
+  );
 }

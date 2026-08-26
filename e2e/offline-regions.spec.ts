@@ -3,11 +3,14 @@ import {
   clearOpfs,
   clearConditions,
   downloadTestRegion,
+  jumpTo,
   listOpfs,
   openRegionsSheet,
   gotoApp,
   simulateInstalledPwa,
+  regionArchiveLayers,
   styleLayers,
+  TEST_REGION,
   waitForServiceWorkerControl,
 } from './helpers';
 
@@ -28,7 +31,7 @@ test.describe('offline regions', () => {
     await downloadTestRegion(page);
 
     const layers = await styleLayers(page);
-    const regionLayers = layers.filter((l) => l.id.startsWith('region-'));
+    const regionLayers = await regionArchiveLayers(page);
 
     expect(regionLayers.length).toBeGreaterThan(0);
     expect(regionLayers.filter((l) => l.type === 'background')).toEqual([]);
@@ -89,6 +92,36 @@ test.describe('offline regions', () => {
     expect(files.filter((f) => f.includes('.part'))).toEqual([]);
   });
 
+  test('deletes a region only on a second, deliberate tap', async ({ page }) => {
+    await openRegionsSheet(page);
+    await downloadTestRegion(page);
+
+    const action = page.locator('.region-action').first();
+
+    // Two taps, not one. This button sits in the slot every other row uses for
+    // "Download", and the mistake costs re-downloading the whole region — which on a hill
+    // is not a mistake you can undo.
+    await action.click();
+    // The second tap names the size, so the cost is visible at the moment of confirming.
+    await expect(action).toHaveText(/^Delete [\d.]+ MB\?$/);
+
+    // An armed delete left sitting there is a trap for the next tap, and the next tap is
+    // often someone scrolling back to this row — so it disarms itself.
+    await expect(action).toHaveText('Delete', { timeout: 15_000 });
+    expect(await listOpfs(page)).not.toEqual([]);
+
+    await action.click();
+    await expect(action).toHaveText(/\?$/);
+    await action.click();
+
+    await expect(page.locator('.toast.ok', { hasText: /^Deleted / })).toBeVisible();
+
+    // Gone from the device and off the map, not merely delisted.
+    await expect.poll(async () => listOpfs(page)).toEqual([]);
+    await expect.poll(async () => (await regionArchiveLayers(page)).length).toBe(0);
+    await expect(page.locator('.region-action').first()).toHaveText('Download');
+  });
+
   test('renders the region from OPFS after an offline cold start', async ({ context, page }) => {
     await openRegionsSheet(page);
     await downloadTestRegion(page);
@@ -104,9 +137,7 @@ test.describe('offline regions', () => {
 
     // Region layers must be restored with no user action and no network.
     await expect
-      .poll(async () => (await styleLayers(cold)).filter((l) => l.id.startsWith('region-')).length, {
-        timeout: 30_000,
-      })
+      .poll(async () => (await regionArchiveLayers(cold)).length, { timeout: 30_000 })
       .toBeGreaterThan(0);
 
     await cold.close();
@@ -125,5 +156,76 @@ test.describe('offline regions', () => {
     await expect(offline).toHaveCount(1, { timeout: 30_000 });
 
     await cold.close();
+  });
+});
+
+test.describe('the region catalogue', () => {
+  test.beforeEach(async ({ context, page }) => {
+    await simulateInstalledPwa(context);
+    await gotoApp(page);
+    await clearOpfs(page);
+    await clearConditions(page);
+  });
+
+  test('offers what covers the ground you are looking at', async ({ page }) => {
+    await openRegionsSheet(page);
+
+    // The catalogue covers the globe, so listing it is not a list — it is a wall. What
+    // someone opening this sheet almost always wants is the ground on screen.
+    await expect(page.locator('.regions-hint')).toHaveText(/Nearest regions/);
+    const nearScotland = await page.locator('.region-name').allTextContents();
+    expect(nearScotland.length).toBeGreaterThan(0);
+
+    // And it follows the map: panning to the valley you want to download has to change
+    // the answer, or the list is only ever answering for wherever the sheet was opened.
+    await jumpTo(page, [11.35, 46.5], 8);
+    await expect
+      .poll(async () => page.locator('.region-name').allTextContents())
+      .not.toEqual(nearScotland);
+  });
+
+  test('searches the rest of the catalogue by name', async ({ page }) => {
+    await openRegionsSheet(page);
+
+    await page.locator('.regions-search').fill(TEST_REGION);
+    await expect(page.locator('.regions-hint')).toHaveText('1 match.');
+    await expect(page.locator('.region-name')).toHaveText(/Lochaber/);
+    // Size and artifacts up front: this is a decision about megabytes on a phone.
+    await expect(page.locator('.region-meta')).toHaveText(/MB · .*basemap/);
+
+    await page.locator('.regions-search').fill('zzzznowhere');
+    await expect(page.locator('.regions-hint')).toHaveText('No region matches that name.');
+    await expect(page.locator('.region-row')).toHaveCount(0);
+  });
+});
+
+test.describe('without persistent storage (C1)', () => {
+  // Deliberately no simulateInstalledPwa: this is the real headless behaviour, and it is
+  // the same state a user is in before installing to their home screen.
+  test.beforeEach(async ({ page }) => {
+    await gotoApp(page);
+    await clearOpfs(page);
+  });
+
+  test('says why downloads are off, and refuses to start one', async ({ page }) => {
+    // A condition rather than a toast: it is currently true and stays true until the user
+    // does something about it.
+    await expect(
+      page.locator('#conditions .condition', { hasText: /can’t keep maps safely/ }),
+    ).toBeVisible();
+
+    await openRegionsSheet(page);
+    await expect(page.locator('.regions-intro')).toHaveText(/Storage is not persistent yet/);
+
+    await page.locator('.regions-search').fill(TEST_REGION);
+    await page.locator('.region-action').first().click();
+
+    // Refused with a reason, never a silent no-op and never a download that the browser
+    // may evict without warning — the user would find that out with no signal, on a hill.
+    await expect(
+      page.locator('.toast.warn', { hasText: /Persistent storage has not been granted/ }),
+    ).toBeVisible();
+    await expect(page.locator('.region-action').first()).toHaveText('Download');
+    expect(await listOpfs(page)).toEqual([]);
   });
 });

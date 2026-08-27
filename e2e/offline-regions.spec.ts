@@ -155,7 +155,33 @@ test.describe('offline regions', () => {
     const offline = cold.locator('#conditions .condition', { hasText: /no connection/i });
     await expect(offline).toHaveCount(1, { timeout: 30_000 });
 
+    // And it stays up. It used to be retracted within a couple of milliseconds by a
+    // source reporting itself "loaded" having loaded nothing — so a banner that is
+    // present once is not evidence that anyone could read it.
+    await cold.waitForTimeout(3000);
+    await expect(offline).toHaveCount(1);
+
     await cold.close();
+  });
+
+  test('takes the notice back down when tiles actually arrive again', async ({
+    context,
+    page,
+  }) => {
+    // The other half of the same contract: the warning has to go when the signal returns,
+    // or the fix above would just be a banner that never leaves.
+    await context.setOffline(true);
+    await jumpTo(page, [10.0, 46.0], 5);
+
+    const offline = page.locator('#conditions .condition', { hasText: /no connection/i });
+    await expect(offline).toHaveCount(1, { timeout: 30_000 });
+
+    await context.setOffline(false);
+    // Ground this page has not asked for before: MapLibre does not retry a tile it has
+    // already given up on, so panning back over the failures would prove nothing.
+    await jumpTo(page, [-70.0, -33.0], 4);
+
+    await expect(offline).toHaveCount(0, { timeout: 30_000 });
   });
 });
 
@@ -171,10 +197,11 @@ test.describe('the region catalogue', () => {
     await openRegionsSheet(page);
 
     // The catalogue covers the globe, so listing it is not a list — it is a wall. What
-    // someone opening this sheet almost always wants is the ground on screen.
-    await expect(page.locator('.regions-hint')).toHaveText(/Nearest regions/);
+    // someone opening this sheet almost always wants is the ground on screen, so before
+    // anything is typed the list is the handful of regions nearest the map, not all 391.
     const nearScotland = await page.locator('.region-name').allTextContents();
     expect(nearScotland.length).toBeGreaterThan(0);
+    expect(nearScotland.length).toBeLessThan(20);
 
     // And it follows the map: panning to the valley you want to download has to change
     // the answer, or the list is only ever answering for wherever the sheet was opened.
@@ -215,8 +242,6 @@ test.describe('without persistent storage (C1)', () => {
     ).toBeVisible();
 
     await openRegionsSheet(page);
-    await expect(page.locator('.regions-intro')).toHaveText(/Storage is not persistent yet/);
-
     await page.locator('.regions-search').fill(TEST_REGION);
     await page.locator('.region-action').first().click();
 

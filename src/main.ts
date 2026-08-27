@@ -15,7 +15,7 @@ import {
   USE_FALLBACK_TERRAIN,
 } from './config';
 import { TileSourceRegistry } from './tile-source-registry';
-import { addPeaksLayer, formatElevation, peakAt, type PeakProperties } from './peaks';
+import { addPeaksLayer, formatElevation, peakAt, PEAKS_SOURCE_ID, type PeakProperties } from './peaks';
 import { HeadingWatcher } from './heading';
 import { LocationController, type LocationState } from './location';
 import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS } from './install';
@@ -480,11 +480,31 @@ map.on('error', (e) => {
   });
 });
 
+/**
+ * The sources whose tiles actually come over the network.
+ *
+ * An allow-list rather than "anything that is not a geojson source": a downloaded region's
+ * archives are ordinary vector and raster-dem sources read out of OPFS, and their tiles
+ * load perfectly well with the radio off — which is precisely the situation the banner
+ * exists to describe. Clearing it on those would take the warning away from the one user
+ * who has most reason to see it.
+ */
+const REMOTE_SOURCE_IDS = new Set(['basemap', 'terrain', PEAKS_SOURCE_ID]);
+
 // Tiles arriving again is the only reliable signal that the connection is back:
 // `navigator.onLine` reports the OS link state and stays true behind a dead uplink, which
 // is exactly this app's situation (see isNetworkFailure above).
 map.on('sourcedata', (e) => {
-  if (e.isSourceLoaded) status.setCondition('offline', null);
+  // A tile that actually *arrived*, rather than a source that has merely stopped asking.
+  // This used to test `isSourceLoaded`, which flips true as soon as a source has no
+  // outstanding requests — including when every one of them failed — and which the app's
+  // own in-memory geojson sources (route geometry, the off-route line, the coverage
+  // outlines) report unconditionally on every pan. Measured offline: the "No connection"
+  // line went up and was retracted 2 ms later by the basemap reporting itself "loaded"
+  // with nothing loaded at all, so in practice the banner was never visible.
+  if (e.tile?.state !== 'loaded') return;
+  if (!REMOTE_SOURCE_IDS.has(e.sourceId)) return;
+  status.setCondition('offline', null);
 });
 
 /**
@@ -839,7 +859,6 @@ async function showPlacesSheet(): Promise<void> {
   }
 
   sheet.body.innerHTML = `
-    <h2>Saved places</h2>
     <ul class="places-list"></ul>
   `;
 

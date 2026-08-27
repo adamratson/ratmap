@@ -9,7 +9,9 @@ const BASE_PATH = '/ratmap/';
 export default defineConfig({
   testDir: './e2e',
   // Region downloads are tens of MB over the network; the default 30 s is not enough.
-  timeout: 180_000,
+  // Comfortably above the downloader's own limit in e2e/helpers.ts, so a slow bucket
+  // surfaces as that helper's explanatory error rather than as a bare test timeout.
+  timeout: 300_000,
   expect: { timeout: 15_000 },
   // Serial by default: these tests share OPFS and a service worker per origin, so
   // running them in parallel would have them fight over the same downloaded region.

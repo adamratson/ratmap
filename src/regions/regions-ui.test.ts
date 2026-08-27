@@ -184,16 +184,21 @@ describe('a catalogue that covers the globe', () => {
     const container = await openSheet();
 
     expect(names(container).length).toBeLessThan(CATALOGUE.length);
-    expect(container.querySelector('.regions-hint')!.textContent).toMatch(/search/i);
+    // And says nothing about it: at rest the rows are the answer, and a standing line of
+    // prose above six of them is a caption on a picture that needs none.
+    expect(container.querySelector('.regions-hint')!.textContent).toBe('');
   });
 
-  it('does not tell you to search for the other zero regions', async () => {
-    // The normal state of a young catalogue, and of a filtered test fixture.
+  it('says nothing at rest, whatever the catalogue is sized', async () => {
+    // A catalogue smaller than the nearby cap is the normal state of a young catalogue,
+    // and of a filtered test fixture. It used to be the case that produced "search to
+    // reach any of the other 0" — there is no hint to get wrong now, and there must not
+    // be one.
     fetchManifestMock.mockResolvedValue({ regions: CATALOGUE.slice(0, 2) });
     const container = await openSheet(centredOn(-4.5, 56.8));
 
     expect(names(container)).toHaveLength(2);
-    expect(container.querySelector('.regions-hint')!.textContent).toMatch(/every published/i);
+    expect(container.querySelector('.regions-hint')!.textContent).toBe('');
   });
 
   it('offers the regions covering where the map is pointed', async () => {

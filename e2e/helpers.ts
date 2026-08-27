@@ -115,6 +115,17 @@ export async function openRegionsSheet(page: Page): Promise<void> {
 export const TEST_REGION = 'Lochaber';
 
 /**
+ * How long to wait for {@link TEST_REGION} to come down.
+ *
+ * Generous, because the wire is the slow part and not under our control: the public
+ * `.r2.dev` bucket URL is rate-limited and explicitly not meant for production traffic
+ * (see src/config.ts). Measured at 15 kB/s while throttled, which is an hour for this
+ * region — no timeout makes that pass, so the point of the limit is to fail promptly and
+ * say why, not to outlast it.
+ */
+const DOWNLOAD_TIMEOUT_MS = 240_000;
+
+/**
  * Download {@link TEST_REGION} and wait for completion, i.e. the action button becoming
  * "Delete". Assumes the regions sheet is already open.
  *
@@ -132,7 +143,22 @@ export async function downloadTestRegion(page: Page): Promise<void> {
   const action = page.locator('.region-action').first();
   if ((await action.textContent())?.trim() === 'Delete') return;
   await action.click();
-  await action.filter({ hasText: 'Delete' }).waitFor({ timeout: 150_000 });
+
+  try {
+    await action.filter({ hasText: 'Delete' }).waitFor({ timeout: DOWNLOAD_TIMEOUT_MS });
+  } catch (cause) {
+    // A bare Playwright timeout here reads as "the button never changed", which sends you
+    // looking for a UI bug. It is almost always the bucket. The downloader keeps its
+    // running total in the button's title, so report how far it actually got — a download
+    // stuck at 2 MB of 53 MB is a throughput problem, one stuck at 0 is not.
+    const progress = (await action.getAttribute('title')) ?? 'no progress reported';
+    throw new Error(
+      `${TEST_REGION} did not finish downloading within ${DOWNLOAD_TIMEOUT_MS / 1000}s ` +
+        `(${progress}). The public .r2.dev bucket is rate-limited; check throughput ` +
+        'before treating this as an app failure.',
+      { cause },
+    );
+  }
 }
 
 /** Read every layer id currently in the map style. */

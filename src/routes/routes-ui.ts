@@ -293,7 +293,6 @@ export async function renderRoutesSheet(deps: RoutesUiDeps): Promise<void> {
   const { container, planner, onStatus } = deps;
 
   container.innerHTML = `
-    <h2>Routes</h2>
     <div class="routes-toolbar"></div>
     <ul class="routes-list"></ul>
   `;

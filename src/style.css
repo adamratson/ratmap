@@ -674,7 +674,7 @@ body {
   gap: 0.5rem;
   /* The resting row sits at the very bottom of the screen, so it has to clear the home
      indicator itself — nothing else is down there to do it for it. */
-  padding: 0 0.9rem calc(0.9rem + env(safe-area-inset-bottom));
+  padding: 0 0.9rem calc(0.4rem + env(safe-area-inset-bottom));
 }
 
 .sheet-scroll {

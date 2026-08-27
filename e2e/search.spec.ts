@@ -52,8 +52,9 @@ test.describe('search', () => {
       .toBeLessThan(0.01);
 
     // Zoomed in far enough to be useful — a jump that kept z6 would land you on the
-    // right pixel of a blurry map.
-    expect((await mapView(page)).zoom).toBeGreaterThanOrEqual(11);
+    // right pixel of a blurry map. Polled, not read once: easeTo is still animating when
+    // the centre arrives, and a zoom caught a frame early reads 10.9994.
+    await expect.poll(async () => (await mapView(page)).zoom).toBeGreaterThanOrEqual(11);
     await expect(page.locator('#search-results')).toBeHidden();
   });
 

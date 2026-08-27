@@ -276,9 +276,43 @@ describe('app bootstrap', () => {
     handlers.error?.[0]?.({ error: new TypeError('Failed to fetch') });
     expect(document.querySelector('.condition.warn')?.textContent).toMatch(/no connection/i);
 
-    handlers.sourcedata?.[0]?.({ isSourceLoaded: true });
+    // A real tile, from a source that really does come over the network.
+    handlers.sourcedata?.[0]?.({
+      sourceId: 'basemap',
+      isSourceLoaded: true,
+      tile: { state: 'loaded' },
+    });
 
     expect(document.querySelector('#conditions')?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('keeps the offline notice up when only local sources report themselves loaded', async () => {
+    // The bug this guards: `isSourceLoaded` means "no outstanding requests", which is also
+    // true when every request has just failed — and the app's own in-memory geojson
+    // sources report it on every pan. Offline, that retracted the banner about 2 ms after
+    // raising it, so it was never actually readable.
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    handlers.error?.[0]?.({ error: new TypeError('Failed to fetch') });
+
+    // A source that has stopped asking, having failed at everything it asked for.
+    handlers.sourcedata?.[0]?.({ sourceId: 'basemap', isSourceLoaded: true, tile: null });
+    // The route geometry, re-tiled from memory by that same pan.
+    handlers.sourcedata?.[0]?.({
+      sourceId: 'route-geometry',
+      isSourceLoaded: true,
+      tile: { state: 'loaded' },
+    });
+    // A downloaded region's own archive, served from OPFS with the radio off — the one
+    // user with most reason to see this warning.
+    handlers.sourcedata?.[0]?.({
+      sourceId: 'region-lochaber-basemap',
+      isSourceLoaded: true,
+      tile: { state: 'loaded' },
+    });
+
+    expect(document.querySelector('.condition.warn')?.textContent).toMatch(/no connection/i);
   });
 
   it('distinguishes a real map fault from lost connection', async () => {

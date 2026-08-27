@@ -78,31 +78,20 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   const previousQuery = container.querySelector<HTMLInputElement>('.regions-search')?.value ?? '';
 
   container.innerHTML = `
-    <h2>Offline regions</h2>
-    <p class="regions-intro"></p>
     <input class="regions-search" type="search" enterkeyhint="search" autocomplete="off"
            placeholder="Search regions" aria-label="Search regions" />
     <p class="regions-hint" aria-live="polite"></p>
     <ul class="regions-list"></ul>
   `;
 
-  const intro = container.querySelector<HTMLParagraphElement>('.regions-intro')!;
   const hint = container.querySelector<HTMLParagraphElement>('.regions-hint')!;
   const search = container.querySelector<HTMLInputElement>('.regions-search')!;
   const list = container.querySelector<HTMLUListElement>('.regions-list')!;
 
-  const storage = await readStorage();
-  intro.textContent = storage.persisted
-    ? 'Downloads are kept on this device and work with no signal.'
-    : 'Storage is not persistent yet — install to your home screen before downloading.';
-
   let manifest;
   try {
     manifest = await fetchManifest();
-  } catch (err) {
-    // Offline with nothing cached is the common case here — say so plainly rather than
-    // showing an empty list that looks like "no regions exist".
-    intro.textContent = `Region catalogue unavailable: ${(err as Error).message}`;
+  } catch {
     search.hidden = true;
     return;
   }
@@ -134,7 +123,7 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
     if (key === drawn) return;
     drawn = key;
 
-    hint.textContent = describe(shown.length, matches?.total ?? null, manifest.regions.length);
+    hint.textContent = describe(shown.length, matches?.total ?? null);
     list.replaceChildren(
       ...shown.map((region) =>
         renderRegionRow(region, statuses.get(region.id) ?? 'absent', deps, refresh),
@@ -242,15 +231,16 @@ function fold(text: string): string {
     .trim();
 }
 
-function describe(shown: number, matched: number | null, total: number): string {
-  if (matched === null) {
-    const rest = total - shown;
-    // A catalogue smaller than the nearby cap is the normal state early on, and telling
-    // someone to search for "the other 0" reads as a bug.
-    return rest > 0
-      ? `Nearest regions — search to reach any of the other ${rest}.`
-      : 'Every published region is listed.';
-  }
+/**
+ * What the hint above the list says, if anything.
+ *
+ * Nothing at rest: the nearby list speaks for itself, and a standing line of prose above
+ * six rows was a caption on a picture that needed none. It earns its place only once a
+ * search has an answer that the rows alone cannot give — no matches at all, or more
+ * matches than are being shown.
+ */
+function describe(shown: number, matched: number | null): string {
+  if (matched === null) return '';
   if (matched === 0) return 'No region matches that name.';
   if (matched > shown) return `${matched} matches — showing the first ${shown}.`;
   return matched === 1 ? '1 match.' : `${matched} matches.`;

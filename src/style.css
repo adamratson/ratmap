@@ -866,6 +866,34 @@ body {
   list-style: none;
 }
 
+/* Withdrawn regions still occupying storage. Set apart from the catalogue above rather
+   than mixed into it: these are not offers, they are leftovers, and the only thing anyone
+   can do with one is delete it. */
+.regions-orphans {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.regions-orphans h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.regions-orphans-note {
+  margin: 0.25rem 0 0.5rem !important;
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
+.regions-orphan-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .region-row {
   display: grid;
   grid-template-columns: 1fr auto;

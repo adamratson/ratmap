@@ -8,6 +8,8 @@ const deleteRegionMock = vi.hoisted(() => vi.fn());
 const removeRegionFromMapMock = vi.hoisted(() => vi.fn());
 const readStorageMock = vi.hoisted(() => vi.fn());
 const downloadsInFlightMock = vi.hoisted(() => vi.fn(() => 0));
+const findOrphansMock = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
+const deleteOrphanMock = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock('./manifest', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./manifest')>()),
@@ -25,6 +27,11 @@ vi.mock('./downloader', () => ({
 vi.mock('./region-layers', () => ({
   addRegionToMap: vi.fn(),
   removeRegionFromMap: removeRegionFromMapMock,
+}));
+
+vi.mock('./orphans', () => ({
+  findOrphans: findOrphansMock,
+  deleteOrphan: deleteOrphanMock,
 }));
 
 vi.mock('./storage-budget', () => ({
@@ -60,6 +67,8 @@ const deleteButton = (container: HTMLElement): HTMLButtonElement =>
 describe('deleting a downloaded region', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    findOrphansMock.mockResolvedValue([]);
+    deleteOrphanMock.mockClear();
     fetchManifestMock.mockResolvedValue({ regions: [LOCHABER] });
     regionStatusesMock.mockResolvedValue(new Map([[LOCHABER.id, 'downloaded']]));
     deleteRegionMock.mockResolvedValue(undefined);
@@ -170,6 +179,7 @@ describe('a catalogue that covers the globe', () => {
   };
 
   beforeEach(() => {
+    findOrphansMock.mockResolvedValue([]);
     fetchManifestMock.mockResolvedValue({ regions: CATALOGUE });
     regionStatusesMock.mockResolvedValue(new Map());
     readStorageMock.mockResolvedValue({ persisted: true, availableBytes: 1e12 });
@@ -303,5 +313,72 @@ describe('a catalogue that covers the globe', () => {
 
     expect(names(container)).toEqual([]);
     expect(container.querySelector('.regions-hint')!.textContent).toMatch(/no region/i);
+  });
+});
+
+describe('withdrawn regions', () => {
+  const ORPHAN = { id: 'lochaber', files: ['lochaber-basemap.pmtiles'], bytes: 53_550_554 };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fetchManifestMock.mockResolvedValue({ regions: [LOCHABER] });
+    regionStatusesMock.mockResolvedValue(new Map());
+    readStorageMock.mockResolvedValue({ persisted: true, availableBytes: 1e12 });
+    deleteOrphanMock.mockClear();
+    findOrphansMock.mockResolvedValue([ORPHAN]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const open = async (): Promise<HTMLElement> => {
+    const container = document.createElement('div');
+    await renderRegionsSheet({
+      map: {} as MLMap,
+      registry: {} as never,
+      container,
+      onStatus: vi.fn(),
+    });
+    return container;
+  };
+
+  it('offers a region the catalogue no longer lists, with its size', async () => {
+    const container = await open();
+    const section = container.querySelector<HTMLElement>('.regions-orphans')!;
+
+    expect(section.hidden).toBe(false);
+    expect(section.querySelector('.region-name')!.textContent).toBe('lochaber');
+    expect(section.querySelector('.region-meta')!.textContent).toMatch(/53\.6 MB · withdrawn/);
+  });
+
+  it('stays hidden when nothing is orphaned', async () => {
+    findOrphansMock.mockResolvedValue([]);
+    const container = await open();
+
+    expect(container.querySelector<HTMLElement>('.regions-orphans')!.hidden).toBe(true);
+  });
+
+  it('needs two taps to delete, like every other delete', async () => {
+    const container = await open();
+    const button = container.querySelector<HTMLButtonElement>('.regions-orphans .region-action')!;
+
+    button.click();
+    expect(deleteOrphanMock).not.toHaveBeenCalled();
+    expect(button.textContent).toMatch(/\?$/);
+
+    button.click();
+    await vi.waitFor(() => expect(deleteOrphanMock).toHaveBeenCalledWith(ORPHAN));
+  });
+
+  it('disarms on its own, so a later tap is not a delete', async () => {
+    const container = await open();
+    const button = container.querySelector<HTMLButtonElement>('.regions-orphans .region-action')!;
+
+    button.click();
+    vi.advanceTimersByTime(6000);
+    button.click();
+
+    expect(deleteOrphanMock).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,7 @@ import {
 } from './downloader';
 import { addRegionToMap, removeRegionFromMap } from './region-layers';
 import { evaluateGate, readStorage } from './storage-budget';
+import { deleteOrphan, findOrphans, type OrphanRegion } from './orphans';
 import type { TileSourceRegistry } from '../tile-source-registry';
 
 /** How long a delete stays armed before reverting to its safe label. */
@@ -82,6 +83,11 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
            placeholder="Search regions" aria-label="Search regions" />
     <p class="regions-hint" aria-live="polite"></p>
     <ul class="regions-list"></ul>
+    <div class="regions-orphans" hidden>
+      <h3>Not in the catalogue</h3>
+      <p class="regions-orphans-note"></p>
+      <ul class="regions-orphan-list"></ul>
+    </div>
   `;
 
   const hint = container.querySelector<HTMLParagraphElement>('.regions-hint')!;
@@ -136,6 +142,11 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   search.addEventListener('input', () => draw(search.value));
   search.value = previousQuery;
   draw(previousQuery);
+
+  // Deliberately outside `draw`, and never filtered by the search box. An orphan is
+  // something the user cannot find by name — it is not in the catalogue to be searched —
+  // so hiding it behind a query would leave it exactly as unreachable as before.
+  await renderOrphans(container, manifest.regions, deps, refresh);
 
   // The nearby list answers "what covers the ground I am looking at", so it has to follow
   // the map. Otherwise it keeps answering for wherever the map happened to be when the
@@ -269,6 +280,86 @@ function distanceTo(bbox: Region['bbox'], [lng, lat]: [number, number]): number 
 
 function bboxArea(bbox: Region['bbox']): number {
   return Math.abs(bbox[2] - bbox[0]) * Math.abs(bbox[3] - bbox[1]);
+}
+
+async function renderOrphans(
+  container: HTMLElement,
+  regions: Region[],
+  deps: RegionsUiDeps,
+  refresh: () => void,
+): Promise<void> {
+  const section = container.querySelector<HTMLDivElement>('.regions-orphans')!;
+  const note = container.querySelector<HTMLParagraphElement>('.regions-orphans-note')!;
+  const list = container.querySelector<HTMLUListElement>('.regions-orphan-list')!;
+
+  const orphans = await findOrphans(regions);
+  if (orphans.length === 0) return;
+
+  const total = orphans.reduce((sum, orphan) => sum + orphan.bytes, 0);
+  note.textContent =
+    `${formatBytes(total)} downloaded for ${orphans.length === 1 ? 'a region' : 'regions'} ` +
+    'the catalogue no longer offers. The map does not use them.';
+  list.replaceChildren(...orphans.map((orphan) => renderOrphanRow(orphan, deps, refresh)));
+  section.hidden = false;
+}
+
+function renderOrphanRow(
+  orphan: OrphanRegion,
+  deps: RegionsUiDeps,
+  refresh: () => void,
+): HTMLLIElement {
+  const item = document.createElement('li');
+  item.className = 'region-row';
+
+  const info = document.createElement('div');
+  info.className = 'region-info';
+
+  const name = document.createElement('span');
+  name.className = 'region-name';
+  // The id, because that is genuinely all there is: the display name lived in the manifest
+  // entry that no longer exists. Better the id than a guess.
+  name.textContent = orphan.id;
+
+  const meta = document.createElement('span');
+  meta.className = 'region-meta';
+  meta.textContent = `${formatBytes(orphan.bytes)} · withdrawn from the catalogue`;
+
+  info.append(name, meta);
+
+  const action = document.createElement('button');
+  action.type = 'button';
+  action.className = 'region-action danger';
+  action.textContent = 'Delete';
+
+  // Two taps, as everywhere else a delete costs a re-download — except this one cannot be
+  // undone from the app at all, because there is no catalogue entry left to download it
+  // from again. If anything it earns the confirmation more than the others do.
+  let armTimer: ReturnType<typeof setTimeout> | null = null;
+  const disarm = (): void => {
+    if (armTimer !== null) clearTimeout(armTimer);
+    armTimer = null;
+    action.textContent = 'Delete';
+    action.classList.remove('armed');
+  };
+
+  action.addEventListener('click', () => {
+    if (armTimer === null) {
+      action.textContent = `Delete ${formatBytes(orphan.bytes)}?`;
+      action.classList.add('armed');
+      armTimer = setTimeout(disarm, ARM_TIMEOUT_MS);
+      return;
+    }
+
+    disarm();
+    void (async () => {
+      await deleteOrphan(orphan);
+      deps.onStatus(`Deleted ${orphan.id} — ${formatBytes(orphan.bytes)} reclaimed.`, 'ok');
+      refresh();
+    })();
+  });
+
+  item.append(info, action);
+  return item;
 }
 
 function renderRegionRow(

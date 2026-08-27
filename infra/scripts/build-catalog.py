@@ -90,6 +90,19 @@ UNITS = {"B": 1, "kB": 1e3, "MB": 1e6, "GB": 1e9, "TB": 1e12}
 # Russia's ten federal districts alone measured 176 cells and 115.6 GB once split to full
 # detail. `summarise` prints what this omitted, so a hole in world coverage is a line in
 # the output rather than something you notice on a hill.
+# Ids that were published and then withdrawn. Never reuse one: the filename is the OPFS
+# key (C3), nothing on the client verifies the sha256 the manifest records, and
+# `regionStatus` is "is a file with this name present". So a new region reusing a retired
+# id is served from whatever the old archive was, forever, on every device that had it —
+# the wrong-tiles failure C3 exists to prevent, arriving through time instead of through a
+# name collision. A generated region wanting one of these gets the `-region` suffix.
+RETIRED_IDS = {
+    "lochaber",
+    "cairngorms",
+    "scotland",
+    "montenegro",
+}
+
 EXCLUDED_IDS = {
     "russia",         # 10 federal districts -> 176 cells
     "us",             # 53 state extracts
@@ -109,7 +122,7 @@ AGGREGATE_IDS = {
     "alps",                  # = at + ch + de-south + fr-east + it-north + li + si
     "britain-and-ireland",   # = great-britain + ireland-and-northern-ireland
     "dach",                  # = germany + austria + switzerland
-    "united-kingdom",        # = great-britain + the NI part of ireland-and-northern-ireland
+    "great-britain",        # = great-britain + the NI part of ireland-and-northern-ireland
     "south-africa-and-lesotho",  # = south-africa + lesotho
     "sea",                   # South-East Asia: = indonesia + malaysia-... + thailand + ...
     "us-midwest", "us-northeast", "us-pacific", "us-south", "us-west",  # = us/<state> sets
@@ -117,6 +130,27 @@ AGGREGATE_IDS = {
 
 
 # --------------------------------------------------------------------------- index
+
+
+def check_aggregates(children):
+    """An aggregate with children is a parent, and dropping it drops the subtree.
+
+    `united-kingdom` sat in AGGREGATE_IDS on the reasoning that `great-britain` covers the
+    same ground. It does — but great-britain is the childless union, and united-kingdom is
+    where England, Scotland and Wales hang. Listing the parent deleted all three from the
+    catalogue and left a single 1.1 GB Great Britain capped at basemap z13, which is the
+    zoom that generalises away nearly every path. Ben Nevis lost its paths to a one-line
+    mistake in a set literal, and nothing said a word.
+    """
+    parents = {a: sorted(children[a]) for a in AGGREGATE_IDS if children.get(a)}
+    if parents:
+        detail = "\n".join(f"      {a} -> {', '.join(k)}" for a, k in parents.items())
+        raise SystemExit(
+            "FAIL: these AGGREGATE_IDS have children, so dropping them drops the "
+            f"children too:\n{detail}\n"
+            "      List the childless union instead, or move it to EXCLUDED_IDS if the "
+            "omission is deliberate."
+        )
 
 
 def load_index(refresh: bool) -> dict:
@@ -137,6 +171,7 @@ def load_index(refresh: bool) -> dict:
         children.setdefault(effective_parent(region_id, feature["properties"], features), []).append(
             region_id
         )
+    check_aggregates(children)
     return {"features": features, "children": children}
 
 
@@ -686,7 +721,7 @@ def overrides():
 
 
 def merge_with_manual(generated):
-    """Keep every hand-written region, and never reuse one of their ids.
+    """Keep every hand-written region, and never reuse one of their ids — or a retired one.
 
     Lochaber and the Cairngorms are curated areas with no Geofabrik equivalent, and they
     are published — a regions.json without them would delist them on the next upload.
@@ -700,7 +735,7 @@ def merge_with_manual(generated):
     # Human decisions survive a regeneration rather than being silently reset on the next
     # run — see overrides().
     sticky = overrides()
-    taken = {r["id"] for r in manual}
+    taken = {r["id"] for r in manual} | RETIRED_IDS
     for record in generated:
         record.update(sticky.get(record["id"], {}))
     for record in generated:

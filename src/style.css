@@ -557,6 +557,69 @@ body {
   cursor: pointer;
 }
 
+/* --- The legend ------------------------------------------------------------------------
+   Swatches are drawn in the map's own colours, not the app's UI theme tokens: peaks,
+   paths, contours and routes render in fixed colours regardless of light/dark mode, so a
+   swatch that followed --accent etc. would drift out of sync with what's actually on the
+   map the moment the theme changes. */
+.legend-section + .legend-section {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.legend-section h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.4rem 0;
+}
+
+.legend-swatch {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 1.5rem;
+}
+
+.legend-swatch svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.legend-hillshade-swatch {
+  width: 2.5rem;
+  height: 1.5rem;
+  border-radius: 0.25rem;
+  background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 45%, #475569 100%);
+}
+
+.legend-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.legend-row-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.legend-row-note {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 /* --- The debug overlay ---------------------------------------------------------------
    Opt-in (Settings → Debug overlay), off by default. Prints the sheet's own geometry
    over the map — see src/debug.ts for why. */

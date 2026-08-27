@@ -107,12 +107,13 @@ sheet.peek.innerHTML = `
   <div class="peek-row">
     <div id="chips"></div>
     <button id="theme-btn" type="button" class="chip chip-icon"></button>
+    <button id="legend-btn" type="button" class="chip chip-icon" aria-label="Map legend">▤</button>
     <button id="settings-btn" type="button" class="chip chip-icon" aria-label="Settings">⚙</button>
   </div>
 `;
 
 /** What the sheet body is currently showing. `null` is the resting state. */
-type View = 'peak' | 'places' | 'regions' | 'routes' | 'plan' | 'install' | 'settings';
+type View = 'peak' | 'places' | 'regions' | 'routes' | 'plan' | 'install' | 'settings' | 'legend';
 
 let view: View | null = null;
 
@@ -193,6 +194,7 @@ function renderChips(): void {
     );
   }
 
+  legendBtn.classList.toggle('active', view === 'legend');
   settingsBtn.classList.toggle('active', view === 'settings');
 }
 
@@ -297,6 +299,126 @@ function openSettingsView(): void {
   });
 }
 
+// --- Legend --------------------------------------------------------------------------
+
+const legendBtn = sheet.peek.querySelector<HTMLButtonElement>('#legend-btn')!;
+legendBtn.addEventListener('click', () => {
+  if (view === 'legend' && sheet.detent() !== 'peek') closeView();
+  else openLegendView();
+});
+
+/** One legend entry: a swatch (SVG, matched to the real map colours) plus a label and note. */
+function legendRow(swatch: string, label: string, note: string): string {
+  return `
+    <div class="legend-row">
+      <div class="legend-swatch">${swatch}</div>
+      <div class="legend-row-text">
+        <span class="legend-row-label">${label}</span>
+        <span class="legend-row-note">${note}</span>
+      </div>
+    </div>
+  `;
+}
+
+/** A plain line swatch, optionally cased in white the way paths and routes are on the map. */
+function lineSwatch(
+  color: string,
+  width: number,
+  { dash, cased, cap = 'round' }: { dash?: string; cased?: boolean; cap?: 'round' | 'butt' } = {},
+): string {
+  const casing = cased
+    ? `<line x1="3" y1="12" x2="37" y2="12" stroke="rgba(255,255,255,0.85)" stroke-width="${width + 3}" stroke-linecap="round"/>`
+    : '';
+  const dashAttr = dash ? ` stroke-dasharray="${dash}"` : '';
+  return (
+    `<svg viewBox="0 0 40 24">${casing}` +
+    `<line x1="3" y1="12" x2="37" y2="12" stroke="${color}" stroke-width="${width}"${dashAttr} stroke-linecap="${cap}"/></svg>`
+  );
+}
+
+function openLegendView(): void {
+  openView('legend', (body) => {
+    body.innerHTML = `
+      <p class="sheet-lede">What the lines and markers on the map mean.</p>
+
+      <div class="legend-section">
+        <h3>Summits</h3>
+        ${legendRow(
+          '<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="4.5" fill="#7a4a2b" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/></svg>',
+          'Summit',
+          'Named and given a height once its prominence clears the zoom threshold — less prominent summits appear as you zoom in.',
+        )}
+      </div>
+
+      <div class="legend-section">
+        <h3>Paths</h3>
+        ${legendRow(
+          lineSwatch('#8a3d2e', 2, { dash: '4 3', cased: true, cap: 'butt' }),
+          'Footpath',
+          'Dashed. Drawn once its region is downloaded, from zoom 12.',
+        )}
+        ${legendRow(
+          lineSwatch('#8a3d2e', 3.2, { cased: true }),
+          'Track',
+          'Solid and heavier than a footpath — vehicle-width.',
+        )}
+      </div>
+
+      <div class="legend-section">
+        <h3>Relief</h3>
+        ${legendRow(
+          '<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="rgba(120,85,55,0.55)" stroke-width="1.2"/></svg>',
+          'Contour line',
+          '10 m interval, where a region is fully downloaded.',
+        )}
+        ${legendRow(
+          '<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="#6b4a33" stroke-width="1.8"/><text x="21" y="6.5" font-size="6.5" fill="#6b4a33" text-anchor="middle">620</text></svg>',
+          'Index contour',
+          'Every 50 m, drawn heavier and labelled with height — count the thin lines between them for the rest.',
+        )}
+        ${legendRow(
+          '<div class="legend-hillshade-swatch"></div>',
+          'Hillshade',
+          'Shaded relief from downloaded terrain — fades out at close zoom, where contours carry the detail instead.',
+        )}
+      </div>
+
+      <div class="legend-section">
+        <h3>Routes</h3>
+        ${legendRow(
+          lineSwatch('#1d4ed8', 3.5, { cased: true }),
+          'Route',
+          'A planned or saved route, following real paths where the network allows.',
+        )}
+        ${legendRow(
+          lineSwatch('#b45309', 3.5, { dash: '5 4', cased: true, cap: 'butt' }),
+          'Unsnapped leg',
+          'No path connects these two waypoints — a straight line only, not a real route. Move a waypoint onto a path to fix it.',
+        )}
+        ${legendRow(
+          lineSwatch('#dc2626', 2, { dash: '3 3' }),
+          'Off-route',
+          'Shown while following a route — the way back to it.',
+        )}
+      </div>
+
+      <div class="legend-section">
+        <h3>Offline coverage</h3>
+        ${legendRow(
+          '<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="#15803d" fill-opacity="0.12" stroke="#15803d" stroke-width="1.5"/></svg>',
+          'Downloaded region',
+          'Full detail, works offline.',
+        )}
+        ${legendRow(
+          '<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="#2563eb" fill-opacity="0.08" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="3 3"/></svg>',
+          'Available to download',
+          'Outlined below full detail zoom — get it from the Offline tab.',
+        )}
+      </div>
+    `;
+  });
+}
+
 sheet.open('peek');
 
 
@@ -324,6 +446,7 @@ const VIEW_LABEL: Record<View, string> = {
   plan: 'Route planner',
   install: 'Add to Home Screen',
   settings: 'Settings',
+  legend: 'Map legend',
 };
 
 const terrainSource: maplibregl.SourceSpecification = USE_FALLBACK_TERRAIN

@@ -1210,6 +1210,15 @@ body {
   vector-effect: non-scaling-stroke;
 }
 
+/* "You are here". White-stroked so it reads over both the fill and the line, on the
+   light plan panel and the dark follow screen alike. */
+.profile-position {
+  fill: var(--accent-strong);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
 .route-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1522,6 +1531,17 @@ body {
   font-size: 0.8rem;
   line-height: 1.4;
   color: var(--follow-muted);
+}
+
+/* The follow screen's surface is always the dark navy token, in both app themes (see the
+   comment on .route-follow) — the marker's halo has to match that rather than the
+   light-theme --surface it uses everywhere else, or it reads as a hole in the line. */
+.route-follow .profile-chart {
+  margin-top: 1rem;
+}
+
+.route-follow .profile-position {
+  stroke: var(--follow-surface);
 }
 
 .route-follow .route-actions {

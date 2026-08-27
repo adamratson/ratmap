@@ -10,6 +10,12 @@ import { formatDistance } from './geo';
 export interface ChartOptions {
   width?: number;
   height?: number;
+  /**
+   * Distance along the route to mark as "here", metres. Draws nothing when null/undefined,
+   * outside the route, or landing inside a DEM coverage gap — a dot on invented ground
+   * would be exactly the kind of confident wrong answer this chart otherwise avoids.
+   */
+  currentDistanceM?: number | null;
 }
 
 /**
@@ -71,7 +77,44 @@ export function renderProfileChart(
     );
   }
 
+  if (options.currentDistanceM != null) {
+    const ele = elevationAt(profile, options.currentDistanceM);
+    if (ele !== null) {
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      marker.setAttribute('cx', x(options.currentDistanceM).toFixed(2));
+      marker.setAttribute('cy', y(ele).toFixed(2));
+      marker.setAttribute('r', '4');
+      marker.setAttribute('class', 'profile-position');
+      svg.append(marker);
+    }
+  }
+
   return svg;
+}
+
+/**
+ * Elevation at an arbitrary distance along the route, interpolated between the two
+ * bracketing samples. Null outside the route or when either bracketing sample has no DEM
+ * value — see the note on {@link ChartOptions.currentDistanceM}.
+ */
+function elevationAt(profile: ElevationProfile, distanceM: number): number | null {
+  const points = profile.points;
+  if (points.length === 0) return null;
+  if (distanceM < points[0].distanceM || distanceM > points[points.length - 1].distanceM) {
+    return null;
+  }
+
+  for (let i = 1; i < points.length; i++) {
+    if (points[i].distanceM < distanceM) continue;
+    const a = points[i - 1];
+    const b = points[i];
+    if (a.ele === null || b.ele === null) return null;
+    if (b.distanceM === a.distanceM) return a.ele;
+    const t = (distanceM - a.distanceM) / (b.distanceM - a.distanceM);
+    return a.ele + t * (b.ele - a.ele);
+  }
+
+  return points[points.length - 1].ele;
 }
 
 function path(d: string, className: string): SVGPathElement {

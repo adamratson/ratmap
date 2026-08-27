@@ -1,6 +1,6 @@
 import maplibregl, { type Map as MLMap, type MapMouseEvent } from 'maplibre-gl';
 import type { LngLat } from './geo';
-import { boundsOf, formatDistance, pathLengthMetres } from './geo';
+import { boundsOf, formatDistance, nearestPointOnPath, pathLengthMetres } from './geo';
 import { OfflineRouter } from './router';
 import { RouteDraft, type LegSlot, type Waypoint } from './route-model';
 import {
@@ -40,6 +40,12 @@ export interface RouteSummary {
   profileNote: string | null;
   follow: FollowState | null;
   following: boolean;
+  /**
+   * Distance along the route nearest to the last GPS fix, metres — for the "you are here"
+   * dot on the elevation chart. Null with no fix yet, no route, or the fix too far from
+   * this route to mean anything (see {@link NEARBY_ROUTE_M}).
+   */
+  currentDistanceM: number | null;
 }
 
 /**
@@ -76,6 +82,18 @@ export interface RoutePlannerOptions {
  */
 const CLICK_SUPPRESSION_MS = 400;
 
+/**
+ * How far a GPS fix can be from the route and still be shown as "here" on the elevation
+ * chart while just viewing a plan, rather than following it.
+ *
+ * Wider than the off-route follow threshold (60 m, see follow.ts) on purpose: that one is a
+ * warning that has to stay tight to mean anything, this is only informational. Someone who
+ * has stepped off the path to sit down should still see roughly where they are, not have
+ * the dot vanish — but someone planning a route from across town should not see a dot at
+ * all, which is what an unbounded "nearest point" would otherwise draw.
+ */
+const NEARBY_ROUTE_M = 250;
+
 export class RoutePlanner {
   private readonly map: MLMap;
   private readonly registry: TileSourceRegistry;
@@ -103,6 +121,8 @@ export class RoutePlanner {
 
   private follower: RouteFollower | null = null;
   private followState: FollowState | null = null;
+  /** Last GPS fix, kept regardless of follow state so the plan panel can show it too. */
+  private currentPosition: LngLat | null = null;
   /**
    * Held for as long as a route is being followed.
    *
@@ -335,12 +355,17 @@ export class RoutePlanner {
     this.emit();
   }
 
-  /** Feed a GPS fix in. No-op unless following is on. */
+  /**
+   * Feed a GPS fix in. Kept for the plan panel's "you are here" dot even when not
+   * following; the off-route line and progress figures still only update while following.
+   */
   updatePosition(position: LngLat): void {
-    if (!this.follower) return;
-    const state = this.follower.update(position);
-    this.followState = state;
-    setOffRouteLine(this.map, state?.isOffRoute ? position : null, state?.nearest ?? null);
+    this.currentPosition = position;
+    if (this.follower) {
+      const state = this.follower.update(position);
+      this.followState = state;
+      setOffRouteLine(this.map, state?.isOffRoute ? position : null, state?.nearest ?? null);
+    }
     this.emit();
   }
 
@@ -581,7 +606,21 @@ export class RoutePlanner {
       profileNote: this.profileNote,
       follow: this.followState,
       following: this.follower !== null,
+      currentDistanceM: this.currentDistanceM(),
     };
+  }
+
+  /** See {@link RouteSummary.currentDistanceM}. */
+  private currentDistanceM(): number | null {
+    if (this.followState) return this.followState.alongM;
+    if (!this.currentPosition) return null;
+
+    const coords = this.draft.coordinates();
+    if (coords.length < 2) return null;
+
+    const nearest = nearestPointOnPath(coords, this.currentPosition);
+    if (!nearest || nearest.distanceM > NEARBY_ROUTE_M) return null;
+    return nearest.alongM;
   }
 
   private emit(): void {

@@ -23,6 +23,7 @@ const BASE: RouteSummary = {
   profileNote: null,
   follow: null,
   following: false,
+  currentDistanceM: null,
 };
 
 function render(summary: Partial<RouteSummary>): HTMLElement {

@@ -69,7 +69,9 @@ function planSection(
   }
 
   if (summary.profile) {
-    const chart = renderProfileChart(summary.profile);
+    const chart = renderProfileChart(summary.profile, {
+      currentDistanceM: summary.currentDistanceM,
+    });
     if (chart) section.append(chart);
   }
 
@@ -185,6 +187,11 @@ function followSection(summary: RouteSummary, planner: RoutePlanner): HTMLElemen
         : `On route — ${formatDistance(follow.offRouteM)} from the line`,
     );
     section.append(state);
+
+    if (summary.profile) {
+      const chart = renderProfileChart(summary.profile, { currentDistanceM: follow.alongM });
+      if (chart) section.append(chart);
+    }
 
     if (follow.isOffRoute) {
       section.append(el('p', 'follow-note', 'The dashed red line points back to the route.'));

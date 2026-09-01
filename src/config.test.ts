@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const R2_ARTIFACT_VARS = [
-  'VITE_R2_BASE_URL',
+const TILES_ARTIFACT_VARS = [
+  'VITE_TILES_BASE_URL',
   'VITE_BASEMAP_PMTILES_URL',
   'VITE_TERRAIN_PMTILES_URL',
   'VITE_PEAKS_PMTILES_URL',
@@ -15,14 +15,14 @@ describe('config', () => {
     // Explicitly cleared, not merely "not set": a developer's .env.local is loaded by
     // Vitest too, and would otherwise make these assert whatever happens to be configured
     // on this machine rather than the committed defaults.
-    for (const name of R2_ARTIFACT_VARS) vi.stubEnv(name, undefined);
+    for (const name of TILES_ARTIFACT_VARS) vi.stubEnv(name, undefined);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it('defaults every artifact to our own R2 bucket (C15 — we serve our own copies)', async () => {
+  it('defaults every artifact to our own bucket (C15 — we serve our own copies)', async () => {
     const config = await import('./config');
 
     for (const url of [
@@ -36,8 +36,8 @@ describe('config', () => {
     }
   });
 
-  it('lets VITE_R2_BASE_URL move every artifact at once (Phase 3 custom domain swap)', async () => {
-    vi.stubEnv('VITE_R2_BASE_URL', 'https://tiles.example.com');
+  it('lets VITE_TILES_BASE_URL move every artifact at once (e.g. a custom domain)', async () => {
+    vi.stubEnv('VITE_TILES_BASE_URL', 'https://tiles.example.com');
 
     const config = await import('./config');
 

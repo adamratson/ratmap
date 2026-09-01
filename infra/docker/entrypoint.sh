@@ -35,7 +35,7 @@ ratmap infra toolchain
 Mounts this image expects (see docker/README.md):
   /work                     >= 150 GB free   OSM cache + scratch; keep it between runs
   /opt/ratmap/infra/dist    >= 20 GB free    build output
-  /opt/ratmap/infra/.env    (upload only)    R2 credentials, read-only
+  /opt/ratmap/infra/.env    (upload only)    object storage credentials, read-only
 
 Everything the build scripts honour as an environment variable still works:
   PEAKS_SOURCE_URLS PLACES_SOURCE_URLS WORLD_SOURCE_URL TERRAIN_SOURCE_URL

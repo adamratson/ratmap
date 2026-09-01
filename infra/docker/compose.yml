@@ -53,9 +53,9 @@ services:
       # point of mounting it is that the host's copy is the one that changes.
       - ../regions.json:/opt/ratmap/infra/regions.json
 
-    # R2 credentials for upload.sh. Optional: absent, every stage except upload still
-    # runs. Injected as environment rather than bind-mounted, because a bind mount of a
-    # file that doesn't exist yet silently becomes a directory.
+    # Object storage credentials for upload.sh. Optional: absent, every stage except
+    # upload still runs. Injected as environment rather than bind-mounted, because a bind
+    # mount of a file that doesn't exist yet silently becomes a directory.
     env_file:
       - path: ../.env
         required: false

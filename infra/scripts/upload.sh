@@ -1,21 +1,38 @@
 #!/usr/bin/env bash
-# Uploads every file in infra/dist/ to R2. Needs infra/.env filled in per infra/SETUP.md —
-# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / R2_ACCOUNT_ID / R2_BUCKET.
+# Uploads every file in infra/dist/ to Krystal Object Storage. Needs infra/.env filled in
+# per infra/SETUP.md — AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / S3_BUCKET / S3_ENDPOINT
+# / S3_REGION.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-require_cmd pmtiles
 
-: "${R2_ACCOUNT_ID:?Set R2_ACCOUNT_ID in infra/.env — see infra/SETUP.md}"
-: "${R2_BUCKET:?Set R2_BUCKET in infra/.env — see infra/SETUP.md}"
+: "${S3_BUCKET:?Set S3_BUCKET in infra/.env — see infra/SETUP.md}"
+: "${S3_ENDPOINT:?Set S3_ENDPOINT in infra/.env — see infra/SETUP.md}"
+: "${S3_REGION:?Set S3_REGION in infra/.env — see infra/SETUP.md}"
 : "${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID in infra/.env — see infra/SETUP.md}"
 : "${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY in infra/.env — see infra/SETUP.md}"
 
-# A bucket created with a jurisdiction (EU/FedRAMP/US data-location restriction) is only
-# reachable via a jurisdiction-qualified endpoint host. Hitting the default host for such a
-# bucket fails as a blanket 403 AccessDenied on *every* operation including List — which
-# looks exactly like a bad or misscoped credential, not a wrong URL. Cost a long debugging
-# detour on 2026-08-21; hence R2_JURISDICTION.
-R2_ENDPOINT_HOST="${R2_ACCOUNT_ID}${R2_JURISDICTION:+.${R2_JURISDICTION}}.r2.cloudflarestorage.com"
-BUCKET_URL="s3://${R2_BUCKET}?region=auto&endpoint=https://${R2_ENDPOINT_HOST}"
+# `pmtiles upload` (gocloud's aws-sdk-go-v2-based S3 client) fails every write against
+# Krystal with a flat SigV4 "SignatureDoesNotMatch", regardless of region string or
+# path-style addressing — tested 2026-08-28, not a config problem, a client incompatibility
+# with Krystal's Swift-based S3 gateway. `aws s3 cp` (botocore) signs the exact same request
+# successfully, so it does the uploading here instead; nothing pmtiles-specific was
+# happening in the old call, it was just a multipart PUT. That also drops the pmtiles CLI
+# as an upload-time dependency.
+#
+# aws-cli v2's default CRC32 request-checksum trailer is a separate, known incompatibility
+# with non-AWS S3 gateways (hit against R2 too, see infra/docker/README.md) — force it off.
+export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
+AWS_DEFAULT_REGION="$S3_REGION"
+export AWS_DEFAULT_REGION
+BUCKET_URL="s3://${S3_BUCKET}"
+
+s3_cp() {
+  aws s3 cp "$1" "${BUCKET_URL}/$2" --endpoint-url "$S3_ENDPOINT" "${@:3}"
+}
+
+s3_head_size() {
+  aws s3api head-object --bucket "$S3_BUCKET" --key "$1" --endpoint-url "$S3_ENDPOINT" \
+    --query ContentLength --output text 2>/dev/null || echo "absent"
+}
 
 shopt -s nullglob globstar
 
@@ -34,28 +51,21 @@ fi
 #
 # A global catalogue is hundreds of GB across hundreds of archives, and it is not built in
 # one sitting: every run of this script after the first would otherwise re-push everything
-# that had not changed. Size is the check because pmtiles upload is a multipart upload,
-# whose ETag is not the file's md5 and cannot be compared to anything local. An archive
-# rebuilt at the same size is possible in principle, so FORCE_UPLOAD=1 re-pushes.
+# that had not changed. Size is the check because a large upload goes as multipart, whose
+# ETag is not the file's md5 and cannot be compared to anything local. An archive rebuilt
+# at the same size is possible in principle, so FORCE_UPLOAD=1 re-pushes.
 require_cmd aws
-
-remote_size() {
-  AWS_DEFAULT_REGION=auto aws s3api head-object \
-    --bucket "$R2_BUCKET" --key "$1" \
-    --endpoint-url "https://${R2_ENDPOINT_HOST}" \
-    --query ContentLength --output text 2>/dev/null || echo "absent"
-}
 
 uploaded=0
 skipped=0
 for key in "${files[@]}"; do
   if [ "${FORCE_UPLOAD:-}" != "1" ] && \
-     [ "$(remote_size "$key")" = "$(wc -c < "$DIST_DIR/$key" | tr -d ' ')" ]; then
+     [ "$(s3_head_size "$key")" = "$(wc -c < "$DIST_DIR/$key" | tr -d ' ')" ]; then
     skipped=$((skipped + 1))
     continue
   fi
   echo "Uploading $key"
-  pmtiles upload "$DIST_DIR/$key" "$key" --bucket="$BUCKET_URL"
+  s3_cp "$DIST_DIR/$key" "$key" --no-progress
   uploaded=$((uploaded + 1))
 done
 
@@ -73,9 +83,8 @@ if [ -f "$MANIFEST" ]; then
   # naming only Montenegro was one command away from delisting Lochaber.
   PUBLISHED_MANIFEST="$(mktemp)"
   trap 'rm -f "$PUBLISHED_MANIFEST"' EXIT
-  if AWS_DEFAULT_REGION=auto aws s3 cp "s3://${R2_BUCKET}/regions/manifest.json" \
-       "$PUBLISHED_MANIFEST" --endpoint-url "https://${R2_ENDPOINT_HOST}" \
-       --no-progress >/dev/null 2>&1; then
+  if aws s3 cp "${BUCKET_URL}/regions/manifest.json" "$PUBLISHED_MANIFEST" \
+       --endpoint-url "$S3_ENDPOINT" --no-progress >/dev/null 2>&1; then
     MISSING="$(python3 - "$PUBLISHED_MANIFEST" "$MANIFEST" <<'PY'
 import json, sys
 def ids(path):
@@ -95,10 +104,7 @@ PY
   fi
 
   echo "Uploading regions/manifest.json"
-  AWS_DEFAULT_REGION=auto aws s3 cp "$MANIFEST" "s3://${R2_BUCKET}/regions/manifest.json" \
-    --endpoint-url "https://${R2_ENDPOINT_HOST}" \
-    --content-type application/json \
-    --no-progress
+  s3_cp "$MANIFEST" "regions/manifest.json" --content-type application/json --no-progress
 fi
 
-echo "Done. Public base URL: ${R2_PUBLIC_URL:-<set R2_PUBLIC_URL in infra/.env>}"
+echo "Done. Public base URL: ${PUBLIC_BASE_URL:-<set PUBLIC_BASE_URL in infra/.env>}"

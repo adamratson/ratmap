@@ -169,7 +169,7 @@ describe('app bootstrap', () => {
     expect(addProtocolSpy.mock.calls[0]?.[0]).toBe('pmtiles');
   });
 
-  it('builds the style from our own R2 archives, both routed through the registry', async () => {
+  it('builds the style from our own archives, both routed through the registry', async () => {
     bootstrapStorageMock.mockResolvedValue({ supported: false });
 
     await loadMain();

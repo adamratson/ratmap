@@ -1,73 +1,54 @@
-# R2 setup (manual, one-time)
+# Krystal Object Storage setup (manual, one-time)
 
-This is the one part of Phase 1 that needs your Cloudflare account — nothing here can be
+This is the one part of Phase 1 that needs your Krystal account — nothing here can be
 scripted from this repo without credentials only you can create. Do this once, then hand
 the bucket name + credentials to the scripts in `infra/scripts/`.
 
+Migrated here from Cloudflare R2 on 2026-08-28 — see `plans/krystal-migration.md` for why
+and how the cutover was done.
+
 ## 1. Create the bucket
 
-1. [dash.cloudflare.com](https://dash.cloudflare.com) → **R2 Object Storage** in the left
-   sidebar. First time in R2 on this account, Cloudflare requires a payment method on file
-   even to use the free tier (10 GB storage, no egress fees) — it won't charge unless you
-   exceed free-tier limits, which catalog-only (§8.2) comes nowhere near.
-2. **Create bucket** → name it (e.g. `ratmap-tiles`). Location: Automatic is fine.
-3. **If you pick a jurisdiction** (EU / FedRAMP / US data-location restriction) rather than
-   Automatic, set `R2_JURISDICTION` in `infra/.env` to match (`eu`, `fedramp`, `us`).
-   Jurisdiction buckets are *only* reachable at
-   `https://<account>.<jurisdiction>.r2.cloudflarestorage.com`, and hitting the default
-   host instead fails as a blanket **403 AccessDenied on every operation, including
-   List** — indistinguishable from a bad or misscoped credential. Leave `R2_JURISDICTION`
-   unset for Automatic. (The `ratmap-tiles` bucket in use is `eu`.)
+Krystal's console (Object Storage) → create a bucket (e.g. `ratmap-tiles`), region
+`uk-lon-1`. No jurisdiction concept here — unlike R2, there's nothing analogous to
+`R2_JURISDICTION` to get wrong.
 
-## 2. Public access — no custom domain yet
+## 2. Public access and CORS — nothing to configure
 
-Per §3, the custom domain is deferred to Phase 3. For now:
+Krystal serves bucket objects publicly at
+`https://<bucket>.<region>.katapultobjects.com` with no separate "enable public access"
+step, and — unlike R2 — **there is no CORS policy to write**. The bucket's S3-compatible
+gateway (Swift-based) emits a fixed, unconfigurable
+`Access-Control-Allow-Origin: *` on every response, already exposing `ETag` and
+`Content-Range`. Verified directly against the live bucket 2026-08-27/28:
 
-1. Open the bucket → **Settings** tab → **Public Development URL** → **Allow Access**.
-2. Cloudflare gives you a URL like `https://pub-<hash>.r2.dev`. That's the bucket's public
-   base URL — send it to me, it goes in `infra/.env` (see `infra/README.md`) and becomes
-   the origin every `pmtiles://` reference in the app points at.
-
-`.r2.dev` is rate-limited and meant for exactly this (dev/testing), not production traffic
-— fine through Phase 1/2, swap for a real custom domain before Phase 3 launch.
-
-## 3. CORS policy (C4 — do not skip)
-
-Same bucket → **Settings** → **CORS Policy** → paste:
-
-```json
-[
-  {
-    "AllowedOrigins": ["*"],
-    "AllowedMethods": ["GET", "HEAD"],
-    "AllowedHeaders": ["Range"],
-    "ExposeHeaders": ["ETag", "Content-Range", "Content-Length", "Accept-Ranges"],
-    "MaxAgeSeconds": 3600
-  }
-]
+```sh
+curl -s -H "Origin: https://example.github.io" -H "Range: bytes=0-126" -D - \
+  "https://<bucket>.<region>.katapultobjects.com/<some-object>" -o /dev/null
+# got: 206, Content-Range, Accept-Ranges, Access-Control-Allow-Origin: *,
+#      Access-Control-Expose-Headers listing etag + content-type + ...
 ```
 
-`AllowedOrigins: ["*"]` is deliberate, not lazy: everything in this bucket is public map
-data (same posture Protomaps' own buckets use), and a wildcard origin means you don't have
-to remember to add every `localhost` port you happen to dev on. Tighten it in Phase 3 if
-you want.
+This is C4's exact requirement, satisfied by default. Still worth re-running this check
+(`infra/README.md`'s "Verify" section) after any bucket recreation or provider change —
+C4 is a constraint on the *outcome*, not on this specific provider having solved it once.
 
-Without `Range` in `AllowedHeaders` and `ETag`/`Content-Range` in `ExposeHeaders`
-specifically, PMTiles range requests fail in-browser while looking fine in `curl` — this is
-exactly the C4 failure mode the main spec warns about.
+## 3. Access keys for scripted uploads
 
-## 4. API token for scripted uploads
+Katapult console → Object Storage → your bucket → **Access Keys** → **Create**. Copy the
+Access Key ID and Secret immediately, same one-time-display caveat as R2 had.
 
-1. R2 home → **Manage R2 API Tokens** → **Create API Token**.
-2. Permissions: **Object Read & Write**. Scope to the specific bucket, not account-wide.
-3. Cloudflare shows the credentials **once** — copy immediately:
-   - Access Key ID
-   - Secret Access Key
-   - Account ID (also visible in the R2 dashboard URL / right sidebar)
-4. Put them in `infra/.env` (gitignored — see `infra/README.md`), never committed.
+## 4. Fill in `infra/.env`
 
-## 5. Tell me
+```sh
+cp .env.example .env
+```
 
-Once done, I need: the bucket's public `.r2.dev` URL, and confirmation the API token /
-`infra/.env` is filled in on your machine. I can't read your Cloudflare account or
-credentials — the upload script just needs them present locally when you run it.
+Then set `S3_BUCKET`, `S3_ENDPOINT` (`https://<region>.katapultobjects.com` — note this is
+**not** the per-bucket public URL from step 2, it's the region-level S3 API endpoint),
+`S3_REGION`, `PUBLIC_BASE_URL` (the per-bucket URL from step 2), and the access key pair as
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` — the AWS-CLI-standard names, since
+`infra/scripts/upload.sh` shells out to `aws s3 cp` (see that script's header comment for
+why, not `pmtiles upload`).
+
+`.env` is gitignored — never commit it.

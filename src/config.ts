@@ -1,26 +1,28 @@
-// Tile/data artifact locations. Phase 1 built these into our own R2 bucket
+// Tile/data artifact locations. Phase 1 built these into our own bucket
 // (infra/scripts/build-*.sh + upload.sh); C15 — we serve our own copies, never hotlink
 // Protomaps' or Mapterhorn's buckets.
 //
-// R2_BASE defaults to the bucket's public .r2.dev development URL. That host is
-// rate-limited and explicitly not for production traffic — Phase 3 swaps in a custom
-// domain by setting VITE_R2_BASE_URL, no code change needed here.
-export const R2_BASE_URL =
-  import.meta.env.VITE_R2_BASE_URL ?? 'https://pub-1a40001ed7db4ec58589d03151a30bad.r2.dev';
+// Migrated from Cloudflare R2 to Krystal Object Storage 2026-08-28 (see
+// plans/krystal-migration.md) — a UK company, and R2 has no UK data-residency
+// jurisdiction. TILES_BASE defaults to the bucket's raw katapultobjects.com URL; override
+// with VITE_TILES_BASE_URL (e.g. once a custom domain is set up), no code change needed
+// here.
+export const TILES_BASE_URL =
+  import.meta.env.VITE_TILES_BASE_URL ?? 'https://ratmap-tiles.uk-lon-1.katapultobjects.com';
 
-const R2_BASE = R2_BASE_URL;
+const TILES_BASE = TILES_BASE_URL;
 
 // C13: artifact filenames carry their build date, so a refresh is an explicit, reviewable
 // change here rather than a silent "latest" that can shift schema under us. C3: these are
 // also the registry keys, so they must stay globally unique.
 export const BASEMAP_PMTILES_URL =
-  import.meta.env.VITE_BASEMAP_PMTILES_URL ?? `${R2_BASE}/world-catalog-2026-08-21.pmtiles`;
+  import.meta.env.VITE_BASEMAP_PMTILES_URL ?? `${TILES_BASE}/world-catalog-2026-08-21.pmtiles`;
 
 export const TERRAIN_PMTILES_URL =
-  import.meta.env.VITE_TERRAIN_PMTILES_URL ?? `${R2_BASE}/terrain-global-2026-08-21.pmtiles`;
+  import.meta.env.VITE_TERRAIN_PMTILES_URL ?? `${TILES_BASE}/terrain-global-2026-08-21.pmtiles`;
 
 export const PEAKS_PMTILES_URL =
-  import.meta.env.VITE_PEAKS_PMTILES_URL ?? `${R2_BASE}/peaks-global.pmtiles`;
+  import.meta.env.VITE_PEAKS_PMTILES_URL ?? `${TILES_BASE}/peaks-global.pmtiles`;
 
 // The world catalog is a deliberately low-zoom extract (§8.2 catalog-only): it holds
 // z0-5 only, so MapLibre must be told to overzoom rather than request tiles that do not
@@ -50,10 +52,10 @@ export const TERRAIN_ATTRIBUTION =
   '<a href="https://mapterhorn.com/attribution" target="_blank" rel="noreferrer">© Mapterhorn</a>';
 
 // The FTS5 search index (C9). Shipped in public/ and precached by the service worker
-// rather than fetched from R2, because Phase 2's acceptance test requires search to work
-// on a cold offline start — an R2 fetch would need its own download+cache flow to survive
-// that. §3 puts the places index in OPFS long-term; Phase 4 moves it there per-region,
-// at which point this becomes the fallback for "no region downloaded yet".
+// rather than fetched from the bucket, because Phase 2's acceptance test requires search
+// to work on a cold offline start — a bucket fetch would need its own download+cache flow
+// to survive that. §3 puts the places index in OPFS long-term; Phase 4 moves it there
+// per-region, at which point this becomes the fallback for "no region downloaded yet".
 // Refresh with: infra/scripts/build-places.sh && cp infra/dist/places.sqlite public/data/
 export const PLACES_DB_URL = `${window.location.origin}${import.meta.env.BASE_URL}data/places.sqlite`;
 

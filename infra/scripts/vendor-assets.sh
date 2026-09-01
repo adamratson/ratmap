@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Vendors glyphs + sprites locally (C7): left remote, the offline map renders geometry
 # with no labels and no icons. Output goes straight into public/ — these ship with the
-# app, they're not a data artifact uploaded to R2.
+# app, they're not a data artifact uploaded to the bucket.
 #
 # Only vendors the 3 fontstacks the default (non-script-specific) style path actually
 # uses — Regular/Italic/Medium, matching our current {lang:'en'} usage in src/main.ts (see

@@ -1,8 +1,8 @@
 # infra
 
 Phase 1 tile/data pipeline (see `../docs/IMPLEMENTATION.md` §4 Phase 1). Scripted and
-re-runnable on data refresh — nothing here is a one-off manual process except the R2
-bucket itself (`SETUP.md`, needs your Cloudflare account).
+re-runnable on data refresh — nothing here is a one-off manual process except the bucket
+itself (`SETUP.md`, needs your Krystal account).
 
 ## Prerequisites
 
@@ -14,10 +14,10 @@ brew install tippecanoe pmtiles osmium-tool gdal   # gdal only needed for contou
 
 ## One-time setup
 
-Follow `SETUP.md` to create the R2 bucket, then:
+Follow `SETUP.md` to create the bucket, then:
 
 ```sh
-cp .env.example .env   # fill in R2_ACCOUNT_ID, R2_BUCKET, R2_PUBLIC_URL, AWS_* keys
+cp .env.example .env   # fill in S3_BUCKET, S3_ENDPOINT, S3_REGION, PUBLIC_BASE_URL, AWS_* keys
 ```
 
 `.env` is gitignored — never commit it.
@@ -56,8 +56,8 @@ build rather than surfacing on a mountain.
 ### Search index is app-shell, not a bucket artifact
 
 `places.sqlite` lands in `dist/` like everything else, but it does **not** get uploaded to
-R2 — copy it into the app instead, where the service worker precaches it so search works
-on a cold offline start:
+the bucket — copy it into the app instead, where the service worker precaches it so search
+works on a cold offline start:
 
 ```sh
 cp dist/places.sqlite ../public/data/places.sqlite
@@ -81,30 +81,35 @@ this doesn't need re-running on every data refresh the way the others do.
 ./scripts/upload.sh
 ```
 
-Uploads everything currently in `dist/` to the R2 bucket via `pmtiles upload` (S3-compatible,
-uses the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in `.env`).
+Uploads everything currently in `dist/` to the bucket via `aws s3 cp` (S3-compatible, uses
+the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in `.env`) — not `pmtiles upload`; see
+`upload.sh`'s header comment for why.
 
 ## Verify (C4 acceptance check)
 
 After uploading, confirm CORS and range requests actually work from a browser origin, not
 just `curl` — this is the exact failure mode C4 exists to catch. Send an `Origin` header;
-without one R2 returns no CORS headers at all and a plain `curl` looks deceptively fine:
+without one some providers return no CORS headers at all and a plain `curl` looks
+deceptively fine:
 
 ```sh
 curl -s -H "Origin: https://example.github.io" -H "Range: bytes=0-126" -D - \
-  "$R2_PUBLIC_URL/world-catalog-<date>.pmtiles" -o /dev/null
+  "$PUBLIC_BASE_URL/world-catalog-<date>.pmtiles" -o /dev/null
 # expect: 206, Content-Range, Accept-Ranges, Access-Control-Allow-Origin,
 #         Access-Control-Expose-Headers listing ETag + Content-Range
 ```
 
 Then load the app and confirm it renders — a browser enforces CORS on range requests where
 `curl` doesn't, so a clean `curl` result alone proves nothing. The app defaults to this
-bucket (`src/config.ts`); override with `VITE_R2_BASE_URL` in a repo-root `.env.local` to
-point at a different one.
+bucket (`src/config.ts`); override with `VITE_TILES_BASE_URL` in a repo-root `.env.local`
+to point at a different one.
 
-**Verified end-to-end 2026-08-21**: all three archives uploaded, preflight + ranged GET
-return the headers above, and the app rendered basemap, hillshade and peaks from R2 in a
-real browser (206s on all three, no console errors).
+**Verified end-to-end 2026-08-21** against Cloudflare R2; **migrated to Krystal Object
+Storage 2026-08-28** (`plans/krystal-migration.md`) — CORS/range re-verified directly
+against the live Krystal bucket before cutover (Krystal's gateway emits a fixed,
+unconfigurable `Access-Control-Allow-Origin: *`, so there was no CORS policy to write this
+time), and the full 213 GB catalog mirrored and checked byte-for-byte against the R2
+source.
 
 ## Not yet built
 
@@ -233,9 +238,13 @@ each slice costs a few hundred HEAD requests rather than re-pushing everything. 
 Two numbers worth knowing before starting. The upstream archives are **134.8 GB**
 (Protomaps planet, z0–15) and **705.9 GB** (Mapterhorn planet, z0–12) — measured, not
 estimated — and a catalogue of region cutouts at the default ceilings adds up to a large
-fraction of the first plus roughly a quarter of the second. At R2's $0.015/GB-month that
-is single-digit dollars a month with free egress; the cost that bites is the days of
-extraction, which is why the build is resumable at every level.
+fraction of the first plus roughly a quarter of the second. On Krystal that landed the live
+catalogue at **213 GB** (2026-08-28) — close enough to the £5/month plan's 250 GB included
+storage that growing the catalogue further is a real cost decision, not a rounding error
+the way R2's per-GB pricing made it (see §5 Cost in `docs/IMPLEMENTATION.md`); the same
+plan's 1 TB/month included transfer is the number to watch as region downloads add up,
+since unlike R2 egress isn't free here. The cost that bites hardest either way is the days
+of extraction, which is why the build is resumable at every level.
 
 ```sh
 ./scripts/build-region.sh lochaber --dry-run   # size it first

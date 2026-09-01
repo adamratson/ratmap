@@ -117,11 +117,12 @@ export const TEST_REGION = 'Lochaber';
 /**
  * How long to wait for {@link TEST_REGION} to come down.
  *
- * Generous, because the wire is the slow part and not under our control: the public
- * `.r2.dev` bucket URL is rate-limited and explicitly not meant for production traffic
- * (see src/config.ts). Measured at 15 kB/s while throttled, which is an hour for this
- * region — no timeout makes that pass, so the point of the limit is to fail promptly and
- * say why, not to outlast it.
+ * Generous, because the wire is the slow part and not under our control: network
+ * conditions in CI or on a slow connection vary, and no timeout makes an actually-stuck
+ * download pass, so the point of the limit is to fail promptly and say why, not to outlast
+ * a real hang. (Previously sized around the R2 `.r2.dev` dev URL's documented rate limit —
+ * Krystal's bucket carries no equivalent documented throttle, but the generous budget is
+ * kept for the same reason: the wire, not the app, is usually the slow part.)
  */
 const DOWNLOAD_TIMEOUT_MS = 240_000;
 
@@ -154,8 +155,8 @@ export async function downloadTestRegion(page: Page): Promise<void> {
     const progress = (await action.getAttribute('title')) ?? 'no progress reported';
     throw new Error(
       `${TEST_REGION} did not finish downloading within ${DOWNLOAD_TIMEOUT_MS / 1000}s ` +
-        `(${progress}). The public .r2.dev bucket is rate-limited; check throughput ` +
-        'before treating this as an app failure.',
+        `(${progress}). Check bucket/network throughput before treating this as an app ` +
+        'failure.',
       { cause },
     );
   }

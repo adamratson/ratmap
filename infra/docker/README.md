@@ -21,7 +21,7 @@ multi-day unattended run needs and a laptop run doesn't.
 | osmium-tool | Debian trixie (1.18.0) | `tags-filter` / `merge` / `export` |
 | GDAL | Debian trixie (3.10.3) | `gdal_contour`, `ogr2ogr` with the GeoJSONSeq driver |
 | python3 + sqlite3 | Debian trixie | The image build **fails** if FTS5 with `unicode61 remove_diacritics 2` doesn't work — C9's whole search index depends on it, and it's a distro build flag, not a guarantee |
-| awscli | Debian trixie (v2) | `manifest.json` upload only; request checksums forced to `when_required` so an aws-cli-v2/R2 checksum disagreement can't fail the last step of a three-day run |
+| awscli | Debian trixie (v2) | uploads (`upload.sh` uses `aws s3 cp`, not `pmtiles upload` — see its header comment); request checksums forced to `when_required` so an aws-cli-v2 checksum disagreement with a non-AWS S3 gateway (hit against both R2 and Krystal) can't fail the last step of a multi-day run |
 | numpy + scipy | in a venv at `/opt/ratmap/infra/.venv` | `build-peaks.sh`'s prominence pass requires an interpreter at exactly that path. Bounded to current majors rather than pinned; `ratmap doctor` reports what got installed (currently numpy 2.5.2, scipy 1.18.1) |
 
 Build args move any version without editing the Dockerfile:
@@ -239,7 +239,7 @@ slice is cheap.
 
 ## Upload
 
-`upload.sh` works in the container if R2 credentials are present. `compose.yml` loads
+`upload.sh` works in the container if object storage credentials are present. `compose.yml` loads
 `infra/.env` as environment (`required: false`, so its absence doesn't break every other
 stage) rather than bind-mounting it — a bind mount of a file that doesn't exist yet
 silently becomes a directory. `required:` needs Compose v2.24+; on an older Compose either

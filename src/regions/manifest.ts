@@ -1,4 +1,4 @@
-import { R2_BASE_URL } from '../config';
+import { TILES_BASE_URL } from '../config';
 
 // C16: the manifest schema is versioned and open-ended — a region is "a set of named
 // artifacts", not a fixed basemap+terrain pair. Nothing here may hardcode artifact names;
@@ -60,7 +60,7 @@ export interface RegionManifest {
 }
 
 export function artifactUrl(artifact: RegionArtifact): string {
-  return `${R2_BASE_URL}/${artifact.path}`;
+  return `${TILES_BASE_URL}/${artifact.path}`;
 }
 
 // The manifest lives on the network but the archives it describes live in OPFS. On a cold
@@ -95,7 +95,7 @@ export async function fetchManifest(signal?: AbortSignal): Promise<RegionManifes
   // Revalidation costs a conditional GET that answers 304 for a few hundred bytes; the
   // stronger `no-store` would only throw away the copy that makes that 304 possible.
   // (Offline, this fetch fails either way and the caller falls back to loadCachedManifest.)
-  const response = await fetch(`${R2_BASE_URL}/regions/manifest.json`, {
+  const response = await fetch(`${TILES_BASE_URL}/regions/manifest.json`, {
     signal,
     cache: 'no-cache',
   });

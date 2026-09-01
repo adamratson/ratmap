@@ -4,7 +4,17 @@ Replaces the R2 bucket behind every `pmtiles://` and manifest fetch with the exi
 Krystal (Katapult) Object Storage bucket. The app's static hosting stays on GitHub Pages —
 this is only the data origin.
 
-**Status:** Phase 0 passed 2026-08-27. Cleared to proceed.
+**Status:** Phases 0–5 complete as of 2026-08-28. The app is live against Krystal, verified
+end-to-end in a real browser (basemap/terrain/peaks all 200, manifest correctly trimmed to
+387 regions, zero console errors). `upload.sh` now targets Krystal via `aws s3 cp` (not
+`pmtiles upload` — see that script's header comment for the SigV4 incompatibility found and
+worked around). R2 is untouched and kept as the rollback window per §5 below — nothing
+there has been deleted yet.
+
+One item spun off separately, not part of this migration: commit 9d1ba06 retired
+`lochaber`/`cairngorms` with no replacement, and republishing a correct (trimmed) manifest
+during this cutover is what surfaced that four e2e specs now have no small region covering
+Ben Nevis. Tracked as its own follow-up task, not fixed here.
 
 ---
 

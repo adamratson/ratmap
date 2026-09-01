@@ -25,7 +25,7 @@ background geolocation and no background downloads — accepted, see §7.
 | C1 | **Call `navigator.storage.persist()` at startup and verify with `persisted()`. Refuse to start a region download if it returns false** — explain why instead. | Default storage is best-effort and evictable. Persistent mode is *excluded from eviction*. Never let a user believe they have offline maps they don't — they find out with no signal, on a mountain. |
 | C2 | **Installation gates persistence on both platforms — drive it in onboarding.** Detect standalone via `display-mode: standalone`. On **iOS** hand-hold Share → Add to Home Screen; on **Android** capture `beforeinstallprompt` and offer a real install button. | Both engines key `persist()` on installation: WebKit grants it "based on heuristics like whether the website is opened as a Home Screen Web App", and Chromium's heuristic counts PWA installation plus engagement. Install is not just discovery — it *gates the storage guarantee*. Only iOS lacks `beforeinstallprompt`, so only iOS needs the manual walkthrough. |
 | C3 | **Every PMTiles artifact must have a globally unique filename.** | `FileSource.getKey()` returns `file.name`, and that key is how `Protocol.add()` registers the archive. Two regions each shipping `basemap.pmtiles` collide and silently serve the wrong region's tiles. Use `<region>-basemap.pmtiles`. |
-| C4 | **Configure CORS on the R2 bucket: allow the `Range` request header, expose `ETag` and `Content-Range`.** | Unlike a native app, a browser enforces CORS on range requests. Without exposed `ETag`, the pmtiles library cannot do its archive-consistency check. Classic silent failure — tiles just never load. |
+| C4 | **The tile bucket must return CORS-permitted range requests: allow the `Range` request header, expose `ETag` and `Content-Range`.** | Unlike a native app, a browser enforces CORS on range requests. Without exposed `ETag`, the pmtiles library cannot do its archive-consistency check. Classic silent failure — tiles just never load. Provider-specific note: R2 needed a hand-written CORS policy (§4 Phase 1); Krystal's gateway emits this fixed and unconfigurable, so there's nothing to configure there — but re-verify with the curl check in `infra/README.md` on any future provider change, since this is a constraint on the outcome, not a one-time setup step. |
 | C5 | **Store `.pmtiles` archives in OPFS, not the service-worker Cache API.** Keep the SW cache for the app shell only. | Cache API has a much smaller effective quota; OPFS gives real random-access file handles, which is what range reads need. |
 | C6 | **Do not expect an elevation value on Protomaps peaks.** | Schema v4 puts peaks in `pois` as `kind=peak` with `kind`, `cuisine`, `religion`, `sport`, `iata` — no `ele`. (v2's `physical_point` had it; that layer is gone.) Use our own `peaks.pmtiles`. |
 | C7 | **Bundle glyphs and sprites locally.** | They load from URLs independent of the tile archive. Left remote, the offline map renders geometry with no labels and no icons. |
@@ -118,21 +118,28 @@ hillshade and accept that offline terrain needs a different encoding.
 
 ## 3. Architecture
 
-**Everything is a static file.** One R2 bucket (CORS per C4; custom domain deferred to
-Phase 6 — R2's own `*.r2.dev` public bucket URL is fine through Phase 1/2 dev), plus
-static app hosting. **Deployed:** GitHub Pages at `<user>.github.io/ratmap`, not the
-Cloudflare Pages this section originally named — decided during Phase 0, no material
-difference to this architecture (still static hosting, still zero compute). Zero runtime
-compute through Phase 3.
+**Everything is a static file.** One object storage bucket (CORS per C4; custom domain
+still deferred — the bucket's own raw public URL is fine for now, see §8), plus static app
+hosting. **Deployed:** GitHub Pages at `<user>.github.io/ratmap`, not the Cloudflare Pages
+this section originally named — decided during Phase 0, no material difference to this
+architecture (still static hosting, still zero compute). **Bucket migrated from Cloudflare
+R2 to Krystal Object Storage 2026-08-28** (`plans/krystal-migration.md`) — R2 has no UK
+data-residency jurisdiction and Krystal is a UK company; no material difference to this
+architecture either (still one bucket, still zero compute), see §8 for the decision.
+Zero runtime compute through Phase 3.
 
 **§8.2 resolved: catalog-only**, not full planet (2026-08-21). No `planet-<version>.pmtiles`.
 Instead a small low-zoom world extract for "pan anywhere at low detail," plus regions built
-on demand (Phase 3). Cuts R2 storage from ~120 GB/~$3/month to a rounding error; the
-tradeoff is panning outside a downloaded region shows nothing useful above the low zoom cap
+on demand (Phase 3). Intended to cut storage from ~120 GB/~$3/month (R2 pricing) to a
+rounding error — **that no longer holds**: the catalogue extended 2026-08-25 to global
+coverage (§8.2) landed the live bucket at 213 GB, and Krystal's cost model is a £5/month
+floor covering 250 GB + 1 TB transfer rather than R2's per-GB/no-egress-fee model, so
+further catalogue growth is a real cost decision now (see §5). The zoom-cap tradeoff is
+unchanged: panning outside a downloaded region shows nothing useful above the low zoom cap
 until that region is extracted.
 
 ```
-R2 bucket (CORS: allow Range, expose ETag + Content-Range)
+Krystal bucket (CORS: allow Range, expose ETag + Content-Range — fixed/unconfigurable here)
 ├─ world-catalog-<version>.pmtiles Protomaps basemap, low-zoom extract, pinned (C13)
 ├─ terrain-global.pmtiles          coarse, pmtiles extract from Mapterhorn
 ├─ peaks-global.pmtiles            ours: natural=peak|volcano|saddle + ele
@@ -179,8 +186,9 @@ npm 11.12.1.
 Separate repo or `infra/`. Scripted and re-runnable on data refresh. **Identical to the
 native plan except for CORS.**
 
-- R2 bucket, **no custom domain yet** (use the bucket's `*.r2.dev` URL — Phase 6 swaps in
-  a custom domain), **no Worker**, CORS per C4.
+- Krystal Object Storage bucket (migrated from R2, §8), **no custom domain yet** (use the
+  bucket's raw `katapultobjects.com` URL — a custom domain remains open, §8), no compute
+  layer in front of it, CORS per C4 (satisfied by default on Krystal — see §1).
 - **Catalog-only (§8.2, decided 2026-08-21):** `pmtiles extract` a low-zoom-capped world
   cutout from a pinned Protomaps published build — not the full ~120 GB planet. Full
   per-region detail comes from Phase 3's on-demand extracts, not this file.
@@ -246,7 +254,7 @@ checked in a real browser (headless Chromium against the production build). Note
 
 ### Phase 3 — Offline regions
 
-- Build pipeline (offline, not a service): `pmtiles extract` per region → R2, plus a
+- Build pipeline (offline, not a service): `pmtiles extract` per region → the bucket, plus a
   static versioned manifest of name, bbox, per-artifact size, build date (C16). Unique
   filenames (C3).
 - Terrain per region needs **no generation** — an extract from Mapterhorn.
@@ -577,9 +585,10 @@ Small, compared to the native path — no review, no store, no privacy manifest.
   — a flat triangle, no real design. They become the app's face on a home screen.
 - **No iOS splash screens exist** (`apple-touch-startup-image`), so an installed iOS app
   shows a blank screen while booting.
-- The R2 bucket is on its rate-limited `*.r2.dev` development URL, which Cloudflare
-  explicitly says is not for production traffic. A custom domain fixes that and §8.1
-  together.
+- The bucket is on its raw `katapultobjects.com` URL rather than a custom domain. Unlike
+  R2's `*.r2.dev` this isn't documented as rate-limited, but a custom domain is still
+  cleaner long-term (own DNS, a future provider swap becomes a config change only) and
+  would resolve §8.1 too.
 - On-device verification (iPhone Home Screen install + Airplane Mode + force-quit;
   Android Chrome equivalent) has still never been run — everything so far is desktop.
 
@@ -589,14 +598,19 @@ Small, compared to the native path — no review, no store, no privacy manifest.
 
 | Item | Cost |
 |---|---|
-| Cloudflare R2 (~120 GB planet) | ~$3 / month, no egress fees |
-| Cloudflare Pages hosting | Free tier |
-| Domain | ~$10–15 / year |
+| Krystal Object Storage (213 GB catalogue, 2026-08-28) | £5/month flat — covers 250 GB storage + 1 TB transfer; £0.02/GB over either cap |
+| GitHub Pages hosting | Free |
+| Domain | ~$10–15 / year, still open (§8) |
 | Workers / search / app stores | $0 — not used |
 | Routing engine | **$0 — none.** Phase 4 routes on-device over the region tiles already in the bucket |
 
-**~$3/month plus a domain, with zero compute.** No $99/yr Apple fee, no $25 Play fee.
-Cost tracks stored bytes, not users.
+**£5/month (~$6) plus a domain, with zero compute** — while the catalogue and its
+downloads stay inside the included 250 GB / 1 TB. Was R2's ~$3/month no-egress model
+through 2026-08-27; migrated to Krystal 2026-08-28 (`plans/krystal-migration.md`, a UK
+data-residency decision, not a cost one — Krystal is *more* expensive per GB once past its
+included tiers, since unlike R2 its egress isn't free). No $99/yr Apple fee, no $25 Play
+fee. Cost now tracks region-download volume as well as stored bytes, once past 1 TB/month
+transfer — worth an alert before it becomes a surprise bill.
 
 ---
 
@@ -677,14 +691,17 @@ them yet.
 ## 8. Open decisions — ask Adam, do not guess
 
 1. **App name:** `ratmap` (decided Phase 0). **Domain:** still open, but no longer blocking
-   — app hosting uses GitHub Pages' free subdomain, R2 uses `*.r2.dev`. Revisit at Phase 6.
+   — app hosting uses GitHub Pages' free subdomain, the bucket uses its raw
+   `katapultobjects.com` URL. Revisit at Phase 6.
 2. ~~Planet or catalog-only?~~ **Decided 2026-08-21: catalog-only.** Low-zoom world extract
    plus on-demand regions (Phase 3), not the ~120 GB planet. See §3. **Extended 2026-08-25:**
    the catalogue itself now covers the globe — a few hundred generated regions rather than
    four hand-written ones. That does not reopen this decision: what the bucket holds is
    still per-region cutouts, and what the app downloads is still one region at a time. The
    upstream archives it cuts from are 134.8 GB (Protomaps planet, z0–15) and 705.9 GB
-   (Mapterhorn planet, z0–12), measured; neither is hosted or hotlinked (C15).
+   (Mapterhorn planet, z0–12), measured; neither is hosted or hotlinked (C15). This
+   extension is also what pushed the live bucket to 213 GB — see decision 4 below on why
+   that stopped being cost-irrelevant.
 3. Contour interval and styling — needs a cartographic call on real target regions.
    The routing cost multipliers in `src/routes/path-graph.ts` are the same kind of open
    call: they decide which of two parallel ways a route prefers, never whether a route
@@ -707,3 +724,21 @@ them yet.
    companions, a linked route, weather — each is cheap on its own and together they are
    a different product. Needs a call before the IndexedDB schema is written, because it
    is user data and migrating it is the expensive kind of change.
+8. ~~R2 or Krystal?~~ **Decided 2026-08-28: migrated from Cloudflare R2 to Krystal Object
+   Storage.** Driven by UK data residency, not cost — R2 has no UK jurisdiction option
+   (only EU/FedRAMP/US), and Krystal is a UK company. Before cutover, CORS and range
+   requests were verified directly against the live Krystal bucket (`infra/SETUP.md`):
+   Krystal's Swift-based S3 gateway emits a fixed, unconfigurable
+   `Access-Control-Allow-Origin: *` already exposing `ETag`/`Content-Range`, satisfying C4
+   with no CORS policy to write, unlike R2. One real incompatibility found and worked
+   around: `pmtiles upload` (gocloud's aws-sdk-go-v2 client) fails every write against
+   Krystal with `SignatureDoesNotMatch` regardless of region string or path-style
+   addressing; `infra/scripts/upload.sh` now uses `aws s3 cp` instead, which signs
+   correctly (see that script's header comment). The full 213 GB catalogue was mirrored
+   directly bucket-to-bucket (`rclone`, run from a VM rather than home upload bandwidth —
+   see `plans/krystal-migration.md`) and checked byte-for-byte against the R2 source before
+   the app's config was repointed. Traded away by this move: R2's free egress and
+   Cloudflare edge caching — see §5 Cost. One unrelated gap surfaced by re-publishing a
+   fresh manifest during cutover: commit 9d1ba06 retired the `lochaber`/`cairngorms`
+   regions with no replacement, and e2e's Ben Nevis coverage now has none either —
+   tracked separately, not part of this decision.

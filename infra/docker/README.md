@@ -224,15 +224,15 @@ The opt-in became load-bearing when the catalogue went global: iterating every r
 have walked into the planet contour build without anyone deciding to.
 
 `gdal_contour` itself has no multithreading, but regions are independent of each other, so
-the `contours` stage runs several at a time (default: the container's core count) rather
-than one after another. Each region's full output goes to its own log under `/work/logs`;
-only a one-line OK/FAILED per region reaches the main `contours` stage log. Override the
-worker count with `RATMAP_CONTOURS_PARALLEL` — each concurrent worker costs roughly its
-own ~300 MB/sq-degree of scratch space, so a memory- or disk-constrained host should turn
-this down rather than trust the core count:
+the `contours` stage runs several at a time (default: 4) rather than one after another.
+Each region's full output goes to its own log under `/work/logs`; only a one-line
+OK/FAILED per region reaches the main `contours` stage log. The default is capped well
+below the container's core count deliberately: each concurrent worker costs roughly its
+own ~300 MB/sq-degree of scratch space, so this is bounded by memory/disk, not CPU. Raise
+it on a box with room to spare, or lower it further, with `RATMAP_CONTOURS_PARALLEL`:
 
 ```sh
-RATMAP_CONTOURS_PARALLEL=4 docker compose run --rm infra global contours manifest
+RATMAP_CONTOURS_PARALLEL=8 docker compose run --rm infra global contours manifest
 ```
 
 ### A global region build, in slices

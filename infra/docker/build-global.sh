@@ -583,12 +583,12 @@ stage_contours() {
 
   # gdal_contour has no multithreading of its own, and each region is fully independent
   # work — own bbox, own tmp dir, own output file — so the parallelism worth having is
-  # across regions, not inside one. Defaults to the host's own core count (preflight
-  # already reports it above); override with RATMAP_CONTOURS_PARALLEL on a
-  # memory-constrained host, since N concurrent runs cost roughly N times one region's
+  # across regions, not inside one. Defaults to 4, not the host's own core count
+  # (preflight reports that above): N concurrent runs cost roughly N times one region's
   # peak scratch space (the ~300 MB/sq-degree GeoJSON intermediate above), not a shared
-  # pool.
-  local parallel="${RATMAP_CONTOURS_PARALLEL:-$(nproc)}"
+  # pool, so tracking cores as if this were CPU-bound-only overcommits memory/disk on
+  # anything bigger than a small box. Override with RATMAP_CONTOURS_PARALLEL.
+  local parallel="${RATMAP_CONTOURS_PARALLEL:-4}"
   log "contours: building ${#ids[@]} region(s), $parallel at a time"
 
   # Each worker's full build-contours.sh output goes to its own log rather than straight

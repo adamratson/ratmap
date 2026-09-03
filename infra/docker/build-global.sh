@@ -560,24 +560,63 @@ stage_contours() {
   # is ~15,000 square degrees. That is the C14 scratch-space problem, and it is why
   # contours ship per downloaded region rather than as a global artifact.
   [ -n "$DRY_RUN" ] && { log "contours: no dry-run mode, skipping"; return 0; }
-  local id
+
   # Only regions that opt in with "contours": true. Contours are the most expensive
   # artifact by a wide margin — roughly 300 MB of intermediate GeoJSON per square degree
   # — and the catalogue now covers the globe. Running this over every region is the
   # planet-contour build the spec says never to attempt (C14, §4 Phase 2), reached by
   # accident rather than by decision.
-  local -a failed=()
+  local id
+  local -a ids=()
   while read -r id _; do
     if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-contours.pmtiles" ]; then
       log "contours/$id: already built — --force to redo"
       continue
     fi
-    log "contours/$id"
-    if ! "$SCRIPTS_DIR/build-contours.sh" "$id"; then
-      log "contours/$id FAILED — continuing with the rest"
-      failed+=("$id")
-    fi
+    ids+=("$id")
   done < <(region_ids contours)
+
+  if [ "${#ids[@]}" -eq 0 ]; then
+    log "contours: nothing to build"
+    return 0
+  fi
+
+  # gdal_contour has no multithreading of its own, and each region is fully independent
+  # work — own bbox, own tmp dir, own output file — so the parallelism worth having is
+  # across regions, not inside one. Defaults to the host's own core count (preflight
+  # already reports it above); override with RATMAP_CONTOURS_PARALLEL on a
+  # memory-constrained host, since N concurrent runs cost roughly N times one region's
+  # peak scratch space (the ~300 MB/sq-degree GeoJSON intermediate above), not a shared
+  # pool.
+  local parallel="${RATMAP_CONTOURS_PARALLEL:-$(nproc)}"
+  log "contours: building ${#ids[@]} region(s), $parallel at a time"
+
+  # Each worker's full build-contours.sh output goes to its own log rather than straight
+  # to stdout — with several running at once, unredirected output would interleave line
+  # by line into the shared stage log ($LOG_DIR/${RUN_ID}-contours.log, via the `tee` in
+  # the run loop below) and be unreadable. Only a one-line OK/FAIL per region crosses
+  # back, same idiom as fetch-dem.sh's check_one.
+  build_one_contour() {
+    local id="$1"
+    if "$SCRIPTS_DIR/build-contours.sh" "$id" > "$LOG_DIR/${RUN_ID}-contours-$id.log" 2>&1; then
+      printf 'OK\t%s\n' "$id"
+    else
+      printf 'FAIL\t%s\n' "$id"
+    fi
+  }
+  export -f build_one_contour
+  export SCRIPTS_DIR LOG_DIR RUN_ID
+
+  local -a failed=()
+  local status rid
+  while IFS=$'\t' read -r status rid; do
+    if [ "$status" = OK ]; then
+      log "contours/$rid: done"
+    else
+      log "contours/$rid FAILED — see $LOG_DIR/${RUN_ID}-contours-$rid.log — continuing with the rest"
+      failed+=("$rid")
+    fi
+  done < <(printf '%s\n' "${ids[@]}" | xargs -P "$parallel" -I{} bash -c 'build_one_contour "$@"' _ {})
 
   if [ "${#failed[@]}" -gt 0 ]; then
     log "contours: ${#failed[@]} failed: ${failed[*]}"

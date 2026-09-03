@@ -125,7 +125,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles` | hours |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
-| `contours` | `build-contours.sh` for the ids opting in with `"contours": true` | the slowest by far |
+| `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, several regions at once (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
 | `manifest` | `build-manifest.py` — always regenerated, always last | minutes (sha256s everything) |
 
 Stages skip work that already exists; `--force` redoes it. `--dry-run` passes through to
@@ -222,6 +222,18 @@ problem C14 is about; contours ship per downloaded region.
 The opt-in became load-bearing when the catalogue went global: iterating every region in
 `regions.json` used to mean four of them and now means several hundred, so the stage would
 have walked into the planet contour build without anyone deciding to.
+
+`gdal_contour` itself has no multithreading, but regions are independent of each other, so
+the `contours` stage runs several at a time (default: the container's core count) rather
+than one after another. Each region's full output goes to its own log under `/work/logs`;
+only a one-line OK/FAILED per region reaches the main `contours` stage log. Override the
+worker count with `RATMAP_CONTOURS_PARALLEL` — each concurrent worker costs roughly its
+own ~300 MB/sq-degree of scratch space, so a memory- or disk-constrained host should turn
+this down rather than trust the core count:
+
+```sh
+RATMAP_CONTOURS_PARALLEL=4 docker compose run --rm infra global contours manifest
+```
 
 ### A global region build, in slices
 

@@ -69,14 +69,28 @@ echo "==> fetching DEM"
 "$SCRIPT_DIR/fetch-dem.sh" "$WEST" "$SOUTH" "$EAST" "$NORTH" "$WORK_DIR/clip.tif"
 
 echo "==> tracing contours"
-gdal_contour -q -a ele -i "$CONTOUR_INTERVAL" -f GeoJSON \
-  "$WORK_DIR/clip.tif" "$WORK_DIR/contours.geojson"
+# GeoJSONSeq (line-delimited), not plain GeoJSON: this is the full, unfiltered 10 m-interval
+# line set for the whole region — the largest intermediate in the pipeline — and it's read
+# straight back in by the next step. Classic GeoJSON is a single FeatureCollection document;
+# OGR's reader for it parses the whole thing into an in-memory json-c tree before yielding a
+# single feature, so a plain-GeoJSON file here forces that whole raw line set into RAM a
+# second time on top of gdal_contour's own working set. GeoJSONSeq has no such document-level
+# framing, so ogr2ogr below streams it feature by feature instead.
+#
+# Filename is "contour.geojsonl", not "contours...": a GeoJSONSeq file carries no layer-name
+# metadata (there's no FeatureCollection to hang a "name" off), so OGR falls back to the
+# basename for the layer name it reports — and the `-sql ... FROM contour` below has to match
+# that. Plain GeoJSON doesn't have this constraint (it persists the name gdal_contour gives
+# the layer, "contour", regardless of the file's own name), which is how this went unnoticed.
+gdal_contour -q -a ele -i "$CONTOUR_INTERVAL" -f GeoJSONSeq \
+  "$WORK_DIR/clip.tif" "$WORK_DIR/contour.geojsonl"
 
 # Index contours are tagged here rather than computed in a style expression: doing it once
-# at build time keeps the renderer trivial and avoids float modulo in the style.
-# GeoJSONSeq (line-delimited) so tippecanoe streams rather than loading one huge document.
+# at build time keeps the renderer trivial and avoids float modulo in the style. Output is
+# GeoJSONSeq too, for the same streaming reason, so tippecanoe below never loads one huge
+# document either.
 echo "==> tagging index contours"
-ogr2ogr -f GeoJSONSeq "$WORK_DIR/contours-idx.geojsonl" "$WORK_DIR/contours.geojson" \
+ogr2ogr -f GeoJSONSeq "$WORK_DIR/contours-idx.geojsonl" "$WORK_DIR/contour.geojsonl" \
   -dialect SQLite \
   -sql "SELECT geometry, ele, (CAST(ele AS INTEGER) % $INDEX_EVERY = 0) AS idx FROM contour"
 

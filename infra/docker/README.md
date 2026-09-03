@@ -125,7 +125,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles` | hours |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
-| `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, several regions at once (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
+| `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, sequentially by default — peak RSS-bound, see below (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
 | `manifest` | `build-manifest.py` — always regenerated, always last | minutes (sha256s everything) |
 
 Stages skip work that already exists; `--force` redoes it. `--dry-run` passes through to
@@ -223,16 +223,20 @@ The opt-in became load-bearing when the catalogue went global: iterating every r
 `regions.json` used to mean four of them and now means several hundred, so the stage would
 have walked into the planet contour build without anyone deciding to.
 
-`gdal_contour` itself has no multithreading, but regions are independent of each other, so
-the `contours` stage runs several at a time (default: 4) rather than one after another.
-Each region's full output goes to its own log under `/work/logs`; only a one-line
-OK/FAILED per region reaches the main `contours` stage log. The default is capped well
-below the container's core count deliberately: each concurrent worker costs roughly its
-own ~300 MB/sq-degree of scratch space, so this is bounded by memory/disk, not CPU. Raise
-it on a box with room to spare, or lower it further, with `RATMAP_CONTOURS_PARALLEL`:
+`gdal_contour` itself has no multithreading, and regions are independent of each other, so
+in principle the `contours` stage could run several at a time. In practice, a single
+region's own peak RSS is already the binding constraint: measured (2026-09-03) at ~9.8 GB
+for a 2.66 sq-degree region (Corsica), driven by `ogr2ogr`'s tagging pass rather than
+`gdal_contour` itself — nearly 4x the ~300 MB/sq-degree *disk* size of the intermediate
+GeoJSON above, which is not a proxy for its RAM cost. N concurrent workers cost roughly N
+times that, not a shared pool, so the stage defaults to 1 (sequential) rather than assume
+any box has room to spare. Each region's full output still goes to its own log under
+`/work/logs`; only a one-line OK/FAILED per region reaches the main `contours` stage log.
+Raise `RATMAP_CONTOURS_PARALLEL` only on a host confirmed to have the memory for it —
+figure on ~10 GB per worker as a floor, more for larger regions:
 
 ```sh
-RATMAP_CONTOURS_PARALLEL=8 docker compose run --rm infra global contours manifest
+RATMAP_CONTOURS_PARALLEL=2 docker compose run --rm infra global contours manifest
 ```
 
 ### A global region build, in slices

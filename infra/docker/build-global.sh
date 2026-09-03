@@ -582,13 +582,14 @@ stage_contours() {
   fi
 
   # gdal_contour has no multithreading of its own, and each region is fully independent
-  # work — own bbox, own tmp dir, own output file — so the parallelism worth having is
-  # across regions, not inside one. Defaults to 4, not the host's own core count
-  # (preflight reports that above): N concurrent runs cost roughly N times one region's
-  # peak scratch space (the ~300 MB/sq-degree GeoJSON intermediate above), not a shared
-  # pool, so tracking cores as if this were CPU-bound-only overcommits memory/disk on
-  # anything bigger than a small box. Override with RATMAP_CONTOURS_PARALLEL.
-  local parallel="${RATMAP_CONTOURS_PARALLEL:-4}"
+  # work — own bbox, own tmp dir, own output file — so in principle the parallelism worth
+  # having is across regions, not inside one. In practice a single region's own peak RSS
+  # is the limit: measured at ~9.8 GB for a 2.66 sq-degree region (Corsica) even after the
+  # GeoJSONSeq fix above — the ogr2ogr tagging step, not gdal_contour itself, is what
+  # drives that. N concurrent workers cost roughly N times that, not a shared pool, so
+  # default to 1 (i.e. sequential) rather than assume any box has room to spare. Override
+  # with RATMAP_CONTOURS_PARALLEL if a host is confirmed to have the memory for more.
+  local parallel="${RATMAP_CONTOURS_PARALLEL:-1}"
   log "contours: building ${#ids[@]} region(s), $parallel at a time"
 
   # Each worker's full build-contours.sh output goes to its own log rather than straight

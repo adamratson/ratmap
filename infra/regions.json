@@ -13,126 +13,6 @@
       "terrainMaxzoom": 9
     },
     {
-      "id": "angola",
-      "name": "Angola",
-      "bbox": [10.5385, -18.0651, 24.103, -4.3279],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "angola",
-      "estimatedBytes": 995000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "benin",
-      "name": "Benin",
-      "bbox": [0.7615, 5.9848, 3.8617, 12.4366],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "benin",
-      "estimatedBytes": 405000000
-    },
-    {
-      "id": "botswana",
-      "name": "Botswana",
-      "bbox": [19.9874, -26.9154, 29.3855, -17.774],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "botswana",
-      "estimatedBytes": 1002000000
-    },
-    {
-      "id": "congo-brazzaville",
-      "name": "Brazzaville)",
-      "bbox": [10.9442, -5.1959, 18.6678, 3.7409],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "congo-brazzaville",
-      "estimatedBytes": 973000000
-    },
-    {
-      "id": "burkina-faso",
-      "name": "Burkina Faso",
-      "bbox": [-5.5274, 9.3841, 2.4125, 15.0927],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "burkina-faso",
-      "estimatedBytes": 707000000
-    },
-    {
-      "id": "burundi",
-      "name": "Burundi",
-      "bbox": [29.0002, -4.4813, 30.8512, -2.3079],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "burundi",
-      "estimatedBytes": 170000000
-    },
-    {
-      "id": "cameroon",
-      "name": "Cameroon",
-      "bbox": [8.33, 1.6457, 16.2031, 13.0928],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "cameroon",
-      "estimatedBytes": 1710000000
-    },
-    {
-      "id": "canary-islands",
-      "name": "Canary Islands",
-      "bbox": [-18.9235, 26.3612, -12.4787, 30.2565],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "canary-islands",
-      "estimatedBytes": 100000000
-    },
-    {
-      "id": "cape-verde",
-      "name": "Cape Verde",
-      "bbox": [-26.3238, 14.0048, -21.391, 18.005],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "cape-verde",
-      "estimatedBytes": 22400000
-    },
-    {
-      "id": "central-african-republic",
-      "name": "Central African Republic",
-      "bbox": [14.4091, 2.2087, 27.4758, 11.0326],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "central-african-republic",
-      "estimatedBytes": 916000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "chad",
-      "name": "Chad",
-      "bbox": [13.4013, 7.4285, 24.0253, 23.5379],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "chad",
-      "estimatedBytes": 995000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "comores",
-      "name": "Comores",
-      "bbox": [42.7498, -12.969, 45.5966, -10.7418],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "comores",
-      "estimatedBytes": 18700000
-    },
-    {
-      "id": "djibouti",
-      "name": "Djibouti",
-      "bbox": [41.7618, 10.8882, 43.8457, 12.8262],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "djibouti",
-      "estimatedBytes": 55000000
-    },
-    {
       "id": "egypt",
       "name": "Egypt",
       "bbox": [24.6263, 21.9838, 37.1626, 32.5252],
@@ -141,117 +21,6 @@
       "geofabrikId": "egypt",
       "estimatedBytes": 819000000,
       "terrainMaxzoom": 10
-    },
-    {
-      "id": "equatorial-guinea",
-      "name": "Equatorial Guinea",
-      "bbox": [5.1656, -1.7927, 11.4234, 4.1471],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "equatorial-guinea",
-      "estimatedBytes": 247000000
-    },
-    {
-      "id": "eritrea",
-      "name": "Eritrea",
-      "bbox": [36.4207, 12.3438, 43.3323, 18.3296],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "eritrea",
-      "estimatedBytes": 459000000
-    },
-    {
-      "id": "ethiopia",
-      "name": "Ethiopia",
-      "bbox": [32.9672, 3.3892, 48.0055, 14.9163],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "ethiopia",
-      "estimatedBytes": 1193000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "gabon",
-      "name": "Gabon",
-      "bbox": [7.3897, -5.9958, 14.5514, 2.3257],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "gabon",
-      "estimatedBytes": 572000000
-    },
-    {
-      "id": "ghana",
-      "name": "Ghana",
-      "bbox": [-3.8074, 3.7041, 1.394, 11.1777],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "ghana",
-      "estimatedBytes": 522000000
-    },
-    {
-      "id": "guinea",
-      "name": "Guinea",
-      "bbox": [-16.8571, 7.1833, -7.6273, 12.6832],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "guinea",
-      "estimatedBytes": 725000000
-    },
-    {
-      "id": "guinea-bissau",
-      "name": "Guinea-Bissau",
-      "bbox": [-16.9643, 10.1449, -13.6292, 12.6936],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "guinea-bissau",
-      "estimatedBytes": 105000000
-    },
-    {
-      "id": "ivory-coast",
-      "name": "Ivory Coast",
-      "bbox": [-8.6339, 4.1419, -2.4762, 10.7503],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "ivory-coast",
-      "estimatedBytes": 598000000
-    },
-    {
-      "id": "kenya",
-      "name": "Kenya",
-      "bbox": [33.8679, -4.8163, 41.9768, 4.6299],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "kenya",
-      "estimatedBytes": 1191000000
-    },
-    {
-      "id": "congo-democratic-republic",
-      "name": "Kinshasa)",
-      "bbox": [11.8834, -13.5006, 31.3357, 5.4014],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "congo-democratic-republic",
-      "estimatedBytes": 1196000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "lesotho",
-      "name": "Lesotho",
-      "bbox": [27.0092, -30.6847, 29.4639, -28.5673],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "lesotho",
-      "estimatedBytes": 248000000
-    },
-    {
-      "id": "liberia",
-      "name": "Liberia",
-      "bbox": [-14.9545, -0.681, -7.2457, 8.5702],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "liberia",
-      "estimatedBytes": 305000000
     },
     {
       "id": "libya",
@@ -264,53 +33,6 @@
       "terrainMaxzoom": 10
     },
     {
-      "id": "madagascar",
-      "name": "Madagascar",
-      "bbox": [42.3012, -26.5823, 51.1484, -11.0275],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "madagascar",
-      "estimatedBytes": 1172000000
-    },
-    {
-      "id": "malawi",
-      "name": "Malawi",
-      "bbox": [32.6644, -17.1332, 35.9294, -9.3627],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "malawi",
-      "estimatedBytes": 522000000
-    },
-    {
-      "id": "mali",
-      "name": "Mali",
-      "bbox": [-12.247, 10.1176, 4.3303, 25.095],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "mali",
-      "estimatedBytes": 1515000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "mauritania",
-      "name": "Mauritania",
-      "bbox": [-17.3502, 14.7158, -4.8161, 27.3361],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "mauritania",
-      "estimatedBytes": 606000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "mauritius",
-      "name": "Mauritius",
-      "bbox": [53.5473, -22.2411, 64.6699, -9.1836],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "mauritius",
-      "estimatedBytes": 45500000
-    },
-    {
       "id": "morocco",
       "name": "Morocco",
       "bbox": [-18.1835, 20.4037, -0.9936, 36.0608],
@@ -318,131 +40,6 @@
       "group": "Africa",
       "geofabrikId": "morocco",
       "estimatedBytes": 1126000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "mozambique",
-      "name": "Mozambique",
-      "bbox": [30.2074, -26.9384, 42.5349, -9.9862],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "mozambique",
-      "estimatedBytes": 1205000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "namibia",
-      "name": "Namibia",
-      "bbox": [9.7846, -30.2069, 25.2659, -16.9168],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "namibia",
-      "estimatedBytes": 745000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "niger",
-      "name": "Niger",
-      "bbox": [0.1197, 11.6868, 16.056, 23.5686],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "niger",
-      "estimatedBytes": 1074000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "nigeria",
-      "name": "Nigeria",
-      "bbox": [2.6645, 2.674, 14.6806, 13.8987],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "nigeria",
-      "estimatedBytes": 989000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "rwanda",
-      "name": "Rwanda",
-      "bbox": [28.8593, -2.8487, 30.9086, -1.0383],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "rwanda",
-      "estimatedBytes": 214000000
-    },
-    {
-      "id": "saint-helena-ascension-and-tristan-da-cunha",
-      "name": "Saint Helena, Ascension, and Tristan da Cunha",
-      "bbox": [-15.5703, -43.8325, -2.7813, -4.5912],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "saint-helena-ascension-and-tristan-da-cunha",
-      "estimatedBytes": 3100000
-    },
-    {
-      "id": "sao-tome-and-principe",
-      "name": "Sao Tome and Principe",
-      "bbox": [5.2739, -0.5256, 8.367, 2.4403],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "sao-tome-and-principe",
-      "estimatedBytes": 7500000
-    },
-    {
-      "id": "senegal-and-gambia",
-      "name": "Senegal and Gambia",
-      "bbox": [-19.8562, 12.0151, -11.336, 16.7009],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "senegal-and-gambia",
-      "estimatedBytes": 430000000
-    },
-    {
-      "id": "seychelles",
-      "name": "Seychelles",
-      "bbox": [45.685, -12.5584, 57.5743, -3.1724],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "seychelles",
-      "estimatedBytes": 13900000
-    },
-    {
-      "id": "sierra-leone",
-      "name": "Sierra Leone",
-      "bbox": [-14.7645, 5.3916, -10.2558, 10.0057],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "sierra-leone",
-      "estimatedBytes": 224000000
-    },
-    {
-      "id": "somalia",
-      "name": "Somalia",
-      "bbox": [40.9749, -1.8168, 52.4487, 12.5118],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "somalia",
-      "estimatedBytes": 1124000000
-    },
-    {
-      "id": "south-africa",
-      "name": "South Africa",
-      "bbox": [15.9961, -47.5849, 39.2426, -22.1174],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "south-africa",
-      "estimatedBytes": 1136000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "south-sudan",
-      "name": "South Sudan",
-      "bbox": [23.4249, 3.4615, 35.963, 12.2394],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "south-sudan",
-      "estimatedBytes": 723000000,
       "terrainMaxzoom": 10
     },
     {
@@ -456,35 +53,6 @@
       "terrainMaxzoom": 10
     },
     {
-      "id": "swaziland",
-      "name": "Swaziland",
-      "bbox": [30.7858, -27.3183, 32.137, -25.7178],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "swaziland",
-      "estimatedBytes": 81000000
-    },
-    {
-      "id": "tanzania",
-      "name": "Tanzania",
-      "bbox": [29.244, -11.7759, 40.6949, -0.975],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "tanzania",
-      "estimatedBytes": 776000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "togo",
-      "name": "Togo",
-      "bbox": [-0.1483, 5.8925, 1.8109, 11.144],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "togo",
-      "estimatedBytes": 206000000
-    },
-    {
       "id": "tunisia",
       "name": "Tunisia",
       "bbox": [7.514, 30.2086, 12.068, 37.7747],
@@ -494,1361 +62,14 @@
       "estimatedBytes": 442000000
     },
     {
-      "id": "uganda",
-      "name": "Uganda",
-      "bbox": [29.5706, -1.4873, 35.0103, 4.2506],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "uganda",
-      "estimatedBytes": 906000000
-    },
-    {
-      "id": "zambia",
-      "name": "Zambia",
-      "bbox": [21.9898, -18.0878, 33.7177, -8.2395],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "zambia",
-      "estimatedBytes": 1029000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "zimbabwe",
-      "name": "Zimbabwe",
-      "bbox": [25.2229, -22.4473, 33.0854, -15.5871],
-      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
-      "group": "Africa",
-      "geofabrikId": "zimbabwe",
-      "estimatedBytes": 847000000
-    },
-    {
-      "id": "antarctica",
-      "name": "Antarctica",
-      "bbox": [-180.0, -90.0, 180.0, -60.0],
-      "osmExtract": "https://download.geofabrik.de/antarctica-latest.osm.pbf",
-      "group": "Antarctica",
-      "geofabrikId": "antarctica",
-      "estimatedBytes": 423000000,
-      "terrain": false
-    },
-    {
-      "id": "afghanistan",
-      "name": "Afghanistan",
-      "bbox": [60.4876, 29.3686, 74.9002, 38.5067],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "afghanistan",
-      "estimatedBytes": 1291000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "anhui",
-      "name": "Anhui",
-      "bbox": [114.8693, 29.3882, 119.6566, 34.655],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "anhui",
-      "estimatedBytes": 606000000
-    },
-    {
-      "id": "armenia",
-      "name": "Armenia",
-      "bbox": [43.4382, 38.8374, 46.6426, 41.3103],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "armenia",
-      "estimatedBytes": 258000000
-    },
-    {
-      "id": "azerbaijan",
-      "name": "Azerbaijan",
-      "bbox": [44.7501, 38.2473, 51.7231, 42.6744],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "azerbaijan",
-      "estimatedBytes": 542000000
-    },
-    {
-      "id": "bangladesh",
-      "name": "Bangladesh",
-      "bbox": [87.9976, 18.584, 92.6971, 26.6468],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "bangladesh",
-      "estimatedBytes": 752000000
-    },
-    {
-      "id": "beijing",
-      "name": "Beijing",
-      "bbox": [115.4155, 39.4408, 117.5095, 41.0638],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "beijing",
-      "estimatedBytes": 161000000
-    },
-    {
-      "id": "bhutan",
-      "name": "Bhutan",
-      "bbox": [88.7392, 26.6948, 92.1316, 28.2537],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "bhutan",
-      "estimatedBytes": 167000000
-    },
-    {
-      "id": "cambodia",
-      "name": "Cambodia",
-      "bbox": [101.8522, 8.8581, 107.6397, 14.7188],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "cambodia",
-      "estimatedBytes": 469000000
-    },
-    {
-      "id": "central-zone",
-      "name": "Central Zone",
-      "bbox": [74.0149, 17.7709, 84.6466, 31.4907],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "central-zone",
-      "estimatedBytes": 1375000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "chongqing",
-      "name": "Chongqing",
-      "bbox": [105.283, 28.1513, 110.2004, 32.2064],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "chongqing",
-      "estimatedBytes": 517000000
-    },
-    {
-      "id": "chubu",
-      "name": "Chūbu region",
-      "bbox": [135.4393, 34.2665, 139.909, 38.9072],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "chubu",
-      "estimatedBytes": 677000000,
-      "basemapMaxzoom": 14
-    },
-    {
-      "id": "chugoku",
-      "name": "Chūgoku region",
-      "bbox": [129.8975, 33.5423, 134.5244, 36.9681],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "chugoku",
-      "estimatedBytes": 464000000
-    },
-    {
-      "id": "east-timor",
-      "name": "East Timor",
-      "bbox": [123.7912, -9.6901, 127.5911, -8.0579],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "east-timor",
-      "estimatedBytes": 64000000
-    },
-    {
-      "id": "eastern-zone",
-      "name": "Eastern Zone",
-      "bbox": [81.3675, 17.7806, 89.9183, 27.5284],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "eastern-zone",
-      "estimatedBytes": 1145000000,
-      "basemapMaxzoom": 14
-    },
-    {
-      "id": "fujian",
-      "name": "Fujian",
-      "bbox": [115.8409, 23.1825, 121.6277, 28.3224],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "fujian",
-      "estimatedBytes": 698000000
-    },
-    {
-      "id": "gcc-states",
-      "name": "GCC States",
-      "bbox": [34.4349, 15.2475, 60.9475, 32.1965],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "gcc-states",
-      "estimatedBytes": 986000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "gansu",
-      "name": "Gansu",
-      "bbox": [92.2991, 32.5844, 108.7193, 42.8135],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "gansu",
-      "estimatedBytes": 1257000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "guangdong",
-      "name": "Guangdong (with Hong Kong and Macau)",
-      "bbox": [109.3565, 20.0585, 117.665, 25.5243],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "guangdong",
-      "estimatedBytes": 807000000
-    },
-    {
-      "id": "guangxi",
-      "name": "Guangxi",
-      "bbox": [104.4419, 20.7422, 112.0654, 26.3965],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "guangxi",
-      "estimatedBytes": 957000000
-    },
-    {
-      "id": "guizhou",
-      "name": "Guizhou",
-      "bbox": [103.5982, 24.6171, 109.5594, 29.232],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "guizhou",
-      "estimatedBytes": 636000000
-    },
-    {
-      "id": "hainan",
-      "name": "Hainan",
-      "bbox": [108.3153, 14.2974, 118.4373, 20.4038],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "hainan",
-      "estimatedBytes": 101000000
-    },
-    {
-      "id": "hebei",
-      "name": "Hebei (with Beijing and Tianjin)",
-      "bbox": [113.451, 36.043, 119.9982, 42.6249],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "hebei",
-      "estimatedBytes": 966000000
-    },
-    {
-      "id": "heilongjiang",
-      "name": "Heilongjiang",
-      "bbox": [121.15, 43.4108, 134.8036, 53.6556],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "heilongjiang",
-      "estimatedBytes": 1205000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "henan",
-      "name": "Henan",
-      "bbox": [110.3458, 31.3781, 116.647, 36.368],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "henan",
-      "estimatedBytes": 684000000
-    },
-    {
-      "id": "hokkaido",
-      "name": "Hokkaidō",
-      "bbox": [137.9346, 41.151, 146.2476, 45.8154],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "hokkaido",
-      "estimatedBytes": 489000000
-    },
-    {
-      "id": "hong-kong",
-      "name": "Hong Kong",
-      "bbox": [113.813, 22.1304, 114.506, 22.569],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "hong-kong",
-      "estimatedBytes": 42200000
-    },
-    {
-      "id": "hubei",
-      "name": "Hubei",
-      "bbox": [108.3597, 29.0301, 116.1361, 33.2734],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "hubei",
-      "estimatedBytes": 729000000
-    },
-    {
-      "id": "hunan",
-      "name": "Hunan",
-      "bbox": [108.7792, 24.6327, 114.2585, 30.138],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "hunan",
-      "estimatedBytes": 691000000
-    },
-    {
-      "id": "inner-mongolia",
-      "name": "Inner Mongolia",
-      "bbox": [97.1433, 37.3996, 126.0767, 53.4451],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "inner-mongolia",
-      "estimatedBytes": 1491000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "iran",
-      "name": "Iran",
-      "bbox": [44.023, 24.0395, 63.3541, 39.7904],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "iran",
-      "estimatedBytes": 967000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "iraq",
-      "name": "Iraq",
-      "bbox": [38.784, 29.0177, 49.5511, 37.3906],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "iraq",
-      "estimatedBytes": 1324000000
-    },
-    {
-      "id": "israel-and-palestine",
-      "name": "Israel and Palestine",
-      "bbox": [33.9999, 29.4396, 35.9153, 33.4544],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "israel-and-palestine",
-      "estimatedBytes": 303000000
-    },
-    {
-      "id": "java",
-      "name": "Java",
-      "bbox": [104.1394, -9.5412, 116.5814, -3.9519],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "java",
-      "estimatedBytes": 457000000,
-      "basemapMaxzoom": 14
-    },
-    {
-      "id": "jiangsu",
-      "name": "Jiangsu",
-      "bbox": [116.3538, 30.759, 122.9453, 35.5551],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "jiangsu",
-      "estimatedBytes": 568000000
-    },
-    {
-      "id": "jiangxi",
-      "name": "Jiangxi",
-      "bbox": [113.5688, 24.4781, 118.4865, 30.0884],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "jiangxi",
-      "estimatedBytes": 690000000
-    },
-    {
-      "id": "jilin",
-      "name": "Jilin",
-      "bbox": [121.6276, 40.7895, 131.3514, 46.3147],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "jilin",
-      "estimatedBytes": 964000000
-    },
-    {
-      "id": "jordan",
-      "name": "Jordan",
-      "bbox": [34.8689, 29.1821, 39.3102, 33.3792],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "jordan",
-      "estimatedBytes": 405000000
-    },
-    {
-      "id": "kalimantan",
-      "name": "Kalimantan",
-      "bbox": [104.9606, -5.5996, 119.9267, 4.4042],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "kalimantan",
-      "estimatedBytes": 1099000000
-    },
-    {
-      "id": "kansai",
-      "name": "Kansai region (a.k.a. Kinki region)",
-      "bbox": [133.9644, 33.079, 137.6573, 36.4582],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "kansai",
-      "estimatedBytes": 747000000
-    },
-    {
-      "id": "kanto",
-      "name": "Kantō region",
-      "bbox": [134.5757, 20.0823, 154.4709, 37.1599],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "kanto",
-      "estimatedBytes": 790000000,
-      "basemapMaxzoom": 14
-    },
-    {
-      "id": "kazakhstan",
-      "name": "Kazakhstan",
-      "bbox": [46.423, 40.5535, 87.3536, 55.508],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "kazakhstan",
-      "estimatedBytes": 1605000000,
-      "basemapMaxzoom": 13,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "kyrgyzstan",
-      "name": "Kyrgyzstan",
-      "bbox": [69.2551, 39.1514, 80.2771, 43.2812],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "kyrgyzstan",
-      "estimatedBytes": 962000000
-    },
-    {
-      "id": "kyushu",
-      "name": "Kyūshū",
-      "bbox": [122.5814, 21.3869, 132.8044, 35.0972],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "kyushu",
-      "estimatedBytes": 692000000
-    },
-    {
-      "id": "laos",
-      "name": "Laos",
-      "bbox": [100.0828, 13.9016, 107.6503, 22.5282],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "laos",
-      "estimatedBytes": 1383000000
-    },
-    {
-      "id": "lebanon",
-      "name": "Lebanon",
-      "bbox": [34.768, 33.053, 36.6367, 34.8025],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "lebanon",
-      "estimatedBytes": 117000000
-    },
-    {
-      "id": "liaoning",
-      "name": "Liaoning",
-      "bbox": [118.8305, 38.2619, 125.7959, 43.493],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "liaoning",
-      "estimatedBytes": 578000000
-    },
-    {
-      "id": "macau",
-      "name": "Macau",
-      "bbox": [113.5272, 22.0755, 113.6325, 22.2171],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "macau",
-      "estimatedBytes": 7599999
-    },
-    {
-      "id": "malaysia-singapore-brunei",
-      "name": "Malaysia, Singapore, and Brunei",
-      "bbox": [99.2561, 0.8308, 119.6683, 7.7368],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "malaysia-singapore-brunei",
-      "estimatedBytes": 1035000000
-    },
-    {
-      "id": "maldives",
-      "name": "Maldives",
-      "bbox": [71.7, -1.36, 74.5, 7.69],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "maldives",
-      "estimatedBytes": 11300000
-    },
-    {
-      "id": "maluku",
-      "name": "Maluku",
-      "bbox": [123.8928, -9.5249, 135.412, 3.7272],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "maluku",
-      "estimatedBytes": 363000000
-    },
-    {
-      "id": "mongolia",
-      "name": "Mongolia",
-      "bbox": [87.7026, 41.5003, 120.0201, 52.1958],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "mongolia",
-      "estimatedBytes": 1193000000,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "myanmar",
-      "name": "Myanmar (a.k.a. Burma)",
-      "bbox": [90.6513, 9.5102, 101.1971, 28.5748],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "myanmar",
-      "estimatedBytes": 1186000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "nepal",
-      "name": "Nepal",
-      "bbox": [80.0491, 26.3445, 88.2221, 30.4782],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "nepal",
-      "estimatedBytes": 1125000000
-    },
-    {
-      "id": "ningxia",
-      "name": "Ningxia",
-      "bbox": [104.275, 35.2327, 107.6571, 39.3861],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "ningxia",
-      "estimatedBytes": 283000000
-    },
-    {
-      "id": "north-korea",
-      "name": "North Korea",
-      "bbox": [123.697, 37.611, 131.6447, 43.0204],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "north-korea",
-      "estimatedBytes": 740000000
-    },
-    {
-      "id": "north-eastern-zone",
-      "name": "North-Eastern Zone",
-      "bbox": [88.0085, 21.9271, 97.4199, 29.4288],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "north-eastern-zone",
-      "estimatedBytes": 1163000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "northern-zone",
-      "name": "Northern Zone",
-      "bbox": [69.4391, 23.0469, 79.4888, 35.7309],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "northern-zone",
-      "estimatedBytes": 1129000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "nusa-tenggara",
-      "name": "Nusa-Tenggara",
-      "bbox": [114.4089, -11.6066, 128.408, -6.6755],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "nusa-tenggara",
-      "estimatedBytes": 288000000
-    },
-    {
-      "id": "pakistan",
-      "name": "Pakistan",
-      "bbox": [60.8217, 23.3763, 77.2243, 37.1067],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "pakistan",
-      "estimatedBytes": 1498000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "papua",
-      "name": "Papua",
-      "bbox": [128.2819, -9.4951, 141.0217, 2.076],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "papua",
-      "estimatedBytes": 547000000
-    },
-    {
-      "id": "philippines",
-      "name": "Philippines",
-      "bbox": [112.1661, 4.3827, 127.0742, 21.5302],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "philippines",
-      "estimatedBytes": 1138000000
-    },
-    {
-      "id": "qinghai",
-      "name": "Qinghai",
-      "bbox": [89.39, 31.5867, 103.0727, 39.2216],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "qinghai",
-      "estimatedBytes": 728000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "shaanxi",
-      "name": "Shaanxi",
-      "bbox": [105.4801, 31.695, 111.2479, 39.589],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "shaanxi",
-      "estimatedBytes": 1034000000
-    },
-    {
-      "id": "shandong",
-      "name": "Shandong",
-      "bbox": [114.8133, 34.3757, 123.5632, 38.44],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "shandong",
-      "estimatedBytes": 501000000
-    },
-    {
-      "id": "shanghai",
-      "name": "Shanghai",
-      "bbox": [120.847, 30.6391, 123.679, 31.8846],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "shanghai",
-      "estimatedBytes": 72000000
-    },
-    {
-      "id": "shanxi",
-      "name": "Shanxi",
-      "bbox": [110.2, 34.5789, 114.57, 40.7512],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "shanxi",
-      "estimatedBytes": 641000000
-    },
-    {
-      "id": "shikoku",
-      "name": "Shikoku",
-      "bbox": [131.7698, 32.2296, 135.1794, 34.6515],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "shikoku",
-      "estimatedBytes": 309000000
-    },
-    {
-      "id": "sichuan",
-      "name": "Sichuan",
-      "bbox": [97.3128, 26.046, 108.5508, 34.3315],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "sichuan",
-      "estimatedBytes": 1185000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "south-korea",
-      "name": "South Korea",
-      "bbox": [124.3188, 32.3608, 132.3386, 38.6497],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "south-korea",
-      "estimatedBytes": 1079000000
-    },
-    {
-      "id": "southern-zone",
-      "name": "Southern Zone",
-      "bbox": [70.2079, 5.9439, 95.5138, 19.9227],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "southern-zone",
-      "estimatedBytes": 1479000000,
-      "basemapMaxzoom": 14
-    },
-    {
-      "id": "sri-lanka",
-      "name": "Sri Lanka",
-      "bbox": [79.1642, 5.6213, 82.6461, 10.0715],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "sri-lanka",
-      "estimatedBytes": 230000000
-    },
-    {
-      "id": "sulawesi",
-      "name": "Sulawesi",
-      "bbox": [116.2518, -8.0212, 127.9523, 5.9483],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "sulawesi",
-      "estimatedBytes": 693000000
-    },
-    {
-      "id": "sumatra",
-      "name": "Sumatra",
-      "bbox": [92.7648, -7.1699, 109.7524, 6.9993],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "sumatra",
-      "estimatedBytes": 1007000000,
-      "basemapMaxzoom": 14
-    },
-    {
-      "id": "syria",
-      "name": "Syria",
-      "bbox": [35.2855, 32.3066, 42.3838, 37.3224],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "syria",
-      "estimatedBytes": 686000000
-    },
-    {
-      "id": "taiwan",
-      "name": "Taiwan",
-      "bbox": [118.1036, 20.728, 122.9312, 26.603],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "taiwan",
-      "estimatedBytes": 394000000
-    },
-    {
-      "id": "tajikistan",
-      "name": "Tajikistan",
-      "bbox": [67.3201, 36.6637, 75.1657, 41.055],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "tajikistan",
-      "estimatedBytes": 805000000
-    },
-    {
-      "id": "thailand",
-      "name": "Thailand",
-      "bbox": [97.1356, 5.5979, 105.6392, 20.4688],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "thailand",
-      "estimatedBytes": 1748000000
-    },
-    {
-      "id": "tianjin",
-      "name": "Tianjin",
-      "bbox": [116.6944, 38.5533, 118.063, 40.2531],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "tianjin",
-      "estimatedBytes": 84000000
-    },
-    {
-      "id": "tibet",
-      "name": "Tibet",
-      "bbox": [78.294, 27.1997, 99.1255, 36.53],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "tibet",
-      "estimatedBytes": 1191000000,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "turkmenistan",
-      "name": "Turkmenistan",
-      "bbox": [51.8327, 35.1236, 66.7227, 42.8125],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "turkmenistan",
-      "estimatedBytes": 707000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "tohoku",
-      "name": "Tōhoku region",
-      "bbox": [138.9325, 36.5286, 142.8782, 41.6418],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "tohoku",
-      "estimatedBytes": 619000000
-    },
-    {
-      "id": "uzbekistan",
-      "name": "Uzbekistan",
-      "bbox": [55.9771, 37.1664, 73.1746, 45.6188],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "uzbekistan",
-      "estimatedBytes": 1149000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "vietnam",
-      "name": "Vietnam",
-      "bbox": [102.0959, 7.3822, 114.6423, 23.4021],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "vietnam",
-      "estimatedBytes": 961000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "western-zone",
-      "name": "Western Zone",
-      "bbox": [67.6746, 14.3893, 80.9136, 24.7176],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "western-zone",
-      "estimatedBytes": 1343000000,
-      "basemapMaxzoom": 14
-    },
-    {
-      "id": "xinjiang",
-      "name": "Xinjiang",
-      "bbox": [73.4179, 34.2677, 96.43, 49.262],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "xinjiang",
-      "estimatedBytes": 1204000000,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "yemen",
-      "name": "Yemen",
-      "bbox": [41.0689, 11.3677, 55.5117, 19.0319],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "yemen",
-      "estimatedBytes": 864000000
-    },
-    {
-      "id": "yunnan",
-      "name": "Yunnan",
-      "bbox": [97.4285, 21.0448, 106.215, 29.2352],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "yunnan",
-      "estimatedBytes": 955000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "zhejiang",
-      "name": "Zhejiang",
-      "bbox": [118.0206, 26.6916, 123.8379, 31.1908],
-      "osmExtract": "https://download.geofabrik.de/asia-latest.osm.pbf",
-      "group": "Asia",
-      "geofabrikId": "zhejiang",
-      "estimatedBytes": 525000000
-    },
-    {
-      "id": "american-oceania",
-      "name": "American Oceania",
-      "bbox": [141.6357, 9.904, 169.8706, 22.0246],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "american-oceania",
-      "estimatedBytes": 9900000
-    },
-    {
-      "id": "american-oceania-w2",
-      "name": "American Oceania (west 2)",
-      "bbox": [-174.2487, -17.644, -165.0366, -9.9688],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "american-oceania",
-      "estimatedBytes": 10600000
-    },
-    {
-      "id": "american-oceania-w",
-      "name": "American Oceania (west)",
-      "bbox": [-179.9209, -3.0527, -160.2799, 6.1872],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "american-oceania",
-      "estimatedBytes": 1525000
-    },
-    {
-      "id": "ashmore-cartier",
-      "name": "Ashmore and Cartier Islands",
-      "bbox": [122.5681, -12.8482, 124.0416, -11.8927],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "ashmore-cartier",
-      "estimatedBytes": 1888000
-    },
-    {
-      "id": "act",
-      "name": "Australian Capital Territory",
-      "bbox": [148.7583, -35.9255, 149.4018, -35.1209],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "act",
-      "estimatedBytes": 40000000
-    },
-    {
-      "id": "christmas-island",
-      "name": "Christmas Island",
-      "bbox": [105.2993, -10.8266, 105.9946, -10.171],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "christmas-island",
-      "estimatedBytes": 1746000
-    },
-    {
-      "id": "cocos-islands",
-      "name": "Cocos (Keeling) Islands",
-      "bbox": [96.4535, -12.5527, 97.2484, -11.5468],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "cocos-islands",
-      "estimatedBytes": 1424000
-    },
-    {
-      "id": "cook-islands",
-      "name": "Cook Islands",
-      "bbox": [-168.4661, -25.2887, -154.8056, -5.8005],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "cook-islands",
-      "estimatedBytes": 5580000
-    },
-    {
-      "id": "coral-sea-islands",
-      "name": "Coral Sea Islands",
-      "bbox": [146.8651, -30.5783, 160.4218, -14.9815],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "coral-sea-islands",
-      "estimatedBytes": 992000000
-    },
-    {
-      "id": "fiji",
-      "name": "Fiji",
-      "bbox": [172.7647, -25.0813, 180.0, -9.7833],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "fiji",
-      "estimatedBytes": 46000000
-    },
-    {
-      "id": "fiji-w",
-      "name": "Fiji (west)",
-      "bbox": [-180.0, -25.0813, -176.2675, -9.7833],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "fiji",
-      "estimatedBytes": 4900000
-    },
-    {
-      "id": "heard-mcdonald",
-      "name": "Heard Island and McDonald Islands",
-      "bbox": [71.9991, -53.5455, 74.4529, -52.6631],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "heard-mcdonald",
-      "estimatedBytes": 2332000
-    },
-    {
-      "id": "kiribati",
-      "name": "Kiribati",
-      "bbox": [-180.0, -13.8383, -147.0336, 6.4723],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "kiribati",
-      "estimatedBytes": 11600000
-    },
-    {
-      "id": "kiribati-e",
-      "name": "Kiribati (east)",
-      "bbox": [167.8684, -13.8383, 180.0, 6.4723],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "kiribati",
-      "estimatedBytes": 8100000
-    },
-    {
-      "id": "marshall-islands",
-      "name": "Marshall Islands",
-      "bbox": [156.8453, 1.7773, 175.5118, 17.9461],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "marshall-islands",
-      "estimatedBytes": 9400000
-    },
-    {
-      "id": "micronesia",
-      "name": "Micronesia",
-      "bbox": [135.3124, -1.1474, 165.6345, 13.2192],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "micronesia",
-      "estimatedBytes": 13600000
-    },
-    {
-      "id": "nauru",
-      "name": "Nauru",
-      "bbox": [163.7052, -3.7712, 168.5599, 2.6939],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "nauru",
-      "estimatedBytes": 1969000
-    },
-    {
-      "id": "new-caledonia",
-      "name": "New Caledonia",
-      "bbox": [157.9, -25.0, 174.1, -16.9],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "new-caledonia",
-      "estimatedBytes": 53000000
-    },
-    {
-      "id": "new-south-wales",
-      "name": "New South Wales (with ACT and JBT)",
-      "bbox": [140.9948, -37.7598, 160.0747, -28.139],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "new-south-wales",
-      "estimatedBytes": 1197000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "new-zealand",
-      "name": "New Zealand",
-      "bbox": [162.096, -56.7527, 180.0, -28.488],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "new-zealand",
-      "estimatedBytes": 1301000000
-    },
-    {
-      "id": "new-zealand-w",
-      "name": "New Zealand (west)",
-      "bbox": [-180.0, -56.7527, -173.5849, -28.488],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "new-zealand",
-      "estimatedBytes": 5100000
-    },
-    {
-      "id": "niue",
-      "name": "Niue",
-      "bbox": [-172.027, -22.4735, -166.2989, -16.6367],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "niue",
-      "estimatedBytes": 2203000
-    },
-    {
-      "id": "norfolk-island",
-      "name": "Norfolk Island",
-      "bbox": [167.6245, -29.4607, 168.3456, -28.7578],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "norfolk-island",
-      "estimatedBytes": 1362000
-    },
-    {
-      "id": "northern-territory",
-      "name": "Northern Territory",
-      "bbox": [128.6705, -26.0008, 140.4241, -9.9719],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "northern-territory",
-      "estimatedBytes": 574000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "palau",
-      "name": "Palau",
-      "bbox": [130.1034, 1.6214, 136.9541, 11.4882],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "palau",
-      "estimatedBytes": 4800000
-    },
-    {
-      "id": "papua-new-guinea",
-      "name": "Papua New Guinea",
-      "bbox": [139.2014, -14.7485, 162.8034, 2.5878],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "papua-new-guinea",
-      "estimatedBytes": 897000000
-    },
-    {
-      "id": "pitcairn-islands",
-      "name": "Pitcairn Islands",
-      "bbox": [-133.0664, -27.664, -118.3448, -21.5961],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "pitcairn-islands",
-      "estimatedBytes": 1803000
-    },
-    {
-      "id": "polynesie-francaise",
-      "name": "Polynésie française (French Polynesia)",
-      "bbox": [-158.5547, -31.541, -132.5391, -4.9158],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "polynesie-francaise",
-      "estimatedBytes": 35400000
-    },
-    {
-      "id": "queensland",
-      "name": "Queensland",
-      "bbox": [137.9902, -29.1831, 154.2005, -8.8416],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "queensland",
-      "estimatedBytes": 1117000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "samoa",
-      "name": "Samoa",
-      "bbox": [-174.5114, -15.8784, -170.5427, -10.9608],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "samoa",
-      "estimatedBytes": 9500000
-    },
-    {
-      "id": "solomon-islands",
-      "name": "Solomon Islands",
-      "bbox": [154.5856, -16.1269, 173.5934, -4.1399],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "solomon-islands",
-      "estimatedBytes": 97000000
-    },
-    {
-      "id": "south-australia",
-      "name": "South Australia",
-      "bbox": [128.9993, -39.8316, 141.0073, -25.993],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "south-australia",
-      "estimatedBytes": 1046000000
-    },
-    {
-      "id": "tasmania",
-      "name": "Tasmania",
-      "bbox": [143.4704, -56.8624, 161.6707, -39.1969],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "tasmania",
-      "estimatedBytes": 276000000
-    },
-    {
-      "id": "tokelau",
-      "name": "Tokelau",
-      "bbox": [-176.8579, -11.0814, -167.4097, -6.6646],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "tokelau",
-      "estimatedBytes": 1283000
-    },
-    {
-      "id": "tonga",
-      "name": "Tonga",
-      "bbox": [-178.6487, -25.6841, -171.3053, -14.1546],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "tonga",
-      "estimatedBytes": 9700000
-    },
-    {
-      "id": "tuvalu",
-      "name": "Tuvalu",
-      "bbox": [172.9953, -13.2404, 180.0, -4.0616],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "tuvalu",
-      "estimatedBytes": 2200000
-    },
-    {
-      "id": "tuvalu-w",
-      "name": "Tuvalu (west)",
-      "bbox": [-180.0, -13.2404, -176.757, -4.0616],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "tuvalu",
-      "estimatedBytes": 712000
-    },
-    {
-      "id": "vanuatu",
-      "name": "Vanuatu",
-      "bbox": [163.3086, -21.6429, 173.6089, -12.2963],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "vanuatu",
-      "estimatedBytes": 54000000
-    },
-    {
-      "id": "victoria",
-      "name": "Victoria",
-      "bbox": [140.9574, -39.2322, 150.4683, -33.9793],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "victoria",
-      "estimatedBytes": 1139000000
-    },
-    {
-      "id": "wallis-et-futuna",
-      "name": "Wallis et Futuna",
-      "bbox": [-179.978, -16.2569, -174.1553, -9.0587],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "wallis-et-futuna",
-      "estimatedBytes": 2434000
-    },
-    {
-      "id": "western-australia",
-      "name": "Western Australia",
-      "bbox": [109.9281, -41.1643, 130.32, -12.8312],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "western-australia",
-      "estimatedBytes": 1149000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "ile-de-clipperton",
-      "name": "Île de Clipperton",
-      "bbox": [-110.1215, 9.5953, -108.3746, 11.1569],
-      "osmExtract": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-      "group": "Australia and Oceania",
-      "geofabrikId": "ile-de-clipperton",
-      "estimatedBytes": 1224000
-    },
-    {
-      "id": "bahamas",
-      "name": "Bahamas",
-      "bbox": [-81.5186, 20.2725, -71.8667, 27.975],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "bahamas",
-      "estimatedBytes": 426000000
-    },
-    {
-      "id": "belize",
-      "name": "Belize",
-      "bbox": [-89.2289, 15.8831, -86.8598, 18.4984],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "belize",
-      "estimatedBytes": 91000000
-    },
-    {
-      "id": "costa-rica",
-      "name": "Costa Rica",
-      "bbox": [-87.8247, 4.9377, -82.3495, 11.2237],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "costa-rica",
-      "estimatedBytes": 164000000
-    },
-    {
-      "id": "cuba",
-      "name": "Cuba",
-      "bbox": [-85.4242, 19.2533, -73.7083, 23.6043],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "cuba",
-      "estimatedBytes": 228000000
-    },
-    {
-      "id": "el-salvador",
-      "name": "El Salvador",
-      "bbox": [-90.5009, 12.036, -87.5844, 14.4576],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "el-salvador",
-      "estimatedBytes": 117000000
-    },
-    {
-      "id": "guatemala",
-      "name": "Guatemala",
-      "bbox": [-92.733, 12.7417, -87.9518, 17.8353],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "guatemala",
-      "estimatedBytes": 524000000
-    },
-    {
-      "id": "haiti-and-domrep",
-      "name": "Haiti and Dominican Republic",
-      "bbox": [-74.8253, 16.999, -68.0548, 21.4531],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "haiti-and-domrep",
-      "estimatedBytes": 196000000
-    },
-    {
-      "id": "honduras",
-      "name": "Honduras",
-      "bbox": [-89.3601, 12.9694, -81.6614, 17.9317],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "honduras",
-      "estimatedBytes": 468000000
-    },
-    {
-      "id": "jamaica",
-      "name": "Jamaica",
-      "bbox": [-78.85, 16.35, -75.51, 19.16],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "jamaica",
-      "estimatedBytes": 53000000
-    },
-    {
-      "id": "nicaragua",
-      "name": "Nicaragua",
-      "bbox": [-87.9774, 10.7018, -82.3786, 15.1119],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "nicaragua",
-      "estimatedBytes": 364000000
-    },
-    {
-      "id": "panama",
-      "name": "Panama",
-      "bbox": [-83.4646, 6.644, -77.0813, 11.2071],
-      "osmExtract": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-      "group": "Central America",
-      "geofabrikId": "panama",
-      "estimatedBytes": 191000000
-    },
-    {
       "id": "albania",
       "name": "Albania",
       "bbox": [18.8965, 39.6274, 21.0629, 42.6631],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "albania",
-      "estimatedBytes": 233000000
+      "estimatedBytes": 233000000,
+      "contours": true
     },
     {
       "id": "alsace",
@@ -1866,7 +87,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "andalucia",
-      "estimatedBytes": 628000000
+      "estimatedBytes": 628000000,
+      "contours": true
     },
     {
       "id": "andorra",
@@ -1875,7 +97,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "andorra",
-      "estimatedBytes": 15900000
+      "estimatedBytes": 15900000,
+      "contours": true
     },
     {
       "id": "aquitaine",
@@ -1884,7 +107,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "aquitaine",
-      "estimatedBytes": 874000000
+      "estimatedBytes": 874000000,
+      "contours": true
     },
     {
       "id": "aragon",
@@ -1893,7 +117,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "aragon",
-      "estimatedBytes": 564000000
+      "estimatedBytes": 564000000,
+      "contours": true
     },
     {
       "id": "asturias",
@@ -1902,7 +127,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "asturias",
-      "estimatedBytes": 136000000
+      "estimatedBytes": 136000000,
+      "contours": true
     },
     {
       "id": "austria",
@@ -1912,7 +138,8 @@
       "group": "Europe",
       "geofabrikId": "austria",
       "estimatedBytes": 1093000000,
-      "basemapMaxzoom": 13
+      "basemapMaxzoom": 13,
+      "contours": true
     },
     {
       "id": "auvergne",
@@ -1977,7 +204,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "bosnia-herzegovina",
-      "estimatedBytes": 592000000
+      "estimatedBytes": 592000000,
+      "contours": true
     },
     {
       "id": "bourgogne",
@@ -2022,7 +250,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "bulgaria",
-      "estimatedBytes": 699000000
+      "estimatedBytes": 699000000,
+      "contours": true
     },
     {
       "id": "cantabria",
@@ -2031,7 +260,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "cantabria",
-      "estimatedBytes": 123000000
+      "estimatedBytes": 123000000,
+      "contours": true
     },
     {
       "id": "castilla-y-leon",
@@ -2040,7 +270,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "castilla-y-leon",
-      "estimatedBytes": 1027000000
+      "estimatedBytes": 1027000000,
+      "contours": true
     },
     {
       "id": "castilla-la-mancha",
@@ -2049,7 +280,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "castilla-la-mancha",
-      "estimatedBytes": 744000000
+      "estimatedBytes": 744000000,
+      "contours": true
     },
     {
       "id": "cataluna",
@@ -2058,7 +290,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "cataluna",
-      "estimatedBytes": 525000000
+      "estimatedBytes": 525000000,
+      "contours": true
     },
     {
       "id": "centre",
@@ -2076,7 +309,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "centro",
-      "estimatedBytes": 1069000000
+      "estimatedBytes": 1069000000,
+      "contours": true
     },
     {
       "id": "ceuta",
@@ -2103,7 +337,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "corse",
-      "estimatedBytes": 75000000
+      "estimatedBytes": 75000000,
+      "contours": true
     },
     {
       "id": "croatia",
@@ -2113,7 +348,8 @@
       "group": "Europe",
       "geofabrikId": "croatia",
       "estimatedBytes": 1058000000,
-      "basemapMaxzoom": 14
+      "basemapMaxzoom": 14,
+      "contours": true
     },
     {
       "id": "cyprus",
@@ -2159,7 +395,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "extremadura",
-      "estimatedBytes": 332000000
+      "estimatedBytes": 332000000,
+      "contours": true
     },
     {
       "id": "faroe-islands",
@@ -2197,7 +434,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "franche-comte",
-      "estimatedBytes": 421000000
+      "estimatedBytes": 421000000,
+      "contours": true
     },
     {
       "id": "friesland",
@@ -2233,7 +471,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "georgia",
-      "estimatedBytes": 553000000
+      "estimatedBytes": 553000000,
+      "contours": true
     },
     {
       "id": "great-britain",
@@ -2254,7 +493,8 @@
       "group": "Europe",
       "geofabrikId": "greece",
       "estimatedBytes": 954000000,
-      "basemapMaxzoom": 14
+      "basemapMaxzoom": 14,
+      "contours": true
     },
     {
       "id": "groningen",
@@ -2417,7 +657,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "kosovo",
-      "estimatedBytes": 146000000
+      "estimatedBytes": 146000000,
+      "contours": true
     },
     {
       "id": "vysocina",
@@ -2444,7 +685,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "la-rioja",
-      "estimatedBytes": 78000000
+      "estimatedBytes": 78000000,
+      "contours": true
     },
     {
       "id": "languedoc-roussillon",
@@ -2453,7 +695,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "languedoc-roussillon",
-      "estimatedBytes": 679000000
+      "estimatedBytes": 679000000,
+      "contours": true
     },
     {
       "id": "latvia",
@@ -2480,7 +723,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "liechtenstein",
-      "estimatedBytes": 16100000
+      "estimatedBytes": 16100000,
+      "contours": true
     },
     {
       "id": "limburg",
@@ -2534,7 +778,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "macedonia",
-      "estimatedBytes": 174000000
+      "estimatedBytes": 174000000,
+      "contours": true
     },
     {
       "id": "madrid",
@@ -2543,7 +788,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "madrid",
-      "estimatedBytes": 181000000
+      "estimatedBytes": 181000000,
+      "contours": true
     },
     {
       "id": "malta",
@@ -2597,7 +843,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "midi-pyrenees",
-      "estimatedBytes": 926000000
+      "estimatedBytes": 926000000,
+      "contours": true
     },
     {
       "id": "mittelfranken",
@@ -2661,7 +908,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "navarra",
-      "estimatedBytes": 200000000
+      "estimatedBytes": 200000000,
+      "contours": true
     },
     {
       "id": "niederbayern",
@@ -2708,7 +956,8 @@
       "group": "Europe",
       "geofabrikId": "nord-est",
       "estimatedBytes": 938000000,
-      "basemapMaxzoom": 14
+      "basemapMaxzoom": 14,
+      "contours": true
     },
     {
       "id": "nord-norge",
@@ -2729,7 +978,8 @@
       "group": "Europe",
       "geofabrikId": "nord-ovest",
       "estimatedBytes": 996000000,
-      "basemapMaxzoom": 14
+      "basemapMaxzoom": 14,
+      "contours": true
     },
     {
       "id": "nord-pas-de-calais",
@@ -2747,7 +997,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "oberbayern",
-      "estimatedBytes": 612000000
+      "estimatedBytes": 612000000,
+      "contours": true
     },
     {
       "id": "oberfranken",
@@ -2864,7 +1115,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "provence-alpes-cote-d-azur",
-      "estimatedBytes": 757000000
+      "estimatedBytes": 757000000,
+      "contours": true
     },
     {
       "id": "arnsberg-regbez",
@@ -2954,7 +1206,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "reunion",
-      "estimatedBytes": 29500000
+      "estimatedBytes": 29500000,
+      "contours": true
     },
     {
       "id": "rheinland-pfalz",
@@ -2972,7 +1225,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "rhone-alpes",
-      "estimatedBytes": 1049000000
+      "estimatedBytes": 1049000000,
+      "contours": true
     },
     {
       "id": "romania",
@@ -2982,7 +1236,8 @@
       "group": "Europe",
       "geofabrikId": "romania",
       "estimatedBytes": 1256000000,
-      "basemapMaxzoom": 14
+      "basemapMaxzoom": 14,
+      "contours": true
     },
     {
       "id": "saarland",
@@ -3027,7 +1282,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "schwaben",
-      "estimatedBytes": 475000000
+      "estimatedBytes": 475000000,
+      "contours": true
     },
     {
       "id": "serbia",
@@ -3036,7 +1292,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "serbia",
-      "estimatedBytes": 860000000
+      "estimatedBytes": 860000000,
+      "contours": true
     },
     {
       "id": "slovakia",
@@ -3045,7 +1302,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "slovakia",
-      "estimatedBytes": 1054000000
+      "estimatedBytes": 1054000000,
+      "contours": true
     },
     {
       "id": "slovenia",
@@ -3054,7 +1312,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "slovenia",
-      "estimatedBytes": 758000000
+      "estimatedBytes": 758000000,
+      "contours": true
     },
     {
       "id": "stredocesky",
@@ -3072,7 +1331,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "sud",
-      "estimatedBytes": 842000000
+      "estimatedBytes": 842000000,
+      "contours": true
     },
     {
       "id": "svalbard-janmayen",
@@ -3103,7 +1363,8 @@
       "group": "Europe",
       "geofabrikId": "switzerland",
       "estimatedBytes": 1249000000,
-      "maxBytes": 1200000000
+      "maxBytes": 1200000000,
+      "contours": true
     },
     {
       "id": "sorlandet",
@@ -3141,7 +1402,8 @@
       "geofabrikId": "turkey",
       "estimatedBytes": 1444000000,
       "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
+      "terrainMaxzoom": 10,
+      "contours": true
     },
     {
       "id": "ukraine",
@@ -3179,7 +1441,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "valencia",
-      "estimatedBytes": 343000000
+      "estimatedBytes": 343000000,
+      "contours": true
     },
     {
       "id": "vestlandet",
@@ -3189,7 +1452,8 @@
       "group": "Europe",
       "geofabrikId": "vestlandet",
       "estimatedBytes": 1181000000,
-      "basemapMaxzoom": 14
+      "basemapMaxzoom": 14,
+      "contours": true
     },
     {
       "id": "dolnoslaskie",
@@ -3243,7 +1507,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "malopolskie",
-      "estimatedBytes": 437000000
+      "estimatedBytes": 437000000,
+      "contours": true
     },
     {
       "id": "opolskie",
@@ -3370,7 +1635,8 @@
       "group": "Europe",
       "geofabrikId": "ostlandet",
       "estimatedBytes": 1374000000,
-      "basemapMaxzoom": 14
+      "basemapMaxzoom": 14,
+      "contours": true
     },
     {
       "id": "ustecky",
@@ -3380,229 +1646,7 @@
       "group": "Europe",
       "geofabrikId": "ustecky",
       "estimatedBytes": 270000000
-    },
-    {
-      "id": "alberta",
-      "name": "Alberta",
-      "bbox": [-120.0043, 48.9925, -110.0018, 60.0025],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "alberta",
-      "estimatedBytes": 1273000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "greenland",
-      "name": "Greenland",
-      "bbox": [-75.3894, 58.6717, -9.4544, 84.4436],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "greenland",
-      "estimatedBytes": 3190000000,
-      "basemapMaxzoom": 13,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "interior-admreg",
-      "name": "Interior Administrative Region",
-      "bbox": [-128.8637, 49.6036, -118.7691, 53.5574],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "interior-admreg",
-      "estimatedBytes": 1373000000
-    },
-    {
-      "id": "island-admreg",
-      "name": "Island Administrative Region",
-      "bbox": [-129.3393, 48.1265, -122.9789, 52.0576],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "island-admreg",
-      "estimatedBytes": 635000000
-    },
-    {
-      "id": "kitikmeot",
-      "name": "Kitikmeot Region",
-      "bbox": [-120.737, 64.518, -88.9844, 73.9396],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "kitikmeot",
-      "estimatedBytes": 1203000000,
-      "basemapMaxzoom": 13,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "kivalliq",
-      "name": "Kivalliq Region",
-      "bbox": [-105.0092, 56.9513, -80.0199, 67.0003],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "kivalliq",
-      "estimatedBytes": 1688000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "kootenay-admreg",
-      "name": "Kootenay Administrative Region",
-      "bbox": [-119.3857, 48.9946, -114.049, 51.8533],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "kootenay-admreg",
-      "estimatedBytes": 644000000
-    },
-    {
-      "id": "manitoba",
-      "name": "Manitoba",
-      "bbox": [-102.014, 48.9906, -88.1218, 60.0085],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "manitoba",
-      "estimatedBytes": 1544000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "mexico",
-      "name": "Mexico",
-      "bbox": [-132.4952, 9.4567, -85.4909, 32.7207],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "mexico",
-      "estimatedBytes": 1039000000,
-      "basemapMaxzoom": 13,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "new-brunswick",
-      "name": "New Brunswick",
-      "bbox": [-69.0598, 44.1921, -62.8858, 48.3807],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "new-brunswick",
-      "estimatedBytes": 774000000
-    },
-    {
-      "id": "newfoundland-and-labrador",
-      "name": "Newfoundland and Labrador",
-      "bbox": [-67.8708, 44.4579, -44.1768, 60.5086],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "newfoundland-and-labrador",
-      "estimatedBytes": 1420000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "north-admreg",
-      "name": "North Administrative Region",
-      "bbox": [-141.7761, 51.0635, -117.938, 60.0068],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "north-admreg",
-      "estimatedBytes": 1110000000,
-      "basemapMaxzoom": 14,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "northwest-territories",
-      "name": "Northwest Territories",
-      "bbox": [-136.6974, 59.9896, -101.976, 81.6548],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "northwest-territories",
-      "estimatedBytes": 1826000000,
-      "basemapMaxzoom": 13,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "nova-scotia",
-      "name": "Nova Scotia",
-      "bbox": [-67.2473, 42.1069, -58.2259, 47.8979],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "nova-scotia",
-      "estimatedBytes": 654000000
-    },
-    {
-      "id": "okanagan-admreg",
-      "name": "Okanagan Administrative Region",
-      "bbox": [-121.1, 48.9946, -116.8259, 52.5731],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "okanagan-admreg",
-      "estimatedBytes": 594000000
-    },
-    {
-      "id": "ontario",
-      "name": "Ontario",
-      "bbox": [-95.1596, 41.6601, -74.31, 57.5083],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "ontario",
-      "estimatedBytes": 1537000000,
-      "basemapMaxzoom": 13,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "prince-edward-island",
-      "name": "Prince Edward Island",
-      "bbox": [-64.6024, 45.825, -61.2488, 47.6857],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "prince-edward-island",
-      "estimatedBytes": 78000000
-    },
-    {
-      "id": "qikiqtaaluk",
-      "name": "Qikiqtaaluk Region",
-      "bbox": [-110.0345, 51.1268, -53.9896, 84.3263],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "qikiqtaaluk",
-      "estimatedBytes": 5000000000,
-      "basemapMaxzoom": 13,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "quebec",
-      "name": "Quebec",
-      "bbox": [-79.8404, 44.9855, -57.0891, 62.6262],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "quebec",
-      "estimatedBytes": 1604000000,
-      "basemapMaxzoom": 13,
-      "terrainMaxzoom": 9
-    },
-    {
-      "id": "saskatchewan",
-      "name": "Saskatchewan",
-      "bbox": [-110.0069, 48.9876, -101.3614, 60.0005],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "saskatchewan",
-      "estimatedBytes": 1000000000,
-      "terrainMaxzoom": 10
-    },
-    {
-      "id": "southcoast-admreg",
-      "name": "South Coast Administrative Region",
-      "bbox": [-124.2851, 48.9806, -120.8077, 51.2267],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "southcoast-admreg",
-      "estimatedBytes": 413000000
-    },
-    {
-      "id": "yukon",
-      "name": "Yukon",
-      "bbox": [-141.2389, 59.9974, -123.8021, 70.1629],
-      "osmExtract": "https://download.geofabrik.de/north-america-latest.osm.pbf",
-      "group": "North America",
-      "geofabrikId": "yukon",
-      "estimatedBytes": 1073000000,
-      "terrainMaxzoom": 9
     }
+
   ]
 }

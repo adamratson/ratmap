@@ -40,7 +40,8 @@
       "group": "Africa",
       "geofabrikId": "morocco",
       "estimatedBytes": 1126000000,
-      "terrainMaxzoom": 10
+      "terrainMaxzoom": 10,
+      "contours": true
     },
     {
       "id": "sudan",
@@ -475,15 +476,103 @@
       "contours": true
     },
     {
-      "id": "great-britain",
-      "name": "Great Britain",
-      "bbox": [-14.9907, 49.523, 2.5137, 61.1356],
+      "id": "england-north-east",
+      "name": "North East England",
+      "bbox": [-2.6907, 54.4502, -1.1016, 55.8487],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
-      "geofabrikId": "great-britain",
-      "estimatedBytes": 1082000000,
-      "basemapMaxzoom": 13,
-      "terrainMaxzoom": 10
+      "estimatedBytes": 171000000,
+      "contours": true
+    },
+    {
+      "id": "england-north-west",
+      "name": "North West England",
+      "bbox": [-3.9075, 52.9455, -1.908, 55.1886],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 421000000,
+      "contours": true
+    },
+    {
+      "id": "england-yorkshire-humber",
+      "name": "Yorkshire and the Humber",
+      "bbox": [-2.5672, 53.2989, 0.4894, 54.7022],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 395000000,
+      "contours": true
+    },
+    {
+      "id": "england-east-midlands",
+      "name": "East Midlands",
+      "bbox": [-2.0358, 51.9765, 0.4944, 53.73],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 513000000,
+      "contours": true
+    },
+    {
+      "id": "england-west-midlands",
+      "name": "West Midlands",
+      "bbox": [-3.2356, 51.8262, -1.1711, 53.2274],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 411000000,
+      "contours": true
+    },
+    {
+      "id": "england-east",
+      "name": "East of England",
+      "bbox": [-0.7468, 51.4501, 1.9928, 53.3557],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 477000000,
+      "contours": true
+    },
+    {
+      "id": "england-london",
+      "name": "London",
+      "bbox": [-0.5115, 51.2855, 0.3354, 51.6934],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 145000000,
+      "contours": true
+    },
+    {
+      "id": "england-south-east",
+      "name": "South East England",
+      "bbox": [-1.9591, 50.5055, 1.5213, 52.1956],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 717000000,
+      "contours": true
+    },
+    {
+      "id": "england-south-west",
+      "name": "South West England",
+      "bbox": [-6.8204, 49.5781, -1.4888, 52.1156],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 565000000,
+      "contours": true
+    },
+    {
+      "id": "scotland",
+      "name": "Scotland",
+      "bbox": [-14.8615, 54.54, 0.2161, 61.1356],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 1036000000,
+      "contours": true
+    },
+    {
+      "id": "wales",
+      "name": "Wales",
+      "bbox": [-6.1832, 51.04, -2.648, 53.7663],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 448000000,
+      "contours": true
     },
     {
       "id": "greece",
@@ -521,7 +610,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "guernsey-jersey",
-      "estimatedBytes": 12700000
+      "estimatedBytes": 12700000,
+      "contours": true
     },
     {
       "id": "guyane",
@@ -594,7 +684,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "ireland-and-northern-ireland",
-      "estimatedBytes": 805000000
+      "estimatedBytes": 805000000,
+      "contours": true
     },
     {
       "id": "islas-baleares",
@@ -612,7 +703,8 @@
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
       "group": "Europe",
       "geofabrikId": "isle-of-man",
-      "estimatedBytes": 14900000
+      "estimatedBytes": 14900000,
+      "contours": true
     },
     {
       "id": "isole",

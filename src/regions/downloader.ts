@@ -51,9 +51,76 @@ export interface DownloadProgress {
   /** The artifact currently transferring, for UI detail. */
   currentArtifact: string | null;
   done: boolean;
+  /** Smoothed transfer rate. Null until there is enough signal to be worth showing. */
+  bytesPerSecond: number | null;
+  /** Seconds remaining at the current rate. Null when no rate is available yet. */
+  etaSeconds: number | null;
 }
 
 export type ProgressListener = (progress: DownloadProgress) => void;
+
+/** Weight given to the newest sample. Low enough to ride out a single slow chunk. */
+const RATE_SMOOTHING = 0.3;
+/** Rate samples required before quoting an ETA at all. */
+const SETTLE_SAMPLES = 3;
+/** Progress emits closer together than this don't carry a usable rate. */
+const MIN_SAMPLE_SECONDS = 0.1;
+
+/**
+ * Exponentially-weighted transfer rate, for the ETA.
+ *
+ * A lifetime average is the obvious approach and the wrong one here: throughput against
+ * the bucket genuinely swings about 2x minute to minute (measured across providers
+ * 2026-09-04), so a lifetime average keeps quoting a speed the download stopped achieving
+ * ten minutes ago, and an ETA that only ever drifts upward reads as broken.
+ *
+ * Reports null rather than a guess until it has settled. An estimate that opens at "4
+ * hours" and collapses to "30 seconds" once the window fills is worse than showing
+ * nothing — it is the same crying-wolf failure C1 warns about for the detail notice, and
+ * on a download people are deciding whether to sit and wait for, it matters more.
+ */
+export class RateEstimator {
+  private lastAt: number | null = null;
+  private lastBytes = 0;
+  private rate: number | null = null;
+  private samples = 0;
+
+  /** @param bytes absolute bytes transferred so far — never an increment. */
+  update(bytes: number, now: number): void {
+    if (this.lastAt === null) {
+      this.lastAt = now;
+      this.lastBytes = bytes;
+      return;
+    }
+
+    const seconds = (now - this.lastAt) / 1000;
+    const delta = bytes - this.lastBytes;
+
+    // Advance the baseline even when the sample is unusable, so the *next* sample measures
+    // its own interval rather than including this one. That is what keeps an instant jump
+    // — resuming a part-downloaded region, or skipping an artifact already in OPFS — from
+    // being read as infinite throughput and poisoning the average.
+    this.lastAt = now;
+    this.lastBytes = bytes;
+    if (seconds < MIN_SAMPLE_SECONDS || delta <= 0) return;
+
+    const instant = delta / seconds;
+    this.rate = this.rate === null ? instant : RATE_SMOOTHING * instant + (1 - RATE_SMOOTHING) * this.rate;
+    this.samples += 1;
+  }
+
+  /** Null until settled, so callers can render "calculating" rather than a wild guess. */
+  get bytesPerSecond(): number | null {
+    return this.samples >= SETTLE_SAMPLES ? this.rate : null;
+  }
+
+  secondsRemaining(receivedBytes: number, totalBytes: number): number | null {
+    const rate = this.bytesPerSecond;
+    const remaining = totalBytes - receivedBytes;
+    if (rate === null || rate <= 0 || remaining <= 0) return null;
+    return remaining / rate;
+  }
+}
 
 export class DownloadCancelled extends Error {
   constructor() {
@@ -217,6 +284,18 @@ export async function downloadRegion(
     totalBytes: region.totalBytes,
     currentArtifact: null,
     done: false,
+    bytesPerSecond: null,
+    etaSeconds: null,
+  };
+
+  const rate = new RateEstimator();
+  // Monotonic, not Date.now(): a clock adjustment part-way through a multi-hundred-MB
+  // download would otherwise show up as a negative or enormous interval.
+  const emit = (): void => {
+    rate.update(progress.receivedBytes, performance.now());
+    progress.bytesPerSecond = rate.bytesPerSecond;
+    progress.etaSeconds = rate.secondsRemaining(progress.receivedBytes, progress.totalBytes);
+    options.onProgress?.({ ...progress });
   };
 
   try {
@@ -227,16 +306,17 @@ export async function downloadRegion(
 
       await downloadArtifact(artifact, options.signal, (bytesStored) => {
         progress.receivedBytes = completedBytes + bytesStored;
-        options.onProgress?.({ ...progress });
+        emit();
       });
 
       completedBytes += artifact.bytes;
       progress.receivedBytes = completedBytes;
-      options.onProgress?.({ ...progress });
+      emit();
     }
 
     progress.currentArtifact = null;
     progress.done = true;
+    progress.etaSeconds = null;
     options.onProgress?.({ ...progress });
   } finally {
     inFlight -= 1;

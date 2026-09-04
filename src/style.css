@@ -1028,6 +1028,19 @@ body {
   transition: width 0.2s linear;
 }
 
+.region-progress-label {
+  grid-column: 1 / -1;
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-faint);
+  /* Tabular figures so the byte count and ETA don't jitter the line width as they tick. */
+  font-variant-numeric: tabular-nums;
+}
+
+.region-progress-label[hidden] {
+  display: none;
+}
+
 .places-empty {
   padding: 0.6rem 0;
   font-size: 0.85rem;

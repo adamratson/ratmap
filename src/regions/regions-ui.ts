@@ -1,5 +1,5 @@
 import type { Map as MLMap } from 'maplibre-gl';
-import { fetchManifest, formatBytes, type Region } from './manifest';
+import { fetchManifest, formatBytes, formatDuration, type Region } from './manifest';
 import {
   deleteRegion,
   downloadRegion,
@@ -399,6 +399,14 @@ function renderRegionRow(
   bar.className = 'region-progress-bar';
   progress.append(bar);
 
+  // Visible, not just `action.title`. A tooltip needs a hover, which a phone does not
+  // have, and this is a phone-first app where the thing being described is a download
+  // measured in hundreds of megabytes — exactly when someone needs to know whether to
+  // wait for it.
+  const progressLabel = document.createElement('p');
+  progressLabel.className = 'region-progress-label';
+  progressLabel.hidden = true;
+
   if (status === 'downloaded') {
     // Two taps, not one. This button sits in the same slot every other row uses for
     // "Download", and the mistake costs a re-download of the whole region — which on a
@@ -442,13 +450,15 @@ function renderRegionRow(
     action.addEventListener('click', () => {
       if (running) return;
       running = true;
-      void startDownload(region, deps, action, progress, bar, refresh).finally(() => {
-        running = false;
-      });
+      void startDownload(region, deps, action, progress, bar, progressLabel, refresh).finally(
+        () => {
+          running = false;
+        },
+      );
     });
   }
 
-  item.append(info, action, progress);
+  item.append(info, action, progress, progressLabel);
   return item;
 }
 
@@ -458,6 +468,7 @@ async function startDownload(
   action: HTMLButtonElement,
   progress: HTMLElement,
   bar: HTMLElement,
+  progressLabel: HTMLElement,
   refresh: () => void,
 ): Promise<void> {
   // C1: both gates checked immediately before starting, not at page load — persistence
@@ -472,6 +483,8 @@ async function startDownload(
   action.textContent = 'Cancel';
   action.classList.add('danger');
   progress.hidden = false;
+  progressLabel.hidden = false;
+  progressLabel.textContent = 'Starting…';
 
   const onCancel = () => controller.abort();
   action.addEventListener('click', onCancel);
@@ -482,7 +495,13 @@ async function startDownload(
       onProgress: (p) => {
         const pct = p.totalBytes > 0 ? Math.min((p.receivedBytes / p.totalBytes) * 100, 100) : 0;
         bar.style.width = `${pct.toFixed(1)}%`;
-        action.title = `${formatBytes(p.receivedBytes)} of ${formatBytes(p.totalBytes)}`;
+
+        const transferred = `${formatBytes(p.receivedBytes)} of ${formatBytes(p.totalBytes)}`;
+        // No ETA until the estimator has settled — before that it says nothing rather than
+        // quoting a number that would visibly halve on the next tick.
+        const remaining = p.etaSeconds === null ? '' : ` · ${formatDuration(p.etaSeconds)} left`;
+        progressLabel.textContent = `${transferred}${remaining}`;
+        action.title = `${transferred}${remaining}`;
       },
     });
 

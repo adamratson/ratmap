@@ -4,6 +4,7 @@ import {
   cacheManifest,
   fetchManifest,
   formatBytes,
+  formatDuration,
   loadCachedManifest,
   SUPPORTED_SCHEMA_VERSION,
   type RegionManifest,
@@ -159,5 +160,28 @@ describe('formatBytes', () => {
   it('does not render nonsense for invalid input', () => {
     expect(formatBytes(Number.NaN)).toBe('—');
     expect(formatBytes(-1)).toBe('—');
+  });
+});
+
+describe('formatDuration', () => {
+  it('rounds to the precision the estimate deserves', () => {
+    expect(formatDuration(30)).toBe('less than a minute');
+    expect(formatDuration(90)).toBe('2 min');
+    expect(formatDuration(600)).toBe('10 min');
+    expect(formatDuration(3600)).toBe('1 hr');
+    expect(formatDuration(4800)).toBe('1 hr 20 min');
+  });
+
+  it('never quotes seconds', () => {
+    // The rate this is derived from swings ~2x, so second-level precision would be a
+    // number visibly counting wrong rather than a useful estimate.
+    expect(formatDuration(63)).not.toMatch(/\bs\b|second/);
+    expect(formatDuration(44)).toBe('less than a minute');
+  });
+
+  it('does not render nonsense for invalid input', () => {
+    expect(formatDuration(Number.NaN)).toBe('—');
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('—');
+    expect(formatDuration(-1)).toBe('—');
   });
 });

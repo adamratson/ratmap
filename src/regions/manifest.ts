@@ -125,3 +125,21 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1e9) return `${(bytes / 1e6).toFixed(bytes < 1e8 ? 1 : 0)} MB`;
   return `${(bytes / 1e9).toFixed(1)} GB`;
 }
+
+/**
+ * A remaining-time estimate, rounded to the precision the estimate actually deserves.
+ *
+ * Never shows seconds. The underlying rate swings by roughly 2x on these buckets, so
+ * "1 min" is honest where "1 min 3 s" is false precision that visibly counts wrong.
+ */
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '—';
+  if (seconds < 45) return 'less than a minute';
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} hr` : `${hours} hr ${rest} min`;
+}

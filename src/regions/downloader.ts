@@ -43,6 +43,40 @@ const CHUNK_BYTES = 4 * 1024 * 1024;
  */
 const FETCH_CONCURRENCY = 12;
 
+/**
+ * How long a single chunk request may sit with no response before it's treated as stalled
+ * and retried.
+ *
+ * A `fetch()` with no timeout only ends via error or the caller's own abort — it does not
+ * time out on its own. On mobile that gap matters: a cell-tower handoff, a Wi-Fi↔cellular
+ * switch, or iOS briefly suspending network on backgrounding can leave a request neither
+ * resolving nor rejecting. Because chunks are only ever written to OPFS in strict offset
+ * order (`nextToWrite` below), one such hang doesn't just lose a chunk — it permanently
+ * freezes the whole artifact at that byte offset, with nothing to show for it: no error,
+ * no retry, progress just stops advancing. Observed in the field as downloads "stuck" partway
+ * through on mobile with no console error. This timeout is what turns that silent hang back
+ * into a retryable failure.
+ */
+const CHUNK_TIMEOUT_MS = 20_000;
+
+/** Chunk attempts before giving up and failing the whole download. */
+const MAX_CHUNK_ATTEMPTS = 5;
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new DownloadCancelled());
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DownloadCancelled());
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 export interface DownloadProgress {
   regionId: string;
   /** Bytes stored for this region so far, across all its artifacts. */
@@ -159,6 +193,45 @@ async function fetchChunk(
 }
 
 /**
+ * `fetchChunk`, but bounded by `CHUNK_TIMEOUT_MS` and retried on both timeout and ordinary
+ * network failure — a flaky mobile connection produces both, and treating only one as
+ * recoverable would still stall the whole download on the other.
+ *
+ * The timeout is a *derived* AbortController, not the caller's `signal` — the caller's
+ * signal means "cancel", the timeout's means "try again", and collapsing them would turn
+ * every retry into a permanent cancellation.
+ */
+export async function fetchChunkWithRetry(
+  url: string,
+  filename: string,
+  start: number,
+  end: number,
+  signal: AbortSignal,
+): Promise<ArrayBuffer> {
+  for (let attempt = 1; ; attempt += 1) {
+    if (signal.aborted) throw new DownloadCancelled();
+
+    const attemptController = new AbortController();
+    const onOuterAbort = () => attemptController.abort();
+    signal.addEventListener('abort', onOuterAbort);
+    const timer = setTimeout(() => attemptController.abort(), CHUNK_TIMEOUT_MS);
+
+    try {
+      return await fetchChunk(url, filename, start, end, attemptController.signal);
+    } catch (err) {
+      if (signal.aborted) throw new DownloadCancelled();
+      if (attempt >= MAX_CHUNK_ATTEMPTS) throw err;
+      // Exponential backoff so a genuinely down connection doesn't hammer the bucket with
+      // immediate retries — capped well under CHUNK_TIMEOUT_MS.
+      await sleep(Math.min(500 * 2 ** (attempt - 1), 8_000), signal);
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onOuterAbort);
+    }
+  }
+}
+
+/**
  * @param onStored called with the *absolute* number of bytes stored for this artifact so
  *   far — never an increment. Resume makes increments easy to double-count.
  */
@@ -210,7 +283,7 @@ async function downloadArtifact(
   const dispatch = (index: number): void => {
     const start = starts[index];
     const end = Math.min(start + CHUNK_BYTES, artifact.bytes) - 1;
-    inFlight.set(index, fetchChunk(url, artifact.filename, start, end, signal));
+    inFlight.set(index, fetchChunkWithRetry(url, artifact.filename, start, end, signal));
   };
 
   const fillWindow = (): void => {

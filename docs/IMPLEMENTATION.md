@@ -729,8 +729,11 @@ them yet.
    (only EU/FedRAMP/US), and Krystal is a UK company. Before cutover, CORS and range
    requests were verified directly against the live Krystal bucket (`infra/SETUP.md`):
    Krystal's Swift-based S3 gateway emits a fixed, unconfigurable
-   `Access-Control-Allow-Origin: *` already exposing `ETag`/`Content-Range`, satisfying C4
-   with no CORS policy to write, unlike R2. One real incompatibility found and worked
+   `Access-Control-Allow-Origin: *` with no CORS policy to write, unlike R2. **Correction
+   (2026-09-04):** that header set exposes `ETag` but *not* `Content-Range`, so C4 is not
+   met in full — this entry originally claimed it was. Harmless in practice (nothing reads
+   `Content-Range`) and unfixable on Krystal, but do not write code that depends on it.
+   One real incompatibility found and worked
    around: `pmtiles upload` (gocloud's aws-sdk-go-v2 client) fails every write against
    Krystal with `SignatureDoesNotMatch` regardless of region string or path-style
    addressing; `infra/scripts/upload.sh` now uses `aws s3 cp` instead, which signs
@@ -742,3 +745,20 @@ them yet.
    fresh manifest during cutover: commit 9d1ba06 retired the `lochaber`/`cairngorms`
    regions with no replacement, and e2e's Ben Nevis coverage now has none either —
    tracked separately, not part of this decision.
+9. ~~Move off Krystal for download speed?~~ **Decided 2026-09-04: no. Stay on Krystal, and
+   raise download concurrency instead.** Benchmarked Krystal, Civo (LON1) and Scaleway
+   (fr-par) back-to-back on an identical 37 MB artifact with a Cloudflare-edge control on
+   the same link: 12-way aggregate 7.22 / 7.00 / 7.97 MB/s against a 9.5 control. All
+   within noise — **there is no faster provider among these**, and single-stream
+   differences (where Civo led by ~45%) vanish entirely under concurrency. What actually
+   governs download speed is `FETCH_CONCURRENCY` in `src/regions/downloader.ts`: 1-way
+   2.73 MB/s vs 12-way 7.22 MB/s on the same bucket. Raised 4 → 12, which reaches ~75% of
+   CDN throughput with no infrastructure change; the ceiling is memory
+   (`FETCH_CONCURRENCY × CHUNK_BYTES` = 48 MB of buffers), not the network.
+
+   Two measurement lessons worth keeping, because both produced confidently wrong
+   conclusions before being caught: (a) a VPN holding the default route halved every
+   number and made different providers look identical — check `route get default` before
+   trusting any throughput measurement; (b) absolute figures drift enough hour to hour
+   that only back-to-back runs with a known-fast control are comparable. The harness that
+   encodes both is in `plans/` scratch, not yet a repo script.

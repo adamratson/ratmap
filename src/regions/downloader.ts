@@ -23,14 +23,25 @@ import {
 const CHUNK_BYTES = 4 * 1024 * 1024;
 
 /**
- * How many chunk fetches run concurrently.
+ * How many chunks may be outstanding at once — in flight plus fetched-but-not-yet-written.
  *
- * Measured against the storage bucket (2026-09-01): a single connection sustains only
- * ~1.5 MB/s, and concurrent connections roughly double aggregate throughput before
- * flattening out — 4 gave ~2.4 MB/s, 8 gave ~2.9 MB/s. Diminishing enough past 4 that it
- * isn't worth the extra memory (each in-flight chunk is a full `CHUNK_BYTES` buffer).
+ * Concurrency is where nearly all the download speed is. Measured against Krystal on one
+ * connection (2026-09-04, identical 37 MB artifact): 1-way 2.73 MB/s, 4-way 3.58, 8-way
+ * 5.06, 12-way 7.22, against a Cloudflare-edge control of 9.57 on the same link at the
+ * same moment. So a plain object store at 12-way reaches ~75% of a CDN — most of what
+ * looked like a "we need a CDN" problem was just under-parallelised fetching. Civo and
+ * Scaleway benchmarked within noise of these numbers, so this is not Krystal-specific.
+ *
+ * (An earlier version of this comment cited ~1.5 MB/s single-stream and claimed
+ * diminishing returns past 4. Those measurements were taken through a VPN tunnel that
+ * held the default route, which halved everything and flattened the differences.)
+ *
+ * The ceiling is memory, not the network: this bounds *total* outstanding work, so peak
+ * usage is FETCH_CONCURRENCY × CHUNK_BYTES = 48 MB of ArrayBuffers. That is the number to
+ * weigh if downloads start failing on memory-constrained phones — it is the reason this
+ * caps total outstanding rather than just in-flight requests.
  */
-const FETCH_CONCURRENCY = 4;
+const FETCH_CONCURRENCY = 12;
 
 export interface DownloadProgress {
   regionId: string;
@@ -111,16 +122,23 @@ async function downloadArtifact(
   const starts: number[] = [];
   for (let s = offset; s < artifact.bytes; s += CHUNK_BYTES) starts.push(s);
 
-  // Fetches run up to FETCH_CONCURRENCY at a time and can resolve out of order, but they
-  // are only ever committed to OPFS in strict offset order (`nextToWrite`) — resolved
-  // chunks that arrive early just wait in `ready`. That's what keeps `partialSize()` an
-  // honest contiguous prefix: a crash mid-batch can only ever leave the file exactly as
-  // far along as the original serial version would have, never with a gap in the middle
-  // that a later resume would silently treat as real data (C1).
+  // Fetches run concurrently and can resolve out of order, but they are only ever
+  // committed to OPFS in strict offset order (`nextToWrite`) — resolved chunks that arrive
+  // early just wait in `ready`. That's what keeps `partialSize()` an honest contiguous
+  // prefix: a crash mid-batch can only ever leave the file exactly as far along as the
+  // original serial version would have, never with a gap in the middle that a later resume
+  // would silently treat as real data (C1).
+  //
+  // `ready` counts against the concurrency budget as well as `inFlight`. Bounding only the
+  // in-flight requests would let one stalled chunk pile every subsequent chunk up in
+  // memory — each completion dispatching a replacement while nothing drains — so a slow
+  // chunk 3 could buffer the rest of a multi-GB artifact into ArrayBuffers.
   let nextToDispatch = 0;
   let nextToWrite = 0;
   const inFlight = new Map<number, Promise<ArrayBuffer>>();
   const ready = new Map<number, ArrayBuffer>();
+
+  const outstanding = (): number => inFlight.size + ready.size;
 
   const dispatch = (index: number): void => {
     const start = starts[index];
@@ -128,10 +146,14 @@ async function downloadArtifact(
     inFlight.set(index, fetchChunk(url, artifact.filename, start, end, signal));
   };
 
-  while (nextToDispatch < starts.length && inFlight.size < FETCH_CONCURRENCY) {
-    dispatch(nextToDispatch);
-    nextToDispatch += 1;
-  }
+  const fillWindow = (): void => {
+    while (nextToDispatch < starts.length && outstanding() < FETCH_CONCURRENCY) {
+      dispatch(nextToDispatch);
+      nextToDispatch += 1;
+    }
+  };
+
+  fillWindow();
 
   while (nextToWrite < starts.length) {
     if (signal.aborted) throw new DownloadCancelled();
@@ -146,11 +168,7 @@ async function downloadArtifact(
       );
       inFlight.delete(doneIndex);
       ready.set(doneIndex, chunk);
-
-      if (nextToDispatch < starts.length) {
-        dispatch(nextToDispatch);
-        nextToDispatch += 1;
-      }
+      fillWindow();
       continue;
     }
 

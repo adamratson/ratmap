@@ -1,5 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DownloadCancelled, fetchChunkWithRetry } from './downloader';
+import type { RegionArtifact } from './manifest';
+
+const opfsMocks = vi.hoisted(() => ({
+  hasArtifact: vi.fn(async () => false),
+  partialSize: vi.fn(async () => 0),
+  appendToPartial: vi.fn(async () => {}),
+  finalizePartial: vi.fn(async () => {}),
+  deleteArtifact: vi.fn(async () => {}),
+  listArtifactNames: vi.fn(async () => new Set<string>()),
+  partialName: (filename: string) => `${filename}.part`,
+}));
+
+vi.mock('./opfs-store', () => opfsMocks);
+
+const { DownloadCancelled, downloadArtifact, fetchChunkWithRetry } = await import('./downloader');
 
 // Regression coverage for the "downloads get stuck on mobile" bug: a Range request that
 // never resolves or rejects (common on flaky mobile connections — a hung TCP connection,
@@ -96,4 +110,89 @@ describe('fetchChunkWithRetry', () => {
 
     await assertion;
   });
+});
+
+describe('downloadArtifact', () => {
+  // Mirrors downloader.ts's own tuning constants — not exported, since they're an
+  // implementation detail everywhere except here, where the test needs to know exactly
+  // where the old concurrency-window boundary sat.
+  const CHUNK_BYTES = 4 * 1024 * 1024;
+  const FETCH_CONCURRENCY = 12;
+
+  beforeEach(() => {
+    opfsMocks.hasArtifact.mockResolvedValue(false);
+    opfsMocks.partialSize.mockResolvedValue(0);
+    opfsMocks.appendToPartial.mockClear();
+    opfsMocks.finalizePartial.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps dispatching past the first concurrency window when chunks resolve out of order', async () => {
+    // Regression test for the real "stuck at 50.3 MB" bug: two separate downloads froze
+    // at the exact same byte count (FETCH_CONCURRENCY × CHUNK_BYTES = 12 × 4 MiB), which
+    // ruled out random network flakiness and pointed at something deterministic in the
+    // pipeline itself — see downloader.ts's `fillWindow()` comment at the write site.
+    //
+    // Reproducing it needs the first window's chunks to resolve *out of order*: `ready`
+    // only grows one entry per `Promise.race` call, so in-order resolution never lets more
+    // than one entry sit ahead of the writer, and the write branch's missing `fillWindow()`
+    // call never gets exposed. Real mobile networks resolve concurrent requests out of
+    // order routinely (per-request latency jitter); this drives the first window's 12
+    // chunks to resolve in strict reverse order, which piles all 12 into `ready` by the
+    // time chunk 0 lands — the exact condition that let the writer blow through indices
+    // 1..11 via the write-only branch and never dispatch chunk 12.
+    const totalChunks = FETCH_CONCURRENCY + 8;
+    const artifact: RegionArtifact = {
+      kind: 'basemap',
+      filename: 'test-region-basemap.pmtiles',
+      path: 'regions/test-region/test-region-basemap.pmtiles',
+      bytes: CHUNK_BYTES * totalChunks,
+    };
+
+    const resolvers: Array<(response: Response) => void> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>((resolve) => resolvers.push(resolve))),
+    );
+    opfsMocks.appendToPartial.mockResolvedValue(undefined);
+
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    const receivedBytes: number[] = [];
+    const controller = new AbortController();
+    const donePromise = downloadArtifact(artifact, controller.signal, (bytes) => receivedBytes.push(bytes));
+
+    while (resolvers.length < FETCH_CONCURRENCY) await tick();
+
+    // Resolve the first window in reverse order, one at a time, so each is consumed by its
+    // own `Promise.race` before the next lands — exactly what piles the whole window into
+    // `ready` ahead of the writer.
+    for (let i = FETCH_CONCURRENCY - 1; i >= 0; i -= 1) {
+      resolvers[i](okResponse(CHUNK_BYTES));
+      await tick();
+    }
+
+    // Everything from here on (chunk 12+) only exists if the window kept refilling —
+    // resolve it as soon as it's dispatched.
+    const drainRest = (async () => {
+      for (let index = FETCH_CONCURRENCY; index < totalChunks; index += 1) {
+        while (resolvers.length <= index) await tick();
+        resolvers[index](okResponse(CHUNK_BYTES));
+      }
+    })();
+
+    await Promise.all([donePromise, drainRest]);
+
+    expect(opfsMocks.appendToPartial).toHaveBeenCalledTimes(totalChunks);
+    expect(opfsMocks.finalizePartial).toHaveBeenCalledTimes(1);
+    expect(receivedBytes.at(-1)).toBe(artifact.bytes);
+
+    // The old deadlock boundary (50,331,648 bytes, "50.3 MB") must be passed through on
+    // the way to completion, never the final value.
+    expect(receivedBytes).toContain(FETCH_CONCURRENCY * CHUNK_BYTES);
+    expect(receivedBytes.at(-1)).not.toBe(FETCH_CONCURRENCY * CHUNK_BYTES);
+  }, 10_000);
 });

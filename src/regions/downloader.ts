@@ -235,7 +235,7 @@ export async function fetchChunkWithRetry(
  * @param onStored called with the *absolute* number of bytes stored for this artifact so
  *   far — never an increment. Resume makes increments easy to double-count.
  */
-async function downloadArtifact(
+export async function downloadArtifact(
   artifact: RegionArtifact,
   signal: AbortSignal,
   onStored: (bytesStored: number) => void,
@@ -318,6 +318,14 @@ async function downloadArtifact(
     offset += chunk.byteLength;
     onStored(offset);
     nextToWrite += 1;
+
+    // Writing out of `ready` frees a concurrency slot the same as a fetch resolving does —
+    // skip this and the window never refills once the writer catches up to a batch that
+    // resolved faster than it could be drained, which stalls forever the moment `inFlight`
+    // and `ready` are both empty: `Promise.race([])` never settles. That dead end lands at
+    // exactly FETCH_CONCURRENCY × CHUNK_BYTES every time, not at some network-dependent
+    // point, which is what "stuck at the same byte count on different downloads" was.
+    fillWindow();
   }
 
   await finalizePartial(artifact.filename);

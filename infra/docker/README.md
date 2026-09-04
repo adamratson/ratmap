@@ -259,19 +259,18 @@ full-catalogue rebuild — correct for `global all`, where `dist/` genuinely end
 everything, but wrong here: this filtered slice's `dist/` only has five countries in it,
 so `build-manifest.py` run bare would produce a manifest describing *only* those five, and
 `upload.sh` would (correctly) refuse it as an unpublish of the rest of the catalogue.
-Run `manifest` yourself afterward with `--base`, same as any other partial build (see
-`../README.md`'s "Always pass `--base`" section). `dist/` is always the same host-visible
-bind mount (`../dist`, from this directory) regardless of Compose vs a bare script run, so
-stage the live manifest there and reference it by its in-container path:
+Run `manifest` yourself afterward with `--base-live`, same as any other partial build (see
+`../README.md`'s "Always pass `--base-live`" section):
 
 ```sh
-curl -s "$PUBLIC_BASE_URL/regions/manifest.json" -o ../dist/live-manifest.json
-docker compose run --rm infra build-manifest.py \
-  --base /opt/ratmap/infra/dist/live-manifest.json --prune
+docker compose run --rm infra build-manifest.py --base-live --prune
 ```
 
-(`entrypoint.sh` dispatches any `*.py`/`*.sh` name straight to `infra/scripts/`, so this
-runs `build-manifest.py` with the image's pinned `pmtiles` — no need for a local install.)
+No manual `curl` or file staging needed — `--base-live` fetches the currently-published
+manifest itself, and `PUBLIC_BASE_URL` is already in the container's environment via
+`env_file: ../.env` (see the `compose.yml` volumes/environment above). `entrypoint.sh`
+dispatches any `*.py`/`*.sh` name straight to `infra/scripts/`, so this runs
+`build-manifest.py` with the image's pinned `pmtiles` — no local install needed either.
 
 `upload.sh` skips archives already in the bucket at the same size, so uploading after each
 slice is cheap.

@@ -259,25 +259,27 @@ of extraction, which is why the build is resumable at every level.
 ./scripts/build-region.sh lochaber --dry-run   # size it first
 ./scripts/build-region.sh lochaber             # extract basemap + terrain
 ./scripts/build-contours.sh lochaber           # contours (needs gdal)
-curl -s "$PUBLIC_BASE_URL/regions/manifest.json" -o /tmp/live-manifest.json
-python3 ./scripts/build-manifest.py --base /tmp/live-manifest.json  # merge, don't rebuild
+python3 ./scripts/build-manifest.py --base-live  # merge, don't rebuild
 ./scripts/upload.sh                            # archives, then the manifest
 ```
 
 `build-manifest.py` picks up whatever artifacts exist in a region's directory, so a new
 artifact kind needs no code change anywhere — that is what C16's open-ended schema buys.
 
-**Always pass `--base` for anything short of a from-scratch catalogue build.** No single
-machine has ever held every region's archives at once — the catalogue is 180+ regions
-built incrementally, often across different sessions and hosts — so `dist/` here is a
-*partial* build, not the whole thing. Run bare (no `--base`), `build-manifest.py` only
-knows what's on this disk right now, and publishing that would unpublish every region it
-can't see. `--base <existing manifest.json>` merges instead: only the regions actually
-present in `dist/regions/` are (re)computed (by artifact kind — a region that already has
+**Always pass `--base-live` (or `--base`) for anything short of a from-scratch catalogue
+build.** No single machine has ever held every region's archives at once — the catalogue
+is 180+ regions built incrementally, often across different sessions and hosts — so
+`dist/` here is a *partial* build, not the whole thing. Run bare (no `--base-live`),
+`build-manifest.py` only knows what's on this disk right now, and publishing that would
+unpublish every region it can't see. `--base-live` fetches the currently-published
+manifest itself (reads `PUBLIC_BASE_URL` from the environment or `infra/.env` — no need
+to `curl` it separately first) and merges into it: only the regions actually present in
+`dist/regions/` are (re)computed (by artifact kind — a region that already has
 basemap+terrain live and only had contours added here keeps all three, not just the one
-just built), everything else in the base carries over untouched. Add `--prune` to also
-drop base regions whose id is no longer in `regions.json` — a deliberate unpublish, never
-implicit.
+just built), everything else in the base carries over untouched. `--base <path-or-url>`
+does the same against an arbitrary manifest, for anything that isn't the live one. Add
+`--prune` to also drop base regions whose id is no longer in `regions.json` — a
+deliberate unpublish, never implicit.
 
 `upload.sh` deliberately uploads the manifest **last**: a manifest listing artifacts that
 aren't in the bucket yet would offer the user a download that 404s.

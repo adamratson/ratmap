@@ -128,11 +128,10 @@ fi
 if [ -z "$DRY_RUN" ]; then
   echo
   echo "Built $OUT_DIR"
-  # --base, not a bare rebuild: see build-contours.sh's own version of this note — dist/
-  # is essentially never the whole catalogue, so a bare build-manifest.py run would
+  # --base-live, not a bare rebuild: see build-contours.sh's own version of this note —
+  # dist/ is essentially never the whole catalogue, so a bare build-manifest.py run would
   # publish an unpublish of every region it can't see on this disk.
   echo "Next:"
-  echo "  curl -s \"\$PUBLIC_BASE_URL/regions/manifest.json\" -o /tmp/live-manifest.json"
-  echo "  python3 ./scripts/build-manifest.py --base /tmp/live-manifest.json"
+  echo "  python3 ./scripts/build-manifest.py --base-live"
   echo "  ./scripts/upload.sh"
 fi

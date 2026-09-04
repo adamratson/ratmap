@@ -17,26 +17,35 @@ Two modes:
       build uses — dist_dir there genuinely holds (or is building towards holding) every
       region in regions.json, so a from-scratch manifest is correct.
 
-  build-manifest.py [dist_dir] --base <existing-manifest.json> [--prune]
+  build-manifest.py [dist_dir] --base-live [--prune]
+  build-manifest.py [dist_dir] --base <manifest.json path or URL> [--prune]
       Incremental update. No single machine has ever held every region's archives at
       once — regions get built a handful at a time, often in different sessions on
       different hosts, against a catalogue of 180+ entries. Requiring the full set
       locally before publishing anything meant every partial build either had to be
       hand-spliced into a copy of the live manifest (fragile, ad hoc, done at least
       twice — Montenegro's contours artifact and the England/Scotland/Wales split,
-      2026-09) or skipped publishing a manifest update at all. --base takes a copy of
-      the currently-live manifest (fetch it yourself: `curl .../regions/manifest.json`);
-      only region ids actually present in dist_dir/regions/ are (re)computed and
-      overwrite the base entry, everything else in the base carries over untouched.
-      --prune additionally drops base regions whose id is no longer in regions.json —
-      an explicit, opt-in unpublish, not an implicit side effect of a partial build.
+      2026-09), or a `curl .../regions/manifest.json` copy-pasted separately into every
+      doc and script that needed one — which is its own reliability problem, so fetching
+      it is built in here instead: --base-live reads PUBLIC_BASE_URL (from the
+      environment, falling back to infra/.env) and fetches straight from there. --base
+      also still takes a plain http(s) URL or a local path, for a base manifest that
+      isn't the live one. Either way, only region ids actually present in
+      dist_dir/regions/ are (re)computed and overwrite the base entry (merged by
+      artifact kind, not by whole region — see the comment at the merge below);
+      everything else in the base carries over untouched. --prune additionally drops
+      base regions whose id is no longer in regions.json — an explicit, opt-in
+      unpublish, not an implicit side effect of a partial build.
 """
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 
 SCHEMA_VERSION = 1
@@ -91,6 +100,50 @@ def sha256(path, chunk=1 << 20):
         while block := f.read(chunk):
             digest.update(block)
     return digest.hexdigest()
+
+
+def public_base_url(infra_dir):
+    """PUBLIC_BASE_URL from the environment, falling back to infra/.env.
+
+    A bash caller that went through lib.sh already has this exported; a bare
+    `python3 build-manifest.py --base-live` invocation has not. Re-reading infra/.env
+    here (rather than requiring callers to source it first) is what makes --base-live
+    work the same way regardless of how this script was reached — matching the .env
+    fallback lib.sh already gives every shell script in this directory.
+    """
+    value = os.environ.get("PUBLIC_BASE_URL")
+    if value:
+        return value
+
+    env_file = pathlib.Path(infra_dir) / ".env"
+    if env_file.is_file():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            if key.strip() == "PUBLIC_BASE_URL":
+                return val.strip().strip('"').strip("'")
+
+    return None
+
+
+def load_base_manifest(source):
+    """The base manifest's parsed JSON, from a URL or a local path.
+
+    A plain http(s):// prefix is treated as a URL (urllib, stdlib only — no new
+    dependency for what is otherwise a pure local-file script); anything else is opened
+    as a path, same as before this existed.
+    """
+    if source.startswith(("http://", "https://")):
+        try:
+            with urllib.request.urlopen(source, timeout=30) as response:
+                return json.load(response)
+        except urllib.error.URLError as err:
+            raise SystemExit(f"FAIL: could not fetch base manifest from {source}: {err}")
+
+    with open(source) as f:
+        return json.load(f)
 
 
 def build_local_regions(dist_dir, defined):
@@ -153,17 +206,16 @@ def build_local_regions(dist_dir, defined):
     return by_id
 
 
-def build(dist_dir, regions_json, dest, base_path=None, prune=False):
+def build(dist_dir, regions_json, dest, base_source=None, prune=False):
     with open(regions_json) as f:
         defined = {r["id"]: r for r in json.load(f)["regions"]}
 
     fresh = build_local_regions(dist_dir, defined)
 
-    if base_path is None:
+    if base_source is None:
         regions_by_id = dict(fresh)
     else:
-        with open(base_path) as f:
-            base = json.load(f)
+        base = load_base_manifest(base_source)
 
         if base.get("schemaVersion", 0) > SCHEMA_VERSION:
             raise SystemExit(
@@ -222,7 +274,7 @@ def build(dist_dir, regions_json, dest, base_path=None, prune=False):
     # Full rebuild: every region was just computed, so the original behaviour (list
     # everything) still applies. Merge: only the touched ids are news; the rest is
     # exactly what the base manifest already said, so summarise instead of repeating it.
-    if base_path is None:
+    if base_source is None:
         report_ids = sorted(regions_by_id)
     else:
         report_ids = sorted(fresh)
@@ -235,7 +287,7 @@ def build(dist_dir, regions_json, dest, base_path=None, prune=False):
         kinds = ", ".join(a["kind"] for a in region["artifacts"])
         print(f"  {region_id}: {size_mb:.1f} MB ({kinds})")
 
-    if base_path is not None:
+    if base_source is not None:
         unchanged = len(regions) - len(report_ids)
         print(f"  ({unchanged} region(s) unchanged, carried over from base manifest)")
 
@@ -253,38 +305,60 @@ def main():
     )
     parser.add_argument(
         "--base",
-        type=pathlib.Path,
+        type=str,
         default=None,
-        metavar="MANIFEST_JSON",
+        metavar="MANIFEST_JSON_OR_URL",
         help=(
-            "Existing manifest.json to merge into (e.g. a local copy of the currently "
-            "live one). Only regions present in dist_dir/regions/ are recomputed; "
-            "everything else in the base is carried over unchanged. Without this, "
+            "Existing manifest.json to merge into — a local path, or a plain http(s) "
+            "URL. Only regions present in dist_dir/regions/ are recomputed; everything "
+            "else in the base is carried over unchanged. Without this (or --base-live), "
             "dist_dir/regions/ must hold every region in the catalogue."
+        ),
+    )
+    parser.add_argument(
+        "--base-live",
+        action="store_true",
+        help=(
+            "Shorthand for --base $PUBLIC_BASE_URL/regions/manifest.json — fetches the "
+            "currently-published manifest as the merge base. PUBLIC_BASE_URL is read "
+            "from the environment, falling back to infra/.env."
         ),
     )
     parser.add_argument(
         "--prune",
         action="store_true",
         help=(
-            "With --base: also drop base regions whose id is no longer in regions.json. "
-            "An explicit unpublish, off by default."
+            "With --base/--base-live: also drop base regions whose id is no longer in "
+            "regions.json. An explicit unpublish, off by default."
         ),
     )
     args = parser.parse_args()
 
-    if args.prune and args.base is None:
-        parser.error("--prune only makes sense together with --base")
+    if args.base and args.base_live:
+        parser.error("--base and --base-live are mutually exclusive")
+
+    if args.prune and args.base is None and not args.base_live:
+        parser.error("--prune only makes sense together with --base or --base-live")
 
     here = pathlib.Path(__file__).resolve().parent
     infra = here.parent
     dist_dir = args.dist_dir or (infra / "dist")
 
+    base_source = args.base
+    if args.base_live:
+        base_url = public_base_url(infra)
+        if not base_url:
+            parser.error(
+                "--base-live needs PUBLIC_BASE_URL — set it in the environment or in "
+                f"{infra / '.env'}"
+            )
+        base_source = f"{base_url.rstrip('/')}/regions/manifest.json"
+
     build(
         dist_dir=dist_dir,
         regions_json=infra / "regions.json",
         dest=dist_dir / "regions" / "manifest.json",
-        base_path=args.base,
+        base_source=base_source,
         prune=args.prune,
     )
 

@@ -107,6 +107,14 @@ EXCLUDED_IDS = {
     "russia",         # 10 federal districts -> 176 cells
     "us",             # 53 state extracts
     "south-america",  # 12 countries
+    "england",        # 47 counties -> hand-grouped into 9 official regions instead
+                      # (england-north-east, ..., england-south-west in regions.json);
+                      # Geofabrik has no tier between the whole country and county level.
+    "scotland",       # childless leaf, but already a manual (no-geofabrikId) entry in
+                      # regions.json — excluded so a regen doesn't generate a second,
+                      # `-region`-suffixed copy of the same ground. See the montenegro
+                      # incident this same rename mechanism produced (2026-09).
+    "wales",          # same reasoning as scotland, also a manual entry
 }
 
 # Geofabrik publishes convenience extracts that are unions of regions it also publishes

@@ -40,10 +40,17 @@ test.describe('offline regions', () => {
     expect(layers.filter((l) => l.type === 'background')).toHaveLength(1);
   });
 
-  test('keeps labels above the region relief and contours', async ({ page }) => {
+  test('keeps labels above the region relief', async ({ page }) => {
     // Regression: region artifacts were all inserted at the peaks layer, which stacks each
     // on top of the last. Artifacts load basemap → contours → terrain, so the hillshade
     // ended up over the basemap's own labels and washed out gully and corrie names.
+    //
+    // TEST_REGION carries no contours artifact right now — the catalogue's contour build
+    // is being rolled out region by region (commit 4552407) and hasn't reached it yet, so
+    // the `contours-lines` half of this ordering invariant can't be exercised against real
+    // downloaded data here. It is still covered, thoroughly, against synthetic data in
+    // src/regions/region-layers.test.ts ("puts relief and contours beneath the region
+    // labels"). This test keeps the hillshade half honest against the real archive.
     await openRegionsSheet(page);
     await downloadTestRegion(page);
 
@@ -54,9 +61,13 @@ test.describe('offline regions', () => {
     );
     expect(firstRegionLabel).toBeGreaterThan(-1);
 
-    for (const l of layers) {
-      if (l.type !== 'hillshade' && !l.id.endsWith('contours-lines')) continue;
-      if (!l.id.startsWith('region-')) continue;
+    const hillshadeLayers = layers.filter(
+      (l) => l.type === 'hillshade' && l.id.startsWith('region-'),
+    );
+    // If this is ever empty, TEST_REGION stopped carrying terrain and the assertion below
+    // would pass vacuously — so require at least one hillshade layer to actually check.
+    expect(hillshadeLayers.length).toBeGreaterThan(0);
+    for (const l of hillshadeLayers) {
       expect(ids.indexOf(l.id)).toBeLessThan(firstRegionLabel);
     }
   });
@@ -198,7 +209,8 @@ test.describe('the region catalogue', () => {
 
     // The catalogue covers the globe, so listing it is not a list — it is a wall. What
     // someone opening this sheet almost always wants is the ground on screen, so before
-    // anything is typed the list is the handful of regions nearest the map, not all 391.
+    // anything is typed the list is the handful of regions nearest the map, not the whole
+    // catalogue.
     const nearScotland = await page.locator('.region-name').allTextContents();
     expect(nearScotland.length).toBeGreaterThan(0);
     expect(nearScotland.length).toBeLessThan(20);
@@ -216,7 +228,7 @@ test.describe('the region catalogue', () => {
 
     await page.locator('.regions-search').fill(TEST_REGION);
     await expect(page.locator('.regions-hint')).toHaveText('1 match.');
-    await expect(page.locator('.region-name')).toHaveText(/Lochaber/);
+    await expect(page.locator('.region-name')).toHaveText(new RegExp(TEST_REGION));
     // Size and artifacts up front: this is a decision about megabytes on a phone.
     await expect(page.locator('.region-meta')).toHaveText(/MB · .*basemap/);
 

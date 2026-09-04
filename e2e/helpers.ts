@@ -109,10 +109,16 @@ export async function openRegionsSheet(page: Page): Promise<void> {
 }
 
 /**
- * The region these tests download. Small (~54 MB) and contains Ben Nevis, which the route
- * and peak tests need.
+ * The region these tests download.
+ *
+ * `lochaber` (a hand-authored ~54 MB Ben Nevis fixture) was retired without replacement
+ * when the catalogue moved to Geofabrik's auto-generated province/country extracts
+ * (commit 9d1ba06) — see docs/IMPLEMENTATION.md's Krystal migration note. Andorra is the
+ * smallest currently-published region with real z15 footpath data and real elevation, so
+ * the route-planning tests route a real, verified trail across it — see the coordinates
+ * and measured distance/ascent next to their use in route-planning.spec.ts.
  */
-export const TEST_REGION = 'Lochaber';
+export const TEST_REGION = 'Andorra';
 
 /**
  * How long to wait for {@link TEST_REGION} to come down.

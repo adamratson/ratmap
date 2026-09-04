@@ -16,17 +16,32 @@ import {
 // route with no network to snap to is drawn from straight legs (C11) and saved as a
 // complete coordinate array (C10), which is exactly what has to survive export, deletion
 // and a relaunch.
+//
+// Same Andorra fixture as route-planning.spec.ts — see the comment there for how these
+// coordinates were chosen and verified against the live router.
 
-const ACHINTEE: [number, number] = [-5.0765, 56.8094];
-const SUMMIT: [number, number] = [-5.0037, 56.7969];
-const BEN_NEVIS_AREA: [number, number, number, number] = [-5.1, 56.78, -4.98, 56.82];
+const TRAILHEAD: [number, number] = [1.7333, 42.5425];
+const RIDGE: [number, number] = [1.7, 42.575];
+const TEST_AREA: [number, number, number, number] = [1.66, 42.45, 1.76, 42.6];
+
+// Unlike route-planning.spec.ts, this file's "following" tests never download a region
+// (same as before this fixture changed — see the file-level comment), so C11's straight-
+// line fallback is what actually renders here, not the real snapped path. These fixes are
+// measured against *that* line — the snapped-route vertices used in route-planning.spec.ts
+// would read as ~740 m off a straight line between the same two endpoints.
+/** The line's own arithmetic midpoint. */
+const ON_ROUTE_FIX: [number, number] = [1.71665, 42.55875];
+/** ~2 km off the line, west of it. */
+const OFF_ROUTE_FIX: [number, number] = [1.69, 42.55];
+/** A quarter of the way from {@link TRAILHEAD} to {@link RIDGE}, for a "further along" fix. */
+const QUARTER_ROUTE_FIX: [number, number] = [1.724975, 42.550625];
 
 /** Plan a two-waypoint route and save it under `name`. */
 async function planAndSave(page: Page, name: string): Promise<void> {
-  await showArea(page, BEN_NEVIS_AREA);
+  await showArea(page, TEST_AREA);
   await startNewRoute(page);
-  await clickMapAt(page, ...ACHINTEE);
-  await clickMapAt(page, ...SUMMIT);
+  await clickMapAt(page, ...TRAILHEAD);
+  await clickMapAt(page, ...RIDGE);
   await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
 
   await page.locator('.route-actions button', { hasText: 'Save' }).click();
@@ -143,10 +158,10 @@ test.describe('following', () => {
     await clearSavedData(page);
     await clearConditions(page);
 
-    await showArea(page, BEN_NEVIS_AREA);
+    await showArea(page, TEST_AREA);
     await startNewRoute(page);
-    await clickMapAt(page, ...ACHINTEE);
-    await clickMapAt(page, ...SUMMIT);
+    await clickMapAt(page, ...TRAILHEAD);
+    await clickMapAt(page, ...RIDGE);
     await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
     await page.locator('.route-actions button', { hasText: 'Follow' }).click();
   });
@@ -177,10 +192,10 @@ test.describe('following', () => {
   test('says plainly whether you are still on the line', async ({ page }) => {
     // "Am I still on the path" is the whole question on a hill in poor visibility, so it
     // is the loudest thing on the screen and it is never left implicit.
-    await fix(page, [-5.04, 56.803]);
+    await fix(page, ON_ROUTE_FIX);
     await expect(page.locator('.follow-state.on')).toContainText('On route');
 
-    await fix(page, [-5.06, 56.79]);
+    await fix(page, OFF_ROUTE_FIX);
     await expect(page.locator('.follow-state.off')).toContainText('Off route');
     await expect(page.locator('.follow-note', { hasText: /dashed red line/ })).toBeVisible();
 
@@ -192,7 +207,7 @@ test.describe('following', () => {
       .toContain('route-off-route-line');
     await expect.poll(async () => offRouteLinePieces(page)).toBeGreaterThan(0);
 
-    await fix(page, [-5.04, 56.803]);
+    await fix(page, ON_ROUTE_FIX);
     await expect(page.locator('.follow-state.on')).toBeVisible();
     // And taken away again once you are back on it — a stale line pointing at where you
     // used to be off route is worse than none.
@@ -204,20 +219,20 @@ test.describe('following', () => {
     // from a position we do not have would be worse than saying nothing.
     await expect(page.locator('.follow-waiting')).toContainText(/Waiting for a position fix/);
 
-    await fix(page, [-5.0765, 56.8094]);
+    await fix(page, TRAILHEAD);
     await expect(page.locator('.follow-figures')).toContainText('Remaining');
     await expect(page.locator('.follow-figures')).toContainText('Done');
 
     const nearStart = await page.locator('.follow-progress-fill').evaluate((el) => el.style.width);
 
-    await fix(page, [-5.02, 56.8]);
+    await fix(page, QUARTER_ROUTE_FIX);
     await expect
       .poll(async () => page.locator('.follow-progress-fill').evaluate((el) => el.style.width))
       .not.toBe(nearStart);
   });
 
   test('returns to planning when following stops', async ({ page }) => {
-    await fix(page, [-5.04, 56.803]);
+    await fix(page, ON_ROUTE_FIX);
     await expect(page.locator('#chips .chip-mode')).toHaveText('Following');
 
     await page.locator('.route-actions button', { hasText: 'Stop following' }).click();

@@ -260,10 +260,14 @@ everything, but wrong here: this filtered slice's `dist/` only has five countrie
 so `build-manifest.py` run bare would produce a manifest describing *only* those five, and
 `upload.sh` would (correctly) refuse it as an unpublish of the rest of the catalogue.
 Run `manifest` yourself afterward with `--base-live`, same as any other partial build (see
-`../README.md`'s "Always pass `--base-live`" section):
+`../README.md`'s "Always pass `--base-live`" section). Also pass `--only`, scoped to
+exactly this filter — a long-running `/work` volume accumulates archives from unrelated
+past runs, and one corrupt file anywhere in `dist/regions/` would otherwise block
+publishing this slice too, not just its own region:
 
 ```sh
-docker compose run --rm infra build-manifest.py --base-live --prune
+docker compose run --rm infra build-manifest.py \
+  --base-live --prune --only '^(france|germany|switzerland|austria|italy)$'
 ```
 
 No manual `curl` or file staging needed — `--base-live` fetches the currently-published

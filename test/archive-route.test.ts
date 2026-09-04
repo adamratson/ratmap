@@ -17,8 +17,14 @@ import { boundsOf, distanceMetres, type LngLat } from '../src/routes/geo';
 // the network is connected over a route long enough to span several tiles, which is
 // exactly the property that fails silently.
 //
-// Rebuild the archive with: infra/scripts/build-regions.sh
-const ARCHIVE = 'infra/dist/regions/lochaber/lochaber-basemap.pmtiles';
+// Rebuild the archive with: ./scripts/build-region.sh scotland
+//
+// Was infra/dist/regions/lochaber/lochaber-basemap.pmtiles — a small hand-cropped test
+// region — until `lochaber` was retired from regions.json (superseded by the
+// England/Scotland/Wales split, 2026-09). `scotland`'s bbox is a superset of the old
+// Lochaber crop and comes from the same Protomaps source, so it carries identical OSM
+// geometry for Ben Nevis and the Pony Track — the coordinates below needed no rediscovery.
+const ARCHIVE = 'infra/dist/regions/scotland/scotland-basemap.pmtiles';
 
 // Ben Nevis summit, and the Achintee end of the Mountain Path — both read out of the
 // archive itself (2026-08-23) rather than from memory, so the test starts where the data

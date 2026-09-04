@@ -281,6 +281,18 @@ does the same against an arbitrary manifest, for anything that isn't the live on
 `--prune` to also drop base regions whose id is no longer in `regions.json` — a
 deliberate unpublish, never implicit.
 
+**Also pass `--only <regex>` whenever `dist/` holds more than this run's own output** —
+which, in practice, is most of the time: an incrementally-built catalogue's `dist/`
+accumulates scratch from unrelated regions across sessions. Without it, a single corrupt
+archive *anywhere* in `dist/regions/` — even one this run never touched — trips the
+fails-closed check below and blocks publishing everything, not just its own region. Hit
+for real: a stray corrupt `austria-contours.pmtiles` left over from an earlier run
+blocked an unrelated Scotland/Wales/England publish (2026-09) until `--only` existed.
+
+```sh
+python3 ./scripts/build-manifest.py --base-live --only '^lochaber$'
+```
+
 `upload.sh` deliberately uploads the manifest **last**: a manifest listing artifacts that
 aren't in the bucket yet would offer the user a download that 404s.
 

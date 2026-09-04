@@ -36,11 +36,20 @@ Two modes:
       everything else in the base carries over untouched. --prune additionally drops
       base regions whose id is no longer in regions.json — an explicit, opt-in
       unpublish, not an implicit side effect of a partial build.
+
+      --only <regex> scopes dist_dir/regions/ scanning to matching ids, useful (and
+      recommended) whenever dist_dir holds more than this run's own output — an
+      incrementally-built catalogue's dist_dir routinely accumulates scratch from
+      unrelated regions over time, and a single corrupt archive anywhere in it would
+      otherwise abort every region's publish via the fails-closed check below, not just
+      its own (hit for real: a stray corrupt austria-contours.pmtiles blocking a
+      Scotland/Wales/England run, 2026-09).
 """
 import argparse
 import hashlib
 import json
 import os
+import re
 import pathlib
 import subprocess
 import sys
@@ -146,13 +155,21 @@ def load_base_manifest(source):
         return json.load(f)
 
 
-def build_local_regions(dist_dir, defined):
+def build_local_regions(dist_dir, defined, only=None):
     """Region entries computed fresh from whatever is actually present under dist_dir.
 
     A region directory that exists but yields nothing usable (unknown region id, no
     recognised artifacts) is simply absent from the returned dict — callers merging
     against a base manifest must leave such an id's existing entry untouched rather than
     treat the empty/broken local directory as "delete this from the catalogue".
+
+    `only`, if given, is a compiled regex tested against each region id *before* any of
+    its files are opened. A directory that doesn't match is skipped without being
+    touched at all — not even to check whether its archives are readable. Without this,
+    a single corrupt archive anywhere in dist_dir (which, in an incrementally-built
+    catalogue, routinely holds scratch from regions this run has nothing to do with)
+    aborts every region's publish, not just its own. Hit for real (a stray corrupt
+    austria-contours.pmtiles blocking a Scotland/Wales/England run, 2026-09).
     """
     regions_dir = pathlib.Path(dist_dir) / "regions"
     by_id = {}
@@ -162,6 +179,8 @@ def build_local_regions(dist_dir, defined):
 
     for region_dir in sorted(p for p in regions_dir.iterdir() if p.is_dir()):
         region_id = region_dir.name
+        if only is not None and not only.search(region_id):
+            continue
         meta = defined.get(region_id)
         if meta is None:
             print(f"  ! skipping {region_id}: not in regions.json", file=sys.stderr)
@@ -206,11 +225,11 @@ def build_local_regions(dist_dir, defined):
     return by_id
 
 
-def build(dist_dir, regions_json, dest, base_source=None, prune=False):
+def build(dist_dir, regions_json, dest, base_source=None, prune=False, only=None):
     with open(regions_json) as f:
         defined = {r["id"]: r for r in json.load(f)["regions"]}
 
-    fresh = build_local_regions(dist_dir, defined)
+    fresh = build_local_regions(dist_dir, defined, only=only)
 
     if base_source is None:
         regions_by_id = dict(fresh)
@@ -332,6 +351,20 @@ def main():
             "regions.json. An explicit unpublish, off by default."
         ),
     )
+    parser.add_argument(
+        "--only",
+        type=str,
+        default=None,
+        metavar="REGEX",
+        help=(
+            "Only consider region directories under dist_dir/regions/ whose id matches "
+            "this regex (same style as RATMAP_REGION_FILTER elsewhere in this pipeline). "
+            "Everything else is skipped without its files being opened at all — "
+            "unmatched directories, including corrupt or unrelated leftovers from an "
+            "earlier broader build, can't block this run. Recommended whenever dist_dir "
+            "holds more than what this run actually built."
+        ),
+    )
     args = parser.parse_args()
 
     if args.base and args.base_live:
@@ -354,12 +387,20 @@ def main():
             )
         base_source = f"{base_url.rstrip('/')}/regions/manifest.json"
 
+    only = None
+    if args.only:
+        try:
+            only = re.compile(args.only)
+        except re.error as err:
+            parser.error(f"--only is not a valid regex: {err}")
+
     build(
         dist_dir=dist_dir,
         regions_json=infra / "regions.json",
         dest=dist_dir / "regions" / "manifest.json",
         base_source=base_source,
         prune=args.prune,
+        only=only,
     )
 
 

@@ -110,14 +110,28 @@ with open(src) as fin, open(dst, "w") as fout:
 PY
 
 echo "==> tiling"
-tippecanoe -o "$OUT" \
+# Written to a temp name and only renamed to $OUT after verification — same reason as
+# build-region.sh's extract_verified(): tippecanoe writing straight to the final path
+# means a run killed mid-write (OOM, timeout, an interrupted docker compose) leaves a
+# corrupt file sitting at the real filename with no warning. build-manifest.py's own
+# fails-closed guard then refuses on it — correctly — but blocks publishing every OTHER
+# region too, since it scans everything under dist/regions/. Hit for real (austria,
+# 2026-09) before this fix.
+TMP_OUT="$OUT.building"
+rm -f "$TMP_OUT"
+tippecanoe -o "$TMP_OUT" \
   -Z"$CONTOUR_MINZOOM" -z"$CONTOUR_MAXZOOM" \
   --simplification=4 \
   --no-tile-size-limit \
   -l contours -n "ratmap contours $REGION_ID" --force \
   "$WORK_DIR/contours-idx.geojsonl" 2>&1 | tail -1
 
-pmtiles verify "$OUT" >/dev/null
+if ! pmtiles verify "$TMP_OUT" >/dev/null 2>&1; then
+  echo "FAILED verification: $(basename "$OUT") is not a valid PMTiles archive" >&2
+  rm -f "$TMP_OUT"
+  exit 1
+fi
+mv "$TMP_OUT" "$OUT"
 echo
 echo "Built $OUT ($(du -h "$OUT" | cut -f1))"
 # --base-live, not a bare rebuild: this dist/ almost never holds every region in the

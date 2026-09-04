@@ -106,10 +106,19 @@ to point at a different one.
 
 **Verified end-to-end 2026-08-21** against Cloudflare R2; **migrated to Krystal Object
 Storage 2026-08-28** (`plans/krystal-migration.md`) — CORS/range re-verified directly
-against the live Krystal bucket before cutover (Krystal's gateway emits a fixed,
-unconfigurable `Access-Control-Allow-Origin: *`, so there was no CORS policy to write this
-time), and the full 213 GB catalog mirrored and checked byte-for-byte against the R2
-source.
+against the live Krystal bucket before cutover, and the full 213 GB catalog mirrored and
+checked byte-for-byte against the R2 source.
+
+Krystal's gateway emits a fixed, unconfigurable CORS header set: `ETag` is exposed but
+**`Content-Range` is not**, so C4 is not met in full — harmless today because nothing reads
+that header, and unfixable on Krystal. See `SETUP.md` §2.
+
+**Provider re-evaluated 2026-09-04** against Civo (LON1) and Scaleway (fr-par), identical
+37 MB artifact, back-to-back with a Cloudflare-edge control. All three landed within noise
+of each other (12-way aggregate: Krystal 7.22, Civo 7.00, Scaleway 7.97 MB/s; control
+9.5). There is no faster provider to move to — download speed is governed by request
+concurrency, not by which of these buckets the bytes sit in. Both Civo and Scaleway do
+support `put-bucket-cors` and pass C4 in full, which is the one thing they do better.
 
 ## Not yet built
 

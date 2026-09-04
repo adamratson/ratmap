@@ -13,25 +13,37 @@ Krystal's console (Object Storage) → create a bucket (e.g. `ratmap-tiles`), re
 `uk-lon-1`. No jurisdiction concept here — unlike R2, there's nothing analogous to
 `R2_JURISDICTION` to get wrong.
 
-## 2. Public access and CORS — nothing to configure
+## 2. Public access and CORS — nothing to configure, and nothing you *can* configure
 
 Krystal serves bucket objects publicly at
 `https://<bucket>.<region>.katapultobjects.com` with no separate "enable public access"
-step, and — unlike R2 — **there is no CORS policy to write**. The bucket's S3-compatible
-gateway (Swift-based) emits a fixed, unconfigurable
-`Access-Control-Allow-Origin: *` on every response, already exposing `ETag` and
-`Content-Range`. Verified directly against the live bucket 2026-08-27/28:
+step, and — unlike R2 — there is no CORS policy to write. The bucket's S3-compatible
+gateway (Swift-based) emits a fixed, unconfigurable `Access-Control-Allow-Origin: *` on
+every response. Verified against the live bucket 2026-08-27/28 and re-verified 2026-09-04:
 
 ```sh
 curl -s -H "Origin: https://example.github.io" -H "Range: bytes=0-126" -D - \
   "https://<bucket>.<region>.katapultobjects.com/<some-object>" -o /dev/null
-# got: 206, Content-Range, Accept-Ranges, Access-Control-Allow-Origin: *,
-#      Access-Control-Expose-Headers listing etag + content-type + ...
+# 206, Content-Range, Accept-Ranges, Access-Control-Allow-Origin: *
+# Access-Control-Expose-Headers: last-modified, content-type, x-timestamp, expires,
+#                                x-trans-id, etag, cache-control, content-language,
+#                                pragma, x-openstack-request-id
 ```
 
-This is C4's exact requirement, satisfied by default. Still worth re-running this check
-(`infra/README.md`'s "Verify" section) after any bucket recreation or provider change —
-C4 is a constraint on the *outcome*, not on this specific provider having solved it once.
+**This does not fully satisfy C4.** `ETag` is exposed, but `Content-Range` is **not** in
+that list, so a browser hides it from JavaScript. Nothing in the app reads `Content-Range`
+today — `downloadArtifact` checks for status 206 and uses `chunk.byteLength` — so this is
+currently harmless, and because the header set is unconfigurable here there is nothing to
+fix on Krystal's side. Recorded so nobody later assumes C4 is met in full and writes code
+that depends on reading `Content-Range`.
+
+(An earlier version of this file claimed Krystal satisfied C4 exactly. That was wrong on
+this detail.)
+
+Providers whose CORS *is* configurable (Civo and Scaleway both support `put-bucket-cors`)
+can be made to expose both headers properly. Whichever provider is in use, re-run the check
+in `infra/README.md`'s "Verify" section after any bucket recreation or provider change —
+C4 is a constraint on the *outcome*, not on one provider having happened to satisfy it.
 
 ## 3. Access keys for scripted uploads
 

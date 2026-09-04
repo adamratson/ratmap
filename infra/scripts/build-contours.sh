@@ -120,4 +120,12 @@ tippecanoe -o "$OUT" \
 pmtiles verify "$OUT" >/dev/null
 echo
 echo "Built $OUT ($(du -h "$OUT" | cut -f1))"
-echo "Next: python3 ./scripts/build-manifest.py && ./scripts/upload.sh"
+# --base, not a bare rebuild: this dist/ almost never holds every region in the
+# catalogue (regions are built incrementally, often on different machines), and a bare
+# `build-manifest.py` only knows about what's on disk right here — publishing that would
+# unpublish every region it doesn't see. curl the live manifest as the merge base; only
+# this run's region is (re)computed, everything else carries over untouched.
+echo "Next:"
+echo "  curl -s \"\$PUBLIC_BASE_URL/regions/manifest.json\" -o /tmp/live-manifest.json"
+echo "  python3 ./scripts/build-manifest.py --base /tmp/live-manifest.json"
+echo "  ./scripts/upload.sh"

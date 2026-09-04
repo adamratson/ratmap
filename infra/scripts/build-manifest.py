@@ -9,7 +9,29 @@ a region declares instead of hardcoding names.
 Artifact sizes are recorded here so the app can check `navigator.storage.estimate()`
 against a region *before* starting a multi-hundred-MB download (C1: never let a user
 believe they have offline maps they don't).
+
+Two modes:
+
+  build-manifest.py [dist_dir]
+      Full rebuild, strictly from dist_dir/regions/*. This is what the Docker global
+      build uses — dist_dir there genuinely holds (or is building towards holding) every
+      region in regions.json, so a from-scratch manifest is correct.
+
+  build-manifest.py [dist_dir] --base <existing-manifest.json> [--prune]
+      Incremental update. No single machine has ever held every region's archives at
+      once — regions get built a handful at a time, often in different sessions on
+      different hosts, against a catalogue of 180+ entries. Requiring the full set
+      locally before publishing anything meant every partial build either had to be
+      hand-spliced into a copy of the live manifest (fragile, ad hoc, done at least
+      twice — Montenegro's contours artifact and the England/Scotland/Wales split,
+      2026-09) or skipped publishing a manifest update at all. --base takes a copy of
+      the currently-live manifest (fetch it yourself: `curl .../regions/manifest.json`);
+      only region ids actually present in dist_dir/regions/ are (re)computed and
+      overwrite the base entry, everything else in the base carries over untouched.
+      --prune additionally drops base regions whose id is no longer in regions.json —
+      an explicit, opt-in unpublish, not an implicit side effect of a partial build.
 """
+import argparse
 import hashlib
 import json
 import pathlib
@@ -71,12 +93,19 @@ def sha256(path, chunk=1 << 20):
     return digest.hexdigest()
 
 
-def build(dist_dir, regions_json, dest):
-    with open(regions_json) as f:
-        defined = {r["id"]: r for r in json.load(f)["regions"]}
+def build_local_regions(dist_dir, defined):
+    """Region entries computed fresh from whatever is actually present under dist_dir.
 
+    A region directory that exists but yields nothing usable (unknown region id, no
+    recognised artifacts) is simply absent from the returned dict — callers merging
+    against a base manifest must leave such an id's existing entry untouched rather than
+    treat the empty/broken local directory as "delete this from the catalogue".
+    """
     regions_dir = pathlib.Path(dist_dir) / "regions"
-    regions = []
+    by_id = {}
+
+    if not regions_dir.is_dir():
+        return by_id
 
     for region_dir in sorted(p for p in regions_dir.iterdir() if p.is_dir()):
         region_id = region_dir.name
@@ -111,17 +140,70 @@ def build(dist_dir, regions_json, dest):
             print(f"  ! skipping {region_id}: no artifacts built", file=sys.stderr)
             continue
 
-        regions.append(
-            {
-                "id": region_id,
-                "name": meta["name"],
-                # Absent on hand-written regions; the app treats it as optional.
-                **({"group": meta["group"]} if meta.get("group") else {}),
-                "bbox": meta["bbox"],
-                "totalBytes": sum(a["bytes"] for a in artifacts),
-                "artifacts": artifacts,
-            }
-        )
+        by_id[region_id] = {
+            "id": region_id,
+            "name": meta["name"],
+            # Absent on hand-written regions; the app treats it as optional.
+            **({"group": meta["group"]} if meta.get("group") else {}),
+            "bbox": meta["bbox"],
+            "totalBytes": sum(a["bytes"] for a in artifacts),
+            "artifacts": artifacts,
+        }
+
+    return by_id
+
+
+def build(dist_dir, regions_json, dest, base_path=None, prune=False):
+    with open(regions_json) as f:
+        defined = {r["id"]: r for r in json.load(f)["regions"]}
+
+    fresh = build_local_regions(dist_dir, defined)
+
+    if base_path is None:
+        regions_by_id = dict(fresh)
+    else:
+        with open(base_path) as f:
+            base = json.load(f)
+
+        if base.get("schemaVersion", 0) > SCHEMA_VERSION:
+            raise SystemExit(
+                f"FAIL: base manifest schemaVersion {base['schemaVersion']} is newer than "
+                f"this script understands ({SCHEMA_VERSION}). Refusing to merge blind — "
+                f"update this script first."
+            )
+
+        regions_by_id = {r["id"]: r for r in base.get("regions", [])}
+
+        # Merge *by artifact kind*, not by whole region — a region already in the base
+        # manifest is very often only partly rebuilt (e.g. contours added to a region
+        # whose basemap/terrain were already live). Replacing the whole entry with what
+        # was rebuilt here would silently drop every artifact kind not present in this
+        # run's dist_dir, which is a real regression, not a hypothetical one: the first
+        # version of this merge did exactly that to Montenegro's basemap and terrain in
+        # testing (2026-09-04) before this fix.
+        for region_id, fresh_region in fresh.items():
+            existing = regions_by_id.get(region_id)
+            if existing is None:
+                regions_by_id[region_id] = fresh_region
+                continue
+
+            by_kind = {a["kind"]: a for a in existing.get("artifacts", [])}
+            by_kind.update({a["kind"]: a for a in fresh_region["artifacts"]})
+            artifacts = sorted(by_kind.values(), key=lambda a: a["kind"])
+
+            merged = dict(fresh_region)  # name/group/bbox from regions.json — current
+            merged["artifacts"] = artifacts
+            merged["totalBytes"] = sum(a["bytes"] for a in artifacts)
+            regions_by_id[region_id] = merged
+
+        if prune:
+            before = len(regions_by_id)
+            regions_by_id = {rid: r for rid, r in regions_by_id.items() if rid in defined}
+            dropped = before - len(regions_by_id)
+            if dropped:
+                print(f"  pruned {dropped} region(s) no longer in regions.json", file=sys.stderr)
+
+    regions = sorted(regions_by_id.values(), key=lambda r: (r.get("group", ""), r["name"]))
 
     manifest = {
         "schemaVersion": SCHEMA_VERSION,
@@ -136,19 +218,76 @@ def build(dist_dir, regions_json, dest):
         f.write("\n")
 
     print(f"manifest: {len(regions)} region(s) -> {dest_path}")
-    for region in regions:
+
+    # Full rebuild: every region was just computed, so the original behaviour (list
+    # everything) still applies. Merge: only the touched ids are news; the rest is
+    # exactly what the base manifest already said, so summarise instead of repeating it.
+    if base_path is None:
+        report_ids = sorted(regions_by_id)
+    else:
+        report_ids = sorted(fresh)
+
+    for region_id in report_ids:
+        region = regions_by_id.get(region_id)
+        if region is None:
+            continue
         size_mb = region["totalBytes"] / 1e6
         kinds = ", ".join(a["kind"] for a in region["artifacts"])
-        print(f"  {region['id']}: {size_mb:.1f} MB ({kinds})")
+        print(f"  {region_id}: {size_mb:.1f} MB ({kinds})")
+
+    if base_path is not None:
+        unchanged = len(regions) - len(report_ids)
+        print(f"  ({unchanged} region(s) unchanged, carried over from base manifest)")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate or incrementally update regions/manifest.json.",
+    )
+    parser.add_argument(
+        "dist_dir",
+        nargs="?",
+        type=pathlib.Path,
+        default=None,
+        help="Defaults to infra/dist.",
+    )
+    parser.add_argument(
+        "--base",
+        type=pathlib.Path,
+        default=None,
+        metavar="MANIFEST_JSON",
+        help=(
+            "Existing manifest.json to merge into (e.g. a local copy of the currently "
+            "live one). Only regions present in dist_dir/regions/ are recomputed; "
+            "everything else in the base is carried over unchanged. Without this, "
+            "dist_dir/regions/ must hold every region in the catalogue."
+        ),
+    )
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help=(
+            "With --base: also drop base regions whose id is no longer in regions.json. "
+            "An explicit unpublish, off by default."
+        ),
+    )
+    args = parser.parse_args()
+
+    if args.prune and args.base is None:
+        parser.error("--prune only makes sense together with --base")
+
+    here = pathlib.Path(__file__).resolve().parent
+    infra = here.parent
+    dist_dir = args.dist_dir or (infra / "dist")
+
+    build(
+        dist_dir=dist_dir,
+        regions_json=infra / "regions.json",
+        dest=dist_dir / "regions" / "manifest.json",
+        base_path=args.base,
+        prune=args.prune,
+    )
 
 
 if __name__ == "__main__":
-    here = pathlib.Path(__file__).resolve().parent
-    infra = here.parent
-    build(
-        dist_dir=sys.argv[1] if len(sys.argv) > 1 else infra / "dist",
-        regions_json=infra / "regions.json",
-        dest=(pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else infra / "dist")
-        / "regions"
-        / "manifest.json",
-    )
+    main()

@@ -259,20 +259,34 @@ of extraction, which is why the build is resumable at every level.
 ./scripts/build-region.sh lochaber --dry-run   # size it first
 ./scripts/build-region.sh lochaber             # extract basemap + terrain
 ./scripts/build-contours.sh lochaber           # contours (needs gdal)
-python3 ./scripts/build-manifest.py            # regenerate regions/manifest.json
+curl -s "$PUBLIC_BASE_URL/regions/manifest.json" -o /tmp/live-manifest.json
+python3 ./scripts/build-manifest.py --base /tmp/live-manifest.json  # merge, don't rebuild
 ./scripts/upload.sh                            # archives, then the manifest
 ```
 
 `build-manifest.py` picks up whatever artifacts exist in a region's directory, so a new
 artifact kind needs no code change anywhere — that is what C16's open-ended schema buys.
 
+**Always pass `--base` for anything short of a from-scratch catalogue build.** No single
+machine has ever held every region's archives at once — the catalogue is 180+ regions
+built incrementally, often across different sessions and hosts — so `dist/` here is a
+*partial* build, not the whole thing. Run bare (no `--base`), `build-manifest.py` only
+knows what's on this disk right now, and publishing that would unpublish every region it
+can't see. `--base <existing manifest.json>` merges instead: only the regions actually
+present in `dist/regions/` are (re)computed (by artifact kind — a region that already has
+basemap+terrain live and only had contours added here keeps all three, not just the one
+just built), everything else in the base carries over untouched. Add `--prune` to also
+drop base regions whose id is no longer in `regions.json` — a deliberate unpublish, never
+implicit.
+
 `upload.sh` deliberately uploads the manifest **last**: a manifest listing artifacts that
 aren't in the bucket yet would offer the user a download that 404s.
 
-### Three guards against publishing something broken
+### Guards against publishing something broken
 
-All three exist because the corresponding failure actually happened during the Montenegro
-build (2026-08-23):
+The first three exist because the corresponding failure actually happened during the
+Montenegro build (2026-08-23); the fourth, during the Montenegro *contours* addition and
+the England/Scotland/Wales split (2026-09-04):
 
 - **Extraction is atomic.** `build-region.sh` extracts to `<name>.building`, runs
   `pmtiles verify`, and only then renames. An interrupted `pmtiles extract` leaves a file
@@ -285,6 +299,12 @@ build (2026-08-23):
   the next manifest silently delists every region that wasn't rebuilt, orphaning its
   archives in the bucket. The uploader diffs against the published manifest and stops.
   Override with `ALLOW_UNPUBLISH=1` when a delist is genuinely intended.
+- **`--base` merges by artifact kind, not by whole region.** The first version of this
+  merge replaced a base region's entire artifact list with whatever this run rebuilt —
+  which for a contours-only rebuild of an already-published region meant silently
+  dropping its basemap and terrain from the manifest. Caught in testing before it was
+  ever uploaded, not after. `--base` now unions artifacts by kind, so rebuilding one kind
+  never deletes the others.
 
 Source extracts are cached in `infra/.cache/osm` (gitignored) and downloaded with retry
 and resume — Geofabrik drops connections, and a bare `curl` gave up on the first blip

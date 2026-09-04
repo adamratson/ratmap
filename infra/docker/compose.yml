@@ -72,6 +72,22 @@ services:
       # Progress bars are noise in `docker logs`; set to 1 when watching interactively.
       RATMAP_CURL_PROGRESS: "${RATMAP_CURL_PROGRESS:-}"
 
+      # Both read directly by build-global.sh inside the container (region_ids() and
+      # stage_contours() respectively). `docker compose run` does NOT forward an
+      # inline-prefixed host variable (`VAR=x docker compose run ...`) into the container
+      # unless it's declared here or in env_file — without this, infra/docker/README.md's
+      # own documented `RATMAP_REGION_FILTER='...' docker compose run ...` example would
+      # silently no-op and run the full, unfiltered catalogue instead (found 2026-09-04
+      # while wiring up a filtered England/Scotland/Wales contours run — never actually
+      # exercised before, since nobody had run a filtered slice through Compose yet).
+      RATMAP_REGION_FILTER: "${RATMAP_REGION_FILTER:-}"
+      RATMAP_CONTOURS_PARALLEL: "${RATMAP_CONTOURS_PARALLEL:-}"
+
+      # upload.sh's own unpublish guard — same passthrough gap as above, lower stakes
+      # (an unset ALLOW_UNPUBLISH just makes the guard refuse, not silently do the wrong
+      # thing), but the same fix either way.
+      ALLOW_UNPUBLISH: "${ALLOW_UNPUBLISH:-}"
+
     stop_grace_period: 60s
 
 volumes:

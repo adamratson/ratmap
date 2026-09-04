@@ -225,15 +225,19 @@ have walked into the planet contour build without anyone deciding to.
 
 `gdal_contour` itself has no multithreading, and regions are independent of each other, so
 in principle the `contours` stage could run several at a time. In practice, a single
-region's own peak RSS is already the binding constraint: measured (2026-09-03) at ~9.8 GB
-for a 2.66 sq-degree region (Corsica), driven by `ogr2ogr`'s tagging pass rather than
-`gdal_contour` itself — nearly 4x the ~300 MB/sq-degree *disk* size of the intermediate
-GeoJSON above, which is not a proxy for its RAM cost. N concurrent workers cost roughly N
-times that, not a shared pool, so the stage defaults to 1 (sequential) rather than assume
-any box has room to spare. Each region's full output still goes to its own log under
-`/work/logs`; only a one-line OK/FAILED per region reaches the main `contours` stage log.
-Raise `RATMAP_CONTOURS_PARALLEL` only on a host confirmed to have the memory for it —
-figure on ~10 GB per worker as a floor, more for larger regions:
+region's own peak RSS is the binding constraint — and it's `gdal_contour`'s own tracing
+step, not something built on top of it. Measured (2026-09-03) on a real 2.66 sq-degree
+region (Corsica): `gdal_contour` tracing peaks at ~6.4 GB on its own; the index-tagging
+step used to add another ~9.8 GB (`ogr2ogr -dialect SQLite`, materializing the region as a
+SQLite virtual table to evaluate one modulo) until it was replaced with a plain streaming
+pass over the GeoJSONSeq output (~133 MB — see the comment in `build-contours.sh`). Both
+figures are well past the ~300 MB/sq-degree *disk* size of the intermediate GeoJSON, which
+was never a proxy for RAM cost. N concurrent workers still cost roughly N times the
+remaining ~6.4 GB, not a shared pool, and it grows with region size, so the stage defaults
+to 1 (sequential) rather than assume any box has room to spare. Each region's full output
+still goes to its own log under `/work/logs`; only a one-line OK/FAILED per region reaches
+the main `contours` stage log. Raise `RATMAP_CONTOURS_PARALLEL` only on a host confirmed to
+have the memory for it — figure on ~6-7 GB per worker as a floor, more for larger regions:
 
 ```sh
 RATMAP_CONTOURS_PARALLEL=2 docker compose run --rm infra global contours manifest

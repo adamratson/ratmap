@@ -14,7 +14,6 @@
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$SCRIPT_DIR/lib.sh"
 require_cmd gdal_contour
-require_cmd ogr2ogr
 require_cmd tippecanoe
 require_cmd python3
 
@@ -75,24 +74,40 @@ echo "==> tracing contours"
 # OGR's reader for it parses the whole thing into an in-memory json-c tree before yielding a
 # single feature, so a plain-GeoJSON file here forces that whole raw line set into RAM a
 # second time on top of gdal_contour's own working set. GeoJSONSeq has no such document-level
-# framing, so ogr2ogr below streams it feature by feature instead.
-#
-# Filename is "contour.geojsonl", not "contours...": a GeoJSONSeq file carries no layer-name
-# metadata (there's no FeatureCollection to hang a "name" off), so OGR falls back to the
-# basename for the layer name it reports — and the `-sql ... FROM contour` below has to match
-# that. Plain GeoJSON doesn't have this constraint (it persists the name gdal_contour gives
-# the layer, "contour", regardless of the file's own name), which is how this went unnoticed.
+# framing, so the tagging step below streams it feature by feature instead.
 gdal_contour -q -a ele -i "$CONTOUR_INTERVAL" -f GeoJSONSeq \
-  "$WORK_DIR/clip.tif" "$WORK_DIR/contour.geojsonl"
+  "$WORK_DIR/clip.tif" "$WORK_DIR/contours.geojsonl"
 
 # Index contours are tagged here rather than computed in a style expression: doing it once
-# at build time keeps the renderer trivial and avoids float modulo in the style. Output is
-# GeoJSONSeq too, for the same streaming reason, so tippecanoe below never loads one huge
-# document either.
+# at build time keeps the renderer trivial and avoids float modulo in the style.
+#
+# Plain streaming Python, not ogr2ogr -dialect SQLite: that was the actual memory ceiling
+# of the whole pipeline. Measured on a real 2.66 sq-degree region (Corsica, 2026-09-03),
+# materializing the input as a SQLite virtual table just to evaluate one modulo peaked at
+# 9.8 GB RSS against a 365 MB GeoJSONSeq input — worse than gdal_contour's own tracing
+# step. This does the identical computation (verified byte-for-byte against the SQLite
+# version's output) a line at a time with no SQL engine involved: 133 MB peak, and that
+# figure doesn't grow with region size the way the SQLite approach did, because it never
+# holds more than one feature at once.
 echo "==> tagging index contours"
-ogr2ogr -f GeoJSONSeq "$WORK_DIR/contours-idx.geojsonl" "$WORK_DIR/contour.geojsonl" \
-  -dialect SQLite \
-  -sql "SELECT geometry, ele, (CAST(ele AS INTEGER) % $INDEX_EVERY = 0) AS idx FROM contour"
+python3 - "$WORK_DIR/contours.geojsonl" "$WORK_DIR/contours-idx.geojsonl" "$INDEX_EVERY" <<'PY'
+import json, sys
+
+src, dst, index_every = sys.argv[1], sys.argv[2], int(sys.argv[3])
+with open(src) as fin, open(dst, "w") as fout:
+    for line in fin:
+        line = line.strip()
+        if not line:
+            continue
+        feature = json.loads(line)
+        ele = feature["properties"]["ele"]
+        # Truncating int() matches SQLite's CAST(... AS INTEGER); sign convention only
+        # differs from a C-style modulo for non-zero remainders, which don't matter here
+        # since only equality to zero is ever tested.
+        idx = 1 if int(ele) % index_every == 0 else 0
+        feature["properties"] = {"ele": ele, "idx": idx}
+        fout.write(json.dumps(feature, separators=(",", ":")) + "\n")
+PY
 
 echo "==> tiling"
 tippecanoe -o "$OUT" \

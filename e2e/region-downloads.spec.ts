@@ -73,12 +73,15 @@ test.describe('pausing a download', () => {
     await startTestRegionDownload(page);
 
     // The window described above: the first chunk has landed, the second is the one held
-    // open by the route handler.
+    // open by the route handler. Waits on bytes, not on the file existing — the writer
+    // creates the `.part` up front when it takes its lock, so it is there at size 0 well
+    // before anything has been written into it.
     await expect
-      .poll(async () => opfsFileSize(page, `${BASEMAP_FILE}.part`), { timeout: 20_000 })
-      .not.toBeNull();
+      .poll(async () => (await opfsFileSize(page, `${BASEMAP_FILE}.part`)) ?? 0, {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0);
     const pausedAt = (await opfsFileSize(page, `${BASEMAP_FILE}.part`))!;
-    expect(pausedAt).toBeGreaterThan(0);
     expect(pausedAt).toBeLessThan(BASEMAP_BYTES);
 
     await action(page).click(); // Cancel
@@ -119,11 +122,13 @@ test.describe('pausing a download', () => {
 
     await openRegionsSheet(page);
     await startTestRegionDownload(page);
+    // Bytes on disk, not merely a `.part` file — see the note in the test above.
     await expect
-      .poll(async () => opfsFileSize(page, `${BASEMAP_FILE}.part`), { timeout: 20_000 })
-      .not.toBeNull();
+      .poll(async () => (await opfsFileSize(page, `${BASEMAP_FILE}.part`)) ?? 0, {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0);
     const pausedAt = (await opfsFileSize(page, `${BASEMAP_FILE}.part`))!;
-    expect(pausedAt).toBeGreaterThan(0);
 
     await action(page).click(); // Cancel
     await expect(action(page)).toHaveText('Resume');
@@ -248,10 +253,13 @@ test.describe('a poor connection', () => {
     await openRegionsSheet(page);
     await startTestRegionDownload(page);
 
-    // Some real progress first, so there is something worth resuming.
+    // Some real progress first, so there is something worth resuming — bytes, not just
+    // the `.part` file the writer creates when it opens.
     await expect
-      .poll(async () => opfsFileSize(page, `${BASEMAP_FILE}.part`), { timeout: 20_000 })
-      .not.toBeNull();
+      .poll(async () => (await opfsFileSize(page, `${BASEMAP_FILE}.part`)) ?? 0, {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0);
     const beforeOffline = (await opfsFileSize(page, `${BASEMAP_FILE}.part`)) ?? 0;
     expect(beforeOffline).toBeLessThan(BASEMAP_BYTES);
 

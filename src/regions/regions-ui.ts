@@ -6,6 +6,7 @@ import {
   downloadsInFlight,
   regionStatuses,
   DownloadCancelled,
+  DownloadStalled,
   type RegionState,
 } from './downloader';
 import { addRegionToMap, removeRegionFromMap } from './region-layers';
@@ -508,9 +509,19 @@ async function startDownload(
     await addRegionToMap(deps.map, deps.registry, region);
     deps.onStatus(`${region.name} is available offline.`, 'ok');
   } catch (err) {
-    if (err instanceof DownloadCancelled || (err as Error).name === 'AbortError') {
+    if (err instanceof DownloadCancelled) {
       // Partial data is kept deliberately, so Resume picks up where this left off.
       deps.onStatus(`Paused ${region.name} — progress is kept, tap Resume to continue.`, 'warn');
+    } else if (err instanceof DownloadStalled) {
+      // Deliberately not phrased as a pause. This branch used to be reached through an
+      // `AbortError` name check that also caught the download's own stall timeout, so a
+      // connection that had died reported itself as "Paused — progress is kept": no
+      // error, nothing to act on, and on a slow link nothing was kept either.
+      deps.onStatus(
+        `${region.name} stopped downloading — the connection dropped or is too slow. ` +
+          'Whatever arrived is kept, so Resume picks up from there.',
+        'error',
+      );
     } else {
       deps.onStatus(`Download failed: ${(err as Error).message}`, 'error');
     }

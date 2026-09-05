@@ -1,7 +1,6 @@
 import { artifactUrl, type Region, type RegionArtifact } from './manifest';
 import { WakeLock } from '../wake-lock';
 import {
-  appendToPartial,
   deleteArtifact,
   finalizePartial,
   hasArtifact,
@@ -9,6 +8,7 @@ import {
   partialName,
   partialSize,
 } from './opfs-store';
+import { openPartialWriter } from './opfs-writer';
 
 // C12 baseline: chunked, resumable, holds a Screen Wake Lock while running.
 //
@@ -44,8 +44,8 @@ const CHUNK_BYTES = 4 * 1024 * 1024;
 const FETCH_CONCURRENCY = 12;
 
 /**
- * How long a single chunk request may sit with no response before it's treated as stalled
- * and retried.
+ * How long a chunk may go with **no bytes arriving at all** before it's treated as
+ * stalled and retried.
  *
  * A `fetch()` with no timeout only ends via error or the caller's own abort — it does not
  * time out on its own. On mobile that gap matters: a cell-tower handoff, a Wi-Fi↔cellular
@@ -53,11 +53,21 @@ const FETCH_CONCURRENCY = 12;
  * resolving nor rejecting. Because chunks are only ever written to OPFS in strict offset
  * order (`nextToWrite` below), one such hang doesn't just lose a chunk — it permanently
  * freezes the whole artifact at that byte offset, with nothing to show for it: no error,
- * no retry, progress just stops advancing. Observed in the field as downloads "stuck" partway
- * through on mobile with no console error. This timeout is what turns that silent hang back
- * into a retryable failure.
+ * no retry, progress just stops advancing.
+ *
+ * This is an *idle* timeout, deliberately: it measures silence, not elapsed time. It was
+ * originally a deadline on the whole chunk transfer, which cannot tell a hung connection
+ * from a merely slow one — and killed both. At 4 MiB a chunk, a 20 s deadline demands
+ * 210 kB/s sustained *per chunk*, and with FETCH_CONCURRENCY splitting the link that is
+ * ~20 Mbit/s aggregate before any chunk can finish at all. Measured on an emulated (but
+ * otherwise healthy) connection: at 1 Mbit/s a 16 MB region transferred **zero bytes in
+ * 110 s** before giving up, and at 10 Mbit/s a 75 MB region crawled to 16.8 MB and then
+ * gave up — every chunk aborted mid-transfer and retried from scratch, each retry
+ * discarding megabytes of good data and starving the chunks still running. Users on a
+ * weak signal — i.e. exactly the people downloading maps before going somewhere remote —
+ * could never finish a large region.
  */
-const CHUNK_TIMEOUT_MS = 20_000;
+const CHUNK_STALL_TIMEOUT_MS = 20_000;
 
 /** Chunk attempts before giving up and failing the whole download. */
 const MAX_CHUNK_ATTEMPTS = 5;
@@ -163,17 +173,46 @@ export class DownloadCancelled extends Error {
   }
 }
 
+/**
+ * A chunk that stopped transferring — nothing arrived for {@link CHUNK_STALL_TIMEOUT_MS},
+ * on every attempt.
+ *
+ * A distinct type because otherwise this is indistinguishable from a deliberate cancel:
+ * aborting a fetch rejects with a DOMException named `AbortError` whichever of the two
+ * fired it, and the regions sheet reported any AbortError as "Paused — progress is kept",
+ * the same words a user's own Cancel produces. A connection dying therefore looked like
+ * the user had stopped the download themselves, with no error anywhere.
+ */
+export class DownloadStalled extends Error {
+  constructor(filename: string, start: number) {
+    super(
+      `${filename} stopped transferring at byte ${start}: nothing received for ` +
+        `${CHUNK_STALL_TIMEOUT_MS / 1000}s across ${MAX_CHUNK_ATTEMPTS} attempts.`,
+    );
+    this.name = 'DownloadStalled';
+  }
+}
+
+/**
+ * @param onBytes called every time the connection proves it is still alive — on the
+ *   response headers, and on each block of body bytes. Resets the caller's stall
+ *   watchdog, which is what lets a slow transfer run as long as it needs to.
+ */
 async function fetchChunk(
   url: string,
   filename: string,
   start: number,
   end: number,
   signal: AbortSignal,
+  onBytes: () => void,
 ): Promise<ArrayBuffer> {
   const response = await fetch(url, {
     headers: { Range: `bytes=${start}-${end}` },
     signal,
   });
+
+  // Headers are already proof the connection is alive, before a single body byte lands.
+  onBytes();
 
   // 206 is the expected success. A 200 means the server ignored the Range header and is
   // sending the whole file — writing that at a non-zero offset would corrupt the
@@ -185,9 +224,68 @@ async function fetchChunk(
     );
   }
 
-  const chunk = await response.arrayBuffer();
+  const expected = end - start + 1;
+
+  // Read the body as a stream rather than with `arrayBuffer()`. Both produce the same
+  // bytes, but `arrayBuffer()` is one opaque await that reports nothing until the whole
+  // chunk has landed — so the watchdog above it cannot tell "still downloading, slowly"
+  // from "died silently", which is the entire bug this streaming exists to fix.
+  //
+  // Allocated once, up front, and filled in place: accumulating parts and concatenating
+  // afterwards would briefly hold two copies of every in-flight chunk, doubling the
+  // FETCH_CONCURRENCY × CHUNK_BYTES memory ceiling that bounds this whole design.
+  const body = response.body;
+  if (!body) {
+    // No streaming body — a test double, or some exotic environment. Fall back to
+    // buffering, accepting that the watchdog degrades to a whole-transfer deadline here.
+    const buffered = await response.arrayBuffer();
+    onBytes();
+    return checkedChunk(buffered, expected, filename, start);
+  }
+
+  const reader = body.getReader();
+  const chunk = new Uint8Array(expected);
+  let received = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.byteLength === 0) continue;
+    if (received + value.byteLength > expected) {
+      throw new Error(
+        `${filename} sent more than the ${expected} bytes requested at offset ${start}`,
+      );
+    }
+    chunk.set(value, received);
+    received += value.byteLength;
+    onBytes();
+  }
+
+  return checkedChunk(chunk.buffer.slice(0, received), expected, filename, start);
+}
+
+/**
+ * Refuse a chunk that isn't the length the range asked for.
+ *
+ * A short 206 would otherwise be written at the current offset and the *next* chunk
+ * fetched from `start + CHUNK_BYTES` of the source — quietly misaligning everything after
+ * it, and `finalizePartial` would promote the result as a complete archive. Same
+ * principle as C1: fail loudly rather than hand someone a map that is wrong.
+ */
+function checkedChunk(
+  chunk: ArrayBuffer,
+  expected: number,
+  filename: string,
+  start: number,
+): ArrayBuffer {
   if (chunk.byteLength === 0) {
     throw new Error(`Empty chunk for ${filename} at offset ${start}`);
+  }
+  if (chunk.byteLength !== expected) {
+    throw new Error(
+      `Short read for ${filename} at offset ${start}: got ${chunk.byteLength} of ` +
+        `${expected} bytes`,
+    );
   }
   return chunk;
 }
@@ -214,15 +312,29 @@ export async function fetchChunkWithRetry(
     const attemptController = new AbortController();
     const onOuterAbort = () => attemptController.abort();
     signal.addEventListener('abort', onOuterAbort);
-    const timer = setTimeout(() => attemptController.abort(), CHUNK_TIMEOUT_MS);
+
+    // Re-armed on every sign of life rather than set once, so the deadline is on silence
+    // and not on the transfer. `stalled` records that *we* aborted: an AbortError alone
+    // cannot say whether it came from this watchdog or from the user pressing Cancel.
+    let stalled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const watchdog = (): void => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        stalled = true;
+        attemptController.abort();
+      }, CHUNK_STALL_TIMEOUT_MS);
+    };
+    watchdog();
 
     try {
-      return await fetchChunk(url, filename, start, end, attemptController.signal);
+      return await fetchChunk(url, filename, start, end, attemptController.signal, watchdog);
     } catch (err) {
       if (signal.aborted) throw new DownloadCancelled();
-      if (attempt >= MAX_CHUNK_ATTEMPTS) throw err;
+      const failure = stalled ? new DownloadStalled(filename, start) : err;
+      if (attempt >= MAX_CHUNK_ATTEMPTS) throw failure;
       // Exponential backoff so a genuinely down connection doesn't hammer the bucket with
-      // immediate retries — capped well under CHUNK_TIMEOUT_MS.
+      // immediate retries — capped well under CHUNK_STALL_TIMEOUT_MS.
       await sleep(Math.min(500 * 2 ** (attempt - 1), 8_000), signal);
     } finally {
       clearTimeout(timer);
@@ -295,37 +407,47 @@ export async function downloadArtifact(
 
   fillWindow();
 
-  while (nextToWrite < starts.length) {
-    if (signal.aborted) throw new DownloadCancelled();
+  // One writer for the whole artifact. It holds an exclusive lock on the `.part` file, so
+  // it has to be released before finalizePartial() can rename it — hence the finally.
+  const writer = await openPartialWriter(artifact.filename);
 
-    if (!ready.has(nextToWrite)) {
-      // Not an orphaned request: a rejection here (abort, bad status, network error)
-      // propagates out of this function, which is what we want — the other still-running
-      // fetches are left to settle on their own rather than needing a second abort path
-      // layered on top of the caller's own `signal`.
-      const [doneIndex, chunk] = await Promise.race(
-        [...inFlight.entries()].map(async ([index, pending]) => [index, await pending] as const),
-      );
-      inFlight.delete(doneIndex);
-      ready.set(doneIndex, chunk);
+  try {
+    while (nextToWrite < starts.length) {
+      if (signal.aborted) throw new DownloadCancelled();
+
+      if (!ready.has(nextToWrite)) {
+        // Not an orphaned request: a rejection here (abort, bad status, network error)
+        // propagates out of this function, which is what we want — the other still-running
+        // fetches are left to settle on their own rather than needing a second abort path
+        // layered on top of the caller's own `signal`.
+        const [doneIndex, chunk] = await Promise.race(
+          [...inFlight.entries()].map(async ([index, pending]) => [index, await pending] as const),
+        );
+        inFlight.delete(doneIndex);
+        ready.set(doneIndex, chunk);
+        fillWindow();
+        continue;
+      }
+
+      const chunk = ready.get(nextToWrite)!;
+      ready.delete(nextToWrite);
+      // The writer reports the length: it may have transferred the buffer, which leaves
+      // `chunk.byteLength` reading 0 here.
+      offset += await writer.append(chunk, offset);
+      onStored(offset);
+      nextToWrite += 1;
+
+      // Writing out of `ready` frees a concurrency slot the same as a fetch resolving does
+      // — skip this and the window never refills once the writer catches up to a batch
+      // that resolved faster than it could be drained, which stalls forever the moment
+      // `inFlight` and `ready` are both empty: `Promise.race([])` never settles. That dead
+      // end lands at exactly FETCH_CONCURRENCY × CHUNK_BYTES every time, not at some
+      // network-dependent point, which is what "stuck at the same byte count on different
+      // downloads" was.
       fillWindow();
-      continue;
     }
-
-    const chunk = ready.get(nextToWrite)!;
-    ready.delete(nextToWrite);
-    await appendToPartial(artifact.filename, chunk, offset);
-    offset += chunk.byteLength;
-    onStored(offset);
-    nextToWrite += 1;
-
-    // Writing out of `ready` frees a concurrency slot the same as a fetch resolving does —
-    // skip this and the window never refills once the writer catches up to a batch that
-    // resolved faster than it could be drained, which stalls forever the moment `inFlight`
-    // and `ready` are both empty: `Promise.race([])` never settles. That dead end lands at
-    // exactly FETCH_CONCURRENCY × CHUNK_BYTES every time, not at some network-dependent
-    // point, which is what "stuck at the same byte count on different downloads" was.
-    fillWindow();
+  } finally {
+    await writer.close();
   }
 
   await finalizePartial(artifact.filename);

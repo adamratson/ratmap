@@ -4,6 +4,21 @@ import type { WorkerResponse } from './opfs-writer.worker';
 // Main-thread side of the partial-download write path. See opfs-writer.worker.ts for why
 // the fast path lives in a worker at all.
 
+/**
+ * How long a single worker round-trip may take before the worker is presumed dead.
+ *
+ * Generous: a 4 MiB write plus flush is milliseconds on a desktop and well under a second
+ * on a phone, even under storage pressure. The point is not to police slow writes, it is
+ * that *something* must bound this — an unanswered message is otherwise a promise nothing
+ * can ever settle, and the download freezes at whatever byte was last written with the
+ * row still reading "Cancel", as though it were still going. Reported from a real device:
+ * a Scotland download sitting at 457 MB of 1.3 GB with no error anywhere.
+ *
+ * Deliberately longer than the network's own stall timeout so the two don't race to
+ * explain the same bad minute.
+ */
+const WORKER_TIMEOUT_MS = 30_000;
+
 export interface PartialWriter {
   /**
    * Append a chunk at an absolute file offset.
@@ -52,7 +67,30 @@ class SyncHandleWriter implements PartialWriter {
   private send(message: Record<string, unknown>, transfer: Transferable[] = []): Promise<number> {
     const id = this.nextId++;
     return new Promise<number>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      // `onerror` is not enough on its own. It fires for a script error inside the worker,
+      // but a worker the OS terminates — which is what iOS does to background threads
+      // under memory pressure — raises no event at all. It simply stops answering, and
+      // every outstanding write waits forever.
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        this.worker.terminate();
+        const dead = new Error(
+          `OPFS writer stopped responding after ${WORKER_TIMEOUT_MS / 1000}s`,
+        );
+        this.failAll(dead);
+        reject(dead);
+      }, WORKER_TIMEOUT_MS);
+
+      this.pending.set(id, {
+        resolve: (written) => {
+          clearTimeout(timer);
+          resolve(written);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
       this.worker.postMessage({ ...message, id }, transfer);
     });
   }

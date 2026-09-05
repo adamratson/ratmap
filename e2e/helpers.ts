@@ -76,6 +76,25 @@ export async function listOpfs(page: Page): Promise<string[]> {
   });
 }
 
+/**
+ * The size of one named file in OPFS, or null if it doesn't exist.
+ *
+ * For precise byte-level assertions — resume tests need to know exactly how much of a
+ * partial artifact survived a cancel — rather than parsing it back out of
+ * {@link listOpfs}'s human-readable strings.
+ */
+export async function opfsFileSize(page: Page, name: string): Promise<number | null> {
+  return page.evaluate(async (fileName) => {
+    const root = await navigator.storage.getDirectory();
+    try {
+      const handle = await root.getFileHandle(fileName);
+      return (await handle.getFile()).size;
+    } catch {
+      return null;
+    }
+  }, name);
+}
+
 export async function clearOpfs(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const root = await navigator.storage.getDirectory();
@@ -133,19 +152,27 @@ export const TEST_REGION = 'Andorra';
 const DOWNLOAD_TIMEOUT_MS = 240_000;
 
 /**
- * Download {@link TEST_REGION} and wait for completion, i.e. the action button becoming
- * "Delete". Assumes the regions sheet is already open.
+ * Narrow the regions list down to {@link TEST_REGION}'s own row. Assumes the regions
+ * sheet is already open.
  *
  * Searched for by name rather than taken as the first row: the catalogue is ordered by
  * what is near the map, and covers the globe, so "the first row" is a lottery whose
  * losing tickets are several hundred megabytes over the wire.
  */
-export async function downloadTestRegion(page: Page): Promise<void> {
+export async function focusTestRegionRow(page: Page): Promise<void> {
   const search = page.locator('.regions-search');
   if (await search.isVisible()) {
     await search.fill(TEST_REGION);
     await page.locator('.regions-list .region-row').first().waitFor({ state: 'visible' });
   }
+}
+
+/**
+ * Download {@link TEST_REGION} and wait for completion, i.e. the action button becoming
+ * "Delete". Assumes the regions sheet is already open.
+ */
+export async function downloadTestRegion(page: Page): Promise<void> {
+  await focusTestRegionRow(page);
 
   const action = page.locator('.region-action').first();
   if ((await action.textContent())?.trim() === 'Delete') return;

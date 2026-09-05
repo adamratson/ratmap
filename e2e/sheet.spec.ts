@@ -165,14 +165,15 @@ test.describe('detail limit', () => {
     const notice = page.locator('#detail-notice');
     await expect(notice).toBeVisible();
     // Naming the region turns a complaint into an instruction: the notice reports that
-    // the map is enlarged, and a specific download is the thing that fixes it. "Great
-    // Britain" since the catalogue moved to Geofabrik's country-level extracts (see
-    // TEST_REGION in e2e/helpers.ts) — there is no smaller UK region publishing any more.
+    // the map is enlarged, and a specific download is the thing that fixes it. "Scotland"
+    // since the catalogue's Great Britain entry was later split into England/Scotland/
+    // Wales (infra/regions.json) — check the live catalogue if this drifts again rather
+    // than re-guessing which UK region currently covers Ben Nevis.
     await expect(notice).toHaveText(/Limited detail/);
-    await expect(notice).toHaveText(/Great Britain/);
+    await expect(notice).toHaveText(/Scotland/);
 
-    // The offered region gets an outline, so "get Great Britain" has a visible extent
-    // rather than naming a place without showing how much of the screen it covers.
+    // The offered region gets an outline, so "get Scotland" has a visible extent rather
+    // than naming a place without showing how much of the screen it covers.
     await expect
       .poll(async () => (await styleLayers(page)).map((l) => l.id))
       .toEqual(expect.arrayContaining(['region-footprints-fill', 'region-footprints-line']));

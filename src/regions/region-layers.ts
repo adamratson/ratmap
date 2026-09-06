@@ -5,6 +5,7 @@ import { getArtifactFile } from './opfs-store';
 import type { TileSourceRegistry } from '../tile-source-registry';
 import { OSM_ATTRIBUTION, TERRAIN_ATTRIBUTION } from '../config';
 import { PEAKS_LAYER_ID } from '../peaks';
+import { addSacLayers } from '../sac';
 
 // Renders a downloaded region *over* the low-zoom world catalog rather than replacing it,
 // so panning outside the region degrades to the global view instead of falling off the
@@ -282,6 +283,24 @@ export async function addRegionToMap(
       );
 
       addContourLabels(map, sourceId, region.id, minzoom);
+    } else if (artifact.kind === 'sac') {
+      map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+
+      // The colour band goes *under* the path's white casing, so a graded path reads as
+      // the same path with a coloured halo rather than as a second line beside it. The
+      // grade labels go above the paths, with the rest of the region's text.
+      //
+      // The casing may not exist — a region can carry grades with its basemap not yet
+      // downloaded, and C16 means artifacts arrive independently — in which case the band
+      // simply sits under the labels like the relief does.
+      const casing = `${regionSourceId(region.id, 'basemap')}-paths-casing`;
+      addSacLayers(map, sourceId, {
+        // Same floor as the paths themselves: a grade with no visible path under it is
+        // an annotation on nothing.
+        minzoom: Math.max(12, minzoom),
+        beforeBand: map.getLayer(casing) ? casing : beneathLabels(map, region.id),
+        beforeLabels: beneathLabels(map, region.id),
+      });
     }
   }
 }

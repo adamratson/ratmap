@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Builds one region's downloadable artifacts (Phase 3).
 #
-#   ./build-region.sh <region-id> [--dry-run]
+#   ./build-region.sh <region-id> [--dry-run] [--only=<kinds>]
+#
+# `--only=sac` (or `--only=basemap,terrain`) builds a subset. That exists for adding a new
+# artifact kind to a catalogue that is already published: the grades are a 1.8 MB cutout
+# for Scotland against a 646 MB basemap, and re-extracting the basemap to get them would
+# mean days and hundreds of GB of range requests for bytes that have not changed.
 #
 # Region ids and bboxes come from infra/regions.json. Output lands in
 # dist/regions/<id>/ using <id>-<artifact>.pmtiles filenames — C3: these names are the
@@ -15,9 +20,34 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_cmd pmtiles
 require_cmd python3
 
-REGION_ID="${1:?Usage: build-region.sh <region-id> [--dry-run]}"
+REGION_ID="${1:?Usage: build-region.sh <region-id> [--dry-run] [--only=<kinds>]}"
+shift
 DRY_RUN=""
-[ "${2:-}" = "--dry-run" ] && DRY_RUN="--dry-run"
+ONLY=""
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)  DRY_RUN="--dry-run" ;;
+    --only=*)   ONLY="${arg#--only=}" ;;
+    # Rejected rather than ignored: a mistyped --only would otherwise build everything,
+    # which for a global catalogue is the difference between minutes and days.
+    *) echo "Unknown option: $arg (expected --dry-run or --only=<kinds>)" >&2; exit 2 ;;
+  esac
+done
+
+# Which artifact kinds this run should build. Empty ONLY means all of them.
+wants() {
+  [ -z "$ONLY" ] && return 0
+  case ",$ONLY," in *,"$1",*) return 0 ;; esac
+  return 1
+}
+
+for requested in ${ONLY//,/ }; do
+  case "$requested" in
+    basemap|sac|terrain) ;;
+    *) echo "Unknown artifact kind in --only: $requested (known: basemap, sac, terrain)" >&2
+       exit 2 ;;
+  esac
+done
 
 REGIONS_JSON="$INFRA_DIR/regions.json"
 
@@ -58,6 +88,22 @@ eval "$REGION_VARS"
 BASEMAP_SOURCE="${WORLD_SOURCE_URL:-https://data.source.coop/protomaps/openstreetmap/v4.pmtiles}"
 TERRAIN_SOURCE="${TERRAIN_SOURCE_URL:-https://download.mapterhorn.com/planet.pmtiles}"
 
+# SAC grades (T1-T6) are ours, not upstream's — build-sac.sh makes sac-global.pmtiles from
+# OSM. Prefer the local copy when this machine has just built one, and fall back to the
+# published archive so a region can be rebuilt on a machine that has not.
+#
+# Absent altogether is not an error: a region built before the grades existed is a
+# perfectly good region (C16), and the app draws whatever artifacts it finds.
+if [ -n "${SAC_SOURCE_URL:-}" ]; then
+  SAC_SOURCE="$SAC_SOURCE_URL"
+elif [ -s "$DIST_DIR/sac-global.pmtiles" ]; then
+  SAC_SOURCE="$DIST_DIR/sac-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  SAC_SOURCE="$PUBLIC_BASE_URL/sac-global.pmtiles"
+else
+  SAC_SOURCE=""
+fi
+
 # Measured for Scotland (2026-08-21): basemap z12 ~84 MB / z13 ~175 MB; terrain z10
 # ~107 MB / z11 ~340 MB. Raster terrain grows far faster than vector basemap per level,
 # hence the different ceilings. Override per build if a region needs more.
@@ -75,11 +121,18 @@ TERRAIN_SOURCE="${TERRAIN_SOURCE_URL:-https://download.mapterhorn.com/planet.pmt
 BASEMAP_MAXZOOM="${REGION_BASEMAP_MAXZOOM:-${REGION_BASEMAP_Z:-15}}"
 TERRAIN_MAXZOOM="${REGION_TERRAIN_MAXZOOM:-${REGION_TERRAIN_Z:-11}}"
 
+# Never deeper than the basemap: the grade is drawn as a band under a path, and a band at
+# a zoom where the region has no path to draw it under is an annotation on nothing.
+# sac-global.pmtiles itself stops at z15.
+SAC_MAXZOOM="$BASEMAP_MAXZOOM"
+[ "$SAC_MAXZOOM" -gt 15 ] && SAC_MAXZOOM=15
+
 OUT_DIR="$DIST_DIR/regions/$REGION_ID"
 mkdir -p "$OUT_DIR"
 
 echo "Region: $REGION_NAME ($REGION_ID)"
 echo "  bbox: $BBOX"
+[ -n "$ONLY" ] && echo "  only: $ONLY"
 if [ "$WANT_TERRAIN" = 1 ]; then
   echo "  basemap maxzoom=$BASEMAP_MAXZOOM, terrain maxzoom=$TERRAIN_MAXZOOM"
 else
@@ -94,13 +147,33 @@ echo
 # "magic number not detected". One of those was nearly published: it survived because the
 # build was killed after writing tile data but before finalising the header. Nothing may
 # appear under its real name until it has passed verification.
+#
+# `--allow-empty` additionally accepts "this region contains none of that data" as a
+# result. Only the SAC grades use it: `sac_scale` is tagged nowhere in most of the world,
+# and an empty cutout is the honest answer for Egypt rather than a failed build — but an
+# empty *basemap* would be a broken region, so it stays an error by default.
 extract_verified() {
-  local source="$1" out="$2" maxzoom="$3"
+  local source="$1" out="$2" maxzoom="$3" allow_empty="${4:-}"
   local tmp="$out.building"
 
   rm -f "$tmp"
   pmtiles extract "$source" "$tmp" --bbox="$BBOX" --maxzoom="$maxzoom" $DRY_RUN
   [ -n "$DRY_RUN" ] && return 0
+
+  # An empty extract does not merely contain nothing — it fails `pmtiles verify` outright
+  # ("header MinZoom=12 does not match min tile z 31"), so it has to be recognised before
+  # the verify step or every grade-less region would abort its own build.
+  #
+  # Read from the header rather than inferred from the file size: an empty archive is
+  # 1754 bytes of header and root directory, and "small" is not the same fact as "holds
+  # no tiles".
+  if [ "$allow_empty" = "--allow-empty" ] && [ "$(archive_tile_count "$tmp")" = "0" ]; then
+    # The previous build's copy goes too: a region that no longer has graded paths (or
+    # whose grades were built from a narrower source) must not keep publishing yesterday's.
+    rm -f "$tmp" "$out"
+    echo "  nothing here — no $(basename "$out") published"
+    return 0
+  fi
 
   if ! pmtiles verify "$tmp" >/dev/null 2>&1; then
     echo "  FAILED verification: $(basename "$out") is not a valid PMTiles archive" >&2
@@ -111,10 +184,37 @@ extract_verified() {
   echo "  verified $(basename "$out") ($(du -h "$out" | cut -f1))"
 }
 
-echo "==> basemap"
-extract_verified "$BASEMAP_SOURCE" "$OUT_DIR/$REGION_ID-basemap.pmtiles" "$BASEMAP_MAXZOOM"
+# Tiles addressed by a PMTiles v3 archive: u64 little-endian at offset 72 of the fixed
+# 127-byte header (spec v3). Prints "invalid" for anything that is not a PMTiles file, so
+# a truncated download can never be read as an empty region.
+archive_tile_count() {
+  python3 - "$1" <<'PY_COUNT'
+import struct, sys
+with open(sys.argv[1], "rb") as f:
+    header = f.read(127)
+print(struct.unpack_from("<Q", header, 72)[0] if header[:7] == b"PMTiles" else "invalid")
+PY_COUNT
+}
 
-if [ "$WANT_TERRAIN" = 1 ]; then
+if wants basemap; then
+  echo "==> basemap"
+  extract_verified "$BASEMAP_SOURCE" "$OUT_DIR/$REGION_ID-basemap.pmtiles" "$BASEMAP_MAXZOOM"
+fi
+
+if ! wants sac; then
+  :
+elif [ -n "$SAC_SOURCE" ]; then
+  echo "==> sac grades"
+  extract_verified "$SAC_SOURCE" "$OUT_DIR/$REGION_ID-sac.pmtiles" "$SAC_MAXZOOM" --allow-empty
+else
+  # Said out loud rather than skipped quietly: a catalogue where half the regions have
+  # grades and half do not, with no note of which, is worse than one with none.
+  echo "==> sac grades: skipped (no sac-global.pmtiles — run ./scripts/build-sac.sh)"
+fi
+
+if ! wants terrain; then
+  :
+elif [ "$WANT_TERRAIN" = 1 ]; then
   echo "==> terrain"
   extract_verified "$TERRAIN_SOURCE" "$OUT_DIR/$REGION_ID-terrain.pmtiles" "$TERRAIN_MAXZOOM"
 else

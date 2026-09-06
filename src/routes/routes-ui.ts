@@ -4,6 +4,7 @@ import { renderProfileChart } from './profile-chart';
 import { parseRouteFile, toGeoJson, toGpx } from './gpx';
 import { deleteRoute, listRoutes, saveRoute, type SavedRoute } from './route-store';
 import type { RoutePlanner, RouteSummary } from './route-planner';
+import { SAC_GRADES, sacCssColor, sacGradeInfo } from '../sac';
 
 // The route planner's interface: a panel that lives over the map while planning or
 // following, and a sheet listing saved routes.
@@ -79,6 +80,9 @@ function planSection(
     section.append(el('p', 'route-note warn', summary.profileNote));
   }
 
+  const sac = sacSection(summary);
+  if (sac) section.append(sac);
+
   if (summary.hasStraightLegs) {
     // C11 in the UI: an unsnapped leg is allowed, but it is a straight line across
     // country and must never be presented as a path.
@@ -142,7 +146,74 @@ function statsRow(summary: RouteSummary): HTMLElement {
     );
   }
 
+  const hardest = summary.sac?.hardest != null ? sacGradeInfo(summary.sac.hardest) : null;
+  if (hardest) {
+    // "Hardest graded", not "Hardest": the figure describes the graded part of the route,
+    // and the rest of the route may well be harder than anything the tagging covers.
+    const group = stat('Hardest graded', hardest.short);
+    const value = group.querySelector('dd');
+    if (value) value.style.color = sacCssColor(hardest.grade);
+    stats.append(group);
+  }
+
   return stats;
+}
+
+/**
+ * The SAC breakdown: how much of the route sits at each grade, and how much of it is
+ * graded at all.
+ *
+ * The coverage line is not a footnote here, it is the point. `sac_scale` is tagged on a
+ * minority of paths, so "T2" on a route means "the graded parts reach T2" and never "this
+ * route is T2" — and a walker reading the second thing off the first is exactly how
+ * somebody ends up on ground they did not choose.
+ */
+function sacSection(summary: RouteSummary): HTMLElement | null {
+  if (summary.sacNote) return el('p', 'route-note warn', summary.sacNote);
+
+  const sac = summary.sac;
+  if (!sac) return null;
+
+  const block = el('div', 'route-sac');
+
+  if (sac.hardest === null) {
+    block.append(
+      el(
+        'p',
+        'route-note',
+        'No SAC grades along this route. Most paths are not graded, which tells you nothing about how hard they are.',
+      ),
+    );
+    return block;
+  }
+
+  const chips = el('ul', 'sac-chips');
+  for (const info of SAC_GRADES) {
+    const metres = sac.metresByGrade.get(info.grade);
+    if (!metres) continue;
+
+    const chip = el('li', 'sac-chip');
+    const swatch = el('span', 'sac-chip-swatch');
+    swatch.style.background = sacCssColor(info.grade);
+    chip.append(
+      swatch,
+      el('span', 'sac-chip-grade', info.short),
+      el('span', 'sac-chip-distance', formatDistance(metres)),
+    );
+    // The grade's meaning, for anyone who does not carry T1-T6 in their head.
+    chip.title = `${info.label} — ${info.note}`;
+    chips.append(chip);
+  }
+  block.append(chips);
+
+  block.append(el('p', 'route-note', coverageSentence(sac.coverage)));
+  return block;
+}
+
+function coverageSentence(coverage: number): string {
+  const percent = Math.round(coverage * 100);
+  if (percent >= 99) return 'Every part of this route carries a grade.';
+  return `Graded on ${percent}% of the route; the rest is untagged, not necessarily easier.`;
 }
 
 function stat(label: string, value: string): HTMLDivElement {

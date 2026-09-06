@@ -13,6 +13,7 @@ import {
 } from './route-layers';
 import { buildProfile, profileSampleCoords, type ElevationProfile } from './profile';
 import { TerrainSampler } from './terrain-sampler';
+import { SacSampler, summariseSacGrades, type SacSummary } from './sac-sampler';
 import { RouteFollower, type FollowState } from './follow';
 import { onPressHold } from './press-hold';
 import { WakeLock } from '../wake-lock';
@@ -38,6 +39,16 @@ export interface RouteSummary {
   profile: ElevationProfile | null;
   /** Why there is no profile, when there is none. */
   profileNote: string | null;
+  /**
+   * SAC grades along the route, where the region carries them.
+   *
+   * Null means "we have nothing to say", never "T1". Its own `coverage` says how much of
+   * the route the grades actually cover, which on most routes outside the Alps is very
+   * little — see sac-sampler.ts.
+   */
+  sac: SacSummary | null;
+  /** Why there are no grades, when there are none. */
+  sacNote: string | null;
   follow: FollowState | null;
   following: boolean;
   /**
@@ -118,6 +129,8 @@ export class RoutePlanner {
   private inflight: AbortController | null = null;
   private profile: ElevationProfile | null = null;
   private profileNote: string | null = null;
+  private sac: SacSummary | null = null;
+  private sacNote: string | null = null;
 
   private follower: RouteFollower | null = null;
   private followState: FollowState | null = null;
@@ -203,6 +216,7 @@ export class RoutePlanner {
   invalidateRegions(): void {
     this.router.clearCache();
     this.samplers.clear();
+    this.sacSamplers.clear();
     void this.refreshProfile();
   }
 
@@ -263,6 +277,8 @@ export class RoutePlanner {
     this.loadedName = null;
     this.profile = null;
     this.profileNote = null;
+    this.sac = null;
+    this.sacNote = null;
     this.stopFollowing();
     this.afterEdit();
   }
@@ -414,6 +430,34 @@ export class RoutePlanner {
   }
 
   /**
+   * Measure the route: elevation profile, then SAC grades.
+   *
+   * Both read the same sample points — the profile's 25 m densification — so the two sets
+   * of numbers describe the same places, and a later feature that colours the chart by
+   * grade has them index for index. One `emit()` at the end: each of these is a panel
+   * re-render, and a waypoint drag already fires one per frame.
+   */
+  private async refreshProfile(signal?: AbortSignal): Promise<void> {
+    const coords = this.draft.coordinates();
+    if (coords.length < 2) {
+      this.profile = null;
+      this.profileNote = null;
+      this.sac = null;
+      this.sacNote = null;
+      this.emit();
+      return;
+    }
+
+    const samples = profileSampleCoords(coords);
+    await this.measureElevation(coords, samples, signal);
+    if (signal?.aborted) return;
+    await this.measureSacGrades(coords, samples, signal);
+    if (signal?.aborted) return;
+
+    this.emit();
+  }
+
+  /**
    * Sample the elevation profile.
    *
    * Requires a downloaded region's terrain archive. The global terrain archive is a z0-4
@@ -421,25 +465,19 @@ export class RoutePlanner {
    * be a smooth curve bearing no relation to the ground. Saying "download the region"
    * is the honest answer; drawing that curve would not be.
    */
-  private async refreshProfile(signal?: AbortSignal): Promise<void> {
-    const coords = this.draft.coordinates();
-    if (coords.length < 2) {
-      this.profile = null;
-      this.profileNote = null;
-      this.emit();
-      return;
-    }
-
+  private async measureElevation(
+    coords: readonly LngLat[],
+    samples: LngLat[],
+    signal?: AbortSignal,
+  ): Promise<void> {
     const terrain = this.terrainSourceFor(coords);
     if (!terrain) {
       this.profile = null;
       this.profileNote =
         'Elevation profile needs a downloaded region — the worldwide terrain layer is far too coarse to measure a climb from.';
-      this.emit();
       return;
     }
 
-    const samples = profileSampleCoords(coords);
     try {
       const elevations = await terrain.sample(samples, signal);
       if (signal?.aborted) return;
@@ -453,9 +491,82 @@ export class RoutePlanner {
       this.profile = null;
       this.profileNote = `Could not read elevation data: ${(err as Error).message}`;
     }
-
-    this.emit();
   }
+
+  /**
+   * Look up the SAC grade of each sample.
+   *
+   * Absent grades are the normal case, not a failure: `sac_scale` is tagged on roughly 7%
+   * of walkable ways in the Scottish hills and far more in the Alps, so most routes come
+   * back mostly ungraded. That is why the summary carries coverage and the UI leads with
+   * it — an ungraded path is not an easy path, and this must never be read as one.
+   */
+  private async measureSacGrades(
+    coords: readonly LngLat[],
+    samples: LngLat[],
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const sac = this.sacSourceFor(coords);
+    if (!sac) {
+      this.sac = null;
+      this.sacNote = null;
+      return;
+    }
+
+    try {
+      const grades = await sac.grades(samples, signal);
+      if (signal?.aborted) return;
+      this.sac = summariseSacGrades(samples, grades);
+      this.sacNote = null;
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') throw err;
+      this.sac = null;
+      this.sacNote = `Could not read SAC grades: ${(err as Error).message}`;
+    }
+  }
+
+  /**
+   * The grade archive covering this route, or null.
+   *
+   * Whole-route containment, like the profile: a route running out of the region would
+   * come back with its far half ungraded and no way to tell that apart from genuinely
+   * untagged ground. Saying nothing is the honest answer there.
+   */
+  private sacSourceFor(coords: readonly LngLat[]): SacSampler | null {
+    const bounds = boundsOf(coords);
+    if (!bounds) return null;
+
+    for (const region of this.downloadedRegions()) {
+      const artifact = region.artifacts.find((candidate) => candidate.kind === 'sac');
+      if (!artifact) continue;
+      if (
+        bounds[0] < region.bbox[0] ||
+        bounds[1] < region.bbox[1] ||
+        bounds[2] > region.bbox[2] ||
+        bounds[3] > region.bbox[3]
+      ) {
+        continue;
+      }
+
+      const archive = this.registry.get(artifact.filename);
+      if (!archive) continue;
+
+      const existing = this.sacSamplers.get(artifact.filename);
+      if (existing) return existing;
+
+      // z15 default: the same zoom the router reads the network at, and the archive's own
+      // top level — build-sac.sh tiles to z15 because that is where paths stop being
+      // generalised away.
+      const maxzoom = typeof artifact.maxzoom === 'number' ? artifact.maxzoom : 15;
+      const sampler = new SacSampler({ archive, maxzoom });
+      this.sacSamplers.set(artifact.filename, sampler);
+      return sampler;
+    }
+
+    return null;
+  }
+
+  private readonly sacSamplers = new Map<string, SacSampler>();
 
   private terrainSourceFor(coords: readonly LngLat[]): TerrainSampler | null {
     const bounds = boundsOf(coords);
@@ -604,6 +715,8 @@ export class RoutePlanner {
       canUndo: this.draft.canUndo,
       profile: this.profile,
       profileNote: this.profileNote,
+      sac: this.sac,
+      sacNote: this.sacNote,
       follow: this.followState,
       following: this.follower !== null,
       currentDistanceM: this.currentDistanceM(),

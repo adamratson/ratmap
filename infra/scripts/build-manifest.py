@@ -65,6 +65,7 @@ ARTIFACT_KINDS = {
     "-basemap.pmtiles": "basemap",
     "-terrain.pmtiles": "terrain",
     "-contours.pmtiles": "contours",
+    "-sac.pmtiles": "sac",
 }
 
 

@@ -16,6 +16,7 @@ import {
 } from './config';
 import { TileSourceRegistry } from './tile-source-registry';
 import { addPeaksLayer, formatElevation, peakAt, PEAKS_SOURCE_ID, type PeakProperties } from './peaks';
+import { SAC_GRADES, sacCssColor, sacPathAt, type SacHit } from './sac';
 import { HeadingWatcher } from './heading';
 import { LocationController, type LocationState } from './location';
 import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS } from './install';
@@ -113,7 +114,16 @@ sheet.peek.innerHTML = `
 `;
 
 /** What the sheet body is currently showing. `null` is the resting state. */
-type View = 'peak' | 'places' | 'regions' | 'routes' | 'plan' | 'install' | 'settings' | 'legend';
+type View =
+  | 'peak'
+  | 'path'
+  | 'places'
+  | 'regions'
+  | 'routes'
+  | 'plan'
+  | 'install'
+  | 'settings'
+  | 'legend';
 
 let view: View | null = null;
 
@@ -365,6 +375,22 @@ function openLegendView(): void {
       </div>
 
       <div class="legend-section">
+        <h3>Path grade (SAC)</h3>
+        <p class="legend-note">
+          The Swiss Alpine Club's T1–T6 scale, where OpenStreetMap carries it — a coloured
+          band under the path, labelled from zoom 14. Most paths are not graded; an
+          unbanded path is untagged, not necessarily easy.
+        </p>
+        ${SAC_GRADES.map((entry) =>
+          legendRow(
+            lineSwatch(sacCssColor(entry.grade), 7, { cap: 'butt' }),
+            `${entry.short} · ${entry.label}`,
+            entry.note,
+          ),
+        ).join('')}
+      </div>
+
+      <div class="legend-section">
         <h3>Relief</h3>
         ${legendRow(
           '<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="rgba(120,85,55,0.55)" stroke-width="1.2"/></svg>',
@@ -440,6 +466,7 @@ function chipEl(label: string, active: boolean, onSelect: () => void): HTMLButto
 /** What a screen reader should call the sheet's contents, per view. */
 const VIEW_LABEL: Record<View, string> = {
   peak: 'Summit details',
+  path: 'Path grade',
   places: 'Saved places',
   regions: 'Offline regions',
   routes: 'Routes',
@@ -881,15 +908,20 @@ map.on('click', (e) => {
     // carried no geometry — otherwise the sheet reports, and "Save place" stores, the
     // spot the finger landed on rather than the summit.
     showPeakSheet(hit.properties, hit.lngLat ? new maplibregl.LngLat(...hit.lngLat) : e.lngLat);
-  } else {
-    hideSheet();
+    return;
   }
+
+  // Summits win a shared tap: they are the smaller target, and a graded path is usually
+  // running right past one.
+  const graded = sacPathAt(map, e.point);
+  if (graded?.grade) showPathSheet(graded);
+  else hideSheet();
 });
 
 map.on('mousemove', (e) => {
   // Planning mode owns the cursor (crosshair); don't fight it over summits.
   if (planner.isActive()) return;
-  map.getCanvas().style.cursor = peakAt(map, e.point) ? 'pointer' : '';
+  map.getCanvas().style.cursor = peakAt(map, e.point) || sacPathAt(map, e.point) ? 'pointer' : '';
 });
 
 function showPeakSheet(peak: PeakProperties, lngLat: maplibregl.LngLat): void {
@@ -933,11 +965,43 @@ function showPeakSheet(peak: PeakProperties, lngLat: maplibregl.LngLat): void {
 }
 
 /**
+ * What a tapped path's SAC grade means, in the grade's own words.
+ *
+ * The scale is the SAC's, so the sheet quotes what the grade demands rather than
+ * paraphrasing it into "easy/hard" — the whole value of a graded scale is that T3 means
+ * the same thing on every mountain.
+ */
+function showPathSheet(hit: SacHit): void {
+  const grade = hit.grade;
+  if (!grade) return;
+  const name = hit.properties.name?.trim();
+
+  openView('path', (body) => {
+    body.innerHTML = `
+      <h2></h2>
+      <p class="sheet-sac-grade"></p>
+      <p class="sheet-sac-note"></p>
+      <p class="sheet-note"></p>
+    `;
+    // textContent throughout: path names come from OSM, which is user-editable data.
+    body.querySelector('h2')!.textContent = name || 'Path';
+
+    const gradeLine = body.querySelector<HTMLElement>('.sheet-sac-grade')!;
+    gradeLine.textContent = `${grade.short} · ${grade.label}`;
+    gradeLine.style.color = sacCssColor(grade.grade);
+
+    body.querySelector('.sheet-sac-note')!.textContent = grade.note;
+    body.querySelector('.sheet-note')!.textContent =
+      'SAC hiking scale, as tagged in OpenStreetMap. It describes the path in good summer conditions — snow, ice or bad weather put it up a grade or more.';
+  });
+}
+
+/**
  * A summit sheet is a detail card, not a destination: it should not swallow half the map
  * you tapped it on.
  */
 function hideSheet(): void {
-  if (view === 'peak') closeView();
+  if (view === 'peak' || view === 'path') closeView();
 }
 
 // --- Sheet destinations --------------------------------------------------------------

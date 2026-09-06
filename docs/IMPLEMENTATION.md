@@ -143,8 +143,9 @@ Krystal bucket (CORS: allow Range, expose ETag + Content-Range — fixed/unconfi
 ├─ world-catalog-<version>.pmtiles Protomaps basemap, low-zoom extract, pinned (C13)
 ├─ terrain-global.pmtiles          coarse, pmtiles extract from Mapterhorn
 ├─ peaks-global.pmtiles            ours: natural=peak|volcano|saddle + ele
+├─ sac-global.pmtiles              ours: sac_scale ways, normalized to T1-T6
 ├─ regions/manifest.json           versioned, open-ended artifact list  (C16)
-└─ regions/<id>/<id>-{basemap,terrain,contours}.pmtiles   unique names  (C3)
+└─ regions/<id>/<id>-{basemap,terrain,contours,sac}.pmtiles  unique names (C3)
 
 app (static, service worker)
 ├─ SW cache:  app shell only                                            (C5)
@@ -552,6 +553,57 @@ would not be. §7 gains this as a stated limitation, not a footnote.
 **Acceptance:** with a region downloaded and Airplane Mode on throughout — plan a route
 that follows real paths, read a correct ascent total, save it, force-quit, relaunch, and
 follow it against the GPS dot.
+
+### Phase 4.5 — Path difficulty (SAC scale)
+
+**Added 2026-09-06.** The SAC hiking scale (T1-T6) on the paths that carry it: a coloured
+band under the path on the map, the grade written along it from z14, a tap sheet quoting
+what the grade demands, and a per-grade distance breakdown on a planned route.
+
+**It needs its own artifact, because the basemap has none of it.** Decoding a z15 tile of
+`scotland-basemap.pmtiles` over the Ben Nevis Mountain Path (2026-09-06) gives exactly
+`kind`, `kind_detail`, `min_zoom`, `name`, `sort_rank` — no `sac_scale`, no `surface`, no
+`trail_visibility`. Same situation as C6's missing `ele`, and the same answer:
+`infra/scripts/build-sac.sh` builds `sac-global.pmtiles` from the OSM extracts, and
+`build-region.sh` cuts `<id>-sac.pmtiles` per region with `pmtiles extract` exactly as it
+does for the basemap and terrain. Global build, per-region delivery — a grade that only
+appeared online would be worthless on the phone that needs it. Additive under C16: nothing
+migrates, and a region built before this existed is still a valid region.
+
+**Coverage is partial and that is the design problem, not a caveat.** ~921 k ways
+worldwide carry `sac_scale` (taginfo, 2026-09-06); in a Lochaber/Cairngorms box it is 397
+of 5,948 walkable ways, about 7%, and far denser in the Alps. So every surface here has to
+distinguish *graded T1* from *not graded*: the route panel leads with coverage
+("Graded on 24% of the route; the rest is untagged, not necessarily easier"), the stat is
+labelled "Hardest graded" rather than "Hardest", an ungraded route says so in words rather
+than showing nothing, and the legend says an unbanded path is untagged. Reading an
+ungraded path as an easy one is this feature's version of the C1 failure.
+
+**The join is geometric, and deliberately conservative.** The route comes from Protomaps'
+tiling of the OSM ways; the grades come from our own tippecanoe tiling of the same ways,
+and there is no shared id to match on — Protomaps does not carry the OSM way id. So
+`src/routes/sac-sampler.ts` matches each route sample to the nearest graded line within
+**12 m** *and* within 40° of the route's own bearing. The bearing test is what stops a
+route inheriting the grade of a path it merely crosses; the tight tolerance is what stops
+it inheriting the path on the other side of the burn. Anything that fails either is left
+ungraded rather than guessed at, and a stretch counts as graded only when both its ends
+are — which under-reports coverage and never over-reports it. Verified against the real
+archives (`src/routes/sac-real-data.test.ts`, skipped when they are not on the machine):
+a route built from the *basemap's* Ben Nevis Mountain Path geometry comes back >90%
+graded, >500 m of it T2, from the *sac* archive.
+
+Free-text handling stays in the pipeline, as with `ele` (`infra/scripts/normalize-sac.py`):
+`sac_scale` is a documented enum with 184 values in the wild. A range (`T2-T3`) takes the
+harder end; a modifier (`T2+`) takes its base grade; `strolling` is dropped rather than
+mapped to T1, because the scale starts at T1 and a path tagged as a stroll is better shown
+ungraded than as the easiest graded thing on the hill. The build self-tests the parser and
+asserts known paths (Ben Nevis Mountain Path T2, Aonach Eagach T5).
+
+**Not in scope, deliberately:** the grade does **not** feed routing cost. Doing that means
+matching grades onto graph edges rather than onto a finished route, and a router that
+silently avoids a path because of a tag on a *neighbouring* way would be the same
+class of quiet wrongness this whole document is written against. If it is wanted, it is a
+Phase 5 entry with the edge-matching problem stated up front.
 
 ### Phase 5 — Deferred
 

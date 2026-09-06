@@ -31,6 +31,7 @@ changed.
 ./scripts/build-world-catalog.sh   # low-zoom world basemap (§8.2 catalog-only)
 ./scripts/build-terrain.sh         # coarse global hillshade terrain
 ./scripts/build-peaks.sh           # natural=peak|volcano|saddle + mountain_pass=yes
+./scripts/build-sac.sh             # sac-global.pmtiles — SAC hiking grades T1-T6
 ./scripts/build-places.sh          # places.sqlite — offline FTS5 search index (C9)
 ```
 
@@ -38,13 +39,13 @@ All were run for real (2026-08-21) against small/coarse inputs to verify the com
 actually correct, not just plausible — see the comments at the top of each script for what
 was verified and the exact numbers.
 
-**`build-peaks.sh` and `build-places.sh` derive their inputs from `regions.json`** — the
+**`build-peaks.sh`, `build-sac.sh` and `build-places.sh` derive their inputs from `regions.json`** — the
 deduplicated union of every region's `osmExtract` (see `region-osm-sources.py`). Both
 produce single *global* artifacts that have to cover whatever the catalogue publishes, so
 deriving the list means adding a region can't silently ship a map with no summits and no
 search. Re-run both whenever you add a region.
 
-Override with `PEAKS_SOURCE_URLS` / `PLACES_SOURCE_URLS` for a genuinely global build off
+Override with `PEAKS_SOURCE_URLS` / `SAC_SOURCE_URLS` / `PLACES_SOURCE_URLS` for a genuinely global build off
 Geofabrik's continent extracts — that's 85 GB of source; don't kick it off by accident.
 `docker/` packages exactly that run — see [Running the whole planet](#running-the-whole-planet-docker).
 
@@ -52,6 +53,29 @@ Geofabrik's continent extracts — that's 85 GB of source; don't kick it off by 
 (`normalize-peaks.py` — the raw tag includes values like `~340` and `1141m`) and asserts
 known summit elevations (Ben Nevis 1345 m) so a parsing or schema regression fails the
 build rather than surfacing on a mountain.
+
+### SAC grades
+
+`build-sac.sh` is the same shape: filter `sac_scale` ways out of the OSM extracts,
+normalize the free-text tag into an integer 1-6 (`normalize-sac.py`), and tile to z12-15.
+It exists because the basemap has no room for it — a z15 tile of
+`scotland-basemap.pmtiles` over the Ben Nevis Mountain Path carries exactly `kind`,
+`kind_detail`, `min_zoom`, `name`, `sort_rank` (decoded 2026-09-06).
+
+Unlike the peaks and places artifacts this one is **not** read from the bucket at runtime:
+`build-region.sh` cuts each region's `<id>-sac.pmtiles` out of it with `pmtiles extract`,
+alongside the basemap and terrain, so grades work with the phone in Airplane Mode. Run
+`build-sac.sh` before rebuilding regions; a region built without it simply ships no grades
+(C16) and says so in the build output.
+
+Two checks run inside the build, both cheap and both there because a mis-parsed enum would
+quietly thin the map rather than fail: `normalize-sac.py --self-test` covers the parser
+against the values OSM actually carries (`T2-T3`, `alpine_hiking (T4)`, `strolling`,
+`yes`), and the build then asserts known paths — Ben Nevis Mountain Path T2, West Highland
+Way T1, Aonach Eagach T5 — plus that more than one grade came out at all.
+
+Scotland + Montenegro build to 2.3 MB from 5,165 graded ways (2026-09-06); Scotland's own
+cutout is 1.8 MB against a 646 MB basemap, so this is free in practice.
 
 ### Search index is app-shell, not a bucket artifact
 

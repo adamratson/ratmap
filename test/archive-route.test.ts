@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs';
-import { open } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { PMTiles } from 'pmtiles';
 import { PathGraph } from '../src/routes/path-graph';
 import { decodePathLines, tilesForBbox } from '../src/routes/path-tiles';
 import { boundsOf, distanceMetres, type LngLat } from '../src/routes/geo';
+import { NodeFileSource } from './node-file-source';
 
 // End-to-end check of the offline router against a **real built region archive**, not a
 // fixture: PMTiles → vector tile → clip → graph → Dijkstra, over the same file the app
@@ -32,31 +32,6 @@ const ARCHIVE = 'infra/dist/regions/scotland/scotland-basemap.pmtiles';
 // ~40 m off the path on purpose: snapping is part of what is under test.
 const SUMMIT: LngLat = [-5.0037, 56.7969];
 const ACHINTEE: LngLat = [-5.0765, 56.8094];
-
-class NodeFileSource {
-  private readonly path: string;
-
-  constructor(path: string) {
-    this.path = path;
-  }
-
-  getKey(): string {
-    return this.path;
-  }
-
-  async getBytes(offset: number, length: number): Promise<{ data: ArrayBuffer }> {
-    const handle = await open(this.path, 'r');
-    try {
-      const buffer = Buffer.alloc(length);
-      await handle.read(buffer, 0, length, offset);
-      return {
-        data: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
-      };
-    } finally {
-      await handle.close();
-    }
-  }
-}
 
 async function buildGraph(bbox: [number, number, number, number], zoom: number): Promise<PathGraph> {
   const archive = new PMTiles(new NodeFileSource(ARCHIVE) as never);

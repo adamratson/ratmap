@@ -50,6 +50,18 @@
 
   --warn-text: #b45309;
 
+  /* SAC grade ramp (T1-T6). The map draws these as literal hex — a MapLibre paint
+     property cannot read a CSS variable — so the values here must stay in step with
+     SAC_GRADES in src/sac.ts. What they add is a *text*-safe variant: the map paints the
+     band at 60% opacity over terrain, where the base colours read fine either way, but
+     the same hex as small text on the dark sheet is only ~2.4:1 for T6. */
+  --sac-t1: #2c7fb8;
+  --sac-t2: #3f9e4d;
+  --sac-t3: #d9a125;
+  --sac-t4: #e8590c;
+  --sac-t5: #c92a2a;
+  --sac-t6: #7b2d8b;
+
   /* Fades the iOS status bar into the map beneath it. Follows the *map*, not the chrome:
      the clock is drawn over the map, and a white fade under a dark map is a bright band
      across the top of the screen. */
@@ -65,6 +77,15 @@
 }
 
 [data-theme='dark'] {
+  /* Lightened for contrast against the dark sheet, keeping each grade's hue so the swatch
+     still reads as the same colour as its band on the map. */
+  --sac-t1: #5eb3e4;
+  --sac-t2: #5fd07a;
+  --sac-t3: #f0c14b;
+  --sac-t4: #ff8b4d;
+  --sac-t5: #ff6b6b;
+  --sac-t6: #c77dd6;
+
   --surface: #111827;
   --surface-sunken: #1f2937;
   --surface-raised: #1a2332;
@@ -620,6 +641,15 @@ body {
   color: var(--text-muted);
 }
 
+/* Sits under a legend heading, for a section that needs a sentence before its rows —
+   the SAC scale, where what an *absent* band means matters as much as the colours. */
+.legend-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 /* --- The debug overlay ---------------------------------------------------------------
    Opt-in (Settings → Debug overlay), off by default. Prints the sheet's own geometry
    over the map — see src/debug.ts for why. */
@@ -832,6 +862,26 @@ body {
   margin: 0 0 0.25rem;
   font-size: 0.9rem;
   color: var(--text-muted);
+}
+
+/* The tapped path's grade: the one thing the sheet exists to say, so it is the loudest
+   line on it. Its colour is set inline, from the same ramp the map draws. */
+.sheet-sac-grade {
+  font-size: 1.05rem !important;
+  font-weight: 600;
+}
+
+.sheet-sac-note {
+  color: var(--text) !important;
+}
+
+/* The caveat under a detail sheet — smaller and quieter than the fact above it, but
+   present, because "T3 in summer" and "T3 under snow" are different mountains. */
+.sheet-note {
+  margin-top: 0.5rem !important;
+  font-size: 0.78rem !important;
+  line-height: 1.4;
+  color: var(--text-faint) !important;
 }
 
 .sheet-actions {
@@ -1196,6 +1246,54 @@ body {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* SAC grade breakdown. The chips are read as a set — "how much of this route is at each
+   grade" — so they sit on one wrapping row rather than in a list. The swatch repeats the
+   colour used on the map; the "T3" beside it is what makes the row legible without it. */
+.route-sac {
+  margin: 0.7rem 0 0;
+}
+
+.sac-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sac-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  /* Explicit, not inherited: the sheet body does not set a colour on plain block content,
+     so a chip left to inherit renders black — invisible on the dark theme's chips. */
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.sac-chip-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  /* The map draws the band at 60% opacity over the ground; a solid dot beside a
+     translucent line is close enough to match by eye and far more legible at this size. */
+  flex: 0 0 auto;
+}
+
+.sac-chip-grade {
+  font-weight: 600;
+}
+
+.sac-chip-distance {
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 

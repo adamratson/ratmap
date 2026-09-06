@@ -123,10 +123,15 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `world` | `build-world-catalog.sh` — z0–5 planet basemap extract | minutes, ~15 MB out |
 | `terrain` | `build-terrain.sh` — coarse global hillshade | minutes, ~62 MB out at z4 |
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles` | hours |
+| `sac` | `build-sac.sh` over all 8 continents → `sac-global.pmtiles` (SAC hiking grades) | dominated by streaming 85 GB through `osmium tags-filter`; the tiling itself is minutes (~921 k ways planet-wide, ~400 MB out) |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, sequentially by default — peak RSS-bound, see below (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
 | `manifest` | `build-manifest.py` — always regenerated, always last | minutes (sha256s everything) |
+
+`sac` sits before `regions` in `all` for a reason: `build-region.sh` cuts each region's
+`<id>-sac.pmtiles` out of `sac-global.pmtiles`, so a `regions` run that precedes it builds
+the whole catalogue without grades. Naming stages by hand, keep that order.
 
 Stages skip work that already exists; `--force` redoes it. `--dry-run` passes through to
 `build-region.sh` so you can size the region extracts first. `--skip-preflight` overrides
@@ -138,6 +143,19 @@ docker compose run --rm infra global prefetch peaks places
 docker compose run --rm infra global regions --dry-run
 docker compose run --rm infra global manifest --force
 ```
+
+Adding an artifact kind to a catalogue that is already built is the one case where
+`regions` does *not* mean "rebuild": a region whose basemap and terrain are present but
+whose `<id>-sac.pmtiles` is missing gets `build-region.sh <id> --only=sac`, which is a
+cutout from the local `sac-global.pmtiles` and takes about a second. So grades reach an
+existing 213 GB catalogue with:
+
+```sh
+docker compose run --rm infra global sac regions manifest
+```
+
+and no basemap or terrain is re-fetched. `--force` would re-extract everything, which for
+a global catalogue is days — don't reach for it here.
 
 ### Iterating without rebuilding
 

@@ -69,7 +69,7 @@ MIN_DIST_GB="${RATMAP_MIN_DIST_GB:-20}"
 MIN_MEM_GB="${RATMAP_MIN_MEM_GB:-4}"
 REC_MEM_GB=8
 
-ALL_STAGES=(prefetch world terrain peaks places regions contours manifest)
+ALL_STAGES=(prefetch world terrain peaks sac places regions contours manifest)
 FORCE=""
 DRY_RUN=""
 SKIP_PREFLIGHT=""
@@ -85,7 +85,7 @@ for arg in "$@"; do
     --preflight-only)  PREFLIGHT_ONLY=1 ;;
     --repin)           REPIN=1 ;;
     all)               stages=("${ALL_STAGES[@]}") ;;
-    prefetch|world|terrain|peaks|places|regions|contours|manifest) stages+=("$arg") ;;
+    prefetch|world|terrain|peaks|sac|places|regions|contours|manifest) stages+=("$arg") ;;
     -*)  echo "Unknown flag: $arg" >&2; exit 2 ;;
     *)   echo "Unknown stage: $arg (known: ${ALL_STAGES[*]}, all)" >&2; exit 2 ;;
   esac
@@ -494,6 +494,20 @@ stage_peaks() {
   PEAKS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-peaks.sh"
 }
 
+stage_sac() {
+  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/sac-global.pmtiles" ]; then
+    log "sac: already built — --force to redo"
+    return 0
+  fi
+  # **Before `regions`, not after.** build-region.sh cuts each region's `<id>-sac.pmtiles`
+  # out of this file; run the other way round and every region in the catalogue ships
+  # without grades, and says so once each in a log nobody reads to the end.
+  #
+  # In ALL_STAGES order this sits between peaks and places, so `global all` gets it right
+  # on its own — this note is for anyone naming stages by hand.
+  SAC_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-sac.sh"
+}
+
 stage_places() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/places.sqlite" ]; then
     log "places: already built — --force to redo"
@@ -532,17 +546,38 @@ with open(sys.argv[1]) as f:
 # collected and reported at the end; the stage still fails, so nothing downstream treats a
 # partial catalogue as complete.
 stage_regions() {
-  local id wants_terrain
+  # Not a failure — a region without grades is a valid region (C16) — but worth one line
+  # up front rather than a "sac grades: skipped" per region, several hundred times.
+  if [ ! -f "$DIST_DIR/sac-global.pmtiles" ] && [ -z "${SAC_SOURCE_URL:-}" ]; then
+    log "regions: no sac-global.pmtiles — regions will be built without SAC grades"
+    log "         (run the 'sac' stage first, or set SAC_SOURCE_URL to a published one)"
+  fi
+
+  local id wants_terrain only
   local -a failed=()
   while read -r id wants_terrain; do
+    only=""
     if [ -z "$FORCE" ] && [ -z "$DRY_RUN" ] \
        && [ -f "$DIST_DIR/regions/$id/$id-basemap.pmtiles" ] \
        && { [ "$wants_terrain" = 0 ] || [ -f "$DIST_DIR/regions/$id/$id-terrain.pmtiles" ]; }; then
-      log "regions/$id: already built — --force to redo"
-      continue
+      # Built — unless an artifact kind has been *added* since. Then cut only that one:
+      # re-extracting a region to pick up a 1.8 MB grade file would mean re-fetching its
+      # basemap and terrain over range requests, which for a global catalogue is days of
+      # transfer for bytes that have not changed.
+      if [ -f "$DIST_DIR/sac-global.pmtiles" ] \
+         && [ ! -f "$DIST_DIR/regions/$id/$id-sac.pmtiles" ]; then
+        only="--only=sac"
+      else
+        log "regions/$id: already built — --force to redo"
+        continue
+      fi
     fi
-    log "regions/$id"
-    if ! "$SCRIPTS_DIR/build-region.sh" "$id" $DRY_RUN; then
+    # A region with no graded ways publishes no sac artifact at all (Egypt), so this
+    # re-checks it on every run. That costs about a second each against a local
+    # sac-global.pmtiles, and it is what makes the check self-correcting when the tagging
+    # does eventually arrive.
+    log "regions/$id${only:+ ($only)}"
+    if ! "$SCRIPTS_DIR/build-region.sh" "$id" $DRY_RUN $only; then
       log "regions/$id FAILED — continuing with the rest"
       failed+=("$id")
     fi

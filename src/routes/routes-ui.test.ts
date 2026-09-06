@@ -24,6 +24,8 @@ const BASE: RouteSummary = {
   follow: null,
   following: false,
   currentDistanceM: null,
+  sac: null,
+  sacNote: null,
 };
 
 function render(summary: Partial<RouteSummary>): HTMLElement {
@@ -111,5 +113,73 @@ describe('the follow screen', () => {
 
     expect(buttons).toHaveLength(1);
     expect(buttons[0].textContent).toBe('Stop following');
+  });
+});
+
+describe('SAC grades in the panel', () => {
+  const graded = (over: Partial<import('./sac-sampler').SacSummary> = {}) => ({
+    hardest: 3,
+    metresByGrade: new Map([
+      [1, 1400],
+      [3, 600],
+    ]),
+    gradedM: 2000,
+    totalM: 8200,
+    coverage: 2000 / 8200,
+    ...over,
+  });
+
+  it('shows the hardest graded section, labelled as graded', () => {
+    const panel = render({ sac: graded() });
+
+    const labels = [...panel.querySelectorAll('.route-stat dt')].map((n) => n.textContent);
+    expect(labels).toContain('Hardest graded');
+    expect(panel.textContent).toContain('T3');
+  });
+
+  it('breaks the distance down by grade', () => {
+    const panel = render({ sac: graded() });
+
+    const chips = [...panel.querySelectorAll('.sac-chip')].map((n) => n.textContent);
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toContain('T1');
+    expect(chips[1]).toContain('T3');
+  });
+
+  it('says how much of the route is graded at all', () => {
+    const panel = render({ sac: graded() });
+
+    // The whole point: "T3" on a route where three quarters of the ground carries no
+    // grade must not read as "this route is T3".
+    expect(panel.textContent).toContain('24%');
+  });
+
+  it('does not claim partial coverage when the whole route is graded', () => {
+    const panel = render({
+      sac: graded({ gradedM: 8200, coverage: 1, metresByGrade: new Map([[2, 8200]]), hardest: 2 }),
+    });
+
+    expect(panel.textContent).toContain('Every part of this route carries a grade');
+    expect(panel.textContent).not.toContain('%');
+  });
+
+  it('distinguishes an ungraded route from an easy one', () => {
+    const panel = render({
+      sac: graded({ hardest: null, metresByGrade: new Map(), gradedM: 0, coverage: 0 }),
+    });
+
+    expect(panel.querySelectorAll('.sac-chip')).toHaveLength(0);
+    expect(panel.textContent).toContain('No SAC grades');
+    // Never a grade for a route we know nothing about.
+    expect(panel.textContent).not.toContain('T1');
+  });
+
+  it('says nothing at all when no grade archive covers the route', () => {
+    const panel = render({ sac: null });
+
+    expect(panel.querySelector('.route-sac')).toBeNull();
+    expect([...panel.querySelectorAll('.route-stat dt')].map((n) => n.textContent)).not.toContain(
+      'Hardest graded',
+    );
   });
 });

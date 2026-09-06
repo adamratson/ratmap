@@ -17,11 +17,13 @@ import {
 // browser network stack — a real hung fetch racing a real timer — which is exactly what
 // downloader.test.ts's mocked fetch cannot stand in for.
 //
-// TEST_REGION's two artifacts, measured against the live manifest (2026-09-04):
+// TEST_REGION's artifacts, measured against the live manifest (2026-09-04):
 //   andorra-basemap.pmtiles  7,101,792 bytes
 //   andorra-terrain.pmtiles  8,837,636 bytes
-// downloadRegion() requests region.artifacts in manifest order — basemap, then terrain —
-// so intercepting requests to the basemap file targets the download's first artifact.
+// downloadRegion() requests region.artifacts in manifest order, and basemap sorts first —
+// so intercepting requests to the basemap file targets the download's first artifact. A
+// region can gain artifacts without touching this (C16; SAC grades are the next one), and
+// every assertion below is per-file rather than on a region total, so that stays true.
 // Re-check these if the fixture region is ever rebuilt; see TEST_REGION in helpers.ts.
 const BASEMAP_FILE = 'andorra-basemap.pmtiles';
 const BASEMAP_URL = '**/regions/andorra/andorra-basemap.pmtiles';

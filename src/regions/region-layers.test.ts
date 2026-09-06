@@ -255,3 +255,85 @@ describe('removeRegionFromMap', () => {
     expect([...map.sources]).toEqual([]);
   });
 });
+
+describe('SAC grades', () => {
+  const sacArtifact = { kind: 'sac', filename: 'lochaber-sac.pmtiles', path: 'p4', bytes: 1 };
+  const graded: Region = { ...region, artifacts: [...region.artifacts, sacArtifact] };
+
+  it('draws the grade band under the path casing, so it reads as a halo', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, graded);
+
+    const ids = map.layers.map((l) => String(l.id));
+    const band = ids.indexOf('region-lochaber-sac-band');
+    const casing = ids.indexOf('region-lochaber-basemap-paths-casing');
+    expect(band).toBeGreaterThan(-1);
+    expect(casing).toBeGreaterThan(-1);
+    expect(band).toBeLessThan(casing);
+  });
+
+  it('is wider than the path drawn over it', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, graded);
+
+    const widthAt16 = (id: string): number => {
+      const layer = map.layers.find((l) => String(l.id) === id)!;
+      const stops = (layer.paint as Record<string, unknown>)['line-width'] as unknown[];
+      return Number(stops[stops.length - 1]);
+    };
+
+    // A band narrower than the casing would show as a coloured line beside the path
+    // rather than around it.
+    expect(widthAt16('region-lochaber-sac-band')).toBeGreaterThan(
+      widthAt16('region-lochaber-basemap-paths-casing'),
+    );
+  });
+
+  it('writes the grade along the line, so the colour is not the only signal', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, graded);
+
+    const labels = map.layers.find((l) => String(l.id) === 'region-lochaber-sac-labels')!;
+    const layout = labels.layout as Record<string, unknown>;
+    expect(layout['symbol-placement']).toBe('line');
+    // "T3", not "3" — the form on the signpost.
+    expect(JSON.stringify(layout['text-field'])).toContain('"T"');
+    // T2/T3 are the pair a deuteranope is most likely to confuse, and they are the
+    // boundary between a walk and hands out of pockets — hence the text.
+    expect(Number(labels.minzoom)).toBeGreaterThanOrEqual(14);
+  });
+
+  it('reads the grade from the property the pipeline emits', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, graded);
+
+    const band = map.layers.find((l) => String(l.id) === 'region-lochaber-sac-band')!;
+    expect(band['source-layer']).toBe('sac');
+    // build-sac.sh normalizes sac_scale=demanding_mountain_hiking to t=3; a style
+    // expression reading the raw OSM string would silently colour nothing.
+    expect(JSON.stringify(band.paint)).toContain('"t"');
+  });
+
+  it('still draws the band when the basemap is not downloaded (C16)', async () => {
+    const map = fakeMap();
+    const sacOnly: Region = { ...region, artifacts: [sacArtifact] };
+
+    await addRegionToMap(map as unknown as MLMap, registry, sacOnly);
+
+    expect(map.layers.map((l) => String(l.id))).toContain('region-lochaber-sac-band');
+  });
+
+  it('removes its layers and source when the region is deleted', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, graded);
+    removeRegionFromMap(map as unknown as MLMap, graded);
+
+    expect(map.layers).toEqual([]);
+    expect(map.sources.has('region-lochaber-sac')).toBe(false);
+  });
+});

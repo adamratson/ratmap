@@ -7,7 +7,7 @@ import {
   regionStatuses,
   DownloadCancelled,
   DownloadStalled,
-  type RegionState,
+  type RegionDiskState,
 } from './downloader';
 import { addRegionToMap, removeRegionFromMap } from './region-layers';
 import { evaluateGate, readStorage } from './storage-budget';
@@ -61,11 +61,33 @@ export async function restoreDownloadedRegions(
 
   const restored: Region[] = [];
   for (const region of regions) {
-    if (statuses.get(region.id) !== 'downloaded') continue;
-    await addRegionToMap(map, registry, region);
-    restored.push(region);
+    const disk = statuses.get(region.id);
+    // Whatever is on disk gets drawn, not only a region that matches the catalogue
+    // exactly. The day the catalogue published a new artifact kind, an exact-match rule
+    // would have made every already-downloaded region stop rendering — offline, with no
+    // network to explain why, and nothing on screen to connect it to a catalogue change
+    // that happened on a server.
+    if (!disk || disk.present.length === 0) continue;
+
+    // Narrowed to what is actually here. Everything downstream — the "limited detail"
+    // notice, the router, the elevation and grade samplers — reads artifacts off this
+    // object and looks each one up in the registry, so an artifact with no file behind it
+    // is how the app comes to claim data it does not have.
+    const onDisk = withArtifacts(region, disk.present);
+    await addRegionToMap(map, registry, onDisk);
+    restored.push(onDisk);
   }
   return restored;
+}
+
+/** The same region, described by a subset of its artifacts. */
+function withArtifacts(region: Region, artifacts: Region['artifacts']): Region {
+  if (artifacts.length === region.artifacts.length) return region;
+  return {
+    ...region,
+    artifacts,
+    totalBytes: artifacts.reduce((bytes, artifact) => bytes + artifact.bytes, 0),
+  };
 }
 
 export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
@@ -133,7 +155,7 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
     hint.textContent = describe(shown.length, matches?.total ?? null);
     list.replaceChildren(
       ...shown.map((region) =>
-        renderRegionRow(region, statuses.get(region.id) ?? 'absent', deps, refresh),
+        renderRegionRow(region, statuses.get(region.id) ?? ABSENT, deps, refresh),
       ),
     );
   };
@@ -183,10 +205,10 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
  */
 function nearbySelection(
   regions: Region[],
-  statuses: Map<string, RegionState>,
+  statuses: Map<string, RegionDiskState>,
   centre: [number, number] | null,
 ): Region[] {
-  const held = regions.filter((region) => (statuses.get(region.id) ?? 'absent') !== 'absent');
+  const held = regions.filter((region) => (statuses.get(region.id)?.state ?? 'absent') !== 'absent');
   const heldIds = new Set(held.map((region) => region.id));
   const rest = regions.filter((region) => !heldIds.has(region.id));
 
@@ -363,12 +385,16 @@ function renderOrphanRow(
   return item;
 }
 
+/** A region with nothing of it on this device. */
+const ABSENT: RegionDiskState = { state: 'absent', present: [], missingBytes: 0 };
+
 function renderRegionRow(
   region: Region,
-  status: RegionState,
+  disk: RegionDiskState,
   deps: RegionsUiDeps,
   refresh: () => void,
 ): HTMLLIElement {
+  const status = disk.state;
   const item = document.createElement('li');
   item.className = 'region-row';
 
@@ -385,7 +411,14 @@ function renderRegionRow(
   // The group disambiguates the collisions a global catalogue creates — Georgia the
   // country and Georgia the state are otherwise the same row twice.
   const where = region.group ? `${region.group} · ` : '';
-  meta.textContent = `${where}${formatBytes(region.totalBytes)} · ${kinds}`;
+  // For an update, the number that matters is what it will cost *now* — quoting the
+  // region total next to an "Update" button reads as a full re-download and is the
+  // difference between tapping it and not.
+  const size =
+    status === 'update'
+      ? `${formatBytes(disk.missingBytes)} to add`
+      : formatBytes(region.totalBytes);
+  meta.textContent = `${where}${size} · ${kinds}`;
 
   info.append(name, meta);
 
@@ -443,7 +476,10 @@ function renderRegionRow(
       })();
     });
   } else {
-    action.textContent = status === 'partial' ? 'Resume' : 'Download';
+    // Three different things, three different words: an interrupted download resumes, a
+    // region that gained an artifact updates, and everything else downloads.
+    action.textContent =
+      status === 'partial' ? 'Resume' : status === 'update' ? 'Update' : 'Download';
     // The running download turns this same button into Cancel and installs its own
     // listener for it — so this one has to stand down while that is in play, or a tap on
     // Cancel would abort the download *and* immediately start a second one.

@@ -61,6 +61,13 @@ async function openSheet(map: Partial<MLMap> = {}): Promise<HTMLElement> {
   return container;
 }
 
+/** What regionStatuses reports for a region with every artifact on disk. */
+const complete = (region: Region) => ({
+  state: 'downloaded' as const,
+  present: region.artifacts,
+  missingBytes: 0,
+});
+
 const deleteButton = (container: HTMLElement): HTMLButtonElement =>
   container.querySelector<HTMLButtonElement>('.region-action')!;
 
@@ -70,7 +77,7 @@ describe('deleting a downloaded region', () => {
     findOrphansMock.mockResolvedValue([]);
     deleteOrphanMock.mockClear();
     fetchManifestMock.mockResolvedValue({ regions: [LOCHABER] });
-    regionStatusesMock.mockResolvedValue(new Map([[LOCHABER.id, 'downloaded']]));
+    regionStatusesMock.mockResolvedValue(new Map([[LOCHABER.id, complete(LOCHABER)]]));
     deleteRegionMock.mockResolvedValue(undefined);
     removeRegionFromMapMock.mockReset();
     readStorageMock.mockResolvedValue({ persisted: true, availableBytes: 1e12 });
@@ -219,7 +226,9 @@ describe('a catalogue that covers the globe', () => {
 
   it('keeps a downloaded region to hand however far away it is', async () => {
     // Its button deletes; making someone search for that is worse than a long list.
-    regionStatusesMock.mockResolvedValue(new Map([['polynesie', 'downloaded']]));
+    regionStatusesMock.mockResolvedValue(
+      new Map([['polynesie', { state: 'downloaded', present: [{}], missingBytes: 0 }]]),
+    );
     const container = await openSheet(centredOn(-4.5, 56.8));
 
     expect(names(container)[0]).toBe('Polynésie française');
@@ -380,5 +389,79 @@ describe('withdrawn regions', () => {
     button.click();
 
     expect(deleteOrphanMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('a region whose catalogue entry has gained an artifact', () => {
+  // The case: someone downloaded a region, and the catalogue later published SAC grades
+  // for it. Their basemap and terrain are untouched on disk — one small new file is
+  // missing. That must not read as a broken or interrupted download, and above all it
+  // must not stop the region they already have from drawing.
+  const GRADED: Region = {
+    id: 'lochaber',
+    name: 'Lochaber & Ben Nevis',
+    bbox: [-5.6, 56.5, -4.6, 57.1],
+    totalBytes: 185_800_000,
+    artifacts: [
+      { kind: 'basemap', filename: 'lochaber-basemap.pmtiles', path: 'a', bytes: 184_000_000 },
+      { kind: 'sac', filename: 'lochaber-sac.pmtiles', path: 'b', bytes: 1_800_000 },
+    ],
+  } as unknown as Region;
+
+  const onDisk = {
+    state: 'update' as const,
+    present: [GRADED.artifacts[0]],
+    missingBytes: 1_800_000,
+  };
+
+  beforeEach(() => {
+    findOrphansMock.mockResolvedValue([]);
+    fetchManifestMock.mockResolvedValue({ regions: [GRADED] });
+    regionStatusesMock.mockResolvedValue(new Map([[GRADED.id, onDisk]]));
+    readStorageMock.mockResolvedValue({ persisted: true, availableBytes: 1e12 });
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.useRealTimers();
+  });
+
+  it('still draws the part they already have', async () => {
+    const { restoreDownloadedRegions } = await import('./regions-ui');
+    const { addRegionToMap } = await import('./region-layers');
+    vi.mocked(addRegionToMap).mockClear();
+
+    await restoreDownloadedRegions({} as MLMap, {} as never, [GRADED]);
+
+    // The regression this guards: restore used to take only regions whose every artifact
+    // was present, so the day the catalogue published a new artifact kind, every already
+    // downloaded region silently stopped rendering — offline, with no way to tell why.
+    expect(addRegionToMap).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands on only the artifacts that are actually on disk', async () => {
+    const { restoreDownloadedRegions } = await import('./regions-ui');
+    const { addRegionToMap } = await import('./region-layers');
+    vi.mocked(addRegionToMap).mockClear();
+
+    const restored = await restoreDownloadedRegions({} as MLMap, {} as never, [GRADED]);
+
+    // Downstream — the zoom-limit notice, the router, the samplers — reads artifacts off
+    // these objects and looks each one up in the registry. Passing on a manifest entry
+    // with no file behind it is how the app ends up claiming detail it does not have.
+    expect(restored[0].artifacts.map((a) => a.kind)).toEqual(['basemap']);
+    expect(restored[0].totalBytes).toBe(184_000_000);
+    const passed = vi.mocked(addRegionToMap).mock.calls[0][2];
+    expect(passed.artifacts.map((a) => a.kind)).toEqual(['basemap']);
+  });
+
+  it('offers an update, not a resume, and names what it will actually fetch', async () => {
+    const container = await openSheet();
+    const action = container.querySelector<HTMLButtonElement>('.region-action')!;
+
+    // "Resume" would say their download broke; the region total would say 186 MB. Both
+    // discourage a tap that costs 1.8 MB.
+    expect(action.textContent).toBe('Update');
+    expect(container.textContent).toContain('1.8 MB');
   });
 });

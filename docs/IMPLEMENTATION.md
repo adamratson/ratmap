@@ -599,6 +599,27 @@ mapped to T1, because the scale starts at T1 and a path tagged as a stroll is be
 ungraded than as the easiest graded thing on the hill. The build self-tests the parser and
 asserts known paths (Ben Nevis Mountain Path T2, Aonach Eagach T5).
 
+**Getting grades onto a region someone already downloaded.** Publishing a new artifact
+kind changes what the catalogue says a region *is*, and the app compares that against
+what is on disk — so this is a catalogue change that reaches into existing installs.
+Found by testing it rather than by reasoning about it: `restoreDownloadedRegions` took
+only regions whose every manifest artifact was present, so the day the grades were
+published, every already-downloaded region would have stopped rendering at startup —
+offline, with no network to explain why and nothing on screen tying it to a change made
+on a server. Two fixes, both in place before any upload:
+
+- Restore draws **whatever is on disk**, narrowed to the artifacts actually present, so
+  the "limited detail" notice, the router and the samplers never see a manifest entry
+  with no file behind it.
+- `RegionState` gained `update`, distinct from `partial`: every artifact held is
+  complete, and the region has simply gained one. The catalogue row then offers
+  **Update** rather than **Resume**, and quotes the bytes it will actually fetch (1.8 MB,
+  not the region's 646 MB) — `downloadArtifact` already skips what OPFS holds, so the
+  download really is only the new file. The two are told apart by whether a `.part` file
+  exists, which is honest about disk and cannot read minds; a download interrupted exactly
+  between artifacts also reads as `update`, which is a slightly odd word and correct
+  behaviour.
+
 **Not in scope, deliberately:** the grade does **not** feed routing cost. Doing that means
 matching grades onto graph edges rather than onto a finished route, and a router that
 silently avoids a path because of a tag on a *neighbouring* way would be the same

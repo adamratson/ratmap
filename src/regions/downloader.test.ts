@@ -310,3 +310,59 @@ describe('downloadArtifact', () => {
     expect(receivedBytes.at(-1)).not.toBe(FETCH_CONCURRENCY * CHUNK_BYTES);
   }, 10_000);
 });
+
+describe('what a region looks like on disk', () => {
+  const artifact = (kind: string, bytes: number): RegionArtifact => ({
+    kind,
+    filename: `lochaber-${kind}.pmtiles`,
+    path: `regions/lochaber/lochaber-${kind}.pmtiles`,
+    bytes,
+  });
+
+  const region = {
+    id: 'lochaber',
+    name: 'Lochaber',
+    bbox: [-5.6, 56.5, -4.6, 57.1],
+    totalBytes: 185_800_000,
+    artifacts: [artifact('basemap', 184_000_000), artifact('sac', 1_800_000)],
+  } as never;
+
+  async function stateWith(files: string[]) {
+    opfsMocks.listArtifactNames.mockResolvedValue(new Set(files));
+    const { regionStatuses } = await import('./downloader');
+    return (await regionStatuses([region])).get('lochaber')!;
+  }
+
+  it('calls a region with every artifact downloaded', async () => {
+    const disk = await stateWith(['lochaber-basemap.pmtiles', 'lochaber-sac.pmtiles']);
+
+    expect(disk.state).toBe('downloaded');
+    expect(disk.missingBytes).toBe(0);
+  });
+
+  it('calls a whole missing artifact an update, not an interrupted download', async () => {
+    // The catalogue published SAC grades after this region was downloaded. Nothing here
+    // is half-written; there is simply something new to add.
+    const disk = await stateWith(['lochaber-basemap.pmtiles']);
+
+    expect(disk.state).toBe('update');
+    expect(disk.missingBytes).toBe(1_800_000);
+    expect(disk.present.map((a) => a.kind)).toEqual(['basemap']);
+  });
+
+  it('calls a half-written file a resumable download', async () => {
+    const disk = await stateWith(['lochaber-basemap.pmtiles', 'lochaber-sac.pmtiles.part']);
+
+    // A `.part` is the one thing that distinguishes "this download stopped mid-file"
+    // from "the catalogue moved on".
+    expect(disk.state).toBe('partial');
+  });
+
+  it('reports nothing on disk as absent', async () => {
+    const disk = await stateWith([]);
+
+    expect(disk.state).toBe('absent');
+    expect(disk.present).toEqual([]);
+    expect(disk.missingBytes).toBe(185_800_000);
+  });
+});

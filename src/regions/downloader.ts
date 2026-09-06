@@ -533,7 +533,36 @@ export async function deleteRegion(region: Region): Promise<void> {
   }
 }
 
-export type RegionState = 'absent' | 'partial' | 'downloaded';
+/**
+ * What a region looks like on this device.
+ *
+ * `update` is the case the catalogue creates rather than the user: every artifact this
+ * device holds is complete, and the region has simply gained one it does not have — SAC
+ * grades arriving for a region downloaded before they existed (C16 makes that additive
+ * and therefore routine). Distinguished from `partial` because they call for opposite
+ * words: `partial` means an interrupted download to resume, `update` means an intact
+ * download with something new to add.
+ *
+ * The two are told apart by whether a half-written `.part` file exists, which is honest
+ * about what is on disk but cannot read minds: a download interrupted exactly between two
+ * artifacts also lands here. Both are served correctly by fetching what is missing, so
+ * that ambiguity costs a slightly odd word in a narrow case, not wrong behaviour.
+ */
+export type RegionState = 'absent' | 'partial' | 'update' | 'downloaded';
+
+export interface RegionDiskState {
+  state: RegionState;
+  /**
+   * The region's artifacts actually present in OPFS, in manifest order.
+   *
+   * Callers must render and measure from *these*, never from `region.artifacts`: the
+   * manifest describes what the catalogue publishes, which after a catalogue update is
+   * not the same set as what this phone holds.
+   */
+  present: RegionArtifact[];
+  /** Bytes a download still has to fetch. Ignores partial progress within an artifact. */
+  missingBytes: number;
+}
 
 /**
  * The state of many regions from a single directory listing.
@@ -542,21 +571,33 @@ export type RegionState = 'absent' | 'partial' | 'downloaded';
  * catalogue that is thousands of OPFS lookups, run on the startup path. Callers holding a
  * list — the catalogue sheet, the startup restore — ask here so the listing is read once.
  */
-export async function regionStatuses(regions: Region[]): Promise<Map<string, RegionState>> {
+export async function regionStatuses(regions: Region[]): Promise<Map<string, RegionDiskState>> {
   const present = await listArtifactNames();
   return new Map(regions.map((region) => [region.id, statusFrom(region, present)]));
 }
 
-function statusFrom(region: Region, present: Set<string>): RegionState {
-  let complete = 0;
-  let partial = 0;
+function statusFrom(region: Region, present: Set<string>): RegionDiskState {
+  const complete: RegionArtifact[] = [];
+  let halfWritten = 0;
+  let missingBytes = 0;
 
   for (const artifact of region.artifacts) {
-    if (present.has(artifact.filename)) complete += 1;
-    else if (present.has(partialName(artifact.filename))) partial += 1;
+    if (present.has(artifact.filename)) {
+      complete.push(artifact);
+      continue;
+    }
+    missingBytes += artifact.bytes;
+    if (present.has(partialName(artifact.filename))) halfWritten += 1;
   }
 
-  if (complete === region.artifacts.length) return 'downloaded';
-  if (complete > 0 || partial > 0) return 'partial';
-  return 'absent';
+  const state: RegionState =
+    complete.length === region.artifacts.length
+      ? 'downloaded'
+      : halfWritten > 0
+        ? 'partial'
+        : complete.length > 0
+          ? 'update'
+          : 'absent';
+
+  return { state, present: complete, missingBytes };
 }

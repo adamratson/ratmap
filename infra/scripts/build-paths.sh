@@ -40,15 +40,33 @@ for url in $PATHS_SOURCE_URLS; do
   filtered_pbfs+=("$filtered")
 done
 
-if [ "${#filtered_pbfs[@]}" -gt 1 ]; then
-  echo "Merging ${#filtered_pbfs[@]} filtered extracts"
-  osmium merge "${filtered_pbfs[@]}" -o "$WORK_DIR/paths-raw.osm.pbf" --overwrite
-else
-  cp "${filtered_pbfs[0]}" "$WORK_DIR/paths-raw.osm.pbf"
-fi
-
-osmium export "$WORK_DIR/paths-raw.osm.pbf" -o "$WORK_DIR/paths.geojsonl" \
-  -f geojsonseq -x print_record_separator=false --overwrite
+# Export each filtered extract separately and concatenate the line-delimited GeoJSON,
+# rather than `osmium merge`-ing the PBFs into one first.
+#
+# The merge is what killed the first planet run of this stage (2026-09-08): it exits with
+# "Way ID twice in input. Maybe you are using a history or change file?". The continents
+# are pinned to *dated* Geofabrik snapshots and those dates are resolved per continent —
+# europe-260823 alongside north-america-260824 in that run — because they do not all
+# rebuild at the same hour. A way crossing a continent seam therefore appears in two files
+# with two different versions, which is a history file, and `osmium merge` says so (its
+# own `-H` flag exists to silence exactly that warning). Nothing downstream can read it.
+#
+# Concatenating the exports sidesteps it entirely, and drops a full extra copy of the
+# merged PBF from the working set. The cost is that a way on a seam is exported twice and
+# tiled twice.
+#
+# Not deduplicated here, unlike build-sac.sh: that would mean holding every way id of the
+# planet's ~85 M walkable ways in memory, several GB, to remove the few thousand that sit
+# on a continent boundary. At z12-13 a way drawn twice is invisible. If it ever stops
+# being invisible, dedupe by `-a id` the way the sac build does — the memory is the only
+# reason not to.
+: > "$WORK_DIR/paths.geojsonl"
+for pbf in "${filtered_pbfs[@]}"; do
+  osmium export "$pbf" -o "$WORK_DIR/part.geojsonl" \
+    -f geojsonseq -x print_record_separator=false --overwrite
+  cat "$WORK_DIR/part.geojsonl" >> "$WORK_DIR/paths.geojsonl"
+  rm -f "$WORK_DIR/part.geojsonl"
+done
 
 # Reduce to the two properties the style actually reads, under **Protomaps' own names**.
 # `kind_detail` rather than something of our own so one set of paint expressions can drive

@@ -15,11 +15,14 @@ export type LocationState =
 export interface LocationControllerOptions {
   map: MLMap;
   onStateChange?(state: LocationState): void;
+  /** The user tapped their own position dot — usually to read off its coordinates. */
+  onDotClick?(position: GeolocationPosition): void;
 }
 
 export class LocationController {
   private readonly map: MLMap;
   private readonly onStateChange?: (state: LocationState) => void;
+  private readonly onDotClick?: (position: GeolocationPosition) => void;
   private watchId: number | null = null;
   private marker: maplibregl.Marker | null = null;
   private accuracyCircleId = 'user-location-accuracy';
@@ -28,10 +31,13 @@ export class LocationController {
   /** When true the camera recentres on each fix; any user pan cancels it. */
   private follow = false;
   private state: LocationState = { status: 'idle' };
+  /** The fix behind the dot right now, for `onDotClick` to hand back on tap. */
+  private lastPosition: GeolocationPosition | null = null;
 
   constructor(options: LocationControllerOptions) {
     this.map = options.map;
     this.onStateChange = options.onStateChange;
+    this.onDotClick = options.onDotClick;
   }
 
   getState(): LocationState {
@@ -74,6 +80,7 @@ export class LocationController {
     this.marker?.remove();
     this.marker = null;
     this.heading = null;
+    this.lastPosition = null;
     this.removeAccuracyCircle();
     this.setState({ status: 'idle' });
   }
@@ -100,6 +107,7 @@ export class LocationController {
   }
 
   private handlePosition(position: GeolocationPosition): void {
+    this.lastPosition = position;
     this.setState({ status: 'tracking', position });
     this.renderMarker(position);
     if (this.follow) this.centreOn(position);
@@ -131,6 +139,12 @@ export class LocationController {
       // The cone is a child rather than a pseudo-element so it can be hidden
       // independently of the dot, which is always meaningful even when the compass is not.
       el.innerHTML = '<span class="user-dot-cone" aria-hidden="true"></span>';
+      // A marker element sits outside the map canvas, so this never reaches — and is never
+      // mistaken for — a click on the map underneath it.
+      el.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (this.lastPosition) this.onDotClick?.(this.lastPosition);
+      });
       this.marker = new maplibregl.Marker({ element: el, rotationAlignment: 'map' })
         .setLngLat(lngLat)
         .addTo(this.map);

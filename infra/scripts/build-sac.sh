@@ -47,17 +47,33 @@ for url in $SAC_SOURCE_URLS; do
   filtered_pbfs+=("$filtered")
 done
 
-if [ "${#filtered_pbfs[@]}" -gt 1 ]; then
-  echo "Merging ${#filtered_pbfs[@]} filtered extracts"
-  osmium merge "${filtered_pbfs[@]}" -o "$WORK_DIR/sac-raw.osm.pbf" --overwrite
-else
-  cp "${filtered_pbfs[0]}" "$WORK_DIR/sac-raw.osm.pbf"
-fi
-
+# Export each filtered extract separately and concatenate the line-delimited GeoJSON,
+# rather than `osmium merge`-ing the PBFs into one first.
+#
+# The merge is what killed the first planet run of the sibling paths build (2026-09-08):
+# it exits with "Way ID twice in input. Maybe you are using a history or change file?".
+# The continents are pinned to *dated* Geofabrik snapshots and those dates are resolved
+# per continent — europe-260823 alongside north-america-260824 in that run — because they
+# do not all rebuild at the same hour. A way crossing a continent seam therefore appears
+# in two files with two different versions, which is a history file, and `osmium merge`
+# says so (its own `-H` flag exists to silence exactly that warning). Nothing downstream
+# can read it. This build survived the same structure by luck: with ~921 k graded ways
+# worldwide, none happened to sit on a seam.
+#
+# Concatenating the exports sidesteps it, and drops a full extra copy of the merged PBF
+# from the working set. `-a id` carries the OSM way id through so normalize-sac.py can
+# drop a way it has already seen — a set of ids at this scale is affordable. The paths
+# build cannot afford that and does not do it; see build-paths.sh.
+#
 # Line-delimited so every stage below streams, as in build-peaks.sh. `-x
 # print_record_separator=false` drops the RFC8142 RS byte, leaving plain JSON per line.
-osmium export "$WORK_DIR/sac-raw.osm.pbf" -o "$WORK_DIR/sac.geojsonl" \
-  -f geojsonseq -x print_record_separator=false --overwrite
+: > "$WORK_DIR/sac.geojsonl"
+for pbf in "${filtered_pbfs[@]}"; do
+  osmium export "$pbf" -o "$WORK_DIR/part.geojsonl" \
+    -f geojsonseq -x print_record_separator=false --overwrite -a id
+  cat "$WORK_DIR/part.geojsonl" >> "$WORK_DIR/sac.geojsonl"
+  rm -f "$WORK_DIR/part.geojsonl"
+done
 
 # Free text in, integer 1-6 out — see normalize-sac.py. Anything it cannot read is dropped
 # and counted, never guessed at.

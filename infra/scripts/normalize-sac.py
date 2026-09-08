@@ -98,7 +98,15 @@ def main(src, dest):
     kept = 0
     not_a_line = 0
     untagged = 0
+    duplicated = 0
     unparsed = {}
+    # OSM way ids already written. The input is the concatenation of one export per
+    # continent extract, and Geofabrik's continents share the ways that cross their
+    # seams — pinned a day apart, the same way can arrive twice with two different
+    # versions. Keeping the first is right: they differ by an edit made between two
+    # snapshots, not by being different paths. ~921 k graded ways worldwide, so this set
+    # costs tens of MB; build-paths.sh works at 85 M and cannot do the same.
+    seen = set()
 
     with open(src) as src_f, open(dest, "w") as dest_f:
         for line in src_f:
@@ -123,6 +131,17 @@ def main(src, dest):
                 untagged += 1
                 continue
 
+            # `@id`, not `id`: that is the key `osmium export -a id` writes (verified
+            # against a real export, 2026-09-08 — reading `id` silently deduplicated
+            # nothing at all). Absent when the caller did not pass the flag, in which
+            # case deduplication is skipped rather than half-applied.
+            osm_id = props.get("@id")
+            if osm_id is not None:
+                if osm_id in seen:
+                    duplicated += 1
+                    continue
+                seen.add(osm_id)
+
             grade = parse_grade(raw)
             if grade is None:
                 unparsed[str(raw)] = unparsed.get(str(raw), 0) + 1
@@ -140,7 +159,8 @@ def main(src, dest):
     unreadable = sum(unparsed.values())
     print(
         f"  graded {kept} ways; skipped {not_a_line} non-line features, "
-        f"{untagged} untagged, {unreadable} unreadable"
+        f"{untagged} untagged, {unreadable} unreadable, "
+        f"{duplicated} already seen (continent seams)"
     )
     if unparsed:
         # Printed, not silent: a value climbing this list is how we find out the tag's

@@ -1268,7 +1268,12 @@ function hideSearchResults(): void {
 // --- Location ----------------------------------------------------------------------
 
 const locateBtn = document.querySelector<HTMLButtonElement>('#locate-btn')!;
-const location = new LocationController({ map, onStateChange: renderLocationState });
+const location = new LocationController({
+  map,
+  onStateChange: renderLocationState,
+  onDotClick: (position) =>
+    showCoordsSheet(new maplibregl.LngLat(position.coords.longitude, position.coords.latitude)),
+});
 
 /**
  * The compass.

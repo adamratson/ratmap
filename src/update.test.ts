@@ -246,13 +246,31 @@ describe('startAppUpdates', () => {
   });
 
   describe('checking for a new build', () => {
-    it('checks on demand', async () => {
+    it('checks once as soon as registration resolves, with no trigger needed', async () => {
       const container = installContainer(true);
       const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn() });
 
-      await updates.checkNow();
+      // No visibilitychange, no online event, no interval tick — a page that starts
+      // visible fires neither of the first two, and the app should not have to sit open
+      // for `intervalMs` before it discovers a deploy that landed while it was closed.
+      await flush();
 
       expect(container.registration.update).toHaveBeenCalledTimes(1);
+      updates.dispose();
+    });
+
+    it('checks again on demand, ignoring the throttle', async () => {
+      const container = installContainer(true);
+      const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn() });
+      await flush();
+      expect(container.registration.update).toHaveBeenCalledTimes(1);
+
+      // checkNow() is documented to ignore the throttle, unlike maybeCheck() — otherwise
+      // the "Reload now" affordance and a manual retry would silently no-op if pressed
+      // within MIN_CHECK_GAP_MS of the last check.
+      await updates.checkNow();
+
+      expect(container.registration.update).toHaveBeenCalledTimes(2);
       updates.dispose();
     });
 
@@ -277,24 +295,26 @@ describe('startAppUpdates', () => {
       updates.dispose();
     });
 
-    it('checks when the app is resumed, but not on every flick between apps', async () => {
+    it('checks again when the app is resumed, but not on every flick between apps', async () => {
       vi.useFakeTimers();
       const container = installContainer(true);
       const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn() });
       await flush();
+      // The load itself was the first check.
+      expect(container.registration.update).toHaveBeenCalledTimes(1);
 
       const visibility = vi.spyOn(document, 'visibilityState', 'get');
 
-      // Registration has just checked, so an immediate resume has nothing to ask about.
+      // Still inside the throttle window: an immediate resume has nothing new to ask.
       visibility.mockReturnValue('visible');
       document.dispatchEvent(new Event('visibilitychange'));
       await flush();
-      expect(container.registration.update).not.toHaveBeenCalled();
+      expect(container.registration.update).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(61_000);
       document.dispatchEvent(new Event('visibilitychange'));
       await flush();
-      expect(container.registration.update).toHaveBeenCalledTimes(1);
+      expect(container.registration.update).toHaveBeenCalledTimes(2);
 
       updates.dispose();
     });
@@ -304,11 +324,12 @@ describe('startAppUpdates', () => {
       const container = installContainer(true);
       const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn(), intervalMs: 1_000 });
       await flush();
+      const callsBeforeDispose = container.registration.update.mock.calls.length;
 
       updates.dispose();
       await vi.advanceTimersByTimeAsync(60_000);
 
-      expect(container.registration.update).not.toHaveBeenCalled();
+      expect(container.registration.update).toHaveBeenCalledTimes(callsBeforeDispose);
     });
   });
 });

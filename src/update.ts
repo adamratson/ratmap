@@ -10,8 +10,14 @@
  *
  * Hence three parts, in order:
  *
- * 1. **Ask.** `registration.update()` on a timer, on resume, and when the network returns.
- *    Nothing else prompts an update check in an app that is never navigated.
+ * 1. **Ask.** `registration.update()` once as soon as registration resolves, then again on
+ *    a timer, on resume, and when the network returns. The immediate check matters more
+ *    than it looks: `visibilitychange` only fires on a *change*, not on a page's initial
+ *    visibility state, so a freshly opened app — the common case for a home-screen PWA —
+ *    would otherwise get no check at all until something backgrounds it or the 30-minute
+ *    timer comes round. The browser's own default post-register check does not fill that
+ *    gap either: it is throttled to at most once per 24 hours, which is exactly the
+ *    staleness this module exists to avoid.
  *
  * 2. **Stage, don't stampede.** The worker is generated with `skipWaiting: false`
  *    (vite.config.ts), so a new build installs and then *waits*. The old precache stays
@@ -186,6 +192,27 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
     });
   }
 
+  /**
+   * The actual check, shared by the immediate on-load call and every later trigger.
+   * `lastCheck` is stamped here — at the moment a check is genuinely attempted — not at
+   * registration time, or the very first `maybeCheck()` would see a "just checked" that
+   * never happened and skip the real first check.
+   */
+  async function performCheck(reg: ServiceWorkerRegistration): Promise<void> {
+    // Only trusted in the negative direction. `navigator.onLine === true` is meaningless
+    // here — it stays true behind a captive portal or a dead uplink, which is why the map
+    // detects offline from failed requests instead (see isNetworkFailure in main.ts). But
+    // `false` does reliably mean "no link", so it's a sound reason to skip a check.
+    if (navigator.onLine === false) return;
+
+    lastCheck = Date.now();
+    try {
+      await reg.update();
+    } catch {
+      // A failed check is the expected state out of signal, not a fault.
+    }
+  }
+
   const ready = navigator.serviceWorker
     // `updateViaCache: 'none'` — the default ('imports') already bypasses the HTTP cache
     // for the worker script itself, but not for the workbox runtime it pulls in via
@@ -194,8 +221,11 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
     .then((reg) => {
       if (disposed) return;
       registration = reg;
-      lastCheck = Date.now();
       watch(reg);
+      // Fired and forgotten rather than awaited here: this callback is what settles
+      // `ready`, and `checkNow()` below awaits `ready` — awaiting the check inline would
+      // deadlock the two on each other.
+      void performCheck(reg);
     })
     .catch(() => {
       // No worker (unsupported, blocked, or a 404 in a non-PWA build): the app runs fine,
@@ -205,19 +235,7 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
   async function checkNow(): Promise<void> {
     await ready;
     if (disposed || reloading || !registration) return;
-
-    // Only trusted in the negative direction. `navigator.onLine === true` is meaningless
-    // here — it stays true behind a captive portal or a dead uplink, which is why the map
-    // detects offline from failed requests instead (see isNetworkFailure in main.ts). But
-    // `false` does reliably mean "no link", so it's a sound reason to skip a check.
-    if (navigator.onLine === false) return;
-
-    lastCheck = Date.now();
-    try {
-      await registration.update();
-    } catch {
-      // A failed check is the expected state out of signal, not a fault.
-    }
+    await performCheck(registration);
   }
 
   function maybeCheck(): void {

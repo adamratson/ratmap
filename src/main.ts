@@ -691,7 +691,14 @@ function installAppLayers(): void {
   planner.redrawGeometry();
 }
 
-map.on('load', () => installAppLayers());
+// `styledata`, not `load`: `load` also waits for every tile in the initial view to
+// arrive — the world catalog basemap and terrain, over the network — which can take
+// long enough on a slow connection that a downloaded region sits unrestored and the
+// detail-ceiling notice keeps citing the catalog's zoom 5 over ground that is already
+// on disk. `installAppLayers` only needs a style that will accept sources (`styleReady`
+// above), which `styledata` already gives it — the same event the theme-swap path below
+// uses for the same reason.
+map.once('styledata', () => installAppLayers());
 
 /**
  * Regions whose archives are actually present in OPFS.

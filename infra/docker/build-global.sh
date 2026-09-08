@@ -573,9 +573,9 @@ stage_regions() {
       fi
     fi
     # A region with no graded ways publishes no sac artifact at all (Egypt), so this
-    # re-checks it on every run. That costs about a second each against a local
-    # sac-global.pmtiles, and it is what makes the check self-correcting when the tagging
-    # does eventually arrive.
+    # re-checks it on every run. Measured at ~20 ms per region against a local
+    # sac-global.pmtiles — 22 s for the whole catalogue (2026-09-06) — and it is what
+    # makes the check self-correcting when the tagging does eventually arrive.
     log "regions/$id${only:+ ($only)}"
     if ! "$SCRIPTS_DIR/build-region.sh" "$id" $DRY_RUN $only; then
       log "regions/$id FAILED — continuing with the rest"
@@ -668,7 +668,37 @@ stage_contours() {
 stage_manifest() {
   # Always regenerated: it records sizes, zoom ranges and sha256s of whatever is in
   # dist/ right now, so it has to run last and it has to run every time.
-  python3 "$SCRIPTS_DIR/build-manifest.py"
+  local -a args=()
+
+  # Merge onto the live catalogue rather than replacing it, whenever we know where the
+  # live one is. A bare rebuild publishes *only* what this disk holds, so any region the
+  # catalogue lists and this machine has not built would be silently unpublished — which
+  # is exactly what build-region.sh's own "Next:" hint warns against. That was safe while
+  # this image only ever ran the whole planet from scratch; it stopped being safe the
+  # moment a run existed that adds one artifact kind to an already-published catalogue.
+  #
+  # For a genuine full-planet run the two modes agree: every region is present locally
+  # and overwrites its base entry, kind by kind.
+  if [ -n "${PUBLIC_BASE_URL:-}" ]; then
+    args+=(--base-live)
+    log "manifest: merging onto the live catalogue at $PUBLIC_BASE_URL"
+  else
+    log "manifest: no PUBLIC_BASE_URL — full rebuild from dist/ only."
+    log "          Anything the catalogue lists that is not on this disk will be dropped."
+  fi
+
+  # Scope the scan when dist/ holds more than this run's business. The manifest build
+  # fails closed on an unreadable archive — correctly, since publishing one would put a
+  # broken download in the catalogue — but an incrementally-built dist/ accumulates
+  # scratch from unrelated regions, and one stray corrupt file there blocks every
+  # region's publish. Note what this trades away: a region excluded here is *not*
+  # recomputed, so artifacts built for it in this run stay unpublished until it is.
+  if [ -n "${RATMAP_MANIFEST_ONLY:-}" ]; then
+    args+=(--only "$RATMAP_MANIFEST_ONLY")
+    log "manifest: scoped to region ids matching $RATMAP_MANIFEST_ONLY"
+  fi
+
+  python3 "$SCRIPTS_DIR/build-manifest.py" "${args[@]}"
 }
 
 ########################################################################

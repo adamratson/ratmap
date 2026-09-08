@@ -127,7 +127,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, sequentially by default — peak RSS-bound, see below (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
-| `manifest` | `build-manifest.py` — always regenerated, always last | minutes (sha256s everything) |
+| `manifest` | `build-manifest.py` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | minutes (sha256s everything) |
 
 `sac` sits before `regions` in `all` for a reason: `build-region.sh` cuts each region's
 `<id>-sac.pmtiles` out of `sac-global.pmtiles`, so a `regions` run that precedes it builds
@@ -147,8 +147,9 @@ docker compose run --rm infra global manifest --force
 Adding an artifact kind to a catalogue that is already built is the one case where
 `regions` does *not* mean "rebuild": a region whose basemap and terrain are present but
 whose `<id>-sac.pmtiles` is missing gets `build-region.sh <id> --only=sac`, which is a
-cutout from the local `sac-global.pmtiles` and takes about a second. So grades reach an
-existing 213 GB catalogue with:
+cutout from the local `sac-global.pmtiles`. Measured on the first real run (2026-09-06):
+~20 ms per extract, **22 seconds for the whole catalogue**. So grades reach an existing
+213 GB catalogue with:
 
 ```sh
 docker compose run --rm infra global sac regions manifest
@@ -156,6 +157,41 @@ docker compose run --rm infra global sac regions manifest
 
 and no basemap or terrain is re-fetched. `--force` would re-extract everything, which for
 a global catalogue is days — don't reach for it here.
+
+### When the manifest stage fails on someone else's artifact
+
+`build-manifest.py` fails closed on an archive whose PMTiles header will not read:
+
+```
+FAIL: austria-contours.pmtiles is not a readable PMTiles archive (...).
+      Rebuild it; do not publish this manifest.
+```
+
+That is the right refusal — an interrupted `pmtiles extract` leaves a plausibly-sized file
+with a zeroed header, and publishing it puts a broken download in the catalogue. But the
+scan covers all of `dist/regions/`, so one stray file from an unrelated older build blocks
+every region's publish, including the ones this run just built.
+
+Fix the file, in preference to working around it:
+
+```sh
+docker compose run --rm infra pmtiles show /opt/ratmap/infra/dist/regions/austria/austria-contours.pmtiles
+mv ../dist/regions/austria/austria-contours.pmtiles{,.broken}   # .broken is not *.pmtiles
+docker compose run --rm infra global manifest
+```
+
+With `--base-live` (the default when `PUBLIC_BASE_URL` is set) the merge is per artifact
+kind, so moving a local file aside does **not** unpublish that kind — austria keeps
+whatever contours the live manifest already lists, and everything else in this run
+publishes. Rebuild the bad artifact when convenient.
+
+`RATMAP_MANIFEST_ONLY` is the blunter option, scoping the scan by region id regex. Note
+what it costs: a region excluded from the scan is not recomputed at all, so artifacts this
+run built for it stay unpublished until a later manifest run includes it.
+
+```sh
+RATMAP_MANIFEST_ONLY='^(?!austria$)' docker compose run --rm infra global manifest
+```
 
 ### Iterating without rebuilding
 

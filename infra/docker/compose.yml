@@ -82,6 +82,10 @@ services:
       # exercised before, since nobody had run a filtered slice through Compose yet).
       RATMAP_REGION_FILTER: "${RATMAP_REGION_FILTER:-}"
       RATMAP_CONTOURS_PARALLEL: "${RATMAP_CONTOURS_PARALLEL:-}"
+      # Scopes the manifest stage's scan of dist/ (build-manifest.py --only). Same
+      # passthrough reason as the two above; needed when a corrupt or unrelated archive
+      # elsewhere in dist/ would otherwise block the whole publish.
+      RATMAP_MANIFEST_ONLY: "${RATMAP_MANIFEST_ONLY:-}"
 
       # upload.sh's own unpublish guard — same passthrough gap as above, lower stakes
       # (an unset ALLOW_UNPUBLISH just makes the guard refuse, not silently do the wrong

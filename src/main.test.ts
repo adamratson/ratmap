@@ -248,12 +248,12 @@ describe('app bootstrap', () => {
     const notice = document.querySelector<HTMLElement>('#detail-notice')!;
 
     // Within the archive's range: nothing to say.
-    handlers.zoom?.[0]?.({});
+    handlers.move?.[0]?.({});
     expect(notice.hidden).toBe(true);
 
     // Zoomed well past what the world catalog holds.
     (mapInstances[0] as unknown as { zoom: number }).zoom = 12;
-    handlers.zoom?.[0]?.({});
+    handlers.move?.[0]?.({});
 
     expect(notice.hidden).toBe(false);
     expect(notice.textContent).toMatch(/detail/i);

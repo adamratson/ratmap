@@ -802,7 +802,13 @@ const detailNotice = document.querySelector<HTMLButtonElement>('#detail-notice')
 // over a fully-downloaded region.
 let maxDataZoom = BASEMAP_MAX_ZOOM;
 
-map.on('zoom', renderDetailLimit);
+// `move`, not `zoom`: the notice names whichever region covers the map's *centre*
+// (`covering` below), so it has to be re-evaluated on a pure pan too, not only when the
+// zoom level changes — `zoom` alone left the suggested region stuck on whatever was
+// centred when the last zoom happened, silently wrong after any drag. `move` fires for
+// zoom changes as well (they are a movement), so this also replaces the old listener
+// rather than adding a second one beside it.
+map.on('move', renderDetailLimit);
 map.on('load', renderDetailLimit);
 
 detailNotice.addEventListener('click', () => openRegionsView());

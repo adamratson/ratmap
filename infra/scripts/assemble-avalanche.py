@@ -92,6 +92,20 @@ def decode_to_raw(path, work, index=0):
         return handle.read()
 
 
+# cwebp compression effort. Measured on a real tile from this pipeline (2026-09-08):
+#
+#     -z 0    69 728 bytes   0.01 s
+#     -z 3    51 594 bytes   0.03 s
+#     -z 6    50 986 bytes   0.05 s
+#     -z 9    48 508 bytes   2.71 s
+#
+# `-z 9` costs **54x the CPU of -z 6 for 4.9% smaller files**. That is the whole reason
+# this pass used to saturate a laptop: eight threads each holding a core at 100% for
+# minutes, to save about 2 MB on a 40 MB region. 6 is the knee of the curve. Raise it with
+# AVALANCHE_WEBP_EFFORT on a machine that has time to spare and nothing else to do.
+WEBP_EFFORT = os.environ.get("AVALANCHE_WEBP_EFFORT", "6")
+
+
 def _webp_one(args):
     """Re-encode one tile and prove it decodes identically. Returns (z, x, y, bytes)."""
     z, x, y, blob, work, index = args
@@ -100,7 +114,8 @@ def _webp_one(args):
     with open(png_path, "wb") as handle:
         handle.write(blob)
     subprocess.run(
-        ["cwebp", "-quiet", "-lossless", "-z", "9", "-exact", png_path, "-o", webp_path],
+        ["cwebp", "-quiet", "-lossless", "-z", WEBP_EFFORT, "-exact",
+         png_path, "-o", webp_path],
         check=True,
     )
     if decode_to_raw(png_path, work, index) != decode_to_raw(webp_path, work, index):
@@ -116,12 +131,11 @@ def to_lossless_webp(rows, work, jobs=None):
     round-trip aborts the build rather than being silently kept as PNG — a pyramid that is
     half one format and half another, with no record of which, is worse than a larger one.
 
-    Run across `jobs` cores, every core by default. Each tile costs a `cwebp -z 9` plus two
-    `gdal_translate` decodes for the proof, which is about 2.5 s of mostly-subprocess time;
-    sequentially that put Switzerland's ~600 tiles at around 25 minutes, and the region set
-    this is enabled for contains far larger ones. The work is embarrassingly parallel and
-    the calls spend their lives in subprocesses, so threads are enough — no GIL contention
-    to speak of.
+    Run across `jobs` threads, half the cores by default. Each tile costs a cwebp plus two
+    `gdal_translate` decodes for the proof — about 0.43 s at the default effort, of which
+    0.38 s is the two decodes. The work is embarrassingly parallel and the calls spend
+    their lives in subprocesses, so threads are enough; there is no GIL contention worth
+    the name.
 
     `jobs` exists because this is not the only thing running: the avalanche stage builds
     several regions at once (RATMAP_AVALANCHE_PARALLEL, 4 by default), and a thread per
@@ -133,7 +147,12 @@ def to_lossless_webp(rows, work, jobs=None):
         print("  cwebp not found — keeping PNG tiles")
         return None
 
-    workers = max(1, min(len(rows), jobs or (os.cpu_count() or 4)))
+    # Half the cores by default, not all of them. This is a build tool that people run on
+    # the laptop they are also using: taking every core (including the efficiency cores
+    # macOS runs background work on) makes the machine unusable for the duration, which is
+    # exactly what happened on the first Aragón run. A build box can have the lot via
+    # --jobs.
+    workers = max(1, min(len(rows), jobs or max(1, (os.cpu_count() or 4) // 2)))
     print(f"  re-encoding {len(rows)} tiles as WebP, {workers} at a time")
     tasks = [(z, x, y, blob, work, i) for i, (z, x, y, blob) in enumerate(rows)]
     out = []
@@ -191,6 +210,14 @@ def main():
     ap.add_argument("levels", nargs="+", metavar="Z:RASTER",
                     help="one zoom level and its already-reduced RGB raster")
     args = ap.parse_args()
+
+    # Batch work, explicitly deprioritised. Costs nothing when the machine is idle and is
+    # the difference between "the build is running" and "the laptop is gone" when it is
+    # not. Children inherit it, so this covers every cwebp and gdal_translate below.
+    try:
+        os.nice(10)
+    except (OSError, AttributeError):
+        pass
 
     all_rows = []
     zooms = []

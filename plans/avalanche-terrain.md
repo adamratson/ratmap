@@ -342,6 +342,7 @@ open, and this is now the concrete case to decide them against.
 |---|---|---|---|
 | `liechtenstein` | 0.5 Mpx | 124 kB, z11 | 16.7% of the bbox at or above 25° |
 | `switzerland` | 127.4 Mpx | **40 MB**, z8–z11, 673 tiles | 29.2% above 25°, 12.9% in the 35–44° band |
+| `aragon` | 113.2 Mpx | **13 MB**, z8–z11, 587 tiles | 8.3% above 25° — the Pyrenean strip against a large dry plateau |
 
 Switzerland is the scaling proof, and it forced two fixes:
 
@@ -360,7 +361,26 @@ Switzerland is the scaling proof, and it forced two fixes:
 `maxBytes` and `terrain` — without that, the next catalogue rebuild would have silently
 dropped all 41.
 
-**The remaining 39 regions are a `ratmap global avalanche` run**, not a laptop afternoon:
+**Two bugs the first real multi-region run found (2026-09-08), both now fixed:**
+
+- **Every region west of Greenwich failed to tile.** `--bounds "$BBOX"` with a bbox
+  starting `-2.1791` had argparse read the leading `-` as an option name, not a value:
+  *"argument --bounds: expected one argument"*. It survived review because the first two
+  regions built, Liechtenstein and Switzerland, both sit east of it. 10 of the 41 were
+  affected, Scotland and Iceland among them. Fixed by passing `--bounds=` with an equals
+  sign, which argparse takes literally.
+- **The WebP pass took the laptop down with it.** `cwebp -z 9` on eight threads held every
+  core — including the efficiency cores macOS runs background work on — at 100% for
+  minutes. Measured on a real tile: `-z 9` costs **2.71 s for 48 508 bytes** against
+  `-z 6`'s **0.05 s for 50 986** — **54x the CPU for 4.9% smaller files**. Three changes:
+  effort drops to 6 (raise it with `AVALANCHE_WEBP_EFFORT` on a machine with time to
+  spare), the default job count is half the cores rather than all of them, and the whole
+  pass runs at `nice 10`. Aragón now builds in ~6 minutes at a load average of 4-5 instead
+  of 24, for 4.2% more bytes. The per-tile cost is now dominated by the two
+  `gdal_translate` decodes that prove the round-trip (0.38 s of the 0.43 s), which is the
+  right thing to be spending it on.
+
+**The remaining 38 regions are a `ratmap global avalanche` run**, not a laptop afternoon:
 roughly 20 gigapixels of DEM to fetch and process. The stage skips what is already built,
 so it resumes.
 

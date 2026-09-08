@@ -179,25 +179,41 @@ done
 WEBP_FLAG="--webp"
 [ -n "${AVALANCHE_NO_WEBP:-}" ] && WEBP_FLAG=""
 
-# Cores this region may use for the WebP pass. The stage builds several regions at once
-# (RATMAP_AVALANCHE_PARALLEL, 4 by default), and assemble-avalanche.py otherwise runs a
-# thread per core in each of them — four times the machine's cores in `cwebp` processes,
-# which queues rather than goes faster. Dividing gives each region a share.
+# Cores this region may use for the WebP pass.
+#
+# Only set when the *stage* is building several regions at once
+# (RATMAP_AVALANCHE_PARALLEL): assemble-avalanche.py would otherwise take its own share in
+# each of them, which is several times the machine's cores in `cwebp` processes and queues
+# rather than goes faster. Dividing gives each region a slice of one budget.
+#
+# Left unset for a plain single-region run, so assemble-avalanche.py applies its own
+# default of half the cores. Passing an explicit job count here used to override that with
+# *every* core — which is what made the first Aragón run take the laptop down with it.
 #
 # `getconf` rather than `nproc`: nproc is GNU coreutils and absent on a Mac, where this
 # script is run by hand often enough to matter. Floor of 1, so an over-large outer number
 # cannot silently ask for zero.
-AVALANCHE_CORES="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
-AVALANCHE_JOBS=$(( AVALANCHE_CORES / ${RATMAP_AVALANCHE_PARALLEL:-1} ))
-[ "$AVALANCHE_JOBS" -lt 1 ] && AVALANCHE_JOBS=1
+JOBS_FLAG=""
+if [ -n "${RATMAP_AVALANCHE_PARALLEL:-}" ]; then
+  AVALANCHE_CORES="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+  AVALANCHE_JOBS=$(( AVALANCHE_CORES / RATMAP_AVALANCHE_PARALLEL ))
+  [ "$AVALANCHE_JOBS" -lt 1 ] && AVALANCHE_JOBS=1
+  JOBS_FLAG="--jobs=$AVALANCHE_JOBS"
+fi
 
 echo "==> tiling"
+# `--bounds=` with an equals sign, not a space. A bbox whose western longitude is negative
+# starts with `-`, and argparse reads that as an option name rather than a value: every
+# region west of Greenwich died with "argument --bounds: expected one argument". It got
+# through review because the first two regions built — Liechtenstein and Switzerland —
+# both sit east of it. Aragón (-2.1791) was the first to run, and Scotland, Iceland and
+# most of Iberia would all have followed.
 # shellcheck disable=SC2086
 "$PY" "$SCRIPT_DIR/assemble-avalanche.py" \
   --out "$WORK_DIR/out.mbtiles" \
   --name "ratmap avalanche terrain $REGION_ID" \
-  --bounds "$BBOX" \
-  --jobs "$AVALANCHE_JOBS" \
+  --bounds="$BBOX" \
+  $JOBS_FLAG \
   $WEBP_FLAG \
   $LEVELS
 

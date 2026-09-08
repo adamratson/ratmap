@@ -58,6 +58,12 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances 
     getCanvas(): { style: Record<string, string> } {
       return { style: {} };
     }
+    getCanvasContainer(): HTMLElement {
+      return document.createElement('div');
+    }
+    unproject(): { lat: number; lng: number } {
+      return { lat: 56.8, lng: -4.5 };
+    }
   }
 
     class MarkerMock {

@@ -47,6 +47,7 @@ import { startAppUpdates } from './update';
 import { APP_VERSION } from './version';
 import { compassBearing, distanceMetres, formatDistance } from './routes/geo';
 import { RoutePlanner, type RouteSummary } from './routes/route-planner';
+import { onPressHold } from './routes/press-hold';
 import { renderRoutePanel, renderRoutesSheet, type RoutesUiDeps } from './routes/routes-ui';
 import { addRouteLayers } from './routes/route-layers';
 
@@ -117,6 +118,7 @@ sheet.peek.innerHTML = `
 type View =
   | 'peak'
   | 'path'
+  | 'coords'
   | 'places'
   | 'regions'
   | 'routes'
@@ -467,6 +469,7 @@ function chipEl(label: string, active: boolean, onSelect: () => void): HTMLButto
 const VIEW_LABEL: Record<View, string> = {
   peak: 'Summit details',
   path: 'Path grade',
+  coords: 'Coordinates',
   places: 'Saved places',
   regions: 'Offline regions',
   routes: 'Routes',
@@ -925,6 +928,25 @@ map.on('click', (e) => {
   else hideSheet();
 });
 
+// Coordinates for a bare point are a secondary action, not the primary tap — a plain click
+// on empty map already means "dismiss the sheet" (see above), so reusing it here would make
+// dismissal impossible. Right-click is the desktop convention; long-press is its touch
+// equivalent (contextmenu is dead on iOS since Safari 13 — see press-hold.ts), so both are
+// wired the same way route-planner.ts wires waypoint removal.
+map.on('contextmenu', (e) => {
+  e.preventDefault();
+  if (planner.isActive()) return;
+  showCoordsSheet(e.lngLat);
+});
+
+onPressHold(map.getCanvasContainer(), {
+  onHold: (point) => {
+    if (planner.isActive()) return;
+    const rect = map.getCanvasContainer().getBoundingClientRect();
+    showCoordsSheet(map.unproject([point.x - rect.left, point.y - rect.top]));
+  },
+});
+
 map.on('mousemove', (e) => {
   // Planning mode owns the cursor (crosshair); don't fight it over summits.
   if (planner.isActive()) return;
@@ -1004,11 +1026,46 @@ function showPathSheet(hit: SacHit): void {
 }
 
 /**
- * A summit sheet is a detail card, not a destination: it should not swallow half the map
- * you tapped it on.
+ * Right-click or long-press anywhere on the map to read off its coordinates — just the raw
+ * lat/lng, with copy and save as the only actions since there's no OSM feature behind a bare
+ * point to link out to.
+ */
+function showCoordsSheet(lngLat: maplibregl.LngLat): void {
+  const coordsText = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
+
+  openView('coords', (body) => {
+    body.innerHTML = `
+      <h2></h2>
+      <div class="sheet-actions">
+        <button class="sheet-copy" type="button">Copy</button>
+        <button class="sheet-save" type="button">Save place</button>
+      </div>
+    `;
+    body.querySelector('h2')!.textContent = coordsText;
+
+    body.querySelector('.sheet-copy')!.addEventListener('click', () => {
+      navigator.clipboard
+        .writeText(coordsText)
+        .then(() => status.toast('Copied coordinates'))
+        .catch((err: Error) => status.toast(`Could not copy: ${err.message}`, { kind: 'error' }));
+    });
+
+    body.querySelector('.sheet-save')!.addEventListener('click', () => {
+      void savePlace({ name: coordsText, lng: lngLat.lng, lat: lngLat.lat })
+        .then(() => status.toast(`Saved “${coordsText}”`))
+        .catch((err: Error) =>
+          status.toast(`Could not save “${coordsText}”: ${err.message}`, { kind: 'error' }),
+        );
+    });
+  });
+}
+
+/**
+ * A summit or path sheet is a detail card, not a destination: it should not swallow half
+ * the map you tapped it on. The coordinates sheet gets the same courtesy.
  */
 function hideSheet(): void {
-  if (view === 'peak' || view === 'path') closeView();
+  if (view === 'peak' || view === 'path' || view === 'coords') closeView();
 }
 
 // --- Sheet destinations --------------------------------------------------------------

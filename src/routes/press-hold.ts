@@ -28,8 +28,8 @@ export interface PressHoldOptions {
   onStart?(): void;
   /** The press ended without completing — released early, or turned into a drag. */
   onCancel?(): void;
-  /** Held for the full duration. Fires while the pointer is still down. */
-  onHold(): void;
+  /** Held for the full duration. Fires while the pointer is still down, with where it landed. */
+  onHold(point: { x: number; y: number }): void;
   holdMs?: number;
   slopPx?: number;
 }
@@ -63,9 +63,10 @@ export function onPressHold(element: HTMLElement, options: PressHoldOptions): ()
     origin = { x: event.clientX, y: event.clientY };
     options.onStart?.();
     timer = setTimeout(() => {
+      const point = origin!;
       timer = null;
       origin = null;
-      options.onHold();
+      options.onHold(point);
     }, holdMs);
   }
 

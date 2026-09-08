@@ -124,7 +124,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `terrain` | `build-terrain.sh` — coarse global hillshade | minutes, ~62 MB out at z4 |
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles` | hours |
 | `sac` | `build-sac.sh` over all 8 continents → `sac-global.pmtiles` (SAC hiking grades) | dominated by streaming 85 GB through `osmium tags-filter`; the tiling itself is minutes (~921 k ways planet-wide, ~400 MB out) |
-| `paths` | `build-paths.sh` over all 8 continents → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | same shape as `sac`, more ways: 13 MB for Scotland's 372 k, so a planet build is GB-scale |
+| `paths` | `build-paths.sh` over all 8 continents → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | same shape as `sac`, more ways: 13 MB for Scotland's 372 k, so a planet build is GB-scale. The filter pass alone took 29 min on 12 cpus; its GeoJSON intermediates are tens of GB under `/work` while it runs |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, sequentially by default — peak RSS-bound, see below (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
@@ -159,6 +159,29 @@ docker compose run --rm infra global sac paths regions manifest
 
 and no basemap or terrain is re-fetched. `--force` would re-extract everything, which for
 a global catalogue is days — don't reach for it here.
+
+### Why these stages export per continent instead of merging
+
+`build-sac.sh` and `build-paths.sh` export each filtered continent extract separately and
+concatenate the line-delimited GeoJSON. They do **not** `osmium merge` the PBFs first,
+and reintroducing that would break them:
+
+```
+Way ID twice in input. Maybe you are using a history or change file?
+```
+
+The continents are pinned to *dated* snapshots resolved per continent, because they do not
+all rebuild at the same hour — `europe-260823` alongside `north-america-260824` in the run
+that hit this. A way crossing a continent seam then appears in two files with two
+different versions, which is a history file. `osmium merge`'s own `-H` flag exists to
+silence that warning, and silencing it does not help: the next command cannot read the
+result either.
+
+The cost of concatenating is that a seam way is exported twice. `build-sac.sh` undoes that
+(`osmium export -a id`, and normalize-sac.py drops ids it has already written — the
+property is `@id`, not `id`); `build-paths.sh` deliberately does not, because holding
+~85 M way ids in memory to remove a few thousand duplicates is not a trade worth making
+for lines drawn at z12-13.
 
 ### When the manifest stage fails on someone else's artifact
 

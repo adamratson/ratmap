@@ -23,6 +23,7 @@ import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS } from './in
 import { bootstrapStorage, isStandalone } from './storage';
 import { listPlaces, savePlace, deletePlace, type SavedPlace } from './saved-places';
 import { PlacesSearch, type SearchResult } from './search';
+import { parseLatLng } from './coords';
 import { describeDetailLimit } from './detail-limit';
 import { ThemeController, nextPreference, type Theme, type ThemePreference } from './theme';
 import { DebugOverlay, isDebugOverlayEnabled, setDebugOverlayEnabled } from './debug';
@@ -1195,6 +1196,15 @@ async function runSearch(query: string): Promise<void> {
     return;
   }
 
+  // A pasted coordinate pair is never also a place name, and needs neither the FTS index
+  // nor it being loaded — check for one first so it works even before search.load() has
+  // settled, or if it never does.
+  const coords = parseLatLng(query);
+  if (coords) {
+    renderCoordsResult(coords);
+    return;
+  }
+
   try {
     await search.load();
   } catch (err) {
@@ -1208,6 +1218,35 @@ async function runSearch(query: string): Promise<void> {
   const centre = map.getCenter();
   const results = search.search(query, { lat: centre.lat, lon: centre.lng });
   renderSearchResults(results);
+}
+
+/** A typed-in coordinate pair, offered as the one search result it is. */
+function renderCoordsResult(coords: { lat: number; lng: number }): void {
+  searchResults.innerHTML = '';
+
+  const item = document.createElement('li');
+  const button = document.createElement('button');
+  button.type = 'button';
+
+  const name = document.createElement('span');
+  name.className = 'result-name';
+  name.textContent = `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
+
+  const meta = document.createElement('span');
+  meta.className = 'result-meta';
+  meta.textContent = 'Coordinates';
+
+  button.append(name, meta);
+  button.addEventListener('click', () => {
+    map.easeTo({ center: [coords.lng, coords.lat], zoom: Math.max(map.getZoom(), 11) });
+    hideSearchResults();
+    searchInput.blur();
+    showCoordsSheet(new maplibregl.LngLat(coords.lng, coords.lat));
+  });
+
+  item.append(button);
+  searchResults.append(item);
+  searchResults.hidden = false;
 }
 
 function renderSearchResults(results: SearchResult[]): void {

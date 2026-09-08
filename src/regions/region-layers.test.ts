@@ -256,6 +256,86 @@ describe('removeRegionFromMap', () => {
   });
 });
 
+describe('the low-zoom path network', () => {
+  const pathsArtifact = { kind: 'paths', filename: 'lochaber-paths.pmtiles', path: 'p5', bytes: 1 };
+  const withPaths: Region = { ...region, artifacts: [...region.artifacts, pathsArtifact] };
+
+  // Why this artifact exists at all: Protomaps tags paths `min_zoom: 14` and thins them
+  // below it. Decoded from the real archive over Ben Nevis (2026-09-08): 2 path features
+  // at z14, 1 at z13, none at z12 — so at the zoom where the SAC bands were already
+  // drawing, there was no path under them.
+  it('draws the same path styling from its own source', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, withPaths);
+
+    const low = map.layers.find((l) => String(l.id) === 'region-lochaber-paths-paths')!;
+    const basemap = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-paths')!;
+    expect(low['source-layer']).toBe('paths');
+    // Identical paint, so crossing the handoff zoom changes which source draws and
+    // nothing a user could see.
+    expect(low.paint).toEqual(basemap.paint);
+    expect(low.layout).toEqual(basemap.layout);
+  });
+
+  it('hands over to the basemap at the zoom the basemap actually has paths', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, withPaths);
+
+    const low = map.layers.find((l) => String(l.id) === 'region-lochaber-paths-paths')!;
+    const basemap = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-paths')!;
+    // maxzoom is exclusive in the style spec, so these meet at 14 with neither a gap nor
+    // an overlap — an overlap would double-draw the translucent casing and read brighter.
+    expect(low.maxzoom).toBe(14);
+    expect(basemap.minzoom).toBe(14);
+  });
+
+  it('leaves the basemap paths alone when there is no low-zoom artifact', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, region);
+
+    // A region downloaded before this artifact existed still draws whatever its z12-13
+    // tiles carry, rather than losing paths it used to show.
+    const basemap = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-paths')!;
+    expect(basemap.minzoom).toBe(12);
+  });
+
+  it('adds no low-zoom layer to a region too small to have those zooms', async () => {
+    const map = fakeMap();
+    // A region a hundredth of a degree across is suppressed below z16 by regionMinZoom,
+    // which leaves this artifact no band of zooms at all. A layer whose minzoom is above
+    // its maxzoom is a style error, so there must not be one.
+    const tiny: Region = { ...withPaths, id: 'tiny', bbox: [-5.01, 56.79, -5.0, 56.8] };
+
+    await addRegionToMap(map as unknown as MLMap, registry, tiny);
+
+    const ids = map.layers.map((l) => String(l.id));
+    expect(ids).not.toContain('region-tiny-paths-paths');
+    expect(ids).not.toContain('region-tiny-paths-paths-casing');
+  });
+
+  it('keeps the grade band under the path lines', async () => {
+    const map = fakeMap();
+    const both: Region = {
+      ...region,
+      artifacts: [
+        ...region.artifacts,
+        pathsArtifact,
+        { kind: 'sac', filename: 'lochaber-sac.pmtiles', path: 'p4', bytes: 1 },
+      ],
+    };
+
+    await addRegionToMap(map as unknown as MLMap, registry, both);
+
+    const ids = map.layers.map((l) => String(l.id));
+    expect(ids.indexOf('region-lochaber-sac-band')).toBeLessThan(
+      ids.indexOf('region-lochaber-paths-paths-casing'),
+    );
+  });
+});
+
 describe('SAC grades', () => {
   const sacArtifact = { kind: 'sac', filename: 'lochaber-sac.pmtiles', path: 'p4', bytes: 1 };
   const graded: Region = { ...region, artifacts: [...region.artifacts, sacArtifact] };

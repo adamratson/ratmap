@@ -22,8 +22,9 @@ import {
 //   andorra-terrain.pmtiles  8,837,636 bytes
 // downloadRegion() requests region.artifacts in manifest order, and basemap sorts first —
 // so intercepting requests to the basemap file targets the download's first artifact. A
-// region can gain artifacts without touching this (C16; SAC grades are the next one), and
-// every assertion below is per-file rather than on a region total, so that stays true.
+// region can gain artifacts without touching this (C16 — SAC grades and the low-zoom path
+// network both arrived that way), and every assertion below is per-file rather than on a
+// region total, so that stays true.
 // Re-check these if the fixture region is ever rebuilt; see TEST_REGION in helpers.ts.
 const BASEMAP_FILE = 'andorra-basemap.pmtiles';
 const BASEMAP_URL = '**/regions/andorra/andorra-basemap.pmtiles';

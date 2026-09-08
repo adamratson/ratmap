@@ -17,6 +17,9 @@ import { addSacLayers } from '../sac';
 
 const REGION_SOURCE_PREFIX = 'region';
 
+/** Layer name inside `<region>-paths.pmtiles`, set by infra/scripts/build-paths.sh. */
+const PATHS_SOURCE_LAYER = 'paths';
+
 export function regionSourceId(regionId: string, kind: string): string {
   return `${REGION_SOURCE_PREFIX}-${regionId}-${kind}`;
 }
@@ -60,12 +63,32 @@ function beneathLabels(map: MLMap, regionId: string): string | undefined {
  * without competing with them. Tracks (vehicle-width) draw solid and slightly heavier than
  * footpaths, matching the usual convention.
  *
+ * Used for two different sources, which is why the layer and filter are parameters: the
+ * region basemap's `roads` layer above z14, and our own low-zoom `paths` artifact below
+ * it (see the `paths` branch in addRegionToMap). One set of paint expressions so the
+ * handoff between them is invisible — both read `kind_detail` for the track/footpath
+ * distinction, which is why build-paths.sh emits that Protomaps property name rather than
+ * one of its own.
+ *
  * Styling call, not a settled decision — §8.3 is still open.
  */
-function addPathLayers(map: MLMap, sourceId: string, regionMin: number): void {
-  const isPath: unknown = ['==', ['get', 'kind'], 'path'];
+function addPathLayers(
+  map: MLMap,
+  sourceId: string,
+  {
+    sourceLayer,
+    filter,
+    minzoom,
+    maxzoom,
+  }: {
+    sourceLayer: string;
+    filter?: FilterSpecification;
+    minzoom: number;
+    maxzoom?: number;
+  },
+): void {
   const before = map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined;
-  const minzoom = Math.max(12, regionMin);
+  const zooms = { minzoom, ...(maxzoom === undefined ? {} : { maxzoom }) };
 
   // Casing first, so the dashes above sit in a light channel and stay legible against
   // dark relief.
@@ -74,9 +97,9 @@ function addPathLayers(map: MLMap, sourceId: string, regionMin: number): void {
       id: `${sourceId}-paths-casing`,
       type: 'line',
       source: sourceId,
-      'source-layer': 'roads',
-      filter: isPath as FilterSpecification,
-      minzoom,
+      'source-layer': sourceLayer,
+      ...(filter ? { filter } : {}),
+      ...zooms,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': 'rgba(255,255,255,0.85)',
@@ -91,9 +114,9 @@ function addPathLayers(map: MLMap, sourceId: string, regionMin: number): void {
       id: `${sourceId}-paths`,
       type: 'line',
       source: sourceId,
-      'source-layer': 'roads',
-      filter: isPath as FilterSpecification,
-      minzoom,
+      'source-layer': sourceLayer,
+      ...(filter ? { filter } : {}),
+      ...zooms,
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': '#8a3d2e',
@@ -118,6 +141,16 @@ function addPathLayers(map: MLMap, sourceId: string, regionMin: number): void {
     before,
   );
 }
+
+/**
+ * Zoom at which the region basemap starts carrying paths.
+ *
+ * Not a preference — a property of the data. Protomaps tags paths `min_zoom: 14` and
+ * thins them out below it: measured on `scotland-basemap.pmtiles` over Ben Nevis
+ * (2026-09-08), the z14 tile holds 2 path features, the z13 tile holds 1, and the z12
+ * tile holds none at all. Below this zoom the network has to come from somewhere else.
+ */
+const BASEMAP_PATHS_MIN_ZOOM = 14;
 
 /**
  * The zoom below which a region's own layers must not draw.
@@ -159,6 +192,15 @@ export async function addRegionToMap(
   region: Region,
 ): Promise<void> {
   const minzoom = regionMinZoom(region.bbox);
+
+  // Decided up front rather than by mutating the basemap's layers once the `paths`
+  // artifact is reached: `setLayerZoomRange` throws "Style is not done loading" if it
+  // lands while the style is still loading, and this runs at startup and again after
+  // every download — so that version could abort a restore partway through and leave
+  // regions undrawn, which is the failure this whole path exists to avoid. Reading the
+  // artifact list is free and cannot throw.
+  const hasLowZoomPaths = region.artifacts.some((artifact) => artifact.kind === 'paths');
+  const basemapPathsMin = Math.max(hasLowZoomPaths ? BASEMAP_PATHS_MIN_ZOOM : 12, minzoom);
 
   for (const artifact of region.artifacts) {
     const file = await getArtifactFile(artifact.filename);
@@ -232,7 +274,15 @@ export async function addRegionToMap(
         map.addLayer(scoped, map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined);
       }
 
-      addPathLayers(map, sourceId, minzoom);
+      addPathLayers(map, sourceId, {
+        sourceLayer: 'roads',
+        filter: ['==', ['get', 'kind'], 'path'] as unknown as FilterSpecification,
+        // With the low-zoom artifact present this starts where that one stops, so the two
+        // never draw the same way twice — a duplicated translucent casing reads brighter,
+        // not invisible. Without it, 12: a region downloaded before that artifact existed
+        // keeps drawing whatever few paths its z12-13 tiles do carry.
+        minzoom: basemapPathsMin,
+      });
     } else if (artifact.kind === 'contours') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
 
@@ -283,6 +333,25 @@ export async function addRegionToMap(
       );
 
       addContourLabels(map, sourceId, region.id, minzoom);
+    } else if (artifact.kind === 'paths') {
+      map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+
+      // The network below z14, where the basemap has none. Same paint as the basemap's
+      // own path layers, so crossing z14 changes which source is drawing and nothing
+      // else. `maxzoom` is exclusive in the style spec, so this stops exactly where the
+      // basemap layers start.
+      //
+      // A region small enough that its own low-zoom cutoff is already at or above the
+      // handoff has no band of zooms for this to occupy — adding a layer whose minzoom
+      // exceeds its maxzoom is a style error, so it is simply not added.
+      const lowZoomMin = Math.max(12, minzoom);
+      if (lowZoomMin < BASEMAP_PATHS_MIN_ZOOM) {
+        addPathLayers(map, sourceId, {
+          sourceLayer: PATHS_SOURCE_LAYER,
+          minzoom: lowZoomMin,
+          maxzoom: BASEMAP_PATHS_MIN_ZOOM,
+        });
+      }
     } else if (artifact.kind === 'sac') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
 

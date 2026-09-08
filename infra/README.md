@@ -32,6 +32,7 @@ changed.
 ./scripts/build-terrain.sh         # coarse global hillshade terrain
 ./scripts/build-peaks.sh           # natural=peak|volcano|saddle + mountain_pass=yes
 ./scripts/build-sac.sh             # sac-global.pmtiles — SAC hiking grades T1-T6
+./scripts/build-paths.sh           # paths-global.pmtiles — the walkable network at z12-13
 ./scripts/build-places.sh          # places.sqlite — offline FTS5 search index (C9)
 ```
 
@@ -39,13 +40,13 @@ All were run for real (2026-08-21) against small/coarse inputs to verify the com
 actually correct, not just plausible — see the comments at the top of each script for what
 was verified and the exact numbers.
 
-**`build-peaks.sh`, `build-sac.sh` and `build-places.sh` derive their inputs from `regions.json`** — the
+**`build-peaks.sh`, `build-sac.sh`, `build-paths.sh` and `build-places.sh` derive their inputs from `regions.json`** — the
 deduplicated union of every region's `osmExtract` (see `region-osm-sources.py`). Both
 produce single *global* artifacts that have to cover whatever the catalogue publishes, so
 deriving the list means adding a region can't silently ship a map with no summits and no
 search. Re-run both whenever you add a region.
 
-Override with `PEAKS_SOURCE_URLS` / `SAC_SOURCE_URLS` / `PLACES_SOURCE_URLS` for a genuinely global build off
+Override with `PEAKS_SOURCE_URLS` / `SAC_SOURCE_URLS` / `PATHS_SOURCE_URLS` / `PLACES_SOURCE_URLS` for a genuinely global build off
 Geofabrik's continent extracts — that's 85 GB of source; don't kick it off by accident.
 `docker/` packages exactly that run — see [Running the whole planet](#running-the-whole-planet-docker).
 
@@ -76,6 +77,23 @@ Way T1, Aonach Eagach T5 — plus that more than one grade came out at all.
 
 Scotland + Montenegro build to 2.3 MB from 5,165 graded ways (2026-09-06); Scotland's own
 cutout is 1.8 MB against a 646 MB basemap, so this is free in practice.
+
+### The low-zoom path network
+
+`build-paths.sh` fills a hole the grades exposed. Protomaps tags paths `min_zoom: 14` and
+thins them out below it — decoded from `scotland-basemap.pmtiles` over Ben Nevis
+(2026-09-08), the z14 tile carries 2 path features, the z13 tile 1, the z12 tile none —
+so at z13 the map drew SAC grade bands over blank hillside, because those bands come from
+our own tiles and had no such floor. No style change can draw geometry that is not in the
+tile.
+
+So: `highway=path|footway|bridleway|steps|track` from the same OSM extracts, reduced to
+`kind`/`kind_detail` (Protomaps' own property names, so one set of paint expressions
+drives both sources and the handoff is invisible), tiled at **z12-13 only**. The basemap
+still owns z14 and up, where it has names, bridges and access tags this does not.
+
+Measured on Scotland (2026-09-08): 372,205 ways → 13 MB, against a 646 MB basemap.
+`--simplification=8` is half a screen pixel at both zooms and saves 28% over the default.
 
 ### Search index is app-shell, not a bucket artifact
 

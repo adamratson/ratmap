@@ -144,8 +144,9 @@ Krystal bucket (CORS: allow Range, expose ETag + Content-Range — fixed/unconfi
 ├─ terrain-global.pmtiles          coarse, pmtiles extract from Mapterhorn
 ├─ peaks-global.pmtiles            ours: natural=peak|volcano|saddle + ele
 ├─ sac-global.pmtiles              ours: sac_scale ways, normalized to T1-T6
+├─ paths-global.pmtiles            ours: the walkable network at z12-13 only
 ├─ regions/manifest.json           versioned, open-ended artifact list  (C16)
-└─ regions/<id>/<id>-{basemap,terrain,contours,sac}.pmtiles  unique names (C3)
+└─ regions/<id>/<id>-{basemap,terrain,contours,sac,paths}.pmtiles  unique (C3)
 
 app (static, service worker)
 ├─ SW cache:  app shell only                                            (C5)
@@ -619,6 +620,29 @@ on a server. Two fixes, both in place before any upload:
   exists, which is honest about disk and cannot read minds; a download interrupted exactly
   between artifacts also reads as `update`, which is a slightly odd word and correct
   behaviour.
+
+**The grades exposed a hole in the basemap, and filling it is now part of this phase.**
+Reported from the hill (2026-09-08): at z13 the coloured bands drew over blank hillside,
+with no path under them. The cause is not a style threshold — Protomaps tags paths
+`min_zoom: 14` and thins them below it, measured on `scotland-basemap.pmtiles` over Ben
+Nevis as 2 path features in the z14 tile, 1 in the z13 tile and none at z12. Our own
+tiles have no such floor, so the annotation outlived the thing it annotates. No style
+change can draw geometry that is not in the tile.
+
+`infra/scripts/build-paths.sh` therefore builds `paths-global.pmtiles` — the walkable
+network (`highway=path|footway|bridleway|steps|track`) at **z12-13 only**, cut per region
+like everything else. The basemap keeps z14 and up, where it carries names, bridges and
+access tags this does not; duplicating that would be an order of magnitude more bytes to
+say the same thing. Measured on Scotland: 372,205 ways → 13 MB against a 646 MB basemap.
+
+Two details that make the seam invisible. The artifact emits Protomaps' own property
+names (`kind`, `kind_detail`), so one set of paint expressions in `addPathLayers` drives
+both sources — the surest way to make two layers look identical is to give them the same
+expressions. And the basemap's path layers are created with `minzoom` already at the
+handoff when the region carries this artifact, rather than being raised afterwards:
+`setLayerZoomRange` throws "Style is not done loading" if it lands mid-load, and this runs
+at startup and after every download, so the mutating version could abort a restore partway
+through — the same class of failure as the one above, found the same way.
 
 **Not in scope, deliberately:** the grade does **not** feed routing cost. Doing that means
 matching grades onto graph edges rather than onto a finished route, and a router that

@@ -69,7 +69,7 @@ MIN_DIST_GB="${RATMAP_MIN_DIST_GB:-20}"
 MIN_MEM_GB="${RATMAP_MIN_MEM_GB:-4}"
 REC_MEM_GB=8
 
-ALL_STAGES=(prefetch world terrain peaks sac places regions contours manifest)
+ALL_STAGES=(prefetch world terrain peaks sac paths places regions contours manifest)
 FORCE=""
 DRY_RUN=""
 SKIP_PREFLIGHT=""
@@ -85,7 +85,7 @@ for arg in "$@"; do
     --preflight-only)  PREFLIGHT_ONLY=1 ;;
     --repin)           REPIN=1 ;;
     all)               stages=("${ALL_STAGES[@]}") ;;
-    prefetch|world|terrain|peaks|sac|places|regions|contours|manifest) stages+=("$arg") ;;
+    prefetch|world|terrain|peaks|sac|paths|places|regions|contours|manifest) stages+=("$arg") ;;
     -*)  echo "Unknown flag: $arg" >&2; exit 2 ;;
     *)   echo "Unknown stage: $arg (known: ${ALL_STAGES[*]}, all)" >&2; exit 2 ;;
   esac
@@ -508,6 +508,16 @@ stage_sac() {
   SAC_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-sac.sh"
 }
 
+stage_paths() {
+  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/paths-global.pmtiles" ]; then
+    log "paths: already built — --force to redo"
+    return 0
+  fi
+  # The walkable network at z12-13, which the basemap does not carry: Protomaps tags paths
+  # min_zoom 14 and thins them below it. Before `regions`, for the same reason as `sac`.
+  PATHS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-paths.sh"
+}
+
 stage_places() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/places.sqlite" ]; then
     log "places: already built — --force to redo"
@@ -546,12 +556,22 @@ with open(sys.argv[1]) as f:
 # collected and reported at the end; the stage still fails, so nothing downstream treats a
 # partial catalogue as complete.
 stage_regions() {
-  # Not a failure — a region without grades is a valid region (C16) — but worth one line
-  # up front rather than a "sac grades: skipped" per region, several hundred times.
-  if [ ! -f "$DIST_DIR/sac-global.pmtiles" ] && [ -z "${SAC_SOURCE_URL:-}" ]; then
-    log "regions: no sac-global.pmtiles — regions will be built without SAC grades"
-    log "         (run the 'sac' stage first, or set SAC_SOURCE_URL to a published one)"
-  fi
+  # Artifact kinds that are cut from a global archive rather than from upstream, as
+  # "<kind>:<global file>". Both are additive (C16), so a missing one is a region built
+  # before that kind existed, not a broken region.
+  local -a cut_from_global=(sac:sac-global.pmtiles paths:paths-global.pmtiles)
+
+  # Not a failure — but worth one line up front rather than a "skipped" per region,
+  # several hundred times over.
+  local pair kind global
+  for pair in "${cut_from_global[@]}"; do
+    kind="${pair%%:*}"
+    global="${pair##*:}"
+    if [ ! -f "$DIST_DIR/$global" ]; then
+      log "regions: no $global — regions will be built without $kind"
+      log "         (run the '$kind' stage first, or point at a published copy)"
+    fi
+  done
 
   local id wants_terrain only
   local -a failed=()
@@ -560,13 +580,20 @@ stage_regions() {
     if [ -z "$FORCE" ] && [ -z "$DRY_RUN" ] \
        && [ -f "$DIST_DIR/regions/$id/$id-basemap.pmtiles" ] \
        && { [ "$wants_terrain" = 0 ] || [ -f "$DIST_DIR/regions/$id/$id-terrain.pmtiles" ]; }; then
-      # Built — unless an artifact kind has been *added* since. Then cut only that one:
+      # Built — unless an artifact kind has been *added* since. Then cut only those:
       # re-extracting a region to pick up a 1.8 MB grade file would mean re-fetching its
       # basemap and terrain over range requests, which for a global catalogue is days of
       # transfer for bytes that have not changed.
-      if [ -f "$DIST_DIR/sac-global.pmtiles" ] \
-         && [ ! -f "$DIST_DIR/regions/$id/$id-sac.pmtiles" ]; then
-        only="--only=sac"
+      local -a missing=()
+      for pair in "${cut_from_global[@]}"; do
+        kind="${pair%%:*}"
+        global="${pair##*:}"
+        [ -f "$DIST_DIR/$global" ] || continue
+        [ -f "$DIST_DIR/regions/$id/$id-$kind.pmtiles" ] || missing+=("$kind")
+      done
+
+      if [ "${#missing[@]}" -gt 0 ]; then
+        only="--only=$(IFS=,; echo "${missing[*]}")"
       else
         log "regions/$id: already built — --force to redo"
         continue

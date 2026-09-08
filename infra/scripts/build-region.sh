@@ -43,8 +43,8 @@ wants() {
 
 for requested in ${ONLY//,/ }; do
   case "$requested" in
-    basemap|sac|terrain) ;;
-    *) echo "Unknown artifact kind in --only: $requested (known: basemap, sac, terrain)" >&2
+    basemap|paths|sac|terrain) ;;
+    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, sac, terrain)" >&2
        exit 2 ;;
   esac
 done
@@ -104,6 +104,19 @@ else
   SAC_SOURCE=""
 fi
 
+# The z12-13 walkable network, also ours (build-paths.sh), resolved the same way. The
+# basemap has no paths below z14 — see that script's header — so without this a region
+# draws grade bands over blank hillside.
+if [ -n "${PATHS_SOURCE_URL:-}" ]; then
+  PATHS_SOURCE="$PATHS_SOURCE_URL"
+elif [ -s "$DIST_DIR/paths-global.pmtiles" ]; then
+  PATHS_SOURCE="$DIST_DIR/paths-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  PATHS_SOURCE="$PUBLIC_BASE_URL/paths-global.pmtiles"
+else
+  PATHS_SOURCE=""
+fi
+
 # Measured for Scotland (2026-08-21): basemap z12 ~84 MB / z13 ~175 MB; terrain z10
 # ~107 MB / z11 ~340 MB. Raster terrain grows far faster than vector basemap per level,
 # hence the different ceilings. Override per build if a region needs more.
@@ -126,6 +139,10 @@ TERRAIN_MAXZOOM="${REGION_TERRAIN_MAXZOOM:-${REGION_TERRAIN_Z:-11}}"
 # sac-global.pmtiles itself stops at z15.
 SAC_MAXZOOM="$BASEMAP_MAXZOOM"
 [ "$SAC_MAXZOOM" -gt 15 ] && SAC_MAXZOOM=15
+
+# paths-global.pmtiles only holds z12-13 — it exists to fill the gap below where the
+# basemap starts carrying paths, not to duplicate it.
+PATHS_MAXZOOM=13
 
 OUT_DIR="$DIST_DIR/regions/$REGION_ID"
 mkdir -p "$OUT_DIR"
@@ -199,6 +216,15 @@ PY_COUNT
 if wants basemap; then
   echo "==> basemap"
   extract_verified "$BASEMAP_SOURCE" "$OUT_DIR/$REGION_ID-basemap.pmtiles" "$BASEMAP_MAXZOOM"
+fi
+
+if ! wants paths; then
+  :
+elif [ -n "$PATHS_SOURCE" ]; then
+  echo "==> low-zoom paths"
+  extract_verified "$PATHS_SOURCE" "$OUT_DIR/$REGION_ID-paths.pmtiles" "$PATHS_MAXZOOM" --allow-empty
+else
+  echo "==> low-zoom paths: skipped (no paths-global.pmtiles — run ./scripts/build-paths.sh)"
 fi
 
 if ! wants sac; then

@@ -124,14 +124,16 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `terrain` | `build-terrain.sh` — coarse global hillshade | minutes, ~62 MB out at z4 |
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles` | hours |
 | `sac` | `build-sac.sh` over all 8 continents → `sac-global.pmtiles` (SAC hiking grades) | dominated by streaming 85 GB through `osmium tags-filter`; the tiling itself is minutes (~921 k ways planet-wide, ~400 MB out) |
+| `paths` | `build-paths.sh` over all 8 continents → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | same shape as `sac`, more ways: 13 MB for Scotland's 372 k, so a planet build is GB-scale |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, sequentially by default — peak RSS-bound, see below (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
 | `manifest` | `build-manifest.py` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | minutes (sha256s everything) |
 
-`sac` sits before `regions` in `all` for a reason: `build-region.sh` cuts each region's
-`<id>-sac.pmtiles` out of `sac-global.pmtiles`, so a `regions` run that precedes it builds
-the whole catalogue without grades. Naming stages by hand, keep that order.
+`sac` and `paths` sit before `regions` in `all` for a reason: `build-region.sh` cuts each
+region's `<id>-sac.pmtiles` and `<id>-paths.pmtiles` out of those global archives, so a
+`regions` run that precedes them builds the whole catalogue without either. Naming stages
+by hand, keep that order.
 
 Stages skip work that already exists; `--force` redoes it. `--dry-run` passes through to
 `build-region.sh` so you can size the region extracts first. `--skip-preflight` overrides
@@ -146,13 +148,13 @@ docker compose run --rm infra global manifest --force
 
 Adding an artifact kind to a catalogue that is already built is the one case where
 `regions` does *not* mean "rebuild": a region whose basemap and terrain are present but
-whose `<id>-sac.pmtiles` is missing gets `build-region.sh <id> --only=sac`, which is a
-cutout from the local `sac-global.pmtiles`. Measured on the first real run (2026-09-06):
-~20 ms per extract, **22 seconds for the whole catalogue**. So grades reach an existing
-213 GB catalogue with:
+that is missing an artifact kind gets `build-region.sh <id> --only=<kinds>` — a cutout
+from the local global archive for exactly the kinds it lacks. Measured on the first real
+run (2026-09-06): ~20 ms per extract, **22 seconds for the whole catalogue**. So grades
+and the low-zoom path network reach an existing 213 GB catalogue with:
 
 ```sh
-docker compose run --rm infra global sac regions manifest
+docker compose run --rm infra global sac paths regions manifest
 ```
 
 and no basemap or terrain is re-fetched. `--force` would re-extract everything, which for

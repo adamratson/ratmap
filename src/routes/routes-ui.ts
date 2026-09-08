@@ -213,7 +213,7 @@ function sacSection(summary: RouteSummary): HTMLElement | null {
 function coverageSentence(coverage: number): string {
   const percent = Math.round(coverage * 100);
   if (percent >= 99) return 'Every part of this route carries a grade.';
-  return `Graded on ${percent}% of the route; the rest is untagged, not necessarily easier.`;
+  return `Graded on ${percent}% of the route; the rest is untagged.`;
 }
 
 function stat(label: string, value: string): HTMLDivElement {

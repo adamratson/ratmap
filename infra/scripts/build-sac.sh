@@ -138,10 +138,16 @@ OUT="$DIST_DIR/sac-global.pmtiles"
 # -z15: the basemap's own ceiling, and the zoom the route sampler reads at. Paths carry
 # min_zoom 14 in the Protomaps schema, so below z15 the network the grades are matched
 # against is already generalised.
+# One progress line per tile writes a 177 MB log on a planet run (measured 2026-09-08) —
+# into /work/logs *and* through docker's json-file driver, for a stage whose progress a
+# human reads about twice. `--progress-interval` costs no time (12.71 s with full progress
+# against 12.74 s with none, on the same input), so this is about the log, not the clock:
+# a line every 10 s still answers "is it alive and where is it", at about 60 kB for a
+# five-hour stage instead of 177 MB.
 tippecanoe -o "$OUT" -Z12 -z15 \
   --include=t --include=name \
   -l sac -n "ratmap SAC grades" \
-  --drop-densest-as-needed --force \
+  --drop-densest-as-needed --progress-interval=10 --force \
   "$WORK_DIR/sac-final.geojsonl"
 
 pmtiles show "$OUT"

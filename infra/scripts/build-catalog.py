@@ -712,9 +712,11 @@ def build_regions(index, accepted, estimator, max_bytes: int, caps: dict[str, in
 def overrides():
     """Per-region decisions in regions.json that a regeneration must not overwrite.
 
-    All three are human calls the generator has no way to make. `contours` says a region
-    is worth the most expensive artifact in the pipeline; `terrain: false` says the
-    opposite about hillshade (Antarctica's is 101 GB at z11, spanning every longitude);
+    All of these are human calls the generator has no way to make. `contours` says a
+    region is worth the most expensive artifact in the pipeline; `avalanche` says its
+    terrain is the kind people are killed by in winter — a claim about snow climate and
+    use, not about topography, so nothing in Geofabrik's index can imply it;
+    `terrain: false` says the opposite about hillshade (Antarctica's is 101 GB at z11, spanning every longitude);
     `maxBytes` says a region is worth more than the default cap — Switzerland's basemap is 980 MB at z15, and dropping it to z14
     to stay under 900 MB trades away detail over the Alps to save 20% of a download people
     take on wifi before a trip.
@@ -723,7 +725,11 @@ def overrides():
         return {}
     with open(REGIONS_JSON) as f:
         return {
-            r["id"]: {k: r[k] for k in ("contours", "maxBytes", "terrain") if k in r}
+            r["id"]: {
+                k: r[k]
+                for k in ("contours", "avalanche", "maxBytes", "terrain")
+                if k in r
+            }
             for r in json.load(f)["regions"]
         }
 
@@ -784,7 +790,10 @@ CATALOGUE_COMMENT = (
     "`contours: true` "
     "opts a region into the contour build, which is otherwise skipped — it costs roughly "
     "300 MB of intermediate GeoJSON per square degree and does not scale to a global "
-    "catalogue."
+    "catalogue. `avalanche: true` likewise opts a region into the avalanche terrain "
+    "build (Phase 4.6); it is set for ranges with an avalanche warning service or "
+    "documented avalanche activity, which is a judgement about winter use rather than "
+    "about the shape of the ground."
 )
 
 

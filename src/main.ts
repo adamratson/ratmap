@@ -17,6 +17,13 @@ import {
 import { TileSourceRegistry } from './tile-source-registry';
 import { addPeaksLayer, formatElevation, peakAt, PEAKS_SOURCE_ID, type PeakProperties } from './peaks';
 import { SAC_GRADES, sacCssColor, sacPathAt, type SacHit } from './sac';
+import {
+  SLOPE_CLASSES,
+  isAvalancheEnabled,
+  setAvalancheEnabled,
+  setAvalancheVisible,
+  slopeCssColor,
+} from './avalanche';
 import { HeadingWatcher } from './heading';
 import { LocationController, type LocationState } from './location';
 import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS } from './install';
@@ -294,6 +301,17 @@ function openSettingsView(): void {
       <h2>Settings</h2>
       <label class="settings-row">
         <span class="settings-row-text">
+          <span class="settings-row-label">Avalanche terrain</span>
+          <span class="settings-row-note">
+            Shades slopes by steepness, from the downloaded region's own elevation data.
+            Terrain only &mdash; it has never seen the snow, and it is not a forecast.
+            Check your avalanche service before you go.
+          </span>
+        </span>
+        <input id="avalanche-toggle" type="checkbox" />
+      </label>
+      <label class="settings-row">
+        <span class="settings-row-text">
           <span class="settings-row-label">Debug overlay</span>
           <span class="settings-row-note">
             Prints the sheet's on-screen geometry over the map — for tracking down
@@ -303,6 +321,13 @@ function openSettingsView(): void {
         <input id="debug-overlay-toggle" type="checkbox" />
       </label>
     `;
+    const avalanche = body.querySelector<HTMLInputElement>('#avalanche-toggle')!;
+    avalanche.checked = isAvalancheEnabled();
+    avalanche.addEventListener('change', () => {
+      setAvalancheEnabled(avalanche.checked);
+      setAvalancheVisible(map, avalanche.checked);
+    });
+
     const toggle = body.querySelector<HTMLInputElement>('#debug-overlay-toggle')!;
     toggle.checked = isDebugOverlayEnabled();
     toggle.addEventListener('change', () => {
@@ -410,6 +435,26 @@ function openLegendView(): void {
           'Hillshade',
           'Shaded relief from downloaded terrain — fades out at close zoom, where contours carry the detail instead.',
         )}
+      </div>
+
+      <div class="legend-section">
+        <h3>Avalanche terrain</h3>
+        <p class="legend-note">
+          Off by default &mdash; switch it on in Settings. Slope steepness computed from
+          the downloaded region's elevation data, shaded where a slab could release.
+          <strong>This is terrain, not a forecast.</strong> Avalanche danger is snowpack
+          and weather as well as ground, and this map has never seen either. Unshaded is
+          not the same as safe: the runout of a slope above you is often gentle ground.
+        </p>
+        ${SLOPE_CLASSES.map((entry) =>
+          legendRow(
+            `<svg viewBox="0 0 40 24"><rect x="3" y="5" width="34" height="14" rx="2" fill="${slopeCssColor(
+              SLOPE_CLASSES.indexOf(entry),
+            )}" fill-opacity="0.75"/></svg>`,
+            entry.label,
+            entry.note,
+          ),
+        ).join('')}
       </div>
 
       <div class="legend-section">

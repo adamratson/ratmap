@@ -3,9 +3,10 @@ import { layers as basemapLayers, namedFlavor } from '@protomaps/basemaps';
 import type { Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
 import type { TileSourceRegistry } from '../tile-source-registry';
-import { OSM_ATTRIBUTION, TERRAIN_ATTRIBUTION } from '../config';
+import { COPERNICUS_ATTRIBUTION, OSM_ATTRIBUTION, TERRAIN_ATTRIBUTION } from '../config';
 import { PEAKS_LAYER_ID } from '../peaks';
 import { addSacLayers } from '../sac';
+import { addAvalancheLayer, avalancheSourceSpec, isAvalancheEnabled } from '../avalanche';
 
 // Renders a downloaded region *over* the low-zoom world catalog rather than replacing it,
 // so panning outside the region degrades to the global view instead of falling off the
@@ -284,7 +285,10 @@ export async function addRegionToMap(
         minzoom: basemapPathsMin,
       });
     } else if (artifact.kind === 'contours') {
-      map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+      // Copernicus, not OSM. These lines are traced from Copernicus GLO-30 by
+      // build-contours.sh; crediting OpenStreetMap for them was both wrong and a licence
+      // gap, since the Copernicus terms require attribution of their own.
+      map.addSource(sourceId, { type: 'vector', url, attribution: COPERNICUS_ATTRIBUTION });
 
       // z11-z13 preview: index contours only (every 5th — see the `idx` note below),
       // giving a coarse sense of relief before full 10 m detail arrives. `maxzoom` is
@@ -352,6 +356,25 @@ export async function addRegionToMap(
           maxzoom: BASEMAP_PATHS_MIN_ZOOM,
         });
       }
+    } else if (artifact.kind === 'avalanche') {
+      // Slope shading from the region's own DEM derivative (Phase 4.6). Same source type
+      // as the hillshade, different decoding: see AVALANCHE_ENCODING for why the channel
+      // factors are what they are.
+      map.addSource(sourceId, avalancheSourceSpec(url, COPERNICUS_ATTRIBUTION));
+
+      addAvalancheLayer(map, sourceId, {
+        minzoom: Math.max(artifact.minzoom ?? minzoom, minzoom),
+        // From the manifest, not a constant: the top zoom is latitude-dependent (the
+        // build caps it at the DEM's own ~30 m), so hardcoding it here would drift from
+        // the pipeline exactly the way the detail-limit constant once did.
+        maxzoom: artifact.maxzoom ?? 11,
+        // Beneath the labels like the relief and contours — this shades the ground, so
+        // painting it over the place names would be the same mistake the hillshade made.
+        before: beneathLabels(map, region.id),
+        // Restored from the user's setting rather than defaulting to on: a region
+        // downloaded while the layer is switched off must not switch it back on.
+        visible: isAvalancheEnabled(),
+      });
     } else if (artifact.kind === 'sac') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
 

@@ -69,7 +69,7 @@ MIN_DIST_GB="${RATMAP_MIN_DIST_GB:-20}"
 MIN_MEM_GB="${RATMAP_MIN_MEM_GB:-4}"
 REC_MEM_GB=8
 
-ALL_STAGES=(prefetch world terrain peaks sac paths places regions contours manifest)
+ALL_STAGES=(prefetch world terrain peaks sac paths places regions contours avalanche manifest)
 FORCE=""
 DRY_RUN=""
 SKIP_PREFLIGHT=""
@@ -85,7 +85,7 @@ for arg in "$@"; do
     --preflight-only)  PREFLIGHT_ONLY=1 ;;
     --repin)           REPIN=1 ;;
     all)               stages=("${ALL_STAGES[@]}") ;;
-    prefetch|world|terrain|peaks|sac|paths|places|regions|contours|manifest) stages+=("$arg") ;;
+    prefetch|world|terrain|peaks|sac|paths|places|regions|contours|avalanche|manifest) stages+=("$arg") ;;
     -*)  echo "Unknown flag: $arg" >&2; exit 2 ;;
     *)   echo "Unknown stage: $arg (known: ${ALL_STAGES[*]}, all)" >&2; exit 2 ;;
   esac
@@ -515,7 +515,17 @@ stage_paths() {
   fi
   # The walkable network at z12-13, which the basemap does not carry: Protomaps tags paths
   # min_zoom 14 and thins them below it. Before `regions`, for the same reason as `sac`.
-  PATHS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-paths.sh"
+  #
+  # The script tiles each continent separately, caches those tilesets under /work keyed by
+  # the pinned source name, and tile-joins them — so an interrupted run resumes at the
+  # continent it died on instead of at the first byte.
+  #
+  # Three at a time, because each continent has serial stretches (the osmium export, the
+  # single-threaded reduce) during which one continent leaves the rest of the cores idle,
+  # and a worker only costs 2-3 GB — see the measurements in build-paths.sh, which also
+  # lowers this on its own if the host cannot afford it.
+  PATHS_PARALLEL="${RATMAP_PATHS_PARALLEL:-3}" \
+    PATHS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-paths.sh"
 }
 
 stage_places() {
@@ -688,6 +698,77 @@ stage_contours() {
 
   if [ "${#failed[@]}" -gt 0 ]; then
     log "contours: ${#failed[@]} failed: ${failed[*]}"
+    return 1
+  fi
+}
+
+stage_avalanche() {
+  # Per-region and opt-in, exactly like contours and for the same reason: this is derived
+  # from the Copernicus DEM per bbox, and the catalogue covers the globe. Running it
+  # everywhere would spend days computing slope for terrain nobody skis or walks.
+  #
+  # Far cheaper than contours, though — no line tracing, no large GeoJSON intermediate.
+  # The whole working set is a few byte rasters the size of the region, so this is
+  # parallel by default where contours is not.
+  [ -n "$DRY_RUN" ] && { log "avalanche: no dry-run mode, skipping"; return 0; }
+
+  local id
+  local -a ids=()
+  while read -r id _; do
+    if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-avalanche-1.pmtiles" ]; then
+      log "avalanche/$id: already built — --force to redo"
+      continue
+    fi
+    ids+=("$id")
+  done < <(region_ids avalanche)
+
+  if [ "${#ids[@]}" -eq 0 ]; then
+    log "avalanche: nothing to build"
+    return 0
+  fi
+
+  # Four. A region's phases run in sequence, so its peak is the largest of them rather
+  # than their sum, and that is ~0.8-1.5 GB — measured 2026-09-08 on a 108 and a 216 Mpx
+  # raster: gdalwarp ~694 MB, encode-avalanche.py 792 MB and 1459 MB (most of it evictable
+  # page cache for the memmaps), the tiler a few MB. Four regions is ~6 GB on a 32 GB host,
+  # and the warp phase is network-bound with the cpu idle, so overlapping several is close
+  # to free.
+  #
+  # What four does *not* fit is the cpu: assemble-avalanche.py's WebP proof pass already
+  # runs a thread per core, so several regions reaching it together oversubscribe rather
+  # than go faster. Capping that inner pool by this number is what would make 4 pay off in
+  # wall-clock as well as in memory; until then it is bounded by cores, not by RAM.
+  local parallel="${RATMAP_AVALANCHE_PARALLEL:-4}"
+  # Exported, and with the default resolved rather than left unset: build-avalanche.sh
+  # divides the machine's cores by this to size the WebP pass, and a child that cannot
+  # see the number would take every core while three siblings did the same.
+  export RATMAP_AVALANCHE_PARALLEL="$parallel"
+  log "avalanche: building ${#ids[@]} region(s), $parallel at a time"
+
+  build_one_avalanche() {
+    local id="$1"
+    if "$SCRIPTS_DIR/build-avalanche.sh" "$id" > "$LOG_DIR/${RUN_ID}-avalanche-$id.log" 2>&1; then
+      printf 'OK\t%s\n' "$id"
+    else
+      printf 'FAIL\t%s\n' "$id"
+    fi
+  }
+  export -f build_one_avalanche
+  export SCRIPTS_DIR LOG_DIR RUN_ID
+
+  local -a failed=()
+  local status rid
+  while IFS=$'\t' read -r status rid; do
+    if [ "$status" = OK ]; then
+      log "avalanche/$rid: done"
+    else
+      log "avalanche/$rid FAILED — see $LOG_DIR/${RUN_ID}-avalanche-$rid.log — continuing with the rest"
+      failed+=("$rid")
+    fi
+  done < <(printf '%s\n' "${ids[@]}" | xargs -P "$parallel" -I{} bash -c 'build_one_avalanche "$@"' _ {})
+
+  if [ "${#failed[@]}" -gt 0 ]; then
+    log "avalanche: ${#failed[@]} failed: ${failed[*]}"
     return 1
   fi
 }

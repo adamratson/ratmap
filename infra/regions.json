@@ -64,6 +64,7 @@
     },
     {
       "id": "albania",
+      "avalanche": true,
       "name": "Albania",
       "bbox": [18.8965, 39.6274, 21.0629, 42.6631],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -83,6 +84,7 @@
     },
     {
       "id": "andalucia",
+      "avalanche": true,
       "name": "Andalucía",
       "bbox": [-7.5247, 35.7064, -1.3321, 38.7335],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -93,6 +95,7 @@
     },
     {
       "id": "andorra",
+      "avalanche": true,
       "name": "Andorra",
       "bbox": [1.4124, 42.4276, 1.7875, 42.6572],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -103,6 +106,7 @@
     },
     {
       "id": "aquitaine",
+      "avalanche": true,
       "name": "Aquitaine",
       "bbox": [-1.8428, 42.7733, 1.4506, 45.7172],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -113,6 +117,7 @@
     },
     {
       "id": "aragon",
+      "avalanche": true,
       "name": "Aragón",
       "bbox": [-2.1791, 39.8383, 0.7726, 42.9268],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -123,6 +128,7 @@
     },
     {
       "id": "asturias",
+      "avalanche": true,
       "name": "Asturias",
       "bbox": [-7.1886, 42.8789, -4.3996, 44.011],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -133,6 +139,7 @@
     },
     {
       "id": "austria",
+      "avalanche": true,
       "name": "Austria",
       "bbox": [9.5268, 46.3698, 17.1641, 49.024],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -200,6 +207,7 @@
     },
     {
       "id": "bosnia-herzegovina",
+      "avalanche": true,
       "name": "Bosnia-Herzegovina",
       "bbox": [15.7156, 42.5524, 19.6264, 45.278],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -246,6 +254,7 @@
     },
     {
       "id": "bulgaria",
+      "avalanche": true,
       "name": "Bulgaria",
       "bbox": [22.3487, 41.2268, 29.1882, 44.2178],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -256,6 +265,7 @@
     },
     {
       "id": "cantabria",
+      "avalanche": true,
       "name": "Cantabria",
       "bbox": [-4.8616, 42.7546, -3.145, 43.8655],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -266,6 +276,7 @@
     },
     {
       "id": "castilla-y-leon",
+      "avalanche": true,
       "name": "Castilla y León",
       "bbox": [-7.0805, 40.0804, -1.7661, 43.2409],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -286,6 +297,7 @@
     },
     {
       "id": "cataluna",
+      "avalanche": true,
       "name": "Cataluña",
       "bbox": [0.1564, 40.2124, 4.1748, 42.8632],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -305,6 +317,7 @@
     },
     {
       "id": "centro",
+      "avalanche": true,
       "name": "Centro",
       "bbox": [9.3065, 40.2144, 14.6685, 44.4797],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -333,6 +346,7 @@
     },
     {
       "id": "corse",
+      "avalanche": true,
       "name": "Corse",
       "bbox": [8.3179, 41.311, 9.7512, 43.1659],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -467,6 +481,7 @@
     },
     {
       "id": "georgia",
+      "avalanche": true,
       "name": "Georgia",
       "bbox": [39.8809, 41.0512, 46.7396, 43.5899],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -558,6 +573,7 @@
     },
     {
       "id": "scotland",
+      "avalanche": true,
       "name": "Scotland",
       "bbox": [-14.8615, 54.54, 0.2161, 61.1356],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -661,6 +677,7 @@
     },
     {
       "id": "iceland",
+      "avalanche": true,
       "name": "Iceland",
       "bbox": [-25.7, 62.8455, -12.4171, 67.5008],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -744,6 +761,7 @@
     },
     {
       "id": "kosovo",
+      "avalanche": true,
       "name": "Kosovo",
       "bbox": [20.0136, 41.8541, 21.7933, 43.2775],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -816,7 +834,8 @@
       "group": "Europe",
       "geofabrikId": "liechtenstein",
       "estimatedBytes": 16100000,
-      "contours": true
+      "contours": true,
+      "avalanche": true
     },
     {
       "id": "limburg",
@@ -865,6 +884,7 @@
     },
     {
       "id": "macedonia",
+      "avalanche": true,
       "name": "Macedonia",
       "bbox": [20.4467, 40.8476, 23.0401, 42.3797],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -930,6 +950,7 @@
     },
     {
       "id": "midi-pyrenees",
+      "avalanche": true,
       "name": "Midi-Pyrenees",
       "bbox": [-0.3275, 42.5679, 3.4533, 45.0478],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -967,6 +988,7 @@
     },
     {
       "id": "montenegro-region",
+      "avalanche": true,
       "name": "Montenegro",
       "bbox": [18.1728, 41.6162, 20.3588, 43.5622],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -995,6 +1017,7 @@
     },
     {
       "id": "navarra",
+      "avalanche": true,
       "name": "Navarra",
       "bbox": [-2.5023, 41.9061, -0.7165, 43.3165],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1042,6 +1065,7 @@
     },
     {
       "id": "nord-est",
+      "avalanche": true,
       "name": "Nord-Est",
       "bbox": [9.1955, 43.7298, 13.9288, 47.1001],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1053,6 +1077,7 @@
     },
     {
       "id": "nord-norge",
+      "avalanche": true,
       "name": "Nord-Norge (Northern Norway)",
       "bbox": [7.8402, 64.9392, 33.6397, 72.4056],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1064,6 +1089,7 @@
     },
     {
       "id": "nord-ovest",
+      "avalanche": true,
       "name": "Nord-Ovest",
       "bbox": [6.6027, 43.481, 11.4334, 46.6412],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1084,6 +1110,7 @@
     },
     {
       "id": "oberbayern",
+      "avalanche": true,
       "name": "Oberbayern",
       "bbox": [10.7127, 47.3913, 13.1097, 49.0905],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1202,6 +1229,7 @@
     },
     {
       "id": "provence-alpes-cote-d-azur",
+      "avalanche": true,
       "name": "Provence Alpes-Cote-d'Azur",
       "bbox": [4.1447, 42.3154, 7.7485, 45.1289],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1312,6 +1340,7 @@
     },
     {
       "id": "rhone-alpes",
+      "avalanche": true,
       "name": "Rhone-Alpes",
       "bbox": [3.6861, 44.1127, 7.1921, 46.5225],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1322,6 +1351,7 @@
     },
     {
       "id": "romania",
+      "avalanche": true,
       "name": "Romania",
       "bbox": [20.2418, 43.6125, 30.279, 48.2695],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1369,6 +1399,7 @@
     },
     {
       "id": "schwaben",
+      "avalanche": true,
       "name": "Schwaben",
       "bbox": [9.5125, 47.2654, 11.3135, 49.0366],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1389,6 +1420,7 @@
     },
     {
       "id": "slovakia",
+      "avalanche": true,
       "name": "Slovakia",
       "bbox": [16.8307, 47.7265, 22.5705, 49.6186],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1399,6 +1431,7 @@
     },
     {
       "id": "slovenia",
+      "avalanche": true,
       "name": "Slovenia",
       "bbox": [13.3051, 45.4208, 16.6003, 46.8796],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1438,6 +1471,7 @@
     },
     {
       "id": "sweden",
+      "avalanche": true,
       "name": "Sweden",
       "bbox": [10.5414, 55.0265, 24.2247, 69.0664],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1449,6 +1483,7 @@
     },
     {
       "id": "switzerland",
+      "avalanche": true,
       "name": "Switzerland",
       "bbox": [5.9544, 45.8164, 10.4958, 47.8113],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1478,6 +1513,7 @@
     },
     {
       "id": "trondelag",
+      "avalanche": true,
       "name": "Trøndelag (Central Norway)",
       "bbox": [5.7909, 62.2553, 14.3354, 65.9496],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1487,6 +1523,7 @@
     },
     {
       "id": "turkey",
+      "avalanche": true,
       "name": "Turkey",
       "bbox": [25.524, 35.717, 44.8599, 43.0748],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1499,6 +1536,7 @@
     },
     {
       "id": "ukraine",
+      "avalanche": true,
       "name": "Ukraine (with Crimea)",
       "bbox": [22.1326, 44.0086, 40.2381, 52.3865],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1538,6 +1576,7 @@
     },
     {
       "id": "vestlandet",
+      "avalanche": true,
       "name": "Vestlandet (Western Norway)",
       "bbox": [2.3291, 57.6312, 9.3747, 65.1236],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1594,6 +1633,7 @@
     },
     {
       "id": "malopolskie",
+      "avalanche": true,
       "name": "Województwo małopolskie (Lesser Poland Voivodeship)",
       "bbox": [19.0749, 49.1649, 21.4333, 50.5322],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
@@ -1721,6 +1761,7 @@
     },
     {
       "id": "ostlandet",
+      "avalanche": true,
       "name": "Østlandet (Eastern Norway)",
       "bbox": [7.0954, 58.5968, 12.8807, 62.6973],
       "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",

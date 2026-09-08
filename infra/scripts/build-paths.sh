@@ -21,59 +21,121 @@ require_cmd tippecanoe
 # build-sac.sh. Defaults to the union of every region's `osmExtract`.
 PATHS_SOURCE_URLS="${PATHS_SOURCE_URLS:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/region-osm-sources.py")}"
 
-WORK_DIR="$(mktemp -d)"
-trap 'rm -rf "$WORK_DIR"' EXIT
+# Per-continent tilesets, cached between runs. This is the unit of work, and it is what
+# makes a stage that runs for hours survivable: the first planet attempt spent 29 minutes
+# filtering and then died in a single global tippecanoe, with nothing to show for it.
+#
+# Keyed on the *pinned* source basename (europe-260823, not europe-latest), so when the
+# pin moves the key moves with it and the tileset is rebuilt — the same invalidation rule
+# cached_osm_extract uses for the extracts themselves. Sits next to that cache, which on
+# the container is the /work volume rather than the container's own disk.
+PATHS_TILE_CACHE="${PATHS_TILE_CACHE:-$(dirname "$OSM_CACHE_DIR")/paths-tiles}"
+mkdir -p "$PATHS_TILE_CACHE"
 
-filtered_pbfs=()
-i=0
-for url in $PATHS_SOURCE_URLS; do
-  i=$((i + 1))
-  echo "Source: $url"
+# How many continents to tile at once. One by default: tippecanoe already uses every core
+# for its own tiling. What parallelism actually buys here is the *serial* stretches — the
+# osmium export and the single-threaded reduce below — during which one continent leaves
+# the rest of the box idle.
+#
+# A worker costs 2-3 GB, measured 2026-09-08: `osmium tags-filter` peaks at ~1.9 GB and
+# stays there whatever the extract (1.89 GB on 33 MB of Montenegro, 1.96 GB on 310 MB of
+# Scotland — it is an id bitmap over OSM's global id space, not a function of the input),
+# the reduce step is 17 MB, and tippecanoe went 172 MB to 227 MB for a 4x larger input
+# because its sort is disk-backed. So the default of 3 is ~9 GB and the limit becomes cpu;
+# more than 3 buys little, since only europe, asia and north-america are big enough to be
+# worth overlapping.
+PATHS_PARALLEL="${PATHS_PARALLEL:-3}"
+
+# ...but not on a box that cannot hold them. The preflight admits hosts down to 4 GB, and
+# a fixed default of 3 would turn this stage from slow into killed there. Budget 3 GB a
+# worker, floor of 1. An explicit PATHS_PARALLEL is still capped by this: it is a
+# statement about what the host has, and the host is what it is.
+PATHS_MEMORY_GB="$(available_memory_gb)"
+if [ "$PATHS_MEMORY_GB" -gt 0 ]; then
+  PATHS_AFFORDABLE=$(( PATHS_MEMORY_GB / 3 ))
+  [ "$PATHS_AFFORDABLE" -lt 1 ] && PATHS_AFFORDABLE=1
+  if [ "$PATHS_PARALLEL" -gt "$PATHS_AFFORDABLE" ]; then
+    echo "Limiting to $PATHS_AFFORDABLE worker(s): ${PATHS_MEMORY_GB} GB available," \
+         "and a continent costs about 3 GB to tile."
+    PATHS_PARALLEL="$PATHS_AFFORDABLE"
+  fi
+fi
+echo "Tiling ${PATHS_PARALLEL} continent(s) at a time"
+
+# The walker's network, matching what the router already treats as travelable on foot
+# (ROUTABLE_KINDS in src/routes/path-tiles.ts) minus the roads, which the basemap draws at
+# every zoom anyway.
+PATHS_FILTER="w/highway=path,footway,bridleway,steps,track"
+
+# --simplification=8 is half a screen pixel at both zooms this archive holds — at z13 a
+# tile unit is 0.67 m and a CSS pixel about 11 m of ground, at z12 it is 1.33 m against
+# 22 m — so it is invisible and it is not free: measured on Scotland (2026-09-08), 18 MB
+# at the default 1, 13 MB at 8, for 372,205 ways.
+#
+# --drop-densest-as-needed thins a tile that would exceed the size limit, which in
+# practice means some urban footways at z12. That is the right place to lose detail on a
+# map for hills, and the same mechanism the basemap itself uses.
+#
+# One progress line per tile writes a 177 MB log on a planet run (measured 2026-09-08) —
+# into /work/logs *and* through docker's json-file driver, for a stage whose progress a
+# human reads about twice. `--progress-interval` costs no time (12.71 s with full progress
+# against 12.74 s with none, on the same input), so this is about the log, not the clock.
+tile_one_source() {
+  local url="$1" src key out building work
   src="$(cached_osm_extract "$url")"
+  key="$(basename "${src%.osm.pbf}")"
+  out="$PATHS_TILE_CACHE/$key-paths.pmtiles"
+  # Still ends in .pmtiles, deliberately: tippecanoe and tile-join both choose their
+  # output *format* from the extension, so the obvious "$out.building" quietly writes an
+  # MBTiles file that then fails `pmtiles verify` for a reason that has nothing to do with
+  # the data. The leading dot keeps it out of the way instead.
+  building="$PATHS_TILE_CACHE/.$key-paths.building.pmtiles"
 
-  filtered="$WORK_DIR/filtered-$i.osm.pbf"
-  # The walker's network, matching what the router already treats as travelable on foot
-  # (ROUTABLE_KINDS in src/routes/path-tiles.ts) minus the roads, which the basemap draws
-  # at every zoom anyway.
-  osmium tags-filter "$src" w/highway=path,footway,bridleway,steps,track \
-    -o "$filtered" --overwrite
-  filtered_pbfs+=("$filtered")
-done
+  if [ -s "$out" ]; then
+    echo "  $key: cached tileset ($(du -h "$out" | cut -f1))"
+    return 0
+  fi
 
-# Export each filtered extract separately and concatenate the line-delimited GeoJSON,
-# rather than `osmium merge`-ing the PBFs into one first.
-#
-# The merge is what killed the first planet run of this stage (2026-09-08): it exits with
-# "Way ID twice in input. Maybe you are using a history or change file?". The continents
-# are pinned to *dated* Geofabrik snapshots and those dates are resolved per continent —
-# europe-260823 alongside north-america-260824 in that run — because they do not all
-# rebuild at the same hour. A way crossing a continent seam therefore appears in two files
-# with two different versions, which is a history file, and `osmium merge` says so (its
-# own `-H` flag exists to silence exactly that warning). Nothing downstream can read it.
-#
-# Concatenating the exports sidesteps it entirely, and drops a full extra copy of the
-# merged PBF from the working set. The cost is that a way on a seam is exported twice and
-# tiled twice.
-#
-# Not deduplicated here, unlike build-sac.sh: that would mean holding every way id of the
-# planet's ~85 M walkable ways in memory, several GB, to remove the few thousand that sit
-# on a continent boundary. At z12-13 a way drawn twice is invisible. If it ever stops
-# being invisible, dedupe by `-a id` the way the sac build does — the memory is the only
-# reason not to.
-: > "$WORK_DIR/paths.geojsonl"
-for pbf in "${filtered_pbfs[@]}"; do
-  osmium export "$pbf" -o "$WORK_DIR/part.geojsonl" \
+  # Per-source scratch, removed as soon as its tileset exists. The old shape built one
+  # concatenated GeoJSON of the entire planet — tens of GB live at once; this never holds
+  # more than one continent's worth.
+  work="$(mktemp -d)"
+
+  osmium tags-filter "$src" $PATHS_FILTER -o "$work/filtered.osm.pbf" --overwrite
+  osmium export "$work/filtered.osm.pbf" -o "$work/raw.geojsonl" \
     -f geojsonseq -x print_record_separator=false --overwrite
-  cat "$WORK_DIR/part.geojsonl" >> "$WORK_DIR/paths.geojsonl"
-  rm -f "$WORK_DIR/part.geojsonl"
-done
+  rm -f "$work/filtered.osm.pbf"
+
+  reduce_to_path_properties "$work/raw.geojsonl" "$work/final.geojsonl" "$key"
+  rm -f "$work/raw.geojsonl"
+
+  tippecanoe -o "$building" -Z12 -z13 \
+    --include=kind --include=kind_detail \
+    -l paths -n "ratmap low-zoom paths" \
+    --simplification=8 --drop-densest-as-needed --progress-interval=10 --force \
+    "$work/final.geojsonl"
+
+  rm -rf "$work"
+
+  # Same rule as build-region.sh: nothing appears under its real name until it has been
+  # verified, or an interrupted run leaves a plausibly-sized file with a zeroed header
+  # that the next run happily adopts as "cached".
+  if ! pmtiles verify "$building" >/dev/null 2>&1; then
+    echo "  $key: FAILED verification — not a valid PMTiles archive" >&2
+    rm -f "$building"
+    return 1
+  fi
+  mv "$building" "$out"
+  echo "  $key: built $(du -h "$out" | cut -f1)"
+}
 
 # Reduce to the two properties the style actually reads, under **Protomaps' own names**.
 # `kind_detail` rather than something of our own so one set of paint expressions can drive
 # both this source and the basemap's `roads` layer (see addPathLayers in
 # src/regions/region-layers.ts) — the handoff at z14 has to be invisible, and the surest
 # way to make two layers look identical is to give them the same expressions.
-python3 - "$WORK_DIR/paths.geojsonl" "$WORK_DIR/paths-final.geojsonl" <<'PY_REDUCE'
+reduce_to_path_properties() {
+  python3 - "$1" "$2" "$3" <<'PY_REDUCE'
 import json, sys
 
 kept = 0
@@ -102,24 +164,83 @@ with open(sys.argv[1]) as src, open(sys.argv[2], "w") as dest:
         dest.write(json.dumps(feature) + "\n")
         kept += 1
 
-print(f"  {kept} walkable ways, skipped {skipped} non-line features")
+print(f"  {sys.argv[3]}: {kept} walkable ways, skipped {skipped} non-line features")
 PY_REDUCE
+}
+
+LOG_DIR_PATHS="${RATMAP_WORK:-$INFRA_DIR}/logs"
+mkdir -p "$LOG_DIR_PATHS"
+
+tilesets=()
+running=0
+for url in $PATHS_SOURCE_URLS; do
+  key="$(basename "${url%.osm.pbf}")"
+  tilesets+=("$PATHS_TILE_CACHE/$key-paths.pmtiles")
+
+  if [ "$PATHS_PARALLEL" -le 1 ]; then
+    echo "Source: $url"
+    tile_one_source "$url" || true
+  else
+    # Each worker's output to its own log: several at once would interleave line by line
+    # into one unreadable stream. Same idiom as the contours stage in build-global.sh.
+    echo "Source: $url (log: $LOG_DIR_PATHS/paths-$key.log)"
+    tile_one_source "$url" > "$LOG_DIR_PATHS/paths-$key.log" 2>&1 &
+    running=$((running + 1))
+    if [ "$running" -ge "$PATHS_PARALLEL" ]; then
+      wait
+      running=0
+    fi
+  fi
+done
+wait
+
+# Checked on the artifacts rather than on worker exit codes: with several running in the
+# background a lost exit status is easy and a missing continent is not — and this same
+# check is what makes a resumed run correct, since a tileset that is present was verified
+# before it got its name.
+missing=()
+for tileset in "${tilesets[@]}"; do
+  if [ -s "$tileset" ]; then
+    # A one-line result per continent reaches the stage log even when the detail went to
+    # a worker log — the same split the contours stage uses. Without it, the parallel
+    # default would make a multi-hour stage look like it was doing nothing at all.
+    echo "  $(basename "$tileset" .pmtiles): $(du -h "$tileset" | cut -f1)"
+  else
+    missing+=("$(basename "$tileset")")
+  fi
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+  echo >&2
+  echo "FAILED: ${#missing[@]} continent tileset(s) missing: ${missing[*]}" >&2
+  echo "  Their logs are in $LOG_DIR_PATHS. Re-running skips the ones already built." >&2
+  exit 1
+fi
 
 OUT="$DIST_DIR/paths-global.pmtiles"
+# Ends in .pmtiles for the same reason as the per-continent temp name above.
+OUT_BUILDING="$DIST_DIR/.paths-global.building.pmtiles"
 
-# --simplification=8 is half a screen pixel at both zooms this archive holds — at z13 a
-# tile unit is 0.67 m and a CSS pixel about 11 m of ground, at z12 it is 1.33 m against
-# 22 m — so it is invisible and it is not free: measured on Scotland (2026-09-08),
-# 18 MB at the default 1, 13 MB at 8, for 372,205 ways.
+# Join the continents into the artifact the regions are cut from.
 #
-# --drop-densest-as-needed thins a tile that would exceed the size limit, which in
-# practice means some urban footways at z12. That is the right place to lose detail on a
-# map for hills, and the same mechanism the basemap itself uses.
-tippecanoe -o "$OUT" -Z12 -z13 \
-  --include=kind --include=kind_detail \
-  -l paths -n "ratmap low-zoom paths" \
-  --simplification=8 --drop-densest-as-needed --force \
-  "$WORK_DIR/paths-final.geojsonl"
+# tile-join merges the features of tiles that appear in more than one input, which at this
+# scale is only the tiles a continent boundary runs through — everywhere else each tile
+# comes from exactly one continent and is copied through untouched. -pk because the size
+# limit was already applied per continent by --drop-densest-as-needed: re-applying it to a
+# joined seam tile would drop features for the second time, and a seam is a bad place to
+# thin a map on purpose.
+echo
+echo "Joining ${#tilesets[@]} continent tilesets"
+tile-join -o "$OUT_BUILDING" -pk --force \
+  -n "ratmap low-zoom paths" \
+  -N "The walkable network at z12-13, where the basemap carries none" \
+  "${tilesets[@]}"
+
+if ! pmtiles verify "$OUT_BUILDING" >/dev/null 2>&1; then
+  echo "FAILED verification: the joined archive is not valid PMTiles" >&2
+  rm -f "$OUT_BUILDING"
+  exit 1
+fi
+mv "$OUT_BUILDING" "$OUT"
 
 pmtiles show "$OUT"
 echo "Built $OUT"

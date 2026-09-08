@@ -48,6 +48,13 @@ export const USE_FALLBACK_TERRAIN = import.meta.env.VITE_USE_FALLBACK_TERRAIN ==
 
 export const OSM_ATTRIBUTION =
   '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>';
+// Contours and the avalanche terrain layer are both traced from Copernicus GLO-30 (see
+// infra/scripts/build-contours.sh and build-avalanche.sh), not from OSM. Its licence is
+// free worldwide *with attribution required*, so these sources must not keep borrowing
+// the OSM credit the way the contours source did before 2026-09-08.
+export const COPERNICUS_ATTRIBUTION =
+  '<a href="https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf" target="_blank" rel="noreferrer">© Copernicus DEM</a>';
+
 export const TERRAIN_ATTRIBUTION =
   '<a href="https://mapterhorn.com/attribution" target="_blank" rel="noreferrer">© Mapterhorn</a>';
 

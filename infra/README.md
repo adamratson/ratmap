@@ -95,6 +95,33 @@ still owns z14 and up, where it has names, bridges and access tags this does not
 Measured on Scotland (2026-09-08): 372,205 ways → 13 MB, against a 646 MB basemap.
 `--simplification=8` is half a screen pixel at both zooms and saves 28% over the default.
 
+**Each source extract is tiled on its own and the results are `tile-join`ed.** A planet run
+of this stage is hours of tiling — the first attempt spent 29 minutes filtering and then
+died inside one global tippecanoe with nothing kept. Per-continent tilesets are cached
+under `.cache/paths-tiles` (on the container, `/work/cache/paths-tiles`), keyed by the
+*pinned* source basename, so a re-run skips what is already built and an interrupted run
+resumes at the continent it died on. Verified 2026-09-08: a full re-run of the
+Scotland+Montenegro build is 2.2 s of pure join, and deleting one tileset rebuilds only
+that one.
+
+`tile-join` merges the features of tiles that appear in more than one input, which at this
+scale is only the tiles a continent boundary runs through — checked across 40 tiles present
+in two inputs, the joined tile holds exactly the sum of both, none dropped. `-pk` is there
+because the tile size limit was already applied per continent by
+`--drop-densest-as-needed`; re-applying it on the join would thin a map at its seams,
+which is the worst possible place to do it.
+
+`PATHS_PARALLEL` (or `RATMAP_PATHS_PARALLEL` through the container) tiles several
+continents at once, **3 by default**. tippecanoe already uses every core for its own
+tiling; what parallelism buys is the serial stretches — the osmium export and the
+single-threaded reduce — during which one continent leaves the rest of the box idle.
+
+A worker costs 2-3 GB (measured 2026-09-08: `osmium tags-filter` a flat ~1.9 GB whatever
+the extract size, the reduce step 17 MB, tippecanoe 172 MB at 259 k features and 227 MB at
+1.04 M). The script checks the memory it can actually see, budgets 3 GB a worker and says
+so if it lowers the number — including when you asked for more, since the host is what it
+is. On a 4 GB box that means 1, which is what this stage used to be everywhere.
+
 ### Search index is app-shell, not a bucket artifact
 
 `places.sqlite` lands in `dist/` like everything else, but it does **not** get uploaded to

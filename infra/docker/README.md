@@ -124,7 +124,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `terrain` | `build-terrain.sh` — coarse global hillshade | minutes, ~62 MB out at z4 |
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles` | hours |
 | `sac` | `build-sac.sh` over all 8 continents → `sac-global.pmtiles` (SAC hiking grades) | dominated by streaming 85 GB through `osmium tags-filter`; the tiling itself is minutes (~921 k ways planet-wide, ~400 MB out) |
-| `paths` | `build-paths.sh` over all 8 continents → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | same shape as `sac`, more ways: 13 MB for Scotland's 372 k, so a planet build is GB-scale. The filter pass alone took 29 min on 12 cpus; its GeoJSON intermediates are tens of GB under `/work` while it runs |
+| `paths` | `build-paths.sh` — tiles each continent separately, caches the tilesets under `/work/cache/paths-tiles`, `tile-join`s them → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | hours. 82 M ways planet-wide; the filter pass alone was 29 min on 12 cpus. **Resumable**: a re-run skips continents already tiled, so an interrupted stage costs one continent, not the planet. `RATMAP_PATHS_PARALLEL` tiles several at once (default 1) |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, sequentially by default — peak RSS-bound, see below (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
@@ -322,6 +322,62 @@ have the memory for it — figure on ~6-7 GB per worker as a floor, more for lar
 RATMAP_CONTOURS_PARALLEL=2 docker compose run --rm infra global contours manifest
 ```
 
+### Parallelism and memory
+
+Every knob below defaults to the value that is safe on the smallest box the preflight
+allows, not the fastest on a large one. These are the measured per-worker costs
+(2026-09-08, macOS/arm64 with the same tool versions) for deciding how far to raise them.
+
+| Stage | What dominates memory | Peak RSS per worker | Scales with |
+|---|---|---|---|
+| `paths`, `sac` — `osmium tags-filter` | id bitmap over OSM's *global* id space | **1.89 GB** on a 33 MB extract, **1.96 GB** on a 310 MB one | nothing — it is flat, which is why 33 GB europe passes on a box this size |
+| `paths` — reduce step | streams a line at a time | 17 MB | nothing |
+| `paths` — `tippecanoe` | disk-backed sort | 172 MB at 259 k features, 227 MB at 1.04 M | sublinearly |
+| `contours` — `gdal_contour` | contour rings open at once in the sweep | ~6.4 GB (Corsica, 2.66 sq deg) | raster width and terrain, **not** area — scotland at 99 sq deg is built and published |
+| `places` — `build-places-db.py` | rows + dedupe set held whole | ~1.6 GB for the planet | feature count |
+| `avalanche` — `gdalwarp`, then `encode-avalanche.py` | the warp's block cache; then one strip of DEM plus its gradient buffers | **694 MB** warping; **792 MB** encoding a 108 Mpx raster and **1459 MB** at 216 Mpx, most of it evictable page cache | the encode fits `10.5 x STRIP_BYTES + 6 bytes/pixel` at both sizes |
+
+**Defaults, and what they assume.** `paths` is 3, `avalanche` is 4, `contours` is 1. The
+first is sized for a host with ~12 GB or more and lowers itself on anything smaller. The
+second is bounded by cores rather than by memory. `contours` stays at 1 because its
+per-worker cost is a function of *region size* and its enabled list spans two orders of
+magnitude of it.
+
+- **`paths`: 3.** A worker peaks around 2-3 GB — osmium's flat ~2 GB plus a tippecanoe
+  that never got near 1 GB even at 4x the features — so three is ~9 GB and the limit is
+  cpu, not memory. Three rather than more because only europe, asia and north-america are
+  big enough to be worth overlapping; the rest finish early whatever you set. Measured
+  back to back on a Scotland+Montenegro pair, where one source dominates and the ceiling
+  is therefore low: 78 s and 81 s at 1, against 73 s and 64 s at 3. `build-paths.sh`
+  budgets 3 GB a worker against the memory it can actually see and prints what it settled
+  on, so the default does not have to assume the host — and an explicit
+  `RATMAP_PATHS_PARALLEL` is capped the same way, because a number you type is a statement
+  about the work, not about the machine.
+- **`contours`: 1.** Not because 32 GB has no room for two Corsicas at 6.4 GB — it does —
+  but because the 62 enabled regions run from 0.04 to 269 sq deg, so a blanket 2 will
+  eventually pair morocco with turkey. Raise it only alongside a `RATMAP_REGION_FILTER`
+  that keeps the slice small.
+- **`avalanche`: 4.** A region's phases run in sequence, so its peak is the largest of
+  them and not their sum: ~0.8-1.5 GB, so four is ~6 GB on a 32 GB host. The warp phase is
+  network-bound off `/vsicurl` with the cpu idle, which is what makes overlapping regions
+  worth doing at all.
+
+  An earlier note here put this at ~112 bytes per pixel and ~28.6 GB a worker for austria.
+  That was read off a version of `encode-avalanche.py` that held the whole raster as
+  float64 with eight `np.roll` copies; the script now strips through memmaps, and the
+  figures above are measured against it. If you are reading a memory number in this repo,
+  check it is not older than the code.
+
+  The cpu side needed a second knob to make that true. `assemble-avalanche.py`'s WebP
+  proof pass — ~2.5 s a tile, and Switzerland has ~600 of them — used to run a thread per
+  core whatever else was running, so four regions meant four times the machine's cores in
+  `cwebp` processes. `build-avalanche.sh` now divides the cores by
+  `RATMAP_AVALANCHE_PARALLEL` and passes the share as `--jobs`: on 12 cores, four regions
+  get three each. Run standalone with the variable unset it still takes every core, which
+  is right for one region on an idle box.
+- **`fetch-dem.sh`'s `xargs -P 16`** is availability probing over HTTP, not compute. It
+  holds no raster and needs no adjustment.
+
 ### A global region build, in slices
 
 `RATMAP_REGION_FILTER` is an extended regexp over region ids, so the `regions` stage can be
@@ -333,11 +389,13 @@ RATMAP_REGION_FILTER='^(france|germany|switzerland|austria|italy)' \
   docker compose run --rm infra global regions
 ```
 
-**Deliberately not `... regions manifest`.** The `manifest` stage always does a bare,
-full-catalogue rebuild — correct for `global all`, where `dist/` genuinely ends up holding
-everything, but wrong here: this filtered slice's `dist/` only has five countries in it,
-so `build-manifest.py` run bare would produce a manifest describing *only* those five, and
-`upload.sh` would (correctly) refuse it as an unpublish of the rest of the catalogue.
+**Safe to follow with `manifest` now, but check why.** This used to be deliberately
+excluded: the stage did a bare, full-catalogue rebuild, so a filtered slice's `dist/` —
+five countries — produced a manifest describing only those five, and `upload.sh` would
+(correctly) refuse it as an unpublish of everything else. The stage now merges onto the
+live catalogue whenever `PUBLIC_BASE_URL` is set, per artifact kind, so a slice publishes
+its own regions and leaves the rest untouched. With no `PUBLIC_BASE_URL` it still falls
+back to the bare rebuild, and the old warning applies in full.
 Run `manifest` yourself afterward with `--base-live`, same as any other partial build (see
 `../README.md`'s "Always pass `--base-live`" section). Also pass `--only`, scoped to
 exactly this filter — a long-running `/work` volume accumulates archives from unrelated

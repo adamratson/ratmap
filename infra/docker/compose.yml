@@ -86,6 +86,15 @@ services:
       # passthrough reason as the two above; needed when a corrupt or unrelated archive
       # elsewhere in dist/ would otherwise block the whole publish.
       RATMAP_MANIFEST_ONLY: "${RATMAP_MANIFEST_ONLY:-}"
+      # Continents tiled at once in the paths stage (default 3). Same passthrough reason
+      # as the others: an inline-prefixed host variable does not reach the container
+      # unless it is declared here.
+      RATMAP_PATHS_PARALLEL: "${RATMAP_PATHS_PARALLEL:-}"
+      # Regions built at once in the avalanche stage (default 4). Undeclared until
+      # 2026-09-08, which meant an inline `RATMAP_AVALANCHE_PARALLEL=6 docker compose
+      # run ...` silently ran the default instead — the same gap this file already
+      # records for RATMAP_REGION_FILTER.
+      RATMAP_AVALANCHE_PARALLEL: "${RATMAP_AVALANCHE_PARALLEL:-}"
 
       # upload.sh's own unpublish guard — same passthrough gap as above, lower stakes
       # (an unset ALLOW_UNPUBLISH just makes the guard refuse, not silently do the wrong

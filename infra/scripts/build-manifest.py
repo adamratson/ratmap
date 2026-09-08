@@ -67,6 +67,12 @@ ARTIFACT_KINDS = {
     "-contours.pmtiles": "contours",
     "-paths.pmtiles": "paths",
     "-sac.pmtiles": "sac",
+    # Versioned in the filename, unlike every other kind: `downloadArtifact` skips an
+    # artifact whose name is already in OPFS, so a rebuild under an unchanged name never
+    # reaches anyone who already holds the region. Stage B's runout channel replaces this
+    # line with "-avalanche-2.pmtiles" rather than adding to it — two versions mapping to
+    # one kind would race in the merge below.
+    "-avalanche-1.pmtiles": "avalanche",
 }
 
 

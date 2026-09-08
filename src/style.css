@@ -62,6 +62,17 @@
   --sac-t5: #c92a2a;
   --sac-t6: #7b2d8b;
 
+  /* Avalanche terrain slope classes. Same rule as the SAC ramp: the map paints literal
+     hex (a MapLibre paint property cannot read a CSS variable), so these must stay in step
+     with SLOPE_CLASSES in src/avalanche.ts. Deliberately not a green-amber-red danger
+     ramp, and deliberately not monotonic at the top — 45+ steps to blue because it is a
+     different failure mode, not a worse one. */
+  --avalanche-c25: #d9b800;
+  --avalanche-c30: #e08a10;
+  --avalanche-c35: #e25028;
+  --avalanche-c40: #962878;
+  --avalanche-c45: #3c5ac8;
+
   /* Fades the iOS status bar into the map beneath it. Follows the *map*, not the chrome:
      the clock is drawn over the map, and a white fade under a dark map is a bright band
      across the top of the screen. */
@@ -85,6 +96,13 @@
   --sac-t4: #ff8b4d;
   --sac-t5: #ff6b6b;
   --sac-t6: #c77dd6;
+
+  /* Lightened for the dark sheet, hue preserved so a swatch still reads as its shading. */
+  --avalanche-c25: #f2dc63;
+  --avalanche-c30: #f7b04e;
+  --avalanche-c35: #ff7a58;
+  --avalanche-c40: #d670b8;
+  --avalanche-c45: #7f97ee;
 
   --surface: #111827;
   --surface-sunken: #1f2937;

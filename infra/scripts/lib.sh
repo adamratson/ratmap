@@ -65,3 +65,39 @@ cached_osm_extract() {
   fi
   echo "$dest"
 }
+
+# Memory this process may actually use, in whole GB.
+#
+# Smallest of: a cgroup v2 limit, a cgroup v1 limit, and the host's own total. Under
+# Docker Desktop the number that matters is the VM's, and it is routinely 8 GB by
+# default — so a container reading /proc/meminfo alone would size its worker pool for a
+# machine it cannot have.
+#
+# docker/build-global.sh carries its own copy of this rather than calling here: it is
+# installed at /usr/local/bin/ratmap-global, deliberately outside the infra tree, so that
+# bind-mounting a working copy of scripts/ cannot hide the driver. The cost of that is
+# this one duplicated function; keep the two in step.
+available_memory_gb() {
+  local bytes="" limit host_bytes
+
+  if [ -r /sys/fs/cgroup/memory.max ]; then
+    limit="$(cat /sys/fs/cgroup/memory.max)"
+    [ "$limit" != "max" ] && bytes="$limit"
+  elif [ -r /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+    limit="$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)"
+    # cgroup v1 spells "unlimited" as a nonsense-large number.
+    [ "$limit" -lt 9223372036854000000 ] 2>/dev/null && bytes="$limit"
+  fi
+
+  if [ -r /proc/meminfo ]; then
+    host_bytes=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) * 1024 ))
+  else
+    # macOS, for anyone running a build straight off a laptop.
+    host_bytes="$(sysctl -n hw.memsize 2>/dev/null || echo 0)"
+  fi
+
+  if [ -z "$bytes" ] || { [ "$host_bytes" -gt 0 ] && [ "$bytes" -gt "$host_bytes" ]; }; then
+    bytes="$host_bytes"
+  fi
+  echo $(( bytes / 1073741824 ))
+}

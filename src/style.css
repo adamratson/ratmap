@@ -1356,8 +1356,13 @@ body {
 }
 
 .route-actions button {
+  /* Height, not width, is the touch-target constraint here — five short-text pills
+     genuinely fit one narrow phone width side by side; measured against the actual
+     rendered row (343px available, ~349px needed at the wider padding) rather than
+     guessed, since a false "it fits" would just move the wrap point somewhere less
+     predictable instead of removing it. */
   min-height: 2.75rem;
-  padding: 0.5rem 0.9rem;
+  padding: 0.5rem 0.7rem;
   border: 0;
   border-radius: 0.5rem;
   background: var(--border);
@@ -1376,29 +1381,16 @@ body {
 }
 
 /* Clear wipes the route and used to sit immediately beside Done in a row of five
-   identical grey pills. Now on its own line, at the opposite end, looking like what it
-   is rather than like another way to finish. */
-.route-destroy {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 0.4rem;
-}
-
-.route-destroy button {
-  min-height: 2.75rem;
-  padding: 0.5rem 0.9rem;
-  border: 0;
-  border-radius: 0.5rem;
+   identical grey pills — indistinguishable from finishing. Giving it a whole row to
+   itself fixed that but cost a full row of height for one short link every time the
+   panel is open. Back in the shared row, but still visibly apart: transparent rather
+   than filled, coloured as a warning, and pushed past whatever gap `margin-left: auto`
+   can open up in the row it's sharing — flush right when there's slack, simply last
+   in reading order once everything wraps. */
+.route-actions button.destructive {
+  margin-left: auto;
   background: transparent;
   color: var(--danger);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.route-destroy button:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .route-actions button:disabled {

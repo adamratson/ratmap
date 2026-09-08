@@ -34,6 +34,27 @@ function render(summary: Partial<RouteSummary>): HTMLElement {
   return container;
 }
 
+/** For the Clear-route tests, which need to inspect what the button actually triggers —
+ *  `render()`'s deps are write-only from the test's point of view. */
+function renderClearable(summary: Partial<RouteSummary>) {
+  const container = document.createElement('div');
+  const planner = { clear: vi.fn(), undo: vi.fn() } as unknown as RoutePlanner;
+  const onUndoableStatus = vi.fn();
+  renderRoutePanel(
+    { ...BASE, ...summary },
+    {
+      planner,
+      container,
+      onPlanStarted: vi.fn(),
+      onPlanFinished: vi.fn(),
+      onStatus: vi.fn(),
+      onUndoableStatus,
+    },
+  );
+  const button = container.querySelector<HTMLButtonElement>('.route-actions button.destructive')!;
+  return { button, planner, onUndoableStatus };
+}
+
 describe('the planning panel', () => {
   it('leads with one action rather than five identical pills', () => {
     const panel = render({});
@@ -43,15 +64,18 @@ describe('the planning panel', () => {
     expect(primary[0].textContent).toBe('Follow');
   });
 
-  it('keeps Clear away from Done', () => {
-    // They used to sit next to each other, styled identically — one finishes, one wipes
-    // the route, and nothing distinguished them.
+  it('marks Clear as destructive rather than styling it like Done', () => {
+    // They used to be identical grey pills sitting side by side — one finishes, one
+    // wipes the route, and nothing distinguished them. Sharing a row again (finding a
+    // dedicated row cost real vertical space for one short link), but the styling still
+    // has to keep them apart.
     const panel = render({});
     const inRow = [...panel.querySelectorAll('.route-actions button')].map((b) => b.textContent);
 
-    expect(inRow).toContain('Done');
-    expect(inRow).not.toContain('Clear route');
-    expect(panel.querySelector('.route-destroy button')!.textContent).toBe('Clear route');
+    expect(inRow).toEqual(['Undo', 'Save', 'Follow', 'Done', 'Clear']);
+    const clear = panel.querySelector('.route-actions button.destructive')!;
+    expect(clear.textContent).toBe('Clear');
+    expect(clear.classList.contains('primary')).toBe(false);
   });
 
   it('keeps the mode exit available even on an empty route', () => {
@@ -66,7 +90,59 @@ describe('the planning panel', () => {
 
   it('does not offer to clear a route that has nothing in it', () => {
     const panel = render({ waypointCount: 0 });
-    expect(panel.querySelector<HTMLButtonElement>('.route-destroy button')!.disabled).toBe(true);
+    expect(panel.querySelector<HTMLButtonElement>('.route-actions button.destructive')!.disabled).toBe(
+      true,
+    );
+  });
+
+  describe('clearing a route', () => {
+    it('clears immediately, not behind a confirmation dialog', () => {
+      const { button, planner } = renderClearable({ waypointCount: 8, distanceM: 4200 });
+      button.click();
+
+      expect(planner.clear).toHaveBeenCalledOnce();
+    });
+
+    it('names what was cleared, so the toast alone answers "did I lose the good one"', () => {
+      const { button, onUndoableStatus } = renderClearable({ waypointCount: 8, distanceM: 4200 });
+      button.click();
+
+      const [message] = onUndoableStatus.mock.calls[0];
+      expect(message).toBe('Cleared 8 waypoints · 4.20 km');
+    });
+
+    it('says "1 waypoint", not "1 waypoints"', () => {
+      const { button, onUndoableStatus } = renderClearable({ waypointCount: 1, distanceM: 0 });
+      button.click();
+
+      const [message] = onUndoableStatus.mock.calls[0];
+      expect(message).toBe('Cleared 1 waypoint');
+    });
+
+    it('omits the distance when there is none yet — a lone waypoint has no legs', () => {
+      const { button, onUndoableStatus } = renderClearable({ waypointCount: 1, distanceM: 0 });
+      button.click();
+
+      const [message] = onUndoableStatus.mock.calls[0];
+      expect(message).not.toContain('·');
+    });
+
+    it('wires the toast\'s Undo to the same recovery the panel\'s own Undo button uses', () => {
+      // RouteDraft.clear() snapshots before wiping, so planner.undo() is a full recovery,
+      // not a reconstruction — the toast exists to make that already-correct mechanism
+      // discoverable, not to build a new one.
+      const { button, planner, onUndoableStatus } = renderClearable({
+        waypointCount: 3,
+        distanceM: 1000,
+      });
+      button.click();
+
+      const [, action] = onUndoableStatus.mock.calls[0];
+      expect(action.label).toBe('Undo');
+      action.onSelect();
+
+      expect(planner.undo).toHaveBeenCalledOnce();
+    });
   });
 });
 

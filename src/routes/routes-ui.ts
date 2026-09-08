@@ -96,8 +96,11 @@ function planSection(
   }
 
   // Five identically-styled grey pills, with Clear sitting immediately beside Done, made
-  // finishing and destroying look like the same kind of thing. Now: one primary action,
-  // and Clear pushed to the far end and coloured as a destructive one.
+  // finishing and destroying look like the same kind of thing — fixed by pulling Clear
+  // out and colouring it as the destructive action it is. Giving it an entire row to
+  // itself for that, though, cost a full row of height for one short link every time the
+  // panel is open — one row back, but still visually set apart by colour and position
+  // (last, past a gap `margin-left: auto` opens up whenever the row has room for it).
   const actions = el('div', 'route-actions');
   const ready = summary.waypointCount >= 2 && summary.pendingLegs === 0;
 
@@ -119,15 +122,35 @@ function planSection(
   // rather than "open this summit", and there must be an obvious way back.
   actions.append(buttonEl('Done', () => deps.onPlanFinished()));
 
+  const clear = buttonEl('Clear', () => {
+    // Immediate, not a confirmation dialog in front of every clear — the same "act now,
+    // offer a way back" pattern already used for deleting a saved place or route.
+    // RouteDraft.clear() snapshots before wiping, so the panel's own Undo button already
+    // recovers the exact route — the toast exists because that fact wasn't otherwise
+    // discoverable. Without it, clearing a carefully-placed 10-waypoint route left no
+    // sign anything had happened beyond a button elsewhere in the panel quietly
+    // switching from disabled to enabled.
+    const description = describeWaypoints(summary);
+    planner.clear();
+    deps.onUndoableStatus?.(`Cleared ${description}`, {
+      label: 'Undo',
+      onSelect: () => planner.undo(),
+    });
+  });
+  clear.disabled = summary.waypointCount === 0;
+  clear.classList.add('destructive');
+  actions.append(clear);
+
   section.append(actions);
 
-  const clear = buttonEl('Clear route', () => planner.clear());
-  clear.disabled = summary.waypointCount === 0;
-  const destroy = el('div', 'route-destroy');
-  destroy.append(clear);
-  section.append(destroy);
-
   return section;
+}
+
+/** "8 waypoints · 4.2 km" — what the Clear-route undo toast names, so it's obvious what
+ *  was just wiped without having to remember it from a glance at the panel a moment ago. */
+function describeWaypoints(summary: RouteSummary): string {
+  const points = summary.waypointCount === 1 ? '1 waypoint' : `${summary.waypointCount} waypoints`;
+  return summary.distanceM > 0 ? `${points} · ${formatDistance(summary.distanceM)}` : points;
 }
 
 function statsRow(summary: RouteSummary): HTMLElement {

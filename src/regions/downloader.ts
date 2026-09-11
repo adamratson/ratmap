@@ -344,16 +344,20 @@ export async function fetchChunkWithRetry(
 }
 
 /**
- * @param onStored called with the *absolute* number of bytes stored for this artifact so
- *   far — never an increment. Resume makes increments easy to double-count.
+ * @param onProgress called with the *absolute* number of bytes confirmed downloaded for
+ *   this artifact so far — never an increment. Resume makes increments easy to
+ *   double-count.
+ *
+ *   Driven by network arrival, not by disk writes: see the comment at the call site below
+ *   for why those two had to be split apart.
  */
 export async function downloadArtifact(
   artifact: RegionArtifact,
   signal: AbortSignal,
-  onStored: (bytesStored: number) => void,
+  onProgress: (bytesReceived: number) => void,
 ): Promise<void> {
   if (await hasArtifact(artifact.filename)) {
-    onStored(artifact.bytes);
+    onProgress(artifact.bytes);
     return;
   }
 
@@ -366,7 +370,10 @@ export async function downloadArtifact(
     offset = 0;
   }
 
-  onStored(offset);
+  // Bytes confirmed downloaded, independent of `offset` (bytes actually written). See the
+  // comment at the write site for why the two need to be tracked separately.
+  let received = offset;
+  onProgress(received);
 
   const url = artifactUrl(artifact);
 
@@ -425,6 +432,21 @@ export async function downloadArtifact(
         );
         inFlight.delete(doneIndex);
         ready.set(doneIndex, chunk);
+
+        // Report progress here, at network arrival, not at the write below. Chunks land in
+        // `ready` in whatever order the network delivers them, but C1 requires disk writes
+        // to stay in strict offset order — so whenever a low-index chunk is the last of a
+        // batch to resolve, every other chunk in that batch is already sitting in `ready`,
+        // and the write loop below drains all of them in one uninterrupted burst once it
+        // finally can. On a fast worker-backed writer that burst is near-instant, so a
+        // progress bar driven by *write* completion visibly teleports by however much
+        // piled up — a whole FETCH_CONCURRENCY window (50.3 MB), routinely, since same-host
+        // parallel requests often complete in a tight cluster. Reporting at arrival instead
+        // surfaces each chunk's real completion time, which network jitter naturally
+        // staggers, without changing what gets written or when.
+        received += chunk.byteLength;
+        onProgress(received);
+
         fillWindow();
         continue;
       }
@@ -432,9 +454,9 @@ export async function downloadArtifact(
       const chunk = ready.get(nextToWrite)!;
       ready.delete(nextToWrite);
       // The writer reports the length: it may have transferred the buffer, which leaves
-      // `chunk.byteLength` reading 0 here.
+      // `chunk.byteLength` reading 0 here. Only `offset` (the write position) needs it —
+      // `received` was already taken above, before the transfer could zero it out.
       offset += await writer.append(chunk, offset);
-      onStored(offset);
       nextToWrite += 1;
 
       // Writing out of `ready` frees a concurrency slot the same as a fetch resolving does
@@ -507,8 +529,8 @@ export async function downloadRegion(
     for (const artifact of region.artifacts) {
       progress.currentArtifact = artifact.kind;
 
-      await downloadArtifact(artifact, options.signal, (bytesStored) => {
-        progress.receivedBytes = completedBytes + bytesStored;
+      await downloadArtifact(artifact, options.signal, (bytesReceived) => {
+        progress.receivedBytes = completedBytes + bytesReceived;
         emit();
       });
 

@@ -309,6 +309,57 @@ describe('downloadArtifact', () => {
     expect(receivedBytes).toContain(FETCH_CONCURRENCY * CHUNK_BYTES);
     expect(receivedBytes.at(-1)).not.toBe(FETCH_CONCURRENCY * CHUNK_BYTES);
   }, 10_000);
+
+  it('reports progress as each chunk arrives, not only once a batch is finally written', async () => {
+    // Regression test for "downloads jump in 50.3 MB increments" — reported *after* the
+    // deadlock above was fixed, on downloads that were completing fine. Disk writes are
+    // required to stay in strict offset order (C1), so whenever chunk 0 is the last of a
+    // window to resolve, every other chunk in that window is already sitting in `ready`
+    // and gets written in one uninterrupted burst the moment chunk 0 lands — and with the
+    // worker-backed writer that burst is fast enough to look instantaneous. A progress bar
+    // driven by *write* completion inherits that burst; one driven by chunk *arrival*
+    // should not. This resolves the first window in reverse order (same setup as the
+    // deadlock test above) and checks that progress for the early arrivals — 11, 10, ...
+    // — is reported before chunk 0 ever unblocks the first write.
+    const artifact: RegionArtifact = {
+      kind: 'basemap',
+      filename: 'test-region-basemap.pmtiles',
+      path: 'regions/test-region/test-region-basemap.pmtiles',
+      bytes: CHUNK_BYTES * FETCH_CONCURRENCY,
+    };
+
+    const resolvers: Array<(response: Response) => void> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>((resolve) => resolvers.push(resolve))),
+    );
+    opfsMocks.appendToPartial.mockResolvedValue(undefined);
+
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    const writeCountAtEachReport: number[] = [];
+    const controller = new AbortController();
+    const donePromise = downloadArtifact(artifact, controller.signal, () => {
+      writeCountAtEachReport.push(opfsMocks.appendToPartial.mock.calls.length);
+    });
+
+    while (resolvers.length < FETCH_CONCURRENCY) await tick();
+
+    // Reverse order, same as the deadlock test: chunk 0 (needed for the first write) is
+    // the very last of the window to resolve.
+    for (let i = FETCH_CONCURRENCY - 1; i >= 0; i -= 1) {
+      resolvers[i](okResponse(CHUNK_BYTES));
+      await tick();
+    }
+
+    await donePromise;
+
+    // First report is the resume baseline (0), so the 11 arrivals ahead of chunk 0 are
+    // entries 1..11 — every one of them must have been reported before any write happened.
+    expect(writeCountAtEachReport.slice(1, FETCH_CONCURRENCY)).toEqual(
+      new Array(FETCH_CONCURRENCY - 1).fill(0),
+    );
+  });
 });
 
 describe('what a region looks like on disk', () => {

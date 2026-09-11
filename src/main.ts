@@ -15,7 +15,14 @@ import {
   USE_FALLBACK_TERRAIN,
 } from './config';
 import { TileSourceRegistry } from './tile-source-registry';
-import { addPeaksLayer, formatElevation, peakAt, PEAKS_SOURCE_ID, type PeakProperties } from './peaks';
+import {
+  addPeaksLayer,
+  formatElevation,
+  isMunro,
+  peakAt,
+  PEAKS_SOURCE_ID,
+  type PeakProperties,
+} from './peaks';
 import { SAC_GRADES, sacCssColor, sacPathAt, type SacHit } from './sac';
 import {
   SLOPE_CLASSES,
@@ -1009,10 +1016,12 @@ function showPeakSheet(peak: PeakProperties, lngLat: maplibregl.LngLat): void {
   const name = peak.name?.trim() || 'Unnamed summit';
   const ele = formatElevation(peak.ele);
   const wikidata = peak.wikidata;
+  const munro = isMunro(peak);
 
   openView('peak', (body) => {
     body.innerHTML = `
       <h2></h2>
+      ${munro ? `<p class="sheet-munro-badge">▲ Munro</p>` : ''}
       <p class="sheet-ele"></p>
       <p class="sheet-coords"></p>
       <div class="sheet-actions">

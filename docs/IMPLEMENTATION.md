@@ -491,6 +491,41 @@ hundred KB. §5 is unchanged.
 **Out of scope here:** verified/GPS-proven ascents, social features, leaderboards, and
 any account or sync (§8.5 still says local-only). Bagging is a private log.
 
+#### Status (2026-09-11): Munro visual ID shipped; full Phase 3.5 (bagging) not started
+
+What landed is deliberately smaller than this section: map + sheet show which summits are
+Munros, with no list browser, no bagging log, no export/import. Scoped down from the full
+phase at Adam's call, since that is what was actually asked for.
+
+**Munros — clean, built.** Verified against taginfo (2026-09-11) before writing anything:
+OSM's own `munro=yes` tag has exactly 282 uses, matching the SMC's current published
+count exactly — no editorial join needed, C19 is satisfied by the OSM tag alone.
+`infra/scripts/normalize-peaks.py` derives a `lists` property (`"munro"`) straight from
+the tag; `infra/scripts/build-peaks.sh` bakes it into `peaks-global.pmtiles` and asserts
+the count is exactly 282 at build time, same standard as the Ben Nevis elevation check.
+App side (`src/peaks.ts`): a `▲` label prefix and a distinct marker colour/size for Munros,
+with list membership added as an unconditional override to the zoom/prominence filter — a
+marginal-prominence Munro must not vanish, the same principle §Phase 3.5 states for the
+Wainwrights below. The tap sheet (`src/main.ts`) shows a "▲ Munro" badge. Verified in a
+real browser against a locally-rebuilt Scotland-only `peaks-global.pmtiles` (headless
+Chromium, both themes): correct styling on Munro and non-Munro peaks, correct sheet badge,
+no false positives.
+
+**Wainwrights — blocked, no compliant source found.** Checked all three routes C19 allows,
+2026-09-11:
+- OSM tags: no `wainwright` key exists at all (0 uses on taginfo; confirmed with an
+  Overpass query too, in case it was modelled as a relation instead — it isn't).
+- Wikidata: "list of Wainwrights" (Q17033985) carries no structured membership — no
+  `P361`/`P527` statements link individual fells to it. It is a Wikipedia-list stub, not
+  queryable data.
+- The one dataset that actually has Wainwright membership, the [Database of British and
+  Irish Hills](https://www.hill-bagging.co.uk/dobih/downloads/) (DoBIH), is CC BY 3.0/4.0
+  — open and attributable, but not CC0/ODbL, which is what C19 as written requires.
+
+This reopens open decision §8 item 6 with a concrete finding rather than a question: ship
+Wainwrights only if C19 is amended to accept CC BY sources (DoBIH specifically), or a
+CC0/ODbL source turns up later. Not decided here — flagged for Adam.
+
 ### Phase 4 — Route planning
 
 **Decision, 2026-08-23: there is no routing engine.** This phase originally specified

@@ -33,7 +33,37 @@ export interface PeakProperties {
   /** OSM's own prominence tag. Sparse; kept for reference, not used for filtering. */
   prominence?: string | number;
   wikidata?: string;
+  /**
+   * Semicolon-delimited editorial/rule-derived list membership, e.g. `"munro"` — see
+   * docs/IMPLEMENTATION.md Phase 3.5. Only `munro` is populated today: it comes straight
+   * from OSM's own `munro=yes` tag (infra/scripts/normalize-peaks.py), which taginfo shows
+   * at exactly 282 uses — the SMC's current published Munro count — so it needs no
+   * separate editorial join. Wainwrights are deliberately not here: no OSM tag exists for
+   * them, and Wikidata carries no structured membership for the list either (verified
+   * 2026-09-11) — the only dataset that has it (DoBIH) is CC BY, not the CC0/ODbL C19
+   * requires, so there is no compliant source yet.
+   */
+  lists?: string;
 }
+
+/** True if `lists` names the given list (semicolon-delimited membership string). */
+export function hasList(properties: PeakProperties, list: string): boolean {
+  return (properties.lists ?? '').split(';').includes(list);
+}
+
+export function isMunro(properties: PeakProperties): boolean {
+  return hasList(properties, 'munro');
+}
+
+/**
+ * Matches a peak whose `lists` property names it, as a style expression — mirrors
+ * {@link hasList} but evaluated by MapLibre rather than in JS. `in` on a string operand
+ * checks substring, so this only needs the raw property, no split.
+ */
+// `any`: style expressions aren't typed as tuples once pulled out of a paint/layout
+// literal; see PEAKS_NOTABILITY_FILTER's own `as unknown as FilterSpecification` casts for
+// the same reason.
+const MUNRO_EXPR: any = ['in', 'munro', ['coalesce', ['get', 'lists'], '']];
 
 /** Human-readable elevation, or null when the peak has no usable one. */
 export function formatElevation(ele: unknown): string | null {
@@ -73,6 +103,15 @@ export const PEAKS_NOTABILITY_FILTER = [
   ['all', ['>=', ['zoom'], 9], ['has', 'wikidata']],
 ] as const;
 
+/**
+ * What actually renders: the notability filter, with list membership as an unconditional
+ * override. A Munro must never vanish because it happens to have modest topographic
+ * prominence — Phase 3.5 calls this out explicitly for the Wainwrights (a deliberately
+ * low-prominence list), and the same rule applies here even though most Munros already
+ * clear the prominence floor on their own merits.
+ */
+export const PEAKS_RENDER_FILTER = ['any', PEAKS_NOTABILITY_FILTER, MUNRO_EXPR] as const;
+
 export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
   registry.addRemote(PEAKS_PMTILES_URL);
 
@@ -85,25 +124,33 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
     attribution: OSM_ATTRIBUTION,
   });
 
+  // Base label text, unadorned — wrapped below with a Munro marker so the two peak kinds
+  // share one case chain instead of duplicating the has-name/has-ele fallbacks. Same `any`
+  // reasoning as MUNRO_EXPR: factored out of the layout literal, it loses the tuple typing
+  // contextual inference would otherwise give it.
+  const baseTextField: any = [
+    'case',
+    ['all', ['has', 'name'], ['has', 'ele']],
+    ['concat', ['get', 'name'], '\n', ['to-string', ['round', ['get', 'ele']]], ' m'],
+    ['has', 'name'],
+    ['get', 'name'],
+    ['has', 'ele'],
+    ['concat', ['to-string', ['round', ['get', 'ele']]], ' m'],
+    '',
+  ];
+
   map.addLayer({
     id: PEAKS_LAYER_ID,
     type: 'symbol',
     source: PEAKS_SOURCE_ID,
     'source-layer': PEAKS_SOURCE_LAYER,
-    filter: PEAKS_NOTABILITY_FILTER as unknown as FilterSpecification,
+    filter: PEAKS_RENDER_FILTER as unknown as FilterSpecification,
     layout: {
       // Name on the first line, elevation on the second — dropped cleanly when either is
-      // missing rather than leaving a stray separator or a blank line.
-      'text-field': [
-        'case',
-        ['all', ['has', 'name'], ['has', 'ele']],
-        ['concat', ['get', 'name'], '\n', ['to-string', ['round', ['get', 'ele']]], ' m'],
-        ['has', 'name'],
-        ['get', 'name'],
-        ['has', 'ele'],
-        ['concat', ['to-string', ['round', ['get', 'ele']]], ' m'],
-        '',
-      ],
+      // missing rather than leaving a stray separator or a blank line. A Munro gets a ▲
+      // prefix: colour alone isn't a safe way to mark list membership (washes out on a
+      // greyscale screen in rain), so shape carries it too.
+      'text-field': ['case', MUNRO_EXPR, ['concat', '▲ ', baseTextField], baseTextField],
       'text-font': ['Noto Sans Regular'],
       'text-size': 11,
       'text-offset': [0, 0.6],
@@ -112,7 +159,7 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
       'text-allow-overlap': false,
     },
     paint: {
-      'text-color': '#4a3524',
+      'text-color': ['case', MUNRO_EXPR, '#92680b', '#4a3524'],
       'text-halo-color': 'rgba(255,255,255,0.9)',
       'text-halo-width': 1.2,
     },
@@ -128,12 +175,24 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
       'source-layer': PEAKS_SOURCE_LAYER,
       // Same filter as the label layer — otherwise dots appear for peaks whose labels are
       // filtered out, which reads as a rendering bug.
-      filter: PEAKS_NOTABILITY_FILTER as unknown as FilterSpecification,
+      filter: PEAKS_RENDER_FILTER as unknown as FilterSpecification,
       paint: {
-        'circle-radius': ['step', ['zoom'], 2.5, 9, 3, 12, 4],
-        'circle-color': '#7a4a2b',
+        // A single top-level `step` on zoom, with `case` nested inside each stop rather
+        // than the reverse — MapLibre allows only one zoom subexpression per property, so
+        // two independent `step`s (one per case arm) throws "Only one zoom-based step or
+        // interpolate subexpression may be used in an expression" at style-load time.
+        'circle-radius': [
+          'step',
+          ['zoom'],
+          ['case', MUNRO_EXPR, 3.5, 2.5],
+          9,
+          ['case', MUNRO_EXPR, 4.5, 3],
+          12,
+          ['case', MUNRO_EXPR, 6, 4],
+        ],
+        'circle-color': ['case', MUNRO_EXPR, '#b8860b', '#7a4a2b'],
         'circle-stroke-color': 'rgba(255,255,255,0.9)',
-        'circle-stroke-width': 1,
+        'circle-stroke-width': ['case', MUNRO_EXPR, 1.75, 1],
       },
     },
     PEAKS_LAYER_ID,

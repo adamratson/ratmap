@@ -7,6 +7,15 @@ style expression means the tiles carry a real number, the renderer stays trivial
 bad value can never surface as "NaN m" at a summit — a wrong elevation on a mountain is
 worse than a missing one.
 
+Also derives `lists`, a semicolon-delimited summit-list membership string (docs/
+IMPLEMENTATION.md Phase 3.5, C19 — never transcribe an editorial table; only join from a
+CC0/ODbL source). Today that's just `munro`, straight off OSM's own `munro=yes` tag:
+taginfo shows exactly 282 uses, matching the SMC's current published Munro count, so no
+separate editorial join is needed. Wainwrights are deliberately not derived here — no OSM
+tag exists for them and Wikidata carries no structured list membership either (verified
+2026-09-11); the one dataset that has it (DoBIH) is CC BY, not CC0/ODbL, so there is no
+compliant source yet.
+
 Reads **line-delimited** GeoJSON on argv[1], writes line-delimited GeoJSON to argv[2] —
 one feature per line, streamed, never the whole document at once. A planet-scale peaks
 export is ~1.2 M features and `json.load` of that costs ~1.4 GB of Python objects
@@ -45,9 +54,18 @@ def parse_elevation(raw):
     return round(value, 1)
 
 
+def derive_lists(props):
+    """Semicolon-delimited list membership, or None. See module docstring for sourcing."""
+    lists = []
+    if props.get("munro") == "yes":
+        lists.append("munro")
+    return ";".join(lists) if lists else None
+
+
 def main(src, dest):
     kept_ele = 0
     dropped_ele = 0
+    munro_count = 0
     total = 0
 
     with open(src) as src_f, open(dest, "w") as dest_f:
@@ -72,12 +90,18 @@ def main(src, dest):
                     props["ele"] = parsed
                     kept_ele += 1
 
+            lists = derive_lists(props)
+            if lists:
+                props["lists"] = lists
+                if "munro" in lists.split(";"):
+                    munro_count += 1
+
             dest_f.write(json.dumps(feature))
             dest_f.write("\n")
 
     print(
         f"normalize-peaks: {total} features, {kept_ele} with usable ele, "
-        f"{dropped_ele} unparseable ele dropped"
+        f"{dropped_ele} unparseable ele dropped, {munro_count} munros"
     )
 
 

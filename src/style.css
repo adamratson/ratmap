@@ -73,6 +73,11 @@
   --avalanche-c40: #962878;
   --avalanche-c45: #3c5ac8;
 
+  /* Munro badge text. The map paints its own literal hex for the marker/label (MapLibre
+     paint properties can't read CSS variables — same reason as the SAC ramp above); this
+     is the sheet-only variant, kept close in hue to #92680b/#b8860b. */
+  --munro: #8a6008;
+
   /* Fades the iOS status bar into the map beneath it. Follows the *map*, not the chrome:
      the clock is drawn over the map, and a white fade under a dark map is a bright band
      across the top of the screen. */
@@ -103,6 +108,9 @@
   --avalanche-c35: #ff7a58;
   --avalanche-c40: #d670b8;
   --avalanche-c45: #7f97ee;
+
+  /* Lightened for the dark sheet, same reasoning as the SAC/avalanche ramps above. */
+  --munro: #e0b34d;
 
   --surface: #111827;
   --surface-sunken: #1f2937;
@@ -891,6 +899,14 @@ body {
 
 .sheet-sac-note {
   color: var(--text) !important;
+}
+
+/* Munro membership (Phase 3.5) — OSM's own munro=yes tag, no separate editorial artifact.
+   Same weight as the SAC grade line: it's the one fact this badge exists to state. */
+.sheet-munro-badge {
+  font-size: 0.95rem !important;
+  font-weight: 600;
+  color: var(--munro) !important;
 }
 
 /* The caveat under a detail sheet — smaller and quieter than the fact above it, but

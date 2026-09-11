@@ -3,8 +3,11 @@ import type { Map as MLMap, PointLike } from 'maplibre-gl';
 import {
   addPeaksLayer,
   formatElevation,
+  hasList,
+  isMunro,
   peakAt,
   PEAKS_LAYER_ID,
+  PEAKS_RENDER_FILTER,
   PEAKS_SOURCE_ID,
 } from './peaks';
 import type { TileSourceRegistry } from './tile-source-registry';
@@ -145,6 +148,77 @@ describe('PEAKS_NOTABILITY_FILTER', () => {
     const filters = addLayer.mock.calls.map((call) => JSON.stringify(call[0].filter));
     expect(filters).toHaveLength(2);
     expect(filters[0]).toBe(filters[1]);
+  });
+});
+
+describe('hasList / isMunro', () => {
+  it('reads membership out of the semicolon-delimited lists property', () => {
+    expect(hasList({ lists: 'munro' }, 'munro')).toBe(true);
+    expect(hasList({ lists: 'munro;marilyn' }, 'munro')).toBe(true);
+    expect(hasList({ lists: 'marilyn' }, 'munro')).toBe(false);
+    expect(hasList({}, 'munro')).toBe(false);
+  });
+
+  it('isMunro is hasList narrowed to the one list this build actually derives', () => {
+    expect(isMunro({ lists: 'munro' })).toBe(true);
+    expect(isMunro({ lists: 'marilyn' })).toBe(false);
+    expect(isMunro({})).toBe(false);
+  });
+});
+
+describe('PEAKS_RENDER_FILTER', () => {
+  // Same evaluation approach as PEAKS_NOTABILITY_FILTER above, extended with the list-
+  // membership override this filter adds on top.
+  function passes(props: { prom?: number; wikidata?: string; lists?: string }, zoom: number): boolean {
+    const floor =
+      zoom >= 15 ? -1 : zoom >= 13 ? 30 : zoom >= 11 ? 120 : zoom >= 9 ? 300 : 600;
+    const byProminence = (props.prom ?? -1) >= floor;
+    const byNotability = zoom >= 9 && props.wikidata !== undefined;
+    const byList = (props.lists ?? '').split(';').includes('munro');
+    return byProminence || byNotability || byList;
+  }
+
+  it('renders a munro at every zoom regardless of prominence', () => {
+    // Same low prominence, only one is a munro — this is the case that regresses: a
+    // marginal munro must not vanish the way an equally low-prominence bump correctly does.
+    expect(passes({ prom: 10, lists: 'munro' }, 6)).toBe(true);
+    expect(passes({ prom: 10 }, 6)).toBe(false);
+  });
+
+  it('still applies the ordinary notability filter to non-munro peaks', () => {
+    expect(passes({ prom: 1483 }, 6)).toBe(true);
+    expect(passes({ prom: 93 }, 6)).toBe(false);
+  });
+
+  it('is what addPeaksLayer actually filters both layers on', () => {
+    const registry = fakeRegistry();
+    const addLayer = vi.fn();
+    const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
+
+    addPeaksLayer(map, registry);
+
+    const filter = JSON.stringify(addLayer.mock.calls[0][0].filter);
+    expect(filter).toBe(JSON.stringify(PEAKS_RENDER_FILTER));
+  });
+});
+
+describe('munro styling', () => {
+  it('prefixes the label and swaps marker colour for a munro, not just a symbol change', () => {
+    const registry = fakeRegistry();
+    const addLayer = vi.fn();
+    const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
+
+    addPeaksLayer(map, registry);
+
+    const symbolLayer = addLayer.mock.calls.find((call) => call[0].id === PEAKS_LAYER_ID)![0];
+    const markerLayer = addLayer.mock.calls.find(
+      (call) => call[0].id === `${PEAKS_LAYER_ID}-marker`,
+    )![0];
+
+    // Shape (▲ prefix), not colour alone — a munro must read as one on a greyscale screen.
+    expect(JSON.stringify(symbolLayer.layout['text-field'])).toContain('▲');
+    // And colour still differs, as a second, redundant cue.
+    expect(JSON.stringify(markerLayer.paint['circle-color'])).toContain('munro');
   });
 });
 

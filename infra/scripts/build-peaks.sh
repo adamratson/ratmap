@@ -44,6 +44,10 @@ for url in $PEAKS_SOURCE_URLS; do
   filtered_pbfs+=("$filtered")
 done
 
+# munro=yes lives on the same natural=peak nodes the filter above already keeps in full
+# (osmium tags-filter keeps every tag on a matching object, it doesn't project down to the
+# filter tags), so no extra filter expression is needed here — normalize-peaks.py reads it
+# straight off the export.
 if [ "${#filtered_pbfs[@]}" -gt 1 ]; then
   echo "Merging ${#filtered_pbfs[@]} filtered extracts"
   osmium merge "${filtered_pbfs[@]}" -o "$WORK_DIR/peaks-raw.osm.pbf" --overwrite
@@ -169,11 +173,40 @@ if checked == 0:
     print("  (no known summits in this extract — elevation assertions skipped)")
 PYCHECK
 
+# Munro count assertion (C19, same standard as the elevation check above): 282, the SMC's
+# current published count, verified directly against taginfo's munro=yes usage count
+# (2026-09-11) rather than taken from a guidebook. A rebuild that silently drops munros —
+# a changed osmium filter, a broken tag passthrough — fails here, not on someone's phone.
+python3 - "$WORK_DIR/peaks-final.geojsonl" <<'PYCHECK_MUNRO'
+import json, sys
+
+EXPECTED_MUNROS = 282
+
+count = 0
+with open(sys.argv[1]) as f:
+    for line in f:
+        line = line.lstrip("\x1e").strip()
+        if not line:
+            continue
+        lists = json.loads(line).get("properties", {}).get("lists", "")
+        if "munro" in lists.split(";"):
+            count += 1
+
+if count == 0:
+    print("  (no munro=yes nodes in this extract — count assertion skipped)")
+elif count != EXPECTED_MUNROS:
+    sys.exit(f"FAIL: {count} munros, expected {EXPECTED_MUNROS}")
+else:
+    print(f"  OK {count} munros")
+PYCHECK_MUNRO
+
 OUT="$DIST_DIR/peaks-global.pmtiles"
 # `prom` is the computed prominence the app's zoom filter ranks on; `prominence` is OSM's
-# own sparse tag, kept for reference.
+# own sparse tag, kept for reference. `lists` is the summit-list membership derived in
+# normalize-peaks.py (Phase 3.5, C19).
 tippecanoe -o "$OUT" -zg --drop-densest-as-needed \
   --include=name --include=ele --include=prom --include=prominence --include=wikidata \
+  --include=lists \
   -l peaks -n "ratmap peaks" --force \
   "$WORK_DIR/peaks-final.geojsonl"
 

@@ -151,17 +151,23 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
       // prefix: colour alone isn't a safe way to mark list membership (washes out on a
       // greyscale screen in rain), so shape carries it too.
       'text-field': ['case', MUNRO_EXPR, ['concat', '▲ ', baseTextField], baseTextField],
-      'text-font': ['Noto Sans Regular'],
-      'text-size': 11,
-      'text-offset': [0, 0.6],
+      // Medium, not Regular: the only weight above Regular we bundle (public/fonts has no
+      // Bold), but heavy enough to hold up against a busy hillshaded background.
+      'text-font': ['Noto Sans Medium'],
+      'text-size': 12,
+      'text-offset': [0, 0.7],
       'text-anchor': 'top',
       'text-optional': true,
       'text-allow-overlap': false,
     },
     paint: {
-      'text-color': ['case', MUNRO_EXPR, '#92680b', '#4a3524'],
-      'text-halo-color': 'rgba(255,255,255,0.9)',
-      'text-halo-width': 1.2,
+      // Near-black, not the brown used previously — that brown sat one shade off the
+      // contour (#6b4a33) and footpath (#8a3d2e) colours, so a peak label read as more
+      // relief or path clutter than a distinct feature. Munro gold is kept but darkened
+      // for the same reason: it must pop off the halo, not blend into hillshade ochre.
+      'text-color': ['case', MUNRO_EXPR, '#8a5d00', '#1a1512'],
+      'text-halo-color': 'rgba(255,255,255,0.95)',
+      'text-halo-width': 1.6,
     },
   });
 
@@ -181,18 +187,31 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
         // than the reverse — MapLibre allows only one zoom subexpression per property, so
         // two independent `step`s (one per case arm) throws "Only one zoom-based step or
         // interpolate subexpression may be used in an expression" at style-load time.
+        //
+        // Sized up from the original 2.5-6 px: at that size the dot read as generic
+        // vector-tile clutter (a POI, a hamlet) rather than a summit, especially over
+        // hillshade. A bigger dot plus a heavier white halo is what actually separates it
+        // from the terrain underneath, not the fill colour alone.
         'circle-radius': [
           'step',
           ['zoom'],
-          ['case', MUNRO_EXPR, 3.5, 2.5],
+          ['case', MUNRO_EXPR, 5, 4],
           9,
-          ['case', MUNRO_EXPR, 4.5, 3],
+          ['case', MUNRO_EXPR, 6.5, 5],
           12,
-          ['case', MUNRO_EXPR, 6, 4],
+          ['case', MUNRO_EXPR, 8.5, 6.5],
         ],
-        'circle-color': ['case', MUNRO_EXPR, '#b8860b', '#7a4a2b'],
-        'circle-stroke-color': 'rgba(255,255,255,0.9)',
-        'circle-stroke-width': ['case', MUNRO_EXPR, 1.75, 1],
+        // Deep violet, not the near-black used for the text: colours render fixed
+        // regardless of light/dark map theme (see style.css's legend-section comment), and
+        // a near-black fill all but disappears against the dark-theme basemap — the fill
+        // is most of the dot's area, unlike the text, which always sits inside its own
+        // white halo and so doesn't care what's under it. Violet is otherwise unused on
+        // this map (browns are contours/paths, blue/red/orange are routes, green is
+        // offline coverage), and its mid lightness holds up against both a light terrain
+        // basemap and a dark one.
+        'circle-color': ['case', MUNRO_EXPR, '#c9910a', '#6d28d9'],
+        'circle-stroke-color': 'rgba(255,255,255,0.95)',
+        'circle-stroke-width': ['case', MUNRO_EXPR, 2.25, 1.75],
       },
     },
     PEAKS_LAYER_ID,

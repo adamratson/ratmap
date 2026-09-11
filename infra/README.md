@@ -150,9 +150,17 @@ this doesn't need re-running on every data refresh the way the others do.
 ./scripts/upload.sh
 ```
 
-Uploads everything currently in `dist/` to the bucket via `aws s3 cp` (S3-compatible, uses
-the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in `.env`) — not `pmtiles upload`; see
-`upload.sh`'s header comment for why.
+Uploads the archives in `dist/` that the bucket does not already hold at the same size, via
+`aws s3 cp` (S3-compatible, uses the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in `.env`) —
+not `pmtiles upload`; see `upload.sh`'s header comment for why. Then the manifest, last.
+
+What is already there is decided from a single bucket listing, so the first thing it prints
+is `Checking N archive(s)` followed by how many need sending. It used to `head-object` each
+archive in turn and print nothing for the ones already present — ~0.44 s a call, so a run
+with nothing new sat silent for ~5 minutes across the ~600-archive catalogue and looked
+hung. If the listing cannot be used it says why and falls back to that per-file check, now
+with progress every 25. `FORCE_UPLOAD=1` skips the check and re-sends everything, for the
+rare archive rebuilt at exactly the same size.
 
 ## Verify (C4 acceptance check)
 

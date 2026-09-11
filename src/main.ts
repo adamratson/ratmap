@@ -389,7 +389,7 @@ function openLegendView(): void {
       <div class="legend-section">
         <h3>Summits</h3>
         ${legendRow(
-          '<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="4.5" fill="#7a4a2b" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/></svg>',
+          '<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="6" fill="#6d28d9" stroke="rgba(255,255,255,0.95)" stroke-width="2"/></svg>',
           'Summit',
           'Named and given a height once its prominence clears the zoom threshold — less prominent summits appear as you zoom in.',
         )}

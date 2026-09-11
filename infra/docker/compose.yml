@@ -95,6 +95,9 @@ services:
       # run ...` silently ran the default instead — the same gap this file already
       # records for RATMAP_REGION_FILTER.
       RATMAP_AVALANCHE_PARALLEL: "${RATMAP_AVALANCHE_PARALLEL:-}"
+      # Threads build-manifest.py hashes with (default 2). Set 1 on a spinning disk.
+      # Same passthrough reason as the rest: undeclared, an inline host value is dropped.
+      MANIFEST_HASH_WORKERS: "${MANIFEST_HASH_WORKERS:-}"
 
       # upload.sh's own unpublish guard — same passthrough gap as above, lower stakes
       # (an unset ALLOW_UNPUBLISH just makes the guard refuse, not silently do the wrong

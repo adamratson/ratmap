@@ -128,7 +128,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, sequentially by default — peak RSS-bound, see below (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
-| `manifest` | `build-manifest.py` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | minutes (sha256s everything) |
+| `manifest` | `build-manifest.py` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | seconds when little changed: sha256s are cached by size, mtime and inode in `dist/.manifest-sha256-cache.json`, so only new or rebuilt archives are hashed. A first run hashes everything, 2 threads (`MANIFEST_HASH_WORKERS`, 1 for a spinning disk) |
 
 `sac` and `paths` sit before `regions` in `all` for a reason: `build-region.sh` cuts each
 region's `<id>-sac.pmtiles` and `<id>-paths.pmtiles` out of those global archives, so a

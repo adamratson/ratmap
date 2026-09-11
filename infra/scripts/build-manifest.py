@@ -46,12 +46,13 @@ Two modes:
       Scotland/Wales/England run, 2026-09).
 """
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import os
 import re
 import pathlib
-import subprocess
+import struct
 import sys
 import urllib.error
 import urllib.request
@@ -83,6 +84,17 @@ def artifact_kind(filename):
     return None
 
 
+# PMTiles v3 fixed header: 127 bytes, little-endian. The only part of an archive this script
+# reads other than the bytes it hashes.
+PMTILES_HEADER_BYTES = 127
+PMTILES_SECTIONS = (
+    ("root directory", 8),
+    ("metadata", 24),
+    ("leaf directories", 40),
+    ("tile data", 56),
+)
+
+
 def zoom_range(path):
     """Read an archive's real min/max zoom from its PMTiles header.
 
@@ -90,17 +102,29 @@ def zoom_range(path):
     rather than assuming. Without it the app has to hardcode a guess, and then claims
     "limited detail" over a region it has fully downloaded — crying wolf, which trains
     people to ignore the warning that matters.
+
+    Read directly rather than through `pmtiles show --header-json`, which cost ~32 ms an
+    archive — starting a Go binary to read 127 bytes, ~20 s across a 700-artifact
+    catalogue — and checks no more than this does. Tested 2026-09-11: it rejects a zeroed
+    header and a truncated file, and *accepts* an archive whose root directory is garbage.
+    So it validates the header and that every section it points at fits inside the file,
+    which is exactly what this reproduces; the two agreed on all seven local archives and
+    on all three of those corrupt cases.
     """
     try:
-        out = subprocess.run(
-            ["pmtiles", "show", str(path), "--header-json"],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-        header = json.loads(out)
-        return header.get("minzoom"), header.get("maxzoom")
-    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as err:
+        size = path.stat().st_size
+        with open(path, "rb") as f:
+            header = f.read(PMTILES_HEADER_BYTES)
+        if len(header) < PMTILES_HEADER_BYTES or header[:7] != b"PMTiles":
+            raise ValueError("no PMTiles magic number")
+        if header[7] != 3:
+            raise ValueError(f"spec version {header[7]}; this reads version 3")
+        for name, at in PMTILES_SECTIONS:
+            offset, length = struct.unpack_from("<QQ", header, at)
+            if offset + length > size:
+                raise ValueError(f"{name} runs past the end of the file")
+        return header[100], header[101]
+    except (OSError, ValueError) as err:
         # Hard failure, not a warning. An unreadable header is how a corrupt archive
         # presents itself — an interrupted `pmtiles extract` leaves a plausibly-sized file
         # whose header is all zeros. Publishing it would put a broken download in the
@@ -117,6 +141,109 @@ def sha256(path, chunk=1 << 20):
         while block := f.read(chunk):
             digest.update(block)
     return digest.hexdigest()
+
+
+# Hashes of archives that have not changed since they were last hashed, kept beside them.
+#
+# The manifest stage runs with --base-live, which recomputes every artifact under
+# dist/regions. On a build host holding the catalogue that is ~213 GB read and hashed on
+# every run, usually to publish a handful of new small files. Here a file is rehashed only
+# when its size, mtime or inode has changed — and every way this pipeline rewrites an
+# archive (build under a temporary name, verify, `mv` into place) gives it a new inode and
+# mtime, so a rebuilt archive always misses and an untouched one costs a stat.
+#
+# Not uploaded: upload.sh publishes *.pmtiles and the manifest, nothing else in dist/.
+# Deleting it is always safe; the next run hashes everything, as it used to.
+CACHE_NAME = ".manifest-sha256-cache.json"
+CACHE_VERSION = 1
+
+# Two, measured 2026-09-11 over 1.1 GB with a warm page cache: 2.17 GB/s sequential,
+# 3.53 GB/s at 2 threads, 3.73 GB/s at 8 — hashlib drops the GIL, but memory bandwidth
+# caps it almost at once. Two takes nearly all of that, and on a spinning disk keeps it to
+# two streams rather than seeking between eight. MANIFEST_HASH_WORKERS=1 for a disk that
+# dislikes even that.
+HASH_WORKERS = max(1, int(os.environ.get("MANIFEST_HASH_WORKERS", "2")))
+
+
+def _stamp(st):
+    return {"size": st.st_size, "mtime_ns": st.st_mtime_ns, "ino": st.st_ino}
+
+
+class HashCache:
+    def __init__(self, dist_dir):
+        self.root = pathlib.Path(dist_dir)
+        self.path = self.root / CACHE_NAME
+        self.entries = {}
+        try:
+            data = json.loads(self.path.read_text())
+            if data.get("version") == CACHE_VERSION:
+                self.entries = dict(data["entries"])
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            # Missing or unreadable reads as empty: everything is hashed, which is the
+            # behaviour before this cache existed — never a wrong digest.
+            self.entries = {}
+
+    def _key(self, path):
+        return str(path.relative_to(self.root))
+
+    def get(self, path):
+        entry = self.entries.get(self._key(path))
+        if not entry:
+            return None
+        if all(entry.get(k) == v for k, v in _stamp(path.stat()).items()):
+            return entry.get("sha256")
+        return None
+
+    def put(self, path, digest, st):
+        self.entries[self._key(path)] = {**_stamp(st), "sha256": digest}
+
+    def save(self):
+        # Drop entries whose file is gone — and only those. A run scoped with --only never
+        # visits most regions; evicting everything it did not visit would make the next
+        # full run rehash the whole catalogue.
+        live = {k: v for k, v in self.entries.items() if (self.root / k).exists()}
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        tmp.write_text(json.dumps({"version": CACHE_VERSION, "entries": live}, sort_keys=True))
+        os.replace(tmp, self.path)
+
+
+def fill_digests(pending, cache):
+    """Set artifact["sha256"] for each (artifact, path), reusing what has not changed."""
+    to_hash = []
+    reused = 0
+    for artifact, path in pending:
+        digest = cache.get(path)
+        if digest:
+            artifact["sha256"] = digest
+            reused += 1
+        else:
+            to_hash.append((artifact, path))
+
+    if not to_hash:
+        print(f"  sha256: all {reused} archive(s) unchanged since last hashed", file=sys.stderr)
+        return
+
+    total = sum(artifact["bytes"] for artifact, _ in to_hash)
+    print(
+        f"  sha256: hashing {len(to_hash)} archive(s), {total / 1e9:.2f} GB "
+        f"({reused} unchanged, reused)",
+        file=sys.stderr,
+    )
+
+    def work(item):
+        artifact, path = item
+        # Stamp *before* hashing, and cache only if the file is still the same afterwards.
+        # Stamping after would let a file rewritten mid-hash be remembered under its new
+        # mtime with a digest of neither version.
+        before = path.stat()
+        digest = sha256(path)
+        return artifact, path, digest, before, path.stat()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=HASH_WORKERS) as pool:
+        for artifact, path, digest, before, after in pool.map(work, to_hash):
+            artifact["sha256"] = digest
+            if _stamp(before) == _stamp(after):
+                cache.put(path, digest, before)
 
 
 def public_base_url(infra_dir):
@@ -181,6 +308,7 @@ def build_local_regions(dist_dir, defined, only=None):
     """
     regions_dir = pathlib.Path(dist_dir) / "regions"
     by_id = {}
+    pending = []
 
     if not regions_dir.is_dir():
         return by_id
@@ -201,20 +329,20 @@ def build_local_regions(dist_dir, defined, only=None):
                 print(f"  ! skipping {path.name}: unrecognised artifact suffix", file=sys.stderr)
                 continue
             minzoom, maxzoom = zoom_range(path)
-            artifacts.append(
-                {
-                    "kind": kind,
-                    # C3: the filename is also the OPFS/TileSourceRegistry key, so it must
-                    # stay globally unique — hence the region-id prefix.
-                    "filename": path.name,
-                    "path": f"regions/{region_id}/{path.name}",
-                    "bytes": path.stat().st_size,
-                    "minzoom": minzoom,
-                    "maxzoom": maxzoom,
-                    # Lets a resumed or re-downloaded artifact be checked for integrity.
-                    "sha256": sha256(path),
-                }
-            )
+            artifact = {
+                "kind": kind,
+                # C3: the filename is also the OPFS/TileSourceRegistry key, so it must
+                # stay globally unique — hence the region-id prefix.
+                "filename": path.name,
+                "path": f"regions/{region_id}/{path.name}",
+                "bytes": path.stat().st_size,
+                "minzoom": minzoom,
+                "maxzoom": maxzoom,
+                # "sha256" is filled in below, once every archive has passed the header
+                # check: lets a resumed or re-downloaded artifact be checked for integrity.
+            }
+            artifacts.append(artifact)
+            pending.append((artifact, path))
 
         if not artifacts:
             print(f"  ! skipping {region_id}: no artifacts built", file=sys.stderr)
@@ -229,6 +357,13 @@ def build_local_regions(dist_dir, defined, only=None):
             "totalBytes": sum(a["bytes"] for a in artifacts),
             "artifacts": artifacts,
         }
+
+    # Hashed only after every archive's header has been read, so a corrupt file anywhere
+    # still fails the run in seconds rather than after hashing everything before it.
+    if pending:
+        cache = HashCache(dist_dir)
+        fill_digests(pending, cache)
+        cache.save()
 
     return by_id
 

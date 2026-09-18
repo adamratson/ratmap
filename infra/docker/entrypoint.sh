@@ -20,7 +20,8 @@ ratmap infra toolchain
 
   global [stages...] [--force] [--dry-run]   run the planet-scale pipeline
                                              stages: prefetch world terrain peaks sac
-                                                     paths places regions contours
+                                                     paths terrain-features places
+                                                     regions contours avalanche
                                                      manifest all
   <script>.sh [args...]                      run one infra/scripts entry directly, e.g.
                                                build-region.sh scotland --dry-run
@@ -39,8 +40,10 @@ Mounts this image expects (see docker/README.md):
   /opt/ratmap/infra/.env    (upload only)    object storage credentials, read-only
 
 Everything the build scripts honour as an environment variable still works:
-  PEAKS_SOURCE_URLS SAC_SOURCE_URLS PATHS_SOURCE_URLS PLACES_SOURCE_URLS
+  PEAKS_SOURCE_URLS SAC_SOURCE_URLS PATHS_SOURCE_URLS TERRAIN_FEATURES_SOURCE_URLS
+  PLACES_SOURCE_URLS
   WORLD_SOURCE_URL TERRAIN_SOURCE_URL SAC_SOURCE_URL PATHS_SOURCE_URL
+  TERRAIN_FEATURES_SOURCE_URL
   WORLD_CATALOG_MAXZOOM TERRAIN_MAXZOOM REGION_BASEMAP_MAXZOOM REGION_TERRAIN_MAXZOOM
   CONTOUR_INTERVAL INDEX_EVERY CONTOUR_MINZOOM CONTOUR_MAXZOOM
 USAGE
@@ -100,7 +103,7 @@ case "$cmd" in
     ls -1 "$SCRIPTS_DIR" | sed 's/^/  /' >&2
     exit 1
     ;;
-  prefetch|world|terrain|peaks|sac|paths|places|regions|contours|manifest|all)
+  prefetch|world|terrain|peaks|sac|paths|terrain-features|places|regions|contours|avalanche|manifest|all)
     # A stage name on its own. Without this it falls through to the catch-all below and
     # dies as `exec: regions: not found`, which says nothing about the one word missing.
     echo "\"$cmd\" is a stage of the pipeline, not a command. Run it through 'global':" >&2

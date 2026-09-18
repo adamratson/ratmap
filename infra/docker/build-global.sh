@@ -69,7 +69,7 @@ MIN_DIST_GB="${RATMAP_MIN_DIST_GB:-20}"
 MIN_MEM_GB="${RATMAP_MIN_MEM_GB:-4}"
 REC_MEM_GB=8
 
-ALL_STAGES=(prefetch world terrain peaks sac paths places regions contours avalanche manifest)
+ALL_STAGES=(prefetch world terrain peaks sac paths terrain-features places regions contours avalanche manifest)
 FORCE=""
 DRY_RUN=""
 SKIP_PREFLIGHT=""
@@ -85,7 +85,7 @@ for arg in "$@"; do
     --preflight-only)  PREFLIGHT_ONLY=1 ;;
     --repin)           REPIN=1 ;;
     all)               stages=("${ALL_STAGES[@]}") ;;
-    prefetch|world|terrain|peaks|sac|paths|places|regions|contours|avalanche|manifest) stages+=("$arg") ;;
+    prefetch|world|terrain|peaks|sac|paths|terrain-features|places|regions|contours|avalanche|manifest) stages+=("$arg") ;;
     -*)  echo "Unknown flag: $arg" >&2; exit 2 ;;
     *)   echo "Unknown stage: $arg (known: ${ALL_STAGES[*]}, all)" >&2; exit 2 ;;
   esac
@@ -528,6 +528,17 @@ stage_paths() {
     PATHS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-paths.sh"
 }
 
+stage_terrain-features() {
+  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/terrain-features-global.pmtiles" ]; then
+    log "terrain-features: already built — --force to redo"
+    return 0
+  fi
+  # Scree, shingle, rock and boulders — natural= values Protomaps' OSM ingestion drops
+  # outright (see build-terrain-features.sh's own header). Before `regions`, same reason
+  # as `sac` and `paths`: build-region.sh cuts each region's own cutout from this file.
+  TERRAIN_FEATURES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-terrain-features.sh"
+}
+
 stage_places() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/places.sqlite" ]; then
     log "places: already built — --force to redo"
@@ -569,7 +580,11 @@ stage_regions() {
   # Artifact kinds that are cut from a global archive rather than from upstream, as
   # "<kind>:<global file>". Both are additive (C16), so a missing one is a region built
   # before that kind existed, not a broken region.
-  local -a cut_from_global=(sac:sac-global.pmtiles paths:paths-global.pmtiles)
+  local -a cut_from_global=(
+    sac:sac-global.pmtiles
+    paths:paths-global.pmtiles
+    terrain-features:terrain-features-global.pmtiles
+  )
 
   # Not a failure — but worth one line up front rather than a "skipped" per region,
   # several hundred times over.

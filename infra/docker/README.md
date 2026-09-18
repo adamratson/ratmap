@@ -125,15 +125,17 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles` | hours |
 | `sac` | `build-sac.sh` over all 8 continents → `sac-global.pmtiles` (SAC hiking grades) | dominated by streaming 85 GB through `osmium tags-filter`; the tiling itself is minutes (~921 k ways planet-wide, ~400 MB out) |
 | `paths` | `build-paths.sh` — tiles each continent separately, caches the tilesets under `/work/cache/paths-tiles`, `tile-join`s them → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | hours. 82 M ways planet-wide; the filter pass alone was 29 min on 12 cpus. **Resumable**: a re-run skips continents already tiled, so an interrupted stage costs one continent, not the planet. `RATMAP_PATHS_PARALLEL` tiles several at once (default 1) |
+| `terrain-features` | `build-terrain-features.sh` over all 8 continents → `terrain-features-global.pmtiles` (scree, shingle, rock, boulders — `natural=` values Protomaps' OSM ingestion drops) | dominated by the same `osmium tags-filter` pass over 85 GB as `sac`; tiling is minutes (~826 k features planet-wide by taginfo's count, ~5 MB out for Scotland+Montenegro alone in local testing) |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, sequentially by default — peak RSS-bound, see below (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far |
 | `manifest` | `build-manifest.py` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | seconds when little changed: sha256s are cached by size, mtime and inode in `dist/.manifest-sha256-cache.json`, so only new or rebuilt archives are hashed. A first run hashes everything, 2 threads (`MANIFEST_HASH_WORKERS`, 1 for a spinning disk) |
 
-`sac` and `paths` sit before `regions` in `all` for a reason: `build-region.sh` cuts each
-region's `<id>-sac.pmtiles` and `<id>-paths.pmtiles` out of those global archives, so a
-`regions` run that precedes them builds the whole catalogue without either. Naming stages
-by hand, keep that order.
+`sac`, `paths` and `terrain-features` sit before `regions` in `all` for a reason:
+`build-region.sh` cuts each region's `<id>-sac.pmtiles`, `<id>-paths.pmtiles` and
+`<id>-terrain-features.pmtiles` out of those global archives, so a `regions` run that
+precedes them builds the whole catalogue without any of the three. Naming stages by hand,
+keep that order.
 
 Stages skip work that already exists; `--force` redoes it. `--dry-run` passes through to
 `build-region.sh` so you can size the region extracts first. `--skip-preflight` overrides
@@ -158,13 +160,24 @@ docker compose run --rm infra global sac paths regions manifest
 ```
 
 and no basemap or terrain is re-fetched. `--force` would re-extract everything, which for
-a global catalogue is days — don't reach for it here.
+a global catalogue is days — don't reach for it here. Bringing `terrain-features`
+(scree/shingle/rock/boulders) to an existing catalogue the same way:
+
+```sh
+docker compose run --rm infra global terrain-features regions manifest
+```
+
+— or combine all three new-since-launch kinds in one pass:
+
+```sh
+docker compose run --rm infra global sac paths terrain-features regions manifest
+```
 
 ### Why these stages export per continent instead of merging
 
-`build-sac.sh` and `build-paths.sh` export each filtered continent extract separately and
-concatenate the line-delimited GeoJSON. They do **not** `osmium merge` the PBFs first,
-and reintroducing that would break them:
+`build-sac.sh`, `build-paths.sh` and `build-terrain-features.sh` export each filtered
+continent extract separately and concatenate the line-delimited GeoJSON. They do **not**
+`osmium merge` the PBFs first, and reintroducing that would break them:
 
 ```
 Way ID twice in input. Maybe you are using a history or change file?
@@ -181,7 +194,11 @@ The cost of concatenating is that a seam way is exported twice. `build-sac.sh` u
 (`osmium export -a id`, and normalize-sac.py drops ids it has already written — the
 property is `@id`, not `id`); `build-paths.sh` deliberately does not, because holding
 ~85 M way ids in memory to remove a few thousand duplicates is not a trade worth making
-for lines drawn at z12-13.
+for lines drawn at z12-13. `build-terrain-features.sh` follows `build-sac.sh`'s choice —
+scree/rock/boulder features are a small fraction of `paths`' way count, so the same
+dedup is affordable — but keys on `(kind, @id)` rather than `@id` alone, since a node and
+a way can share a numeric id and `rock`/`stone` are the two kinds that carry both
+geometries (see normalize-terrain-features.py).
 
 ### When the manifest stage fails on someone else's artifact
 

@@ -1,6 +1,7 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { layers, namedFlavor } from '@protomaps/basemaps';
+import { namedFlavor } from '@protomaps/basemaps';
+import { basemapLayersWithBareRock } from './landuse';
 import './style.css';
 import {
   BASEMAP_MAX_ZOOM,
@@ -574,7 +575,7 @@ function buildStyle(theme: Theme): maplibregl.StyleSpecification {
       terrain: terrainSource,
     },
     layers: [
-      ...layers('basemap', namedFlavor(theme), { lang: 'en' }),
+      ...basemapLayersWithBareRock('basemap', namedFlavor(theme), { lang: 'en' }),
       {
         id: 'hillshade',
         type: 'hillshade',

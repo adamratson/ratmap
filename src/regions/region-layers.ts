@@ -1,5 +1,6 @@
 import type { FilterSpecification, Map as MLMap } from 'maplibre-gl';
-import { layers as basemapLayers, namedFlavor } from '@protomaps/basemaps';
+import { namedFlavor } from '@protomaps/basemaps';
+import { basemapLayersWithBareRock } from '../landuse';
 import type { Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
 import type { TileSourceRegistry } from '../tile-source-registry';
@@ -264,7 +265,7 @@ export async function addRegionToMap(
       // #cccccc over the entire global map, leaving only the area with region tiles
       // visible. A style needs exactly one background, and the global basemap already
       // supplies it.
-      const generated = basemapLayers(sourceId, namedFlavor('light'), { lang: 'en' });
+      const generated = basemapLayersWithBareRock(sourceId, namedFlavor('light'), { lang: 'en' });
       for (const layer of generated) {
         if (!('source' in layer) || !layer.source) continue;
         const scoped = {

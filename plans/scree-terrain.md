@@ -1,10 +1,13 @@
 # Scree, boulder fields and bare rock — a terrain-features artifact
 
-**Status: not started. This is the plan, not the build.** Written 2026-09-18 after
-[the bare-rock styling fix landed](../src/landuse.ts) surfaced the harder half of the same
-question: what other ground-surface detail is missing, and what would it cost to add.
-Destined for `docs/IMPLEMENTATION.md` as a Phase 4/5 entry (own number TBD — it depends on
-nothing but the basemap the region already carries, same as Phase 4.5/4.6) if approved.
+**Status: not started, evidence-gathering pass done. This is the plan, not the build.**
+Written 2026-09-18 after [the bare-rock styling fix landed](../src/landuse.ts) surfaced the
+harder half of the same question: what other ground-surface detail is missing, and what
+would it cost to add. Updated the same day with real Overpass measurements against this
+project's own Lochaber reference box (§2), which resolved the geometry-mix open decision
+outright and reshaped the build-assertion approach (§6). Destined for
+`docs/IMPLEMENTATION.md` as a Phase 4/5 entry (own number TBD — it depends on nothing but
+the basemap the region already carries, same as Phase 4.5/4.6) if approved.
 
 ---
 
@@ -46,16 +49,43 @@ There is no `natural=boulder` in real-world use — an isolated boulder is `natu
 a boulder *field* is generally mapped as `natural=scree` or `natural=bare_rock` with no
 distinguishing sub-tag, which is a real limitation carried into §5.
 
-**Not yet verified, and must be before building (same discipline as `build-sac.sh`'s
-`sac_scale` enum check):**
+**Geometry mix and regional density — measured, not guessed (2026-09-18).** The two
+questions this section originally left open, checked directly against a live Overpass
+mirror (`overpass.kumi.systems`, a real global instance — `overpass-api.de` itself and
+several other public mirrors were unreachable from this session's network, and
+`overpass.osm.ch` turned out to be a Switzerland-only extract, caught by getting zero
+results for a Scotland bbox and 4,886 `scree` ways for a Swiss Alps bbox on the same
+query). Counted over the exact Lochaber test box (`-5.2,56.65,-4.8,56.95`) the avalanche
+plan already established as this project's reference region:
 
-- **Geometry mix per value** — what fraction of `scree`/`shingle`/`rock` are ways/areas vs.
-  bare nodes. This decides whether the layer is fill-only, fill+point, or needs to drop
-  stray point-tagged scree that can't be filled. `osmium tags-filter` + a quick count over
-  one region extract answers this in minutes; it is not worth guessing.
-- **Regional density.** Taginfo's global count says nothing about coverage in Scotland,
-  the Alps, or wherever this actually ships first — the SAC build found 7% coverage in
-  Lochaber against a much denser Alps, and this could easily be as lopsided.
+| `natural=` | nodes | ways | total |
+|---|---|---|---|
+| `scree` | 0 | 46 | 46 |
+| `shingle` | 0 | 19 | 19 |
+| `rock` | 2 | 1 | 3 |
+| `stone` | 1 | 0 | 1 |
+| — for comparison — `bare_rock` | 0 | 74 | 74 |
+
+**Geometry mix answered cleanly: 66/69 (96%) are ways.** `scree` and `shingle` are 100%
+ways in this sample, matching `bare_rock`'s own 100%-way pattern. Points (`rock` nodes +
+the one `stone`) are 3 features total — real, but a rounding error. This resolves §9's
+original open decision 1: **ship both**, fills for the ways and markers for the points —
+there's nowhere near enough point density for the "clutter" failure mode §4 worried about
+to be a real risk, so there's no tradeoff left to weigh a fill-only layer against.
+
+**Also found while measuring: none of the 65 scree/shingle ways in this box carry a
+`name` tag.** Unlike SAC grades, scree polygons are essentially always unnamed. §6's build
+assertion needs to change shape because of this — see that section.
+
+**Regional density confirmed lopsided, same shape as SAC's 7% (§4.5).** 69 non-bare_rock
+features across 809 km² is ~0.085/km². Naively scaled to Scotland's ~78,800 km²
+(the figure the avalanche plan measured) that's a back-of-envelope ~6,700 features — an
+order-of-magnitude estimate from one small box, not a real count, and Switzerland's Alps
+box alone returned 4,886 `scree` ways by itself, so density varies by well over an order of
+magnitude between ranges exactly as SAC coverage did. **Still needs a real per-region count
+before publishing a Scotland number** — this only establishes that the lopsidedness is
+real, not what to do about it (nothing — §5 already prices in uneven coverage as a
+standing legend caveat, the same posture as SAC).
 
 ---
 
@@ -67,9 +97,10 @@ distinguishing sub-tag, which is a real limitation carried into §5.
 a normalize pass → `tippecanoe` → `pmtiles convert`.
 
 **No free-text parsing needed** — unlike `sac_scale`'s 184-value enum, these are already
-clean OSM values. `normalize-terrain-features.py` exists mainly to attach `kind` uniformly
-and to apply the point-drop/keep decision from §2's open geometry question, not to parse
-anything.
+clean OSM values. `normalize-terrain-features.py` exists mainly to attach `kind`
+uniformly, not to parse anything. §2's geometry-mix measurement means there's no
+point-drop decision to make here after all: keep nodes and ways both, tagged the same
+`kind`, and let the style layer (§4) draw fills for one and markers for the other.
 
 **Attribution: OSM, not Copernicus** — this is a tag extract like SAC and paths, not a DEM
 derivative like contours or avalanche terrain. Use `OSM_ATTRIBUTION`, and watch for the
@@ -97,7 +128,7 @@ different things to someone routefinding:
 |---|---|---|
 | `scree`, `shingle` | Fill, stippled/speckled texture if MapLibre's paint expressions can fake one cheaply, otherwise a flat grey-brown distinct from `bare_rock`'s tint | The one that actually matters for routefinding — scree underfoot changes the walk |
 | `rock` (area) | Fill, closer to `bare_rock`'s tone but with a distinguishing edge/hatch | Outcrops are often small; needs to read at a glance next to bare_rock |
-| `stone`, `rock` (point) | A small marker icon **only if §2's geometry check finds this worth including** — otherwise dropped | A field of these across a whole country could be visual noise for near-zero navigational value; this is the one part of §4 that should not be built before §2 answers the density question |
+| `stone`, `rock` (point) | A small marker icon, included by default | §2 measured 3 points against 66 ways in the reference box — the "visual noise across a whole country" worry this row originally raised doesn't hold at the density actually observed; the marginal cost of drawing them is close to zero |
 
 Inserted in the same z-order slot as the bare-rock fix (§1): among the landuse-equivalent
 fills, under roads and labels, via the same `beneathLabels()`-style placement the rest of
@@ -131,16 +162,22 @@ not a blocker.
 | File | Role |
 |---|---|
 | `scripts/build-scree.sh` *(new)* | Modelled directly on `build-sac.sh`: same per-continent extract-then-concatenate structure (§ the history-file trap that script's comments document), same `--self-test` convention. |
-| `scripts/normalize-terrain-features.py` *(new)* | Thin — attach `kind`, apply the geometry keep/drop decision from §2. |
+| `scripts/normalize-terrain-features.py` *(new)* | Thin — attach `kind` uniformly across nodes and ways (§2 resolved the keep/drop question: keep both). |
 | `build-manifest.py` | `ARTIFACT_KINDS["-scree.pmtiles"] = "terrain-features"` (or similar — naming TBD so it doesn't collide with a future landcover-general artifact). |
 | `build-region.sh` | A `terrain-features` branch in the `--only` set and the extract loop, same shape as the existing `sac`/`paths` branches. |
 
-**Build assertion, same standard as every other pipeline here:** pin a known scree feature
-(a named scree slope in whichever region builds first) and fail the build if it goes
-missing — the same class of check as the Ben Nevis elevation pin and the SAC hardest-grade
-pin. Concretely: don't invent the name now — find one that's actually tagged in the first
-region this targets, the same way the SAC checks were read out of a real build's output
-rather than a guidebook.
+**Build assertion has to take a different shape than SAC's.** SAC pins named paths
+(Ben Nevis Mountain Path, Aonach Eagach) because graded ways nearly always carry a `name`.
+§2 found the opposite here: none of the 65 scree/shingle ways in the Lochaber reference box
+carry a `name` tag — scree polygons are essentially always anonymous. So the per-feature
+named-pin pattern doesn't apply; instead, follow the *fallback* check `build-sac.sh` already
+has for exactly this situation (its own comment: "the named checks only fire... this one
+always fires") — pin a **count/histogram** for the reference box instead of a named feature:
+this session measured `scree: 46, shingle: 19, rock: 3, stone: 1` for
+`-5.2,56.65,-4.8,56.95` on 2026-09-18 (§2), which is a real number from a real build tool
+(Overpass, not this project's own pipeline) and a reasonable starting pin, to be replaced
+with whatever `osmium`/`tippecanoe` itself counts on the first real build — a regression
+check should assert against its own pipeline's output, not against a different tool's.
 
 ### App — `src/`
 
@@ -158,13 +195,17 @@ someone wants a "crosses scree" route callout later; not scoped here.
 
 ## 7. Cost
 
-Unmeasured — this plan stops short of infra access to actually run `tippecanoe` and report
-a real number, which is the same discipline the avalanche plan insisted on before writing
-down a size. Rough order-of-magnitude reasoning only: `sac-global.pmtiles` covers ~921k
-ways worldwide and is a similar shape of extract; `scree`+`rock`+`stone`+`shingle` combined
-is ~826k features globally (§2 table), so a broadly similar weight class is a reasonable
-prior — **but this must be measured on a real build before it's treated as a decision
-input**, exactly as §2 flags.
+Still not a real tippecanoe/pmtiles measurement — that needs actual infra access this
+session didn't use — but §2's Overpass counts sharpen the estimate past pure taginfo
+extrapolation. `sac-global.pmtiles` covers ~921k ways worldwide at 13 MB for Scotland;
+`scree`+`rock`+`stone`+`shingle` combined is ~826k features globally (taginfo, §2 table),
+so a broadly similar weight class remains a reasonable prior, and the measured Lochaber
+density (69 features / 809 km² ≈ 0.085/km², §2) scaled to Scotland's ~78,800 km² lands
+around 6,700 features — same order of magnitude as SAC's 372,205-way `paths-global.pmtiles`
+input was for a much smaller (z12-13-only) output, so a Scotland cutout in the low single
+digit MB is a defensible prior. **Still must be measured on a real build before treating it
+as a decision input** — a density extrapolated from one 809 km² box has wide error bars,
+and this box is Ben Nevis specifically, plausibly denser in scree than lowland Scotland.
 
 No new infrastructure, no compute layer, no DEM fetch. Same `£0` marginal-infra line as
 SAC and paths.
@@ -189,8 +230,10 @@ Airplane Mode throughout, a region with this artifact downloaded:
 
 ## 9. Open decisions — ask Adam, do not guess
 
-1. **Points or fills only?** §2's unresolved geometry-mix question decides whether `stone`
-   (near-always a node) ships at all, or whether this artifact is fill-only.
+1. ~~Points or fills only?~~ **Resolved by measurement (§2), not a judgement call: both.**
+   The reference box came back 96% ways — points are real but far too sparse (3 of 69
+   features) to be a visual-noise risk, so there's no tradeoff left to decide. Still worth
+   a glance once a real region builds, in case Lochaber's mix isn't representative.
 2. **Artifact name/kind string** — `scree`, `terrain-features`, `rock`, something else. The
    manifest kind string is user-facing nowhere directly but shapes every filename and
    catalogue entry that follows it, so worth a real name rather than whatever seemed fine at

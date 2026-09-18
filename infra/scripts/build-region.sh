@@ -43,8 +43,8 @@ wants() {
 
 for requested in ${ONLY//,/ }; do
   case "$requested" in
-    basemap|paths|sac|terrain) ;;
-    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, sac, terrain)" >&2
+    basemap|paths|sac|terrain|terrain-features) ;;
+    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, sac, terrain, terrain-features)" >&2
        exit 2 ;;
   esac
 done
@@ -117,6 +117,18 @@ else
   PATHS_SOURCE=""
 fi
 
+# Scree/shingle/rock/stone (build-terrain-features.sh), resolved the same way again.
+# Protomaps carries none of these — see that script's header.
+if [ -n "${TERRAIN_FEATURES_SOURCE_URL:-}" ]; then
+  TERRAIN_FEATURES_SOURCE="$TERRAIN_FEATURES_SOURCE_URL"
+elif [ -s "$DIST_DIR/terrain-features-global.pmtiles" ]; then
+  TERRAIN_FEATURES_SOURCE="$DIST_DIR/terrain-features-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  TERRAIN_FEATURES_SOURCE="$PUBLIC_BASE_URL/terrain-features-global.pmtiles"
+else
+  TERRAIN_FEATURES_SOURCE=""
+fi
+
 # Measured for Scotland (2026-08-21): basemap z12 ~84 MB / z13 ~175 MB; terrain z10
 # ~107 MB / z11 ~340 MB. Raster terrain grows far faster than vector basemap per level,
 # hence the different ceilings. Override per build if a region needs more.
@@ -139,6 +151,11 @@ TERRAIN_MAXZOOM="${REGION_TERRAIN_MAXZOOM:-${REGION_TERRAIN_Z:-11}}"
 # sac-global.pmtiles itself stops at z15.
 SAC_MAXZOOM="$BASEMAP_MAXZOOM"
 [ "$SAC_MAXZOOM" -gt 15 ] && SAC_MAXZOOM=15
+
+# Same reasoning as SAC: no reason for scree/rock detail to outrun the basemap it's drawn
+# over, and terrain-features-global.pmtiles itself stops at z15.
+TERRAIN_FEATURES_MAXZOOM="$BASEMAP_MAXZOOM"
+[ "$TERRAIN_FEATURES_MAXZOOM" -gt 15 ] && TERRAIN_FEATURES_MAXZOOM=15
 
 # paths-global.pmtiles only holds z12-13 — it exists to fill the gap below where the
 # basemap starts carrying paths, not to duplicate it.
@@ -236,6 +253,16 @@ else
   # Said out loud rather than skipped quietly: a catalogue where half the regions have
   # grades and half do not, with no note of which, is worse than one with none.
   echo "==> sac grades: skipped (no sac-global.pmtiles — run ./scripts/build-sac.sh)"
+fi
+
+if ! wants terrain-features; then
+  :
+elif [ -n "$TERRAIN_FEATURES_SOURCE" ]; then
+  echo "==> terrain features (scree, shingle, rock, stone)"
+  extract_verified "$TERRAIN_FEATURES_SOURCE" "$OUT_DIR/$REGION_ID-terrain-features.pmtiles" \
+    "$TERRAIN_FEATURES_MAXZOOM" --allow-empty
+else
+  echo "==> terrain features: skipped (no terrain-features-global.pmtiles — run ./scripts/build-terrain-features.sh)"
 fi
 
 if ! wants terrain; then

@@ -10,6 +10,97 @@ same layout ships unmodified to a mouse-and-keyboard window many times its targe
 
 ---
 
+## Status — 2026-09-18
+
+§4 steps 1–3 are implemented:
+
+- **Step 1, the docked panel (C1, B1).** `prefersDockedSheet()` (`src/pointer.ts`) —
+  `(pointer: fine) and (hover: hover) and (min-width: 60rem)`, the same string duplicated
+  into the `@media` query in `style.css`'s "Desktop (docked panel)" block. Above it,
+  `#sheet` becomes a fixed 24rem left panel, full height; `sheet.ts`'s `applyDetent` forces
+  the applied transform offset to 0 regardless of detent (no drag, no animation — nothing
+  to snap to), while `current` keeps tracking the logical peek/content/full value so
+  `main.ts`'s existing "is a view open" checks (`sheet.detent() !== 'peek'`) are untouched.
+  `visibleHeight()` reports 0 when docked, which — with no extra CSS — puts the rail,
+  toasts, `#detail-notice` and the MapLibre bottom controls back at their un-lifted resting
+  offsets, since they all read `--sheet-visible`. Only the *left* axis needed explicit
+  handling (the scale control, `#conditions`, `#toasts`, `#detail-notice`'s centring),
+  since nothing else lifts for a panel on the left edge.
+- **Step 2, search reachable without the mouse (B2, A2 partial).** Docking already puts
+  search at the physical top of the panel for free — it's the peek row, and the peek row
+  is first in DOM order. Added on top: `Cmd/Ctrl+K` (`main.ts`) focuses and selects it from
+  anywhere, closing an open view first so it always lands in the same reachable place.
+- **Step 3, hover and focus-visible (A1).** One rule, not one per component:
+  `button:not(:disabled):hover, a:hover { filter: brightness(0.94) }` under
+  `(hover: hover) and (pointer: fine)`, plus an unconditional `:focus-visible` outline —
+  covers every current control and whatever gets added later, rather than enumerating
+  `.region-action`, `.chip`, `#rail button`, etc. by hand. Verified via `getComputedStyle`
+  in a real browser (`:hover` → `filter: brightness(0.94)` applied; Tab → `:focus-visible`
+  → a 2px accent outline), not just read off the CSS.
+
+Verified in the browser pane at 1440×900: browsing, a summit's detail sheet, the routes
+list, and an in-progress planned route all render correctly inside the docked panel with
+no overflow. Resizing back down to 375×812 (mobile emulation, touch) reproduces the
+original bottom-sheet behaviour unchanged — detents, drag, grip all intact. Full suite
+(508 tests) and `tsc --noEmit` both pass after the change.
+
+### Continued — steps 4 and 6–7
+
+- **Step 4, the rail (B3).** The call: merge it with the zoom cluster rather than leave it
+  a second corner. Inside the same docked-panel media query, `#rail` switches from
+  `bottom: calc(var(--sheet-visible, 0px) + 2.25rem)` to a fixed `top`, stacked directly
+  under `NavigationControl` — `right` is untouched, so both clusters share one edge.
+  The offset (`7rem`) is measured against the control's own rendered height, not derived
+  from it (CSS can't read another control's box); if `NavigationControl`'s own layout
+  changes, this needs a manual recheck. Mobile is untouched — the query that gates it
+  never matches a coarse pointer, so the rail stays at thumb height, bottom-right.
+- **Step 5, arrow-key search navigation (A2).** Scoped to the search-results combobox,
+  not every list in the sheet — regions/routes/places rows are plain buttons in document
+  order, already fully reachable by Tab, and giving them roving-tabindex navigation too
+  is a separable, lower-value piece of work left undone. `main.ts`: `ArrowDown`/`ArrowUp`
+  move a highlighted index (wrapping at the ends) while focus stays in the input — a
+  search-as-you-type field has to keep filtering on every keystroke whether or not a
+  result is highlighted, so moving real DOM focus into the list the way a plain menu
+  would have broken that. `Enter` activates the highlighted result; a fresh render (new
+  query, or the list closing) resets the index, since a stale one would point at content
+  that no longer exists. Wired through `aria-activedescendant` on the input and
+  `role="option"`/`role="listbox"` on the results, not just a visual highlight class.
+
+  **Found and fixed in the process — the results dropdown was rendering off-screen on
+  desktop.** `#search-results` opens *upward* from the input (`bottom: calc(100% + …)`),
+  correct when search sits at the bottom of a phone screen but wrong once step 1 moved it
+  to the top of the docked panel — the list was rendering above the viewport, technically
+  present and fully populated but invisible, unreachable by mouse and pointless to add
+  keyboard navigation to. Caught by actually driving the new navigation in the browser
+  pane rather than reading the code: results existed in the DOM with the right content,
+  measured at a negative `top`. Fixed with a docked-only override that reverses the
+  opening direction; mobile keeps the original upward-opening rule untouched (verified at
+  375×812 after the fix — still opens upward, unaffected).
+- **Step 6, responsive list layouts (B4) — reassessed, not built.** B4 was written against
+  a *full window width* sheet; step 1 already resolved the actual waste by capping the
+  panel at 24rem (384px) rather than widening it to fit a grid. A single-column list at
+  384px is a normal, readable sidebar width — the same width a native app would use —
+  not a wasted one, so a multi-column region grid would need widening the panel
+  specifically to fit it, trading away exactly the map space docking exists to preserve
+  (§3's own C3 concern, cap the panel even on an ultrawide monitor). Not built; recorded
+  here as a finding superseded by an earlier decision rather than silently dropped.
+- **Step 7, peak hover tooltips (C2).** `#peak-tooltip` (`style.css`, `main.ts`): name and
+  elevation, shown on `mousemove` when `peakAt()` hits and `isCoarsePointer()` is false —
+  the same "is this a mouse" check `NavigationControl` already uses, not a new one.
+  Positioned from the event's own container-relative point, no extra measurement.
+  Hidden on `mouseout` and on click (so it never lingers over a sheet that just opened).
+  Verified in the browser: hovering "Ben Wyvis" shows "Ben Wyvis 1046 m" near the cursor;
+  clicking it hides the tooltip and opens the summit sheet; on a 375×812 touch emulation
+  it never appears at all, and the tap sheet is unaffected.
+
+Full suite (508 tests) and `tsc --noEmit` pass after steps 4, 5 and 7 as well.
+
+**All of §4 is now either done or explicitly reassessed** — step 6 deliberately not built
+(superseded by step 1's width decision, see above), everything else shipped. Nothing left
+open from the original plan.
+
+---
+
 ## 0. Measured baseline
 
 At 1440×900, browsing with no summit selected:

@@ -25,6 +25,7 @@ import {
   type PeakProperties,
 } from './peaks';
 import { SAC_GRADES, sacCssColor, sacPathAt, type SacHit } from './sac';
+import { TERRAIN_FEATURE_KINDS } from './terrain-features';
 import {
   SLOPE_CLASSES,
   isAvalancheEnabled,
@@ -76,6 +77,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div id="map"></div>
   <div id="conditions" hidden></div>
   <button id="detail-notice" type="button" hidden></button>
+  <div id="peak-tooltip" hidden></div>
   <div id="rail">
     <button id="locate-btn" type="button" aria-label="Show my location">
       <span class="rail-icon" aria-hidden="true">◎</span>
@@ -119,8 +121,9 @@ const sheet = new BottomSheet({
 sheet.peek.innerHTML = `
   <div id="search">
     <input id="search-input" type="search" placeholder="Search places and summits"
-           autocomplete="off" autocorrect="off" spellcheck="false" />
-    <ul id="search-results" aria-label="Search results" hidden></ul>
+           autocomplete="off" autocorrect="off" spellcheck="false"
+           role="combobox" aria-expanded="false" aria-controls="search-results" />
+    <ul id="search-results" role="listbox" aria-label="Search results" hidden></ul>
   </div>
   <div class="peek-row">
     <div id="chips"></div>
@@ -242,6 +245,23 @@ document.addEventListener('keydown', (event) => {
   }
   if (view !== null) closeView();
   else if (sheet.detent() !== 'peek') sheet.collapse();
+});
+
+/**
+ * Cmd/Ctrl+K focuses search from anywhere.
+ *
+ * On the docked desktop panel (plans/desktop-ux-review.md B2) search sits at the top of a
+ * fixed-width sidebar rather than 800px up a thumb-reach bottom sheet — reachable, but
+ * still not somewhere a keyboard-first user should have to look for. Closing whatever
+ * view is open first means the field lands in the same reachable place every time,
+ * rather than merely present but scrolled behind the view's own content.
+ */
+document.addEventListener('keydown', (event) => {
+  if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return;
+  event.preventDefault();
+  if (view !== null) closeView();
+  searchInput.focus();
+  searchInput.select();
 });
 
 // --- Theme ---------------------------------------------------------------------------
@@ -442,6 +462,36 @@ function openLegendView(): void {
           '<div class="legend-hillshade-swatch"></div>',
           'Hillshade',
           'Shaded relief from downloaded terrain — fades out at close zoom, where contours carry the detail instead.',
+        )}
+      </div>
+
+      <div class="legend-section">
+        <h3>Ground surface</h3>
+        <p class="legend-note">
+          Scree, shingle, rock and boulders — OpenStreetMap detail the basemap has no room
+          for. Coverage is partial and uneven: a summit with nothing shown here is not
+          "there is no scree there", most of the world's surface tagging is simply
+          incomplete.
+        </p>
+        ${legendRow(
+          `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[0].fillColor}" fill-opacity="0.55"/></svg>`,
+          'Scree',
+          TERRAIN_FEATURE_KINDS[0].note,
+        )}
+        ${legendRow(
+          `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[1].fillColor}" fill-opacity="0.55"/></svg>`,
+          'Shingle',
+          TERRAIN_FEATURE_KINDS[1].note,
+        )}
+        ${legendRow(
+          `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[2].fillColor}" fill-opacity="0.55"/></svg>`,
+          'Rock / boulder field',
+          'Bare rock outcrop or boulder field, mapped as an area. OSM cannot distinguish "rock" from "boulders" as areas — both look like this.',
+        )}
+        ${legendRow(
+          `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="4" fill="${TERRAIN_FEATURE_KINDS[2].pointColor}" stroke="rgba(255,255,255,0.9)" stroke-width="1.25"/></svg>`,
+          'Rock outcrop / boulder',
+          'A point rather than an area — an isolated outcrop, or a single boulder.',
         )}
       </div>
 
@@ -968,6 +1018,8 @@ function routesUi(container: HTMLElement = sheet.body): RoutesUiDeps {
 // --- Peak detail sheet -------------------------------------------------------------
 
 map.on('click', (e) => {
+  hidePeakTooltip();
+
   // While planning, a tap places a waypoint instead of opening a summit — including a tap
   // on a summit, which becomes a named waypoint rather than a detail sheet.
   if (planner.handleMapClick(e)) return;
@@ -1007,11 +1059,44 @@ onPressHold(map.getCanvasContainer(), {
   },
 });
 
+const peakTooltip = document.querySelector<HTMLDivElement>('#peak-tooltip')!;
+
+/**
+ * Name and elevation before the click, on a mouse only.
+ *
+ * Touch has no hover to give — the tap sheet is its only path, and stays it. A mouse can
+ * hover, and nothing here used to: free information density a touch user loses nothing
+ * by not having (plans/desktop-ux-review.md C2). Gated on the same "is this a mouse"
+ * check `NavigationControl` already uses, rather than a second definition of it.
+ */
+function showPeakTooltip(peak: PeakProperties, point: { x: number; y: number }): void {
+  const name = peak.name?.trim() || 'Unnamed summit';
+  const ele = formatElevation(peak.ele);
+  peakTooltip.innerHTML = ele
+    ? `${name} <span class="peak-tooltip-ele">${ele}</span>`
+    : name;
+  peakTooltip.style.left = `${point.x}px`;
+  peakTooltip.style.top = `${point.y}px`;
+  peakTooltip.hidden = false;
+}
+
+function hidePeakTooltip(): void {
+  peakTooltip.hidden = true;
+}
+
 map.on('mousemove', (e) => {
   // Planning mode owns the cursor (crosshair); don't fight it over summits.
   if (planner.isActive()) return;
-  map.getCanvas().style.cursor = peakAt(map, e.point) || sacPathAt(map, e.point) ? 'pointer' : '';
+
+  const hit = peakAt(map, e.point);
+  map.getCanvas().style.cursor = hit || sacPathAt(map, e.point) ? 'pointer' : '';
+
+  if (isCoarsePointer()) return; // no hover on touch — see showPeakTooltip
+  if (hit) showPeakTooltip(hit.properties, e.point);
+  else hidePeakTooltip();
 });
+
+map.on('mouseout', hidePeakTooltip);
 
 function showPeakSheet(peak: PeakProperties, lngLat: maplibregl.LngLat): void {
   const name = peak.name?.trim() || 'Unnamed summit';
@@ -1232,8 +1317,64 @@ const search = new PlacesSearch();
 
 let searchSeq = 0;
 
+/**
+ * Arrow-key navigation through search results (plans/desktop-ux-review.md A2).
+ *
+ * Focus stays in the input rather than moving into the list — this is search-as-you-type,
+ * so a keystroke has to keep filtering results whether or not one is highlighted. -1 means
+ * nothing is highlighted, which is also the state every fresh render starts from: indices
+ * from the previous result set don't mean anything once the list has been rebuilt.
+ */
+let highlightedResult = -1;
+
+function resultButtons(): HTMLButtonElement[] {
+  return Array.from(searchResults.querySelectorAll<HTMLButtonElement>('li > button'));
+}
+
+function highlightResult(index: number): void {
+  const buttons = resultButtons();
+  highlightedResult = buttons.length === 0 ? -1 : Math.max(0, Math.min(index, buttons.length - 1));
+
+  buttons.forEach((button, i) => {
+    const active = i === highlightedResult;
+    button.classList.toggle('result-active', active);
+    button.setAttribute('aria-selected', String(active));
+    if (active) button.scrollIntoView({ block: 'nearest' });
+  });
+
+  if (highlightedResult === -1) searchInput.removeAttribute('aria-activedescendant');
+  else searchInput.setAttribute('aria-activedescendant', buttons[highlightedResult].id);
+}
+
 searchInput.addEventListener('input', () => {
   void runSearch(searchInput.value);
+});
+
+searchInput.addEventListener('keydown', (event) => {
+  if (searchResults.hidden) return;
+  const buttons = resultButtons();
+  if (buttons.length === 0) return;
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault();
+      highlightResult(highlightedResult + 1 >= buttons.length ? 0 : highlightedResult + 1);
+      return;
+    case 'ArrowUp':
+      event.preventDefault();
+      highlightResult(highlightedResult <= 0 ? buttons.length - 1 : highlightedResult - 1);
+      return;
+    case 'Enter':
+      // Only when a result is actually highlighted — otherwise Enter falls through to
+      // whatever a plain `type="search"` input already does with it (nothing here), not a
+      // click on a result the user never selected.
+      if (highlightedResult === -1) return;
+      event.preventDefault();
+      buttons[highlightedResult].click();
+      return;
+    default:
+      return;
+  }
 });
 
 // Load the index on first focus rather than at startup: it pulls the SQLite runtime plus
@@ -1281,13 +1422,28 @@ async function runSearch(query: string): Promise<void> {
   renderSearchResults(results);
 }
 
+/**
+ * Clears the results list for a fresh render.
+ *
+ * Also drops the keyboard highlight: indices from the previous result set don't refer to
+ * anything once the list is rebuilt, and leaving `aria-activedescendant` pointing at a
+ * removed element would announce nothing to a screen reader.
+ */
+function beginResultsRender(): void {
+  searchResults.innerHTML = '';
+  highlightedResult = -1;
+  searchInput.removeAttribute('aria-activedescendant');
+}
+
 /** A typed-in coordinate pair, offered as the one search result it is. */
 function renderCoordsResult(coords: { lat: number; lng: number }): void {
-  searchResults.innerHTML = '';
+  beginResultsRender();
 
   const item = document.createElement('li');
   const button = document.createElement('button');
   button.type = 'button';
+  button.id = 'search-result-0';
+  button.setAttribute('role', 'option');
 
   const name = document.createElement('span');
   name.className = 'result-name';
@@ -1308,10 +1464,11 @@ function renderCoordsResult(coords: { lat: number; lng: number }): void {
   item.append(button);
   searchResults.append(item);
   searchResults.hidden = false;
+  searchInput.setAttribute('aria-expanded', 'true');
 }
 
 function renderSearchResults(results: SearchResult[]): void {
-  searchResults.innerHTML = '';
+  beginResultsRender();
 
   if (results.length === 0) {
     const empty = document.createElement('li');
@@ -1319,13 +1476,16 @@ function renderSearchResults(results: SearchResult[]): void {
     empty.textContent = 'No matches';
     searchResults.append(empty);
     searchResults.hidden = false;
+    searchInput.setAttribute('aria-expanded', 'true');
     return;
   }
 
-  for (const result of results) {
+  results.forEach((result, index) => {
     const item = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
+    button.id = `search-result-${index}`;
+    button.setAttribute('role', 'option');
 
     // textContent throughout — these names come from OSM, which is user-editable.
     const name = document.createElement('span');
@@ -1355,14 +1515,18 @@ function renderSearchResults(results: SearchResult[]): void {
 
     item.append(button);
     searchResults.append(item);
-  }
+  });
 
   searchResults.hidden = false;
+  searchInput.setAttribute('aria-expanded', 'true');
 }
 
 function hideSearchResults(): void {
   searchResults.hidden = true;
   searchResults.innerHTML = '';
+  highlightedResult = -1;
+  searchInput.setAttribute('aria-expanded', 'false');
+  searchInput.removeAttribute('aria-activedescendant');
 }
 
 // --- Location ----------------------------------------------------------------------

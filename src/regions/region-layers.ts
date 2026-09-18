@@ -8,6 +8,7 @@ import { COPERNICUS_ATTRIBUTION, OSM_ATTRIBUTION, TERRAIN_ATTRIBUTION } from '..
 import { PEAKS_LAYER_ID } from '../peaks';
 import { addSacLayers } from '../sac';
 import { addAvalancheLayer, avalancheSourceSpec, isAvalancheEnabled } from '../avalanche';
+import { addTerrainFeatureLayers } from '../terrain-features';
 
 // Renders a downloaded region *over* the low-zoom world catalog rather than replacing it,
 // so panning outside the region degrades to the global view instead of falling off the
@@ -393,6 +394,16 @@ export async function addRegionToMap(
         minzoom: Math.max(12, minzoom),
         beforeBand: map.getLayer(casing) ? casing : beneathLabels(map, region.id),
         beforeLabels: beneathLabels(map, region.id),
+      });
+    } else if (artifact.kind === 'terrain-features') {
+      // Scree, shingle, rock and boulders — OSM ground-surface detail Protomaps does not
+      // carry (see src/terrain-features.ts). Same attribution and z-order slot as the
+      // rest of the region's ground-surface overlays (contours, avalanche terrain):
+      // beneath the region's own labels, so text stays legible over a scree fill.
+      map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+      addTerrainFeatureLayers(map, sourceId, {
+        minzoom: Math.max(artifact.minzoom ?? minzoom, minzoom),
+        before: beneathLabels(map, region.id),
       });
     }
   }

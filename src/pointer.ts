@@ -11,3 +11,25 @@
 export function isCoarsePointer(): boolean {
   return globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
 }
+
+/**
+ * The exact condition under which the sheet docks as a permanent left-hand panel instead
+ * of a bottom sheet with drag detents — see `plans/desktop-ux-review.md` §3. A width
+ * threshold alone would fire on a large touch tablet, which still wants the touch sheet;
+ * `pointer: fine` and `hover: hover` together are what actually mean "a mouse, with room
+ * to use it."
+ *
+ * This string must stay identical to the `@media` query in style.css's "Desktop (docked
+ * panel)" block — CSS and JS each need their own copy of the condition, so it is
+ * duplicated by necessity, not by accident. If one changes, change the other.
+ *
+ * Optional-chained for the same reason as {@link isCoarsePointer}: a missing
+ * `matchMedia` is not evidence of a docked-capable browser, so it falls back to `false`,
+ * i.e. the touch sheet.
+ */
+export function prefersDockedSheet(): boolean {
+  return (
+    globalThis.matchMedia?.('(pointer: fine) and (hover: hover) and (min-width: 60rem)')
+      .matches ?? false
+  );
+}

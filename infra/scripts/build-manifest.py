@@ -68,6 +68,7 @@ ARTIFACT_KINDS = {
     "-contours.pmtiles": "contours",
     "-paths.pmtiles": "paths",
     "-sac.pmtiles": "sac",
+    "-terrain-features.pmtiles": "terrain-features",
     # Versioned in the filename, unlike every other kind: `downloadArtifact` skips an
     # artifact whose name is already in OPFS, so a rebuild under an unchanged name never
     # reaches anyone who already holds the region. Stage B's runout channel replaces this

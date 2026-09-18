@@ -11,6 +11,14 @@
 // One sheet instead, dragged rather than toggled. Its resting state ("peek") carries the
 // controls you reach for first, which also moves them from the top of the screen into
 // thumb reach. Dragging down always gives the map back — the gesture people already try.
+//
+// Detents solve a problem — limited *vertical* space — that a wide, mouse-driven desktop
+// window doesn't have (plans/desktop-ux-review.md). Above `prefersDockedSheet()`'s
+// breakpoint the same element docks as a left-hand panel instead: full height, fixed
+// width (style.css), always open, no drag. That's a rendering change only — `current`
+// still tracks peek/content/full so main.ts's "is a view open" checks keep working.
+
+import { prefersDockedSheet } from './pointer';
 
 export type Detent = 'peek' | 'content' | 'full';
 
@@ -190,6 +198,11 @@ export class BottomSheet {
    * rather than a beat behind.
    */
   visibleHeight(): number {
+    // A docked panel takes the left edge, full height — nothing sits at the *bottom* of
+    // the screen any more, so the things this exists to lift clear of the sheet (the
+    // rail, toasts, the attribution) should read it as fully collapsed rather than
+    // measuring an offset from a bottom-sheet geometry the panel no longer uses.
+    if (prefersDockedSheet()) return 0;
     return Math.max(0, this.element.offsetHeight - this.offsets()[this.current]);
   }
 
@@ -247,7 +260,13 @@ export class BottomSheet {
    */
   private applyDetent(detent: Detent, animate: boolean, notify = true): void {
     this.current = detent;
-    const offset = this.offsets()[detent];
+    // Docked mode has no detents to speak of (see the module comment and
+    // plans/desktop-ux-review.md §3) — the panel is always fully open, full height,
+    // ordinarily scrollable. `current` still tracks the logical peek/content/full value
+    // for callers that use it as an "is a view open" signal (main.ts), and the at-*
+    // classes below still follow it, so a docked "peek" still hides the empty body — only
+    // the *transform* collapses to "always shown".
+    const offset = prefersDockedSheet() ? 0 : this.offsets()[detent];
 
     // A recompute that lands on the offset already declared must not touch the
     // transform or the animation class, even when the values are identical. Toggling
@@ -290,6 +309,8 @@ export class BottomSheet {
   }
 
   private onPointerDown(event: PointerEvent): void {
+    // A docked panel isn't dragged — it's always fully open (see applyDetent).
+    if (prefersDockedSheet()) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     if (!this.canDragFrom(event.target)) return;
 

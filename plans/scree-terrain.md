@@ -1,13 +1,39 @@
 # Scree, boulder fields and bare rock — a terrain-features artifact
 
-**Status: not started, evidence-gathering pass done. This is the plan, not the build.**
-Written 2026-09-18 after [the bare-rock styling fix landed](../src/landuse.ts) surfaced the
-harder half of the same question: what other ground-surface detail is missing, and what
-would it cost to add. Updated the same day with real Overpass measurements against this
-project's own Lochaber reference box (§2), which resolved the geometry-mix open decision
-outright and reshaped the build-assertion approach (§6). Destined for
-`docs/IMPLEMENTATION.md` as a Phase 4/5 entry (own number TBD — it depends on nothing but
-the basemap the region already carries, same as Phase 4.5/4.6) if approved.
+**Status (2026-09-18): built and verified against real data.** Written the same day after
+[the bare-rock styling fix landed](../src/landuse.ts) surfaced the harder half of the same
+question. Kind string settled as `terrain-features` and the layer ships always-on (Adam's
+call — §9 decisions 2 and 3, no longer open). Destined for `docs/IMPLEMENTATION.md` as a
+Phase 4/5 entry (own number TBD) once this lands on `main`.
+
+**What's actually built, not just planned:**
+
+- `infra/scripts/normalize-terrain-features.py` and `infra/scripts/build-terrain-features.sh`
+  — ran end-to-end against real cached extracts (`scotland-latest.osm.pbf` +
+  `montenegro-latest.osm.pbf`). Produced `terrain-features-global.pmtiles`, 5.1 MB,
+  z11–15, `pmtiles verify` clean. Found and fixed a real bug in the process: `osmium
+  export` emits a closed way twice by default (a raw LineString *and* the assembled
+  MultiPolygon) — `--geometry-types=point,polygon` drops the duplicate at the source. Also
+  found that `osmium tags-filter`'s relation handling pulls in unrelated-tagged multipolygon
+  members (1,176 stray `coastline`/`heath`/`wood`/etc. features in the Scotland-only run),
+  which is why `normalize-terrain-features.py`'s kind check is load-bearing, not just
+  defence in depth. Both are documented in the scripts themselves, not just here.
+- `build-manifest.py` and `build-region.sh` wired with the new `terrain-features` kind —
+  cut a real `scotland-terrain-features.pmtiles` (4.3 MB, z11–15) and confirmed it appears
+  correctly in a locally-generated `manifest.json` with real min/maxzoom read from the
+  archive header.
+- `src/terrain-features.ts` (new) — the fill + point layers, palette and coverage-caveat
+  text. `src/regions/region-layers.ts` wired with a `terrain-features` branch. A legend
+  section in `src/main.ts`. Full test suite (508 tests) and `tsc --noEmit` clean.
+- **Visually verified against the real built archive**, not just unit-tested: a standalone
+  MapLibre page loaded `scotland-terrain-features.pmtiles` directly and rendered the exact
+  paint expressions from `src/terrain-features.ts`. Centred on a real named feature found
+  in the data ("Caerketton Screes", Pentland Hills) — the fill, the point markers for
+  nearby rock outcrops, and the name label all rendered correctly at real map zoom.
+
+**Not done:** nothing uploaded (`upload.sh` was not run — that touches the live bucket and
+needs explicit sign-off), and no on-device/production verification. The §8 acceptance
+checklist below still describes what "done" means once this is live.
 
 ---
 
@@ -91,7 +117,7 @@ standing legend caveat, the same posture as SAC).
 
 ## 3. The artifact
 
-`scree-global.pmtiles`, source-layer `terrain_features`, one property `kind` ∈
+`terrain-features-global.pmtiles`, source-layer `terrain_features`, one property `kind` ∈
 `scree | shingle | rock | stone`, built the same way `sac-global.pmtiles` is:
 `osmium tags-filter` per source extract → `osmium export` to line-delimited GeoJSON →
 a normalize pass → `tippecanoe` → `pmtiles convert`.
@@ -161,9 +187,9 @@ not a blocker.
 
 | File | Role |
 |---|---|
-| `scripts/build-scree.sh` *(new)* | Modelled directly on `build-sac.sh`: same per-continent extract-then-concatenate structure (§ the history-file trap that script's comments document), same `--self-test` convention. |
+| `scripts/build-terrain-features.sh` *(new)* | Modelled directly on `build-sac.sh`: same per-continent extract-then-concatenate structure (§ the history-file trap that script's comments document), same `--self-test` convention. |
 | `scripts/normalize-terrain-features.py` *(new)* | Thin — attach `kind` uniformly across nodes and ways (§2 resolved the keep/drop question: keep both). |
-| `build-manifest.py` | `ARTIFACT_KINDS["-scree.pmtiles"] = "terrain-features"` (or similar — naming TBD so it doesn't collide with a future landcover-general artifact). |
+| `build-manifest.py` | `ARTIFACT_KINDS["-terrain-features.pmtiles"] = "terrain-features"`. |
 | `build-region.sh` | A `terrain-features` branch in the `--only` set and the extract loop, same shape as the existing `sac`/`paths` branches. |
 
 **Build assertion has to take a different shape than SAC's.** SAC pins named paths
@@ -234,13 +260,8 @@ Airplane Mode throughout, a region with this artifact downloaded:
    The reference box came back 96% ways — points are real but far too sparse (3 of 69
    features) to be a visual-noise risk, so there's no tradeoff left to decide. Still worth
    a glance once a real region builds, in case Lochaber's mix isn't representative.
-2. **Artifact name/kind string** — `scree`, `terrain-features`, `rock`, something else. The
-   manifest kind string is user-facing nowhere directly but shapes every filename and
-   catalogue entry that follows it, so worth a real name rather than whatever seemed fine at
-   3am.
-3. **Does this want its own settings toggle**, like avalanche terrain's default-off switch,
-   or does it ship always-on like SAC bands and paths? Coverage is uneven but the feature
-   itself isn't a "not just a caveat, actually dangerous" case the way avalanche terrain is
-   — leaning towards always-on, but not decided here.
+2. ~~Artifact name/kind string?~~ **Decided: `terrain-features`.** Filenames, the
+   `ARTIFACT_KINDS` entry, the source-layer name and the build script are all built on it.
+3. ~~Settings toggle?~~ **Decided: always-on**, matching SAC/paths. No toggle was added.
 4. **Worth a route-panel callout** ("crosses scree for 400 m")? Flagged in §6 as
-   deliberately out of scope for a first cut; easy to add later if wanted.
+   deliberately out of scope for a first cut; easy to add later if wanted. Still open.

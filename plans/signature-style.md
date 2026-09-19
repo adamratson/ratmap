@@ -249,3 +249,43 @@ themes, not only calculated offline. The browser pane showed Barlow loaded at 37
 1440×900 (dark, docked). `npm run build` lists all 8 woff2 files in `dist/sw.js`'s precache.
 508 tests and `tsc --noEmit` pass. Not done: an actual airplane-mode reload, and checking
 `.route-stats dd` in mono at 375px with a real route (mono is wider, so check it in step 3).
+
+**Step 3** is done. In `style.css`:
+- The rail is one bezel (the container carries surface, border and shadow; cells are flat with
+  hairlines between visible buttons). Active state is an accent icon, not a fill.
+- Chips are square, uppercase and semi-condensed. Padding dropped to 0.7rem so the three
+  browse chips still fit at 375px and in the 24rem docked panel. The active chip is an ink fill
+  with an accent underline, and planning is the only solid-accent chip.
+- The sheet has a hairline edge instead of a cast shadow (right edge when docked). The grip is 28px.
+- Toasts and conditions use graphite with a 3px severity stripe (`--status-stripe-*` replaces
+  `--status-ok/warn/error`). This also fixed the toast action button, whose `color: var(--surface)`
+  drew graphite on graphite in the dark theme.
+- New `--overlay-*` tokens replace the hex literals on `#detail-notice`, `#peak-tooltip` and
+  `.condition-toggle`.
+- Remaining `0.35–0.6rem` radii become `--radius`, and pills become `--radius-sm`.
+- The NavigationControl group matches the bezel, with its icons inverted plus `hue-rotate(180deg)`
+  on dark so the north tip stays red.
+- Night hover lifts (`brightness(1.18)`) rather than dipping.
+- The profile chart uses ink line and fill tokens. On the follow screen it takes the follow
+  palette, with the accent position dot.
+
+New `src/readout.ts` (`fillReadout`) splits a formatter's "<number> <unit>" into mono value and
+muted unit spans. `textContent` is unchanged, so the e2e string assertions still hold. It is
+applied to route stats, follow figures, the summit sheet elevation (now `--text-lg`) and the peak
+tooltip. The tooltip is now built from DOM nodes instead of `innerHTML`, since it had been
+interpolating the OSM name as HTML. Summit coordinates are mono. Region-meta sizes are **not**
+readouts yet: they sit mid-sentence ("Europe · 1.3 GB · …"), and splitting that line is a
+separate change.
+
+Verified in the browser pane:
+- 1440×900 dark: planner chip, "4.54 km" readout, amber-striped toast, bezel.
+- 1440×900 light: summit sheet "1345 m", with DOM checked, and the tooltip.
+- 375×812 light: chips, rail and toast.
+- `#chips` `scrollWidth == clientWidth` at both widths when browsing.
+
+512 unit tests (4 new) pass. The e2e specs for places, sheet, route-planning, search and
+routes-library ran with 35 passed and 3 failed, and **the same 3 fail on 8b2259d, before any of
+this work**: `sheet.spec.ts:25` and `:37` (`sheetHeight()` is 0 because Playwright's desktop
+viewport gets the docked panel) and `places.spec.ts:44`. Not verified: the follow figures with a
+real position fix, because the pane has no geolocation source. That DOM is covered by
+`routes-ui.test.ts`.

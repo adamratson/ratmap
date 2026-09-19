@@ -14,6 +14,7 @@ import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import '@fontsource/jetbrains-mono/latin-600.css';
 import './style.css';
+import { fillReadout } from './readout';
 import {
   BASEMAP_MAX_ZOOM,
   BASEMAP_PMTILES_URL,
@@ -1083,9 +1084,15 @@ const peakTooltip = document.querySelector<HTMLDivElement>('#peak-tooltip')!;
 function showPeakTooltip(peak: PeakProperties, point: { x: number; y: number }): void {
   const name = peak.name?.trim() || 'Unnamed summit';
   const ele = formatElevation(peak.ele);
-  peakTooltip.innerHTML = ele
-    ? `${name} <span class="peak-tooltip-ele">${ele}</span>`
-    : name;
+  // Built from nodes, not innerHTML: the name is OSM data, which anyone can edit — the
+  // same reason showPeakSheet writes it with textContent.
+  peakTooltip.replaceChildren(name);
+  if (ele) {
+    const figure = document.createElement('span');
+    figure.className = 'peak-tooltip-ele';
+    fillReadout(figure, ele);
+    peakTooltip.append(' ', figure);
+  }
   peakTooltip.style.left = `${point.x}px`;
   peakTooltip.style.top = `${point.y}px`;
   peakTooltip.hidden = false;
@@ -1128,7 +1135,7 @@ function showPeakSheet(peak: PeakProperties, lngLat: maplibregl.LngLat): void {
     `;
     // textContent, not interpolation: names come from OSM, which is user-editable data.
     body.querySelector('h2')!.textContent = name;
-    body.querySelector('.sheet-ele')!.textContent = ele ?? 'Elevation unknown';
+    fillReadout(body.querySelector<HTMLElement>('.sheet-ele')!, ele ?? 'Elevation unknown');
     body.querySelector('.sheet-coords')!.textContent =
       `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
     if (wikidata) {

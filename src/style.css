@@ -52,10 +52,26 @@
   /* Status surfaces. Dark backgrounds in both themes: these sit over the map, which is
      never dark enough to carry light-on-light text. */
   --status-neutral: #1c2127;
-  --status-ok: #14532d;
-  --status-warn: #78350f;
-  --status-error: #7f1d1d;
   --status-text: #ffffff;
+  --status-muted: #9aa3ad;
+  /* Severity is a 3px stripe on a graphite surface, not a whole-surface brown or red
+     fill: the wording already says what happened, and a stripe is enough for the colour
+     to confirm it without the banner shouting over the map. */
+  --status-stripe-neutral: #3a424c;
+  --status-stripe-ok: #4ade80;
+  --status-stripe-warn: #fbbf24;
+  --status-stripe-error: #f87171;
+
+  /* Small labels drawn straight over the map (the zoom notice, the summit tooltip).
+     Graphite in both themes, for the same reason as the status surfaces. */
+  --overlay-surface: rgba(14, 17, 20, 0.86);
+  --overlay-text: #e6e9ed;
+  --overlay-muted: #9aa3ad;
+
+  /* Profile chart. Ink rather than accent: the line is data, and the accent is kept for
+     the one mark on it that means "you are here". */
+  --profile-line: #14171a;
+  --profile-fill: rgba(20, 23, 26, 0.1);
 
   /* The follow screen is dark in both themes — see the comment on .route-follow. */
   --follow-surface: #0e1114;
@@ -158,10 +174,10 @@
   --shadow-strong: rgba(0, 0, 0, 0.6);
 
   --status-neutral: #1c2127;
-  --status-ok: #14532d;
-  --status-warn: #78350f;
-  --status-error: #7f1d1d;
   --status-text: #e6e9ed;
+
+  --profile-line: #e6e9ed;
+  --profile-fill: rgba(230, 233, 237, 0.1);
 
   --marker-start: #22c55e;
   --marker-end: #f87171;
@@ -267,6 +283,12 @@ textarea {
   a:hover {
     filter: brightness(0.94);
   }
+
+  /* Darkening graphite by 6% is invisible; night lifts instead. */
+  [data-theme='dark'] button:not(:disabled):hover,
+  [data-theme='dark'] a:hover {
+    filter: brightness(1.18);
+  }
 }
 
 /* Keyboard focus, everywhere, once. `:focus-visible` already excludes a mouse click on
@@ -296,9 +318,16 @@ textarea {
   bottom: calc(var(--sheet-visible, 0px) + 2.25rem);
   transition: bottom 0.26s cubic-bezier(0.32, 0.72, 0, 1);
   z-index: 3;
+  /* One bezel, not a stack of loose circles: the rail is a single instrument cluster,
+     with hairlines between its cells. The container carries the surface and the one
+     shadow (it floats over the map); the buttons are flat cells inside it. */
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
 }
 
 #rail button {
@@ -310,20 +339,25 @@ textarea {
   height: 2.75rem;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: var(--surface);
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
   cursor: pointer;
+}
+
+/* Hairline between cells, drawn on whichever visible button follows another. */
+#rail button:not([hidden]) ~ button:not([hidden]) {
+  border-top: 1px solid var(--border);
 }
 
 #rail button[hidden] {
   display: none;
 }
 
+/* Tracking is a state of the instrument, not a pressed button: the icon lights, the
+   cell doesn't fill. */
 #rail button.active {
-  background: var(--accent);
-  color: var(--accent-text);
+  color: var(--accent-strong);
 }
 
 .rail-icon {
@@ -370,7 +404,7 @@ textarea {
   /* 44px tall. */
   padding: 0.65rem 0.85rem;
   border: 0;
-  border-radius: 0.6rem;
+  border-radius: var(--radius);
   background: var(--surface-sunken);
   color: var(--text);
   /* Never below 16px. iOS Safari zooms the page in when a field with smaller text takes
@@ -391,7 +425,7 @@ textarea {
   list-style: none;
   max-height: 40vh;
   overflow-y: auto;
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   background: var(--surface);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
 }
@@ -454,9 +488,9 @@ textarea {
   transform: translateX(-50%);
   z-index: 2;
   padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.82);
-  color: #ffffff;
+  border-radius: var(--radius);
+  background: var(--overlay-surface);
+  color: var(--overlay-text);
   font-size: 0.75rem;
   white-space: nowrap;
   pointer-events: auto;
@@ -480,9 +514,9 @@ textarea {
   position: absolute;
   z-index: 3;
   padding: 0.3rem 0.6rem;
-  border-radius: 0.4rem;
-  background: rgba(15, 23, 42, 0.85);
-  color: #ffffff;
+  border-radius: var(--radius);
+  background: var(--overlay-surface);
+  color: var(--overlay-text);
   font-size: 0.8rem;
   line-height: 1.3;
   white-space: nowrap;
@@ -497,7 +531,7 @@ textarea {
 }
 
 .peak-tooltip-ele {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--overlay-muted);
 }
 
 /* --- Ongoing conditions -------------------------------------------------------------
@@ -516,7 +550,7 @@ textarea {
   flex-direction: column;
   gap: 1px;
   max-width: 32rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   overflow: hidden;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
@@ -534,6 +568,7 @@ textarea {
   line-height: 1.3;
   color: var(--status-text);
   background: var(--status-neutral);
+  border-left: 3px solid var(--status-stripe-neutral);
 }
 
 .condition p {
@@ -543,13 +578,13 @@ textarea {
 }
 
 .condition.ok {
-  background: var(--status-ok);
+  border-left-color: var(--status-stripe-ok);
 }
 .condition.warn {
-  background: var(--status-warn);
+  border-left-color: var(--status-stripe-warn);
 }
 .condition.error {
-  background: var(--status-error);
+  border-left-color: var(--status-stripe-error);
 }
 
 .condition-action {
@@ -558,9 +593,9 @@ textarea {
   min-height: 2rem;
   padding: 0.35rem 0.7rem;
   border: 0;
-  border-radius: 0.35rem;
-  background: #ffffff;
-  color: #0f172a;
+  border-radius: var(--radius);
+  background: var(--status-text);
+  color: var(--status-neutral);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -569,8 +604,8 @@ textarea {
 .condition-toggle {
   padding: 0.3rem 0.7rem;
   border: 0;
-  background: rgba(15, 23, 42, 0.9);
-  color: rgba(255, 255, 255, 0.85);
+  background: var(--overlay-surface);
+  color: var(--status-muted);
   font-size: 0.75rem;
   font-weight: 600;
   text-align: left;
@@ -603,8 +638,9 @@ textarea {
   gap: 0.75rem;
   max-width: 30rem;
   padding: 0.6rem 0.5rem 0.6rem 0.9rem;
-  border-radius: 0.6rem;
+  border-radius: var(--radius);
   background: var(--status-neutral);
+  border-left: 3px solid var(--status-stripe-neutral);
   color: var(--status-text);
   font-size: 0.85rem;
   line-height: 1.35;
@@ -618,10 +654,10 @@ textarea {
 }
 
 .toast.warn {
-  background: var(--status-warn);
+  border-left-color: var(--status-stripe-warn);
 }
 .toast.error {
-  background: var(--status-error);
+  border-left-color: var(--status-stripe-error);
 }
 
 .toast-action {
@@ -629,9 +665,9 @@ textarea {
   min-height: 2.25rem;
   padding: 0.4rem 0.8rem;
   border: 0;
-  border-radius: 0.4rem;
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--surface);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--status-text);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -717,7 +753,10 @@ textarea {
 
 .legend-section h3 {
   margin: 0 0 0.2rem;
-  font-size: 0.8rem;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text);
 }
@@ -744,7 +783,7 @@ textarea {
 .legend-hillshade-swatch {
   width: 2.5rem;
   height: 1.5rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 45%, #475569 100%);
 }
 
@@ -847,9 +886,10 @@ textarea {
   z-index: 4;
   display: flex;
   flex-direction: column;
-  border-radius: 1rem 1rem 0 0;
+  border-radius: calc(var(--radius) * 2) calc(var(--radius) * 2) 0 0;
   background: var(--surface);
-  box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.2);
+  /* A hairline, not a cast shadow: the surface change is the edge. */
+  border-top: 1px solid var(--border-strong);
   /* The sheet owns vertical gestures inside itself; without this the browser tries to
      scroll the page and the drag stutters or dies. */
   touch-action: none;
@@ -878,10 +918,10 @@ textarea {
 .sheet-grip::before {
   content: '';
   display: block;
-  width: 2.25rem;
+  width: 1.75rem;
   height: 0.25rem;
   margin: 0 auto;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--border-strong);
 }
 
@@ -948,13 +988,16 @@ textarea {
   /* 36px — smaller than the 44px rail buttons because these sit in a row with generous
      horizontal padding, which is where a mis-tap actually happens. */
   min-height: 2.25rem;
-  padding: 0.4rem 0.9rem;
+  padding: 0.4rem 0.7rem;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
-  font-size: 0.85rem;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -974,6 +1017,9 @@ textarea {
   background: var(--text);
   border-color: var(--text);
   color: var(--surface);
+  /* The accent underline marks "this is where you are" without spending the solid
+     accent fill, which belongs to the planning mode below. */
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 /* The planning chip is a mode, not a destination — coloured to say so, and to make the
@@ -981,6 +1027,8 @@ textarea {
 .chip.chip-mode.active {
   background: var(--accent);
   border-color: var(--accent);
+  color: var(--accent-text);
+  box-shadow: none;
 }
 
 .sheet-body h2 {
@@ -1038,7 +1086,7 @@ textarea {
   align-items: center;
   padding: 0.5rem 1rem;
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   background: var(--accent);
   color: var(--surface);
   font-size: 0.9rem;
@@ -1099,7 +1147,7 @@ textarea {
   /* 44px tall, matching #search-input. */
   padding: 0.65rem 0.85rem;
   border: 0;
-  border-radius: 0.6rem;
+  border-radius: var(--radius);
   background: var(--surface-sunken);
   color: var(--text);
   /* Never below 16px — iOS Safari zooms the page in on a smaller field and does not zoom
@@ -1130,7 +1178,10 @@ textarea {
 
 .regions-orphans h3 {
   margin: 0;
-  font-size: 0.8rem;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text);
 }
@@ -1179,7 +1230,7 @@ textarea {
 .region-action {
   padding: 0.4rem 0.75rem;
   border: 0;
-  border-radius: 0.4rem;
+  border-radius: var(--radius);
   background: var(--accent);
   color: var(--surface);
   font-size: 0.8rem;
@@ -1202,7 +1253,7 @@ textarea {
 .region-progress {
   grid-column: 1 / -1;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--border);
   overflow: hidden;
 }
@@ -1332,10 +1383,59 @@ textarea {
   color: var(--ctrl-text);
 }
 
+/* NavigationControl (mouse only), restyled to match the rail's bezel: the two clusters
+   stack on the same edge on desktop and should read as one instrument. MapLibre draws
+   its icons as dark SVG background images; on graphite they are inverted, with the
+   hue turned back so the compass's red north tip stays red. */
+.maplibregl-ctrl.maplibregl-ctrl-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.maplibregl-ctrl.maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+
+[data-theme='dark'] .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+
 .maplibregl-ctrl.maplibregl-ctrl-scale {
   background: var(--ctrl-surface);
   color: var(--ctrl-text);
   border-color: var(--ctrl-border);
+}
+
+/* --- Readouts ------------------------------------------------------------------------
+   A measured value: mono, tabular figures, the unit smaller and muted
+   (plans/signature-style.md principle 1). Applied by src/readout.ts, which splits the
+   formatter's "<number> <unit>" string into these two spans. */
+.readout {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.readout-unit {
+  margin-left: 0.1em;
+  font-size: 0.72em;
+  color: var(--text-muted);
+}
+
+/* The summit sheet's elevation: the figure the sheet exists to give. */
+.sheet-body .sheet-ele {
+  margin: 0 0 0.35rem;
+  font-size: var(--text-lg);
+  color: var(--text);
+}
+
+/* Coordinates are a measured value too, just not one with a unit to split off. */
+.sheet-body .sheet-coords {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Route planning ---------------------------------------------------------------- */
@@ -1377,18 +1477,17 @@ textarea {
 }
 
 .route-stats dt {
+  font-family: var(--font-display);
   font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--text-faint);
 }
 
 .route-stats dd {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+  font-weight: 500;
 }
 
 /* SAC grade breakdown. The chips are read as a set — "how much of this route is at each
@@ -1413,7 +1512,7 @@ textarea {
   gap: 0.35rem;
   padding: 0.2rem 0.5rem;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--surface-sunken);
   /* Explicit, not inherited: the sheet body does not set a colour on plain block content,
      so a chip left to inherit renders black — invisible on the dark theme's chips. */
@@ -1452,13 +1551,13 @@ textarea {
 }
 
 .profile-area {
-  fill: rgba(37, 99, 235, 0.15);
+  fill: var(--profile-fill);
   stroke: none;
 }
 
 .profile-line {
   fill: none;
-  stroke: var(--accent-strong);
+  stroke: var(--profile-line);
   stroke-width: 1.5;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -1489,7 +1588,7 @@ textarea {
   min-height: 2.75rem;
   padding: 0.5rem 0.7rem;
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   background: var(--border);
   color: var(--text);
   font-size: 0.85rem;
@@ -1534,14 +1633,14 @@ textarea {
   min-width: 0;
   padding: 0.4rem 0.5rem;
   border: 1px solid var(--border-strong);
-  border-radius: 0.4rem;
+  border-radius: var(--radius);
   font-size: 0.85rem;
 }
 
 .route-save-form button {
   padding: 0.4rem 0.7rem;
   border: 0;
-  border-radius: 0.4rem;
+  border-radius: var(--radius);
   background: var(--accent);
   color: var(--surface);
   font-size: 0.85rem;
@@ -1620,7 +1719,7 @@ textarea {
 .route-import {
   padding: 0.45rem 0.8rem;
   border: 0;
-  border-radius: 0.4rem;
+  border-radius: var(--radius);
   background: var(--accent);
   color: var(--surface);
   font-size: 0.85rem;
@@ -1689,7 +1788,7 @@ textarea {
 .route-row-actions button {
   padding: 0.3rem 0.5rem;
   border: 0;
-  border-radius: 0.35rem;
+  border-radius: var(--radius);
   background: var(--border);
   color: var(--text);
   font-size: 0.75rem;
@@ -1721,6 +1820,7 @@ textarea {
 }
 
 .follow-figures dt {
+  font-family: var(--font-display);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1731,15 +1831,19 @@ textarea {
   margin: 0;
   /* Deliberately large: this is read at arm's length, in motion. */
   font-size: 2.25rem;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.05;
-  font-variant-numeric: tabular-nums;
+}
+
+/* The unit stays muted at readout scale too, or "km" competes with the figure. */
+.follow-figures .readout-unit {
+  color: var(--follow-muted);
 }
 
 .follow-progress {
   height: 0.4rem;
   margin-top: 0.9rem;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.15);
   overflow: hidden;
 }
@@ -1787,7 +1891,18 @@ textarea {
 }
 
 .route-follow .profile-position {
+  fill: var(--follow-progress);
   stroke: var(--follow-surface);
+}
+
+/* The follow screen is graphite in both themes, so its chart takes the night ink
+   whatever the app theme is — the day ink would draw black on black. */
+.route-follow .profile-line {
+  stroke: var(--follow-text);
+}
+
+.route-follow .profile-area {
+  fill: var(--follow-track);
 }
 
 .route-follow .route-actions {
@@ -1815,7 +1930,7 @@ textarea {
   #sheet {
     right: auto;
     width: min(24rem, 55vw);
-    border-radius: 0 1rem 0 0;
+    border-radius: 0 calc(var(--radius) * 2) 0 0;
     padding-left: env(safe-area-inset-left);
   }
 
@@ -1862,8 +1977,9 @@ textarea {
   #sheet {
     right: auto;
     width: 24rem;
-    border-radius: 0 1rem 1rem 0;
-    box-shadow: 2px 0 20px rgba(0, 0, 0, 0.18);
+    border-radius: 0;
+    border-top: 0;
+    border-right: 1px solid var(--border-strong);
     padding-left: env(safe-area-inset-left);
   }
 

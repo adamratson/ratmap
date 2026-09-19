@@ -5,6 +5,7 @@ import { parseRouteFile, toGeoJson, toGpx } from './gpx';
 import { deleteRoute, listRoutes, saveRoute, type SavedRoute } from './route-store';
 import type { RoutePlanner, RouteSummary } from './route-planner';
 import { SAC_GRADES, sacCssColor, sacGradeInfo } from '../sac';
+import { fillReadout } from '../readout';
 
 // The route planner's interface: a panel that lives over the map while planning or
 // following, and a sheet listing saved routes.
@@ -241,7 +242,9 @@ function coverageSentence(coverage: number): string {
 
 function stat(label: string, value: string): HTMLDivElement {
   const group = el('div', 'route-stat');
-  group.append(el('dt', '', label), el('dd', '', value));
+  const figure = el('dd');
+  fillReadout(figure, value);
+  group.append(el('dt', '', label), figure);
   return group;
 }
 
@@ -313,7 +316,9 @@ function followSection(summary: RouteSummary, planner: RoutePlanner): HTMLElemen
 
 function followFigure(label: string, value: string): HTMLDivElement {
   const group = el('div', 'follow-figure');
-  group.append(el('dt', '', label), el('dd', '', value));
+  const figure = el('dd');
+  fillReadout(figure, value);
+  group.append(el('dt', '', label), figure);
   return group;
 }
 

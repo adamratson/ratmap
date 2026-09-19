@@ -55,6 +55,7 @@ async function openSheet(map: Partial<MLMap> = {}): Promise<HTMLElement> {
   await renderRegionsSheet({
     map: map as MLMap,
     registry: {} as never,
+    theme: () => 'light',
     container,
     onStatus: vi.fn(),
   });
@@ -308,6 +309,7 @@ describe('a catalogue that covers the globe', () => {
     await renderRegionsSheet({
       map: {} as MLMap,
       registry: {} as never,
+      theme: () => 'light',
       container,
       onStatus: vi.fn(),
     });
@@ -346,6 +348,7 @@ describe('withdrawn regions', () => {
     await renderRegionsSheet({
       map: {} as MLMap,
       registry: {} as never,
+      theme: () => 'light',
       container,
       onStatus: vi.fn(),
     });
@@ -431,7 +434,7 @@ describe('a region whose catalogue entry has gained an artifact', () => {
     const { addRegionToMap } = await import('./region-layers');
     vi.mocked(addRegionToMap).mockClear();
 
-    await restoreDownloadedRegions({} as MLMap, {} as never, [GRADED]);
+    await restoreDownloadedRegions({} as MLMap, {} as never, [GRADED], 'light');
 
     // The regression this guards: restore used to take only regions whose every artifact
     // was present, so the day the catalogue published a new artifact kind, every already
@@ -444,7 +447,7 @@ describe('a region whose catalogue entry has gained an artifact', () => {
     const { addRegionToMap } = await import('./region-layers');
     vi.mocked(addRegionToMap).mockClear();
 
-    const restored = await restoreDownloadedRegions({} as MLMap, {} as never, [GRADED]);
+    const restored = await restoreDownloadedRegions({} as MLMap, {} as never, [GRADED], 'light');
 
     // Downstream — the zoom-limit notice, the router, the samplers — reads artifacts off
     // these objects and looks each one up in the registry. Passing on a manifest entry

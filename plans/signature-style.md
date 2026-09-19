@@ -289,3 +289,67 @@ this work**: `sheet.spec.ts:25` and `:37` (`sheetHeight()` is 0 because Playwrig
 viewport gets the docked panel) and `places.spec.ts:44`. Not verified: the follow figures with a
 real position fix, because the pane has no geolocation source. That DOM is covered by
 `routes-ui.test.ts`.
+
+**Step 4** is done. New `src/flavor.ts`:
+- `ratmapFlavor(theme)` spreads Protomaps' `LIGHT` / `DARK` with ratmap's earth, water,
+  landcover, roads and label colours. `mapInk(theme)` holds the inks for everything the app
+  draws over the basemap.
+- Night water was first `#0f1a22`, and in a headless screenshot the lochs disappeared into the
+  land. It is now `#1d3040`.
+
+Consumers:
+- `buildStyle` (basemap and hillshade).
+- `region-layers.ts`: flavour, paths, contours, contour labels, hillshade.
+- `peaks.ts`: label and dot follow the theme, ink by day and near-white at night, replacing the
+  fixed violet. Munro gold is kept.
+- `route-layers.ts`: magenta `#d6127e` by day, `#ff4fa8` at night. Straight legs are amber,
+  off-route red, each with a night variant. `RoutePlanner` takes a `theme` getter for its
+  fallback `addRouteLayers`.
+- The legend reads `mapInk` at render time, so its swatches match the map in either theme.
+
+Fixed: `addRegionToMap` hardcoded `namedFlavor('light')`. It now takes a required `theme`
+(no default, so a caller can't silently bring the bug back), with a regression test in
+`region-layers.test.ts`.
+
+Knock-on: the region inks (brown path `#8a3d2e`, white casings and halos) had only ever
+been drawn on the light flavour. On night graphite the path was 2.3:1 and the casings
+glared. So night gets its own set: graphite casings and halos, and browns lifted with their
+hue kept (path 6.3:1, contour label 6.5:1).
+
+Deliberate exception: SAC grade labels keep a white halo in both themes. Their text takes
+the grade ramp, and T5/T6 need a light ground.
+
+Night hillshade highlight drops from white to `rgba(154,163,173,0.45)`. Pure white turned
+every sunlit slope into a pale blob brighter than the route. Tried live with
+`setPaintProperty` before committing it.
+
+In CSS:
+- The location dot, heading cone and accuracy halo are the position orange (`--position`).
+- Intermediate waypoint pins are ink by day and near-white at night, off the old route blue.
+- At night, pin text and rings are graphite, which also fixes white-on-light-green start pins
+  (2.3:1).
+- §3.2's "accent ring on mid pins" is dropped: principle 2 keeps the accent for "you are here".
+
+Verification notes:
+- The browser pane was hidden for part of this. MapLibre defers loading the style to a
+  `requestAnimationFrame`, which never fires in a hidden document. A blank map there is the
+  environment, not a regression: measured as `visibilityState: 'hidden'` with no rAF in 3s.
+- The day theme and the night-water fix were screenshotted with headless Playwright against
+  the dev server instead.
+
+Tests:
+- 513 unit tests pass.
+- E2E (offline-regions, sheet, route-planning, places, region-downloads): 30 passed, 10 failed,
+  none from this step. The e2e theme test (`sheet.spec.ts` "keeps the app's own layers across a
+  theme change") passes.
+
+Failures:
+- 3 are the known docked-panel ones.
+- 1 is a stale regex in `offline-regions.spec.ts:75`, which predates the `avalanche` artifact
+  kind (`andorra-avalanche-1.pmtiles`).
+- 6 are download timeouts. Route-planning's own message reads "did not finish downloading
+  within 240s (15.3 MB of 23.7 MB)". `region-downloads.spec.ts:57` fails identically on the
+  step-3 commit, so this is bucket throughput, not this step.
+
+A downloaded region in the night theme is therefore covered by the unit regression test, not
+yet by a visual check on a real download.

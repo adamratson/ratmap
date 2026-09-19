@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
 import type { Region } from './manifest';
 import type { TileSourceRegistry } from '../tile-source-registry';
+import { ratmapFlavor } from '../flavor';
 
 const getArtifactFileMock = vi.hoisted(() => vi.fn());
 vi.mock('./opfs-store', () => ({ getArtifactFile: getArtifactFileMock }));
@@ -61,7 +62,7 @@ describe('addRegionToMap', () => {
   it('never adds a background layer for a region', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     // Protomaps' layers() emits a viewport-filling `background` layer. Copying it per
     // region painted flat grey over the entire global map, leaving only the downloaded
@@ -70,10 +71,25 @@ describe('addRegionToMap', () => {
     expect(backgrounds).toEqual([]);
   });
 
+  it("draws a region in the current theme's flavour, not always the light one", async () => {
+    // A regression: this was hardcoded to namedFlavor('light'), so a downloaded region
+    // drew as a light patch on the dark map.
+    const earthColour = async (theme: 'light' | 'dark') => {
+      const map = fakeMap();
+      await addRegionToMap(map as unknown as MLMap, registry, region, theme);
+      const earth = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-earth');
+      return (earth?.paint as Record<string, unknown> | undefined)?.['fill-color'];
+    };
+
+    expect(await earthColour('dark')).toBe(ratmapFlavor('dark').earth);
+    expect(await earthColour('light')).toBe(ratmapFlavor('light').earth);
+    expect(await earthColour('dark')).not.toBe(await earthColour('light'));
+  });
+
   it('only adds layers bound to the region source', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     for (const layer of map.layers) {
       expect(layer.source).toBeTruthy();
@@ -84,7 +100,7 @@ describe('addRegionToMap', () => {
   it('registers each artifact with the tile registry under its unique filename (C3)', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     expect(registry.addLocal).toHaveBeenCalledTimes(3);
     expect(map.addSource).toHaveBeenCalledWith(
@@ -96,7 +112,7 @@ describe('addRegionToMap', () => {
   it('puts relief and contours beneath the region labels, not over them', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     const ids = map.layers.map((l) => String(l.id));
     const firstRegionLabel = map.layers.findIndex(
@@ -116,7 +132,7 @@ describe('addRegionToMap', () => {
   it('emphasises index contours using the attribute the pipeline actually emits', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     const contours = map.layers.find((l) => String(l.id).endsWith('contours-lines'))!;
     const width = JSON.stringify((contours.paint as Record<string, unknown>)['line-width']);
@@ -132,7 +148,7 @@ describe('addRegionToMap', () => {
   it('draws paths visibly, rather than leaving them as the near-invisible default', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     const paths = map.layers.find((l) => String(l.id).endsWith('-paths'));
     const casing = map.layers.find((l) => String(l.id).endsWith('-paths-casing'));
@@ -152,7 +168,7 @@ describe('addRegionToMap', () => {
   it('filters paths on the attribute the Protomaps schema actually uses', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     const paths = map.layers.find((l) => String(l.id).endsWith('-paths'))!;
     // Verified by decoding a real tile: paths are kind="path" in the `roads` layer, with
@@ -164,7 +180,7 @@ describe('addRegionToMap', () => {
   it('annotates index contours with their height, and only the index ones', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     const labels = map.layers.find((l) => String(l.id).endsWith('contours-labels'));
     expect(labels).toBeDefined();
@@ -184,7 +200,7 @@ describe('addRegionToMap', () => {
   it('keeps contour labels below the region place labels', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     const ids = map.layers.map((l) => String(l.id));
     const firstRegionLabel = map.layers.findIndex(
@@ -197,7 +213,7 @@ describe('addRegionToMap', () => {
   it('does not draw the region at zooms where its tiles cover a continent', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     // `pmtiles extract --bbox` keeps whole upstream tiles instead of re-clipping them, so
     // a region's low-zoom tiles are planet tiles that merely intersect it. Montenegro's z5
@@ -214,7 +230,7 @@ describe('addRegionToMap', () => {
     // Lochaber's, and holding it back to Lochaber's cutoff would hide detail it has.
     const scotland: Region = { ...region, id: 'scotland', bbox: [-8.7, 54.6, -0.7, 61.0] };
 
-    await addRegionToMap(map as unknown as MLMap, registry, scotland);
+    await addRegionToMap(map as unknown as MLMap, registry, scotland, 'light');
 
     const hillshade = map.layers.find((l) => String(l.id).endsWith('terrain-hillshade'))!;
     expect(hillshade.minzoom).toBe(6);
@@ -226,7 +242,7 @@ describe('addRegionToMap', () => {
     );
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     expect(map.sources.has(regionSourceId('lochaber', 'contours'))).toBe(false);
     expect(map.sources.has(regionSourceId('lochaber', 'basemap'))).toBe(true);
@@ -235,9 +251,9 @@ describe('addRegionToMap', () => {
   it('is idempotent — a second call does not duplicate sources', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
     const afterFirst = map.layers.length;
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     expect(map.layers.length).toBe(afterFirst);
   });
@@ -246,7 +262,7 @@ describe('addRegionToMap', () => {
 describe('removeRegionFromMap', () => {
   it('removes every layer and source the region added', async () => {
     const map = fakeMap();
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
     expect(map.layers.length).toBeGreaterThan(0);
 
     removeRegionFromMap(map as unknown as MLMap, region);
@@ -267,7 +283,7 @@ describe('the low-zoom path network', () => {
   it('draws the same path styling from its own source', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, withPaths);
+    await addRegionToMap(map as unknown as MLMap, registry, withPaths, 'light');
 
     const low = map.layers.find((l) => String(l.id) === 'region-lochaber-paths-paths')!;
     const basemap = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-paths')!;
@@ -281,7 +297,7 @@ describe('the low-zoom path network', () => {
   it('hands over to the basemap at the zoom the basemap actually has paths', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, withPaths);
+    await addRegionToMap(map as unknown as MLMap, registry, withPaths, 'light');
 
     const low = map.layers.find((l) => String(l.id) === 'region-lochaber-paths-paths')!;
     const basemap = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-paths')!;
@@ -294,7 +310,7 @@ describe('the low-zoom path network', () => {
   it('leaves the basemap paths alone when there is no low-zoom artifact', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, region);
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     // A region downloaded before this artifact existed still draws whatever its z12-13
     // tiles carry, rather than losing paths it used to show.
@@ -309,7 +325,7 @@ describe('the low-zoom path network', () => {
     // its maxzoom is a style error, so there must not be one.
     const tiny: Region = { ...withPaths, id: 'tiny', bbox: [-5.01, 56.79, -5.0, 56.8] };
 
-    await addRegionToMap(map as unknown as MLMap, registry, tiny);
+    await addRegionToMap(map as unknown as MLMap, registry, tiny, 'light');
 
     const ids = map.layers.map((l) => String(l.id));
     expect(ids).not.toContain('region-tiny-paths-paths');
@@ -327,7 +343,7 @@ describe('the low-zoom path network', () => {
       ],
     };
 
-    await addRegionToMap(map as unknown as MLMap, registry, both);
+    await addRegionToMap(map as unknown as MLMap, registry, both, 'light');
 
     const ids = map.layers.map((l) => String(l.id));
     expect(ids.indexOf('region-lochaber-sac-band')).toBeLessThan(
@@ -343,7 +359,7 @@ describe('SAC grades', () => {
   it('draws the grade band under the path casing, so it reads as a halo', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, graded);
+    await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
 
     const ids = map.layers.map((l) => String(l.id));
     const band = ids.indexOf('region-lochaber-sac-band');
@@ -356,7 +372,7 @@ describe('SAC grades', () => {
   it('is wider than the path drawn over it', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, graded);
+    await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
 
     const widthAt16 = (id: string): number => {
       const layer = map.layers.find((l) => String(l.id) === id)!;
@@ -374,7 +390,7 @@ describe('SAC grades', () => {
   it('writes the grade along the line, so the colour is not the only signal', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, graded);
+    await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
 
     const labels = map.layers.find((l) => String(l.id) === 'region-lochaber-sac-labels')!;
     const layout = labels.layout as Record<string, unknown>;
@@ -389,7 +405,7 @@ describe('SAC grades', () => {
   it('reads the grade from the property the pipeline emits', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, graded);
+    await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
 
     const band = map.layers.find((l) => String(l.id) === 'region-lochaber-sac-band')!;
     expect(band['source-layer']).toBe('sac');
@@ -402,7 +418,7 @@ describe('SAC grades', () => {
     const map = fakeMap();
     const sacOnly: Region = { ...region, artifacts: [sacArtifact] };
 
-    await addRegionToMap(map as unknown as MLMap, registry, sacOnly);
+    await addRegionToMap(map as unknown as MLMap, registry, sacOnly, 'light');
 
     expect(map.layers.map((l) => String(l.id))).toContain('region-lochaber-sac-band');
   });
@@ -410,7 +426,7 @@ describe('SAC grades', () => {
   it('removes its layers and source when the region is deleted', async () => {
     const map = fakeMap();
 
-    await addRegionToMap(map as unknown as MLMap, registry, graded);
+    await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
     removeRegionFromMap(map as unknown as MLMap, graded);
 
     expect(map.layers).toEqual([]);

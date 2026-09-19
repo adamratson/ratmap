@@ -193,6 +193,9 @@ export function addSacLayers(
       },
       paint: {
         'text-color': colorExpression() as never,
+        // White in both themes, deliberately — not mapInk().labelHalo. The text takes the
+        // grade ramp, whose darker grades (T5, T6) need a light ground; on the night map
+        // the white halo reads as a badge, which is what this label is.
         'text-halo-color': 'rgba(255,255,255,0.9)',
         'text-halo-width': 1.6,
       },

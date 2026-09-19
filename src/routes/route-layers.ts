@@ -2,6 +2,8 @@ import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
 import type { Feature, FeatureCollection, LineString } from 'geojson';
 import type { LngLat } from './geo';
 import type { LegSlot } from './route-model';
+import { mapInk } from '../flavor';
+import type { Theme } from '../theme';
 
 // Map rendering for the planned route. Geometry only — the planner owns the waypoint
 // markers, because those are interactive DOM elements rather than style layers.
@@ -21,7 +23,8 @@ const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
  * Relief under a place name is context; the route is the thing being read, and a place
  * name drawn over it would break the line exactly where the map is busiest.
  */
-export function addRouteLayers(map: MLMap): void {
+export function addRouteLayers(map: MLMap, theme: Theme): void {
+  const ink = mapInk(theme);
   if (map.getSource(ROUTE_SOURCE_ID)) return;
 
   map.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: EMPTY });
@@ -33,7 +36,7 @@ export function addRouteLayers(map: MLMap): void {
     source: ROUTE_SOURCE_ID,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': 'rgba(255,255,255,0.9)',
+      'line-color': ink.routeCasing,
       'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 8, 5, 16, 11],
     },
   });
@@ -48,7 +51,7 @@ export function addRouteLayers(map: MLMap): void {
       // not be snapped to the path network, and the resulting leg is a guess at a line
       // across country — possibly across a cliff. Rendering it identically to a real
       // routed leg would present that guess as a path.
-      'line-color': ['case', ['==', ['get', 'kind'], 'straight'], '#b45309', '#1d4ed8'],
+      'line-color': ['case', ['==', ['get', 'kind'], 'straight'], ink.routeStraight, ink.routeLine],
       'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 8, 3, 16, 7],
       'line-dasharray': [
         'case',
@@ -67,7 +70,7 @@ export function addRouteLayers(map: MLMap): void {
     source: ROUTE_OFF_ROUTE_SOURCE_ID,
     layout: { 'line-cap': 'round' },
     paint: {
-      'line-color': '#dc2626',
+      'line-color': ink.offRoute,
       'line-width': 2,
       'line-dasharray': [2, 2],
     },

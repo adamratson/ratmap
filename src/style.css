@@ -84,7 +84,19 @@
 
   --marker-start: #15803d;
   --marker-end: #b91c1c;
-  --marker-mid: #1d4ed8;
+  /* Intermediate waypoints: ink, not the old route blue. The route line is magenta now
+     (src/flavor.ts mapInk), and a pin the same colour as the line vanishes into it. */
+  --marker-mid: #14171a;
+  --marker-text: #ffffff;
+  --marker-ring: #ffffff;
+
+  /* "You are here" — the one place the signal orange appears on the map itself
+     (plans/signature-style.md §3.3). The night value in both themes: the dot is a bright
+     mark on the map, not text, so it has no contrast floor to drop to #c2410c for. */
+  --position: #ff5a1f;
+  --position-halo: rgba(255, 90, 31, 0.45);
+  --position-cone: rgba(255, 90, 31, 0.7);
+  --position-cone-fade: rgba(255, 90, 31, 0);
 
   --warn-text: #b45309;
 
@@ -181,7 +193,10 @@
 
   --marker-start: #22c55e;
   --marker-end: #f87171;
-  --marker-mid: #60a5fa;
+  --marker-mid: #e6e9ed;
+  /* Graphite text and ring at night: white on the lightened green start pin was 2.3:1. */
+  --marker-text: #0e1114;
+  --marker-ring: #0e1114;
 
   --warn-text: #fbbf24;
 
@@ -1300,9 +1315,9 @@ textarea {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #2563eb;
+  background: var(--position);
   border: 2px solid #ffffff;
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 0 0 1px var(--position-halo);
 }
 
 /* Hidden until there is a heading worth drawing — an arrow pointing confidently in an
@@ -1324,8 +1339,8 @@ textarea {
      degrees, and a crisp arrow claims a precision the sensor does not have. */
   background: radial-gradient(
     farthest-side at 50% 100%,
-    rgba(37, 99, 235, 0.75),
-    rgba(37, 99, 235, 0)
+    var(--position-cone),
+    var(--position-cone-fade)
   );
   clip-path: polygon(50% 100%, 0 0, 100% 0);
   pointer-events: none;
@@ -1677,10 +1692,10 @@ textarea {
   justify-content: center;
   width: 1.4rem;
   height: 1.4rem;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--marker-ring);
   border-radius: 50%;
   background: var(--marker-mid);
-  color: #ffffff;
+  color: var(--marker-text);
   font-size: 0.7rem;
   font-weight: 700;
   line-height: 1;

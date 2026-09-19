@@ -1,6 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { namedFlavor } from '@protomaps/basemaps';
+import { mapInk, ratmapFlavor } from './flavor';
 import { basemapLayersWithBareRock } from './landuse';
 // Self-hosted, Latin subset, only the weights style.css uses — see the --font-* tokens.
 // Bundled rather than linked so they precache with the shell and render offline (C7's
@@ -398,14 +398,21 @@ function legendRow(swatch: string, label: string, note: string): string {
   `;
 }
 
-/** A plain line swatch, optionally cased in white the way paths and routes are on the map. */
+/**
+ * A plain line swatch, optionally cased the way paths and routes are on the map — in the
+ * casing colour passed, since that is white by day and graphite at night (mapInk()).
+ */
 function lineSwatch(
   color: string,
   width: number,
-  { dash, cased, cap = 'round' }: { dash?: string; cased?: boolean; cap?: 'round' | 'butt' } = {},
+  {
+    dash,
+    casing: casingColor,
+    cap = 'round',
+  }: { dash?: string; casing?: string; cap?: 'round' | 'butt' } = {},
 ): string {
-  const casing = cased
-    ? `<line x1="3" y1="12" x2="37" y2="12" stroke="rgba(255,255,255,0.85)" stroke-width="${width + 3}" stroke-linecap="round"/>`
+  const casing = casingColor
+    ? `<line x1="3" y1="12" x2="37" y2="12" stroke="${casingColor}" stroke-width="${width + 3}" stroke-linecap="round"/>`
     : '';
   const dashAttr = dash ? ` stroke-dasharray="${dash}"` : '';
   return (
@@ -416,13 +423,17 @@ function lineSwatch(
 
 function openLegendView(): void {
   openView('legend', (body) => {
+    // The swatches read the same inks the map layers do, for the theme showing now. A
+    // hardcoded swatch is how the legend drifted from the map last time: violet summits
+    // and a blue route, long after the map had moved on.
+    const ink = mapInk(theme.get());
     body.innerHTML = `
       <p class="sheet-lede">What the lines and markers on the map mean.</p>
 
       <div class="legend-section">
         <h3>Summits</h3>
         ${legendRow(
-          '<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="6" fill="#6d28d9" stroke="rgba(255,255,255,0.95)" stroke-width="2"/></svg>',
+          `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="6" fill="${ink.peakDot}" stroke="${ink.peakDotStroke}" stroke-width="2"/></svg>`,
           'Summit',
           'Named and given a height once its prominence clears the zoom threshold — less prominent summits appear as you zoom in.',
         )}
@@ -431,12 +442,12 @@ function openLegendView(): void {
       <div class="legend-section">
         <h3>Paths</h3>
         ${legendRow(
-          lineSwatch('#8a3d2e', 2, { dash: '4 3', cased: true, cap: 'butt' }),
+          lineSwatch(ink.pathLine, 2, { dash: '4 3', casing: ink.pathCasing, cap: 'butt' }),
           'Footpath',
           'Dashed. Drawn once its region is downloaded, from zoom 12.',
         )}
         ${legendRow(
-          lineSwatch('#8a3d2e', 3.2, { cased: true }),
+          lineSwatch(ink.pathLine, 3.2, { casing: ink.pathCasing }),
           'Track',
           'Solid and heavier than a footpath — vehicle-width.',
         )}
@@ -461,12 +472,12 @@ function openLegendView(): void {
       <div class="legend-section">
         <h3>Relief</h3>
         ${legendRow(
-          '<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="rgba(120,85,55,0.55)" stroke-width="1.2"/></svg>',
+          `<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="${ink.contour}" stroke-width="1.2"/></svg>`,
           'Contour line',
           '10 m interval, where a region is fully downloaded.',
         )}
         ${legendRow(
-          '<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="#6b4a33" stroke-width="1.8"/><text x="21" y="6.5" font-size="6.5" fill="#6b4a33" text-anchor="middle">620</text></svg>',
+          `<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="${ink.contourLabel}" stroke-width="1.8"/><text x="21" y="6.5" font-size="6.5" fill="${ink.contourLabel}" text-anchor="middle">620</text></svg>`,
           'Index contour',
           'Every 50 m, drawn heavier and labelled with height — count the thin lines between them for the rest.',
         )}
@@ -530,17 +541,17 @@ function openLegendView(): void {
       <div class="legend-section">
         <h3>Routes</h3>
         ${legendRow(
-          lineSwatch('#1d4ed8', 3.5, { cased: true }),
+          lineSwatch(ink.routeLine, 3.5, { casing: ink.routeCasing }),
           'Route',
           'A planned or saved route, following real paths where the network allows.',
         )}
         ${legendRow(
-          lineSwatch('#b45309', 3.5, { dash: '5 4', cased: true, cap: 'butt' }),
+          lineSwatch(ink.routeStraight, 3.5, { dash: '5 4', casing: ink.routeCasing, cap: 'butt' }),
           'Unsnapped leg',
           'No path connects these two waypoints — a straight line only, not a real route. Move a waypoint onto a path to fix it.',
         )}
         ${legendRow(
-          lineSwatch('#dc2626', 2, { dash: '3 3' }),
+          lineSwatch(ink.offRoute, 2, { dash: '3 3' }),
           'Off-route',
           'Shown while following a route — the way back to it.',
         )}
@@ -637,14 +648,18 @@ function buildStyle(theme: Theme): maplibregl.StyleSpecification {
       terrain: terrainSource,
     },
     layers: [
-      ...basemapLayersWithBareRock('basemap', namedFlavor(theme), { lang: 'en' }),
+      ...basemapLayersWithBareRock('basemap', ratmapFlavor(theme), { lang: 'en' }),
       {
         id: 'hillshade',
         type: 'hillshade',
         source: 'terrain',
         // Style-spec default is 0.5; dialled down 10% to match the region hillshade's own
         // reduction in region-layers.ts.
-        paint: { 'hillshade-exaggeration': 0.45 },
+        paint: {
+          'hillshade-exaggeration': 0.45,
+          'hillshade-highlight-color': mapInk(theme).hillshadeHighlight,
+          'hillshade-shadow-color': mapInk(theme).hillshadeShadow,
+        },
       },
     ],
   };
@@ -797,10 +812,10 @@ let styleReady = false;
  */
 function installAppLayers(): void {
   styleReady = true;
-  addPeaksLayer(map, registry);
+  addPeaksLayer(map, registry, theme.get());
   // Added here rather than lazily on first use: adding a source before the style is
   // ready throws, and the planner can be opened at any moment after this point.
-  addRouteLayers(map);
+  addRouteLayers(map, theme.get());
   // Downloaded regions are restored without any user action, so a cold offline launch
   // renders from OPFS immediately (Phase 3 acceptance). This also redraws the coverage
   // footprints.
@@ -839,7 +854,7 @@ let catalogue: Region[] = [];
 async function restoreRegions(): Promise<void> {
   try {
     const manifest = await fetchManifest();
-    const restored = await restoreDownloadedRegions(map, registry, manifest.regions);
+    const restored = await restoreDownloadedRegions(map, registry, manifest.regions, theme.get());
     downloadedRegions = restored;
     catalogue = manifest.regions;
     applyAvailableDetail(restored);
@@ -870,7 +885,7 @@ function applyAvailableDetail(regions: Region[]): void {
 async function restoreFromOpfsWithoutManifest(): Promise<void> {
   const cached = loadCachedManifest();
   if (!cached) return;
-  const restored = await restoreDownloadedRegions(map, registry, cached.regions);
+  const restored = await restoreDownloadedRegions(map, registry, cached.regions, theme.get());
   downloadedRegions = restored;
   catalogue = cached.regions;
   applyAvailableDetail(restored);
@@ -973,6 +988,7 @@ let routeInProgress = false;
 const planner = new RoutePlanner({
   map,
   registry,
+  theme: () => theme.get(),
   downloadedRegions: () => downloadedRegions,
   // A tap that lands on a summit makes it a named waypoint, so a route reads
   // "Achintee → Ben Nevis" rather than as a list of coordinates.
@@ -1240,6 +1256,7 @@ function openRegionsView(): void {
     void renderRegionsSheet({
       map,
       registry,
+      theme: () => theme.get(),
       container: body,
       onStatus: (message, kind) => {
         status.toast(message, { kind });

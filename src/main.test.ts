@@ -92,12 +92,15 @@ vi.mock('maplibre-gl', () => ({
 }));
 
 const navigationControlSpy = vi.hoisted(() => vi.fn());
-const namedFlavorSpy = vi.hoisted(() => vi.fn((name: string) => ({ name })));
+// The flavour objects are tagged so a test can tell which base a ratmap flavour was
+// spread from (src/flavor.ts) by reading what reached layers().
+const basemapLayersSpy = vi.hoisted(() => vi.fn((_source: string, _flavor: unknown) => []));
 const store = vi.hoisted(() => new Map<string, string>());
 
 vi.mock('@protomaps/basemaps', () => ({
-  layers: () => [],
-  namedFlavor: namedFlavorSpy,
+  layers: basemapLayersSpy,
+  LIGHT: { base: 'light' },
+  DARK: { base: 'dark' },
 }));
 const bootstrapStorageMock = vi.hoisted(() => vi.fn());
 const isStandaloneMock = vi.hoisted(() => vi.fn());
@@ -145,7 +148,7 @@ beforeEach(() => {
   vi.unstubAllGlobals();
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   navigationControlSpy.mockClear();
-  namedFlavorSpy.mockClear();
+  basemapLayersSpy.mockClear();
   // jsdom's localStorage is not always usable in this runner, and the theme controller
   // deliberately survives storage being unavailable — so give it a real one to assert on.
   store.clear();
@@ -422,7 +425,16 @@ describe('app bootstrap', () => {
 
     expect(document.documentElement.dataset.theme).toBe('dark');
     // The basemap flavour has to follow, or a dark UI frames a white map.
-    expect(namedFlavorSpy).toHaveBeenCalledWith('dark');
+    expect(basemapLayersSpy).toHaveBeenCalledWith(
+      'basemap',
+      expect.objectContaining({ base: 'dark' }),
+      expect.anything(),
+    );
+    expect(basemapLayersSpy).not.toHaveBeenCalledWith(
+      'basemap',
+      expect.objectContaining({ base: 'light' }),
+      expect.anything(),
+    );
   });
 
   it('lets the user override the device, and remembers it', async () => {

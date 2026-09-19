@@ -41,7 +41,7 @@ describe('addPeaksLayer', () => {
     const addLayer = vi.fn();
     const map = { addSource, addLayer } as unknown as MLMap;
 
-    addPeaksLayer(map, registry);
+    addPeaksLayer(map, registry, 'light');
 
     expect(registry.addRemote).toHaveBeenCalledTimes(1);
     const [sourceId, spec] = addSource.mock.calls[0];
@@ -57,7 +57,7 @@ describe('addPeaksLayer', () => {
     const addLayer = vi.fn();
     const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
 
-    addPeaksLayer(map, registry);
+    addPeaksLayer(map, registry, 'light');
 
     const ids = addLayer.mock.calls.map((call) => call[0].id);
     expect(ids).toContain(PEAKS_LAYER_ID);
@@ -69,7 +69,7 @@ describe('addPeaksLayer', () => {
     const addLayer = vi.fn();
     const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
 
-    addPeaksLayer(map, registry);
+    addPeaksLayer(map, registry, 'light');
 
     const symbolLayer = addLayer.mock.calls.find((call) => call[0].id === PEAKS_LAYER_ID)![0];
     const textField = JSON.stringify(symbolLayer.layout['text-field']);
@@ -143,7 +143,7 @@ describe('PEAKS_NOTABILITY_FILTER', () => {
     const addLayer = vi.fn();
     const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
 
-    addPeaksLayer(map, registry);
+    addPeaksLayer(map, registry, 'light');
 
     const filters = addLayer.mock.calls.map((call) => JSON.stringify(call[0].filter));
     expect(filters).toHaveLength(2);
@@ -195,7 +195,7 @@ describe('PEAKS_RENDER_FILTER', () => {
     const addLayer = vi.fn();
     const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
 
-    addPeaksLayer(map, registry);
+    addPeaksLayer(map, registry, 'light');
 
     const filter = JSON.stringify(addLayer.mock.calls[0][0].filter);
     expect(filter).toBe(JSON.stringify(PEAKS_RENDER_FILTER));
@@ -208,7 +208,7 @@ describe('munro styling', () => {
     const addLayer = vi.fn();
     const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
 
-    addPeaksLayer(map, registry);
+    addPeaksLayer(map, registry, 'light');
 
     const symbolLayer = addLayer.mock.calls.find((call) => call[0].id === PEAKS_LAYER_ID)![0];
     const markerLayer = addLayer.mock.calls.find(

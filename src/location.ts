@@ -188,9 +188,12 @@ export class LocationController {
       type: 'circle',
       source: this.accuracyCircleId,
       paint: {
-        'circle-color': '#2563eb',
+        // The position orange (--position in style.css): the accuracy halo belongs to
+        // the "you are here" dot, so it takes its colour — a literal, since MapLibre
+        // paint cannot read a CSS variable.
+        'circle-color': '#ff5a1f',
         'circle-opacity': 0.12,
-        'circle-stroke-color': '#2563eb',
+        'circle-stroke-color': '#ff5a1f',
         'circle-stroke-opacity': 0.35,
         'circle-stroke-width': 1,
         // metres -> pixels: 156543 * cos(lat) / 2^zoom m-per-pixel at the equator.

@@ -1,5 +1,6 @@
 import type { FilterSpecification, Map as MLMap } from 'maplibre-gl';
-import { namedFlavor } from '@protomaps/basemaps';
+import { mapInk, ratmapFlavor, type MapInk } from '../flavor';
+import type { Theme } from '../theme';
 import { basemapLayersWithBareRock } from '../landuse';
 import type { Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
@@ -83,18 +84,20 @@ function addPathLayers(
     filter,
     minzoom,
     maxzoom,
+    ink,
   }: {
     sourceLayer: string;
     filter?: FilterSpecification;
     minzoom: number;
     maxzoom?: number;
+    ink: MapInk;
   },
 ): void {
   const before = map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined;
   const zooms = { minzoom, ...(maxzoom === undefined ? {} : { maxzoom }) };
 
-  // Casing first, so the dashes above sit in a light channel and stay legible against
-  // dark relief.
+  // Casing first, so the line above sits in its own channel and stays legible against
+  // relief — light by day, graphite at night (see mapInk()).
   map.addLayer(
     {
       id: `${sourceId}-paths-casing`,
@@ -105,7 +108,7 @@ function addPathLayers(
       ...zooms,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': 'rgba(255,255,255,0.85)',
+        'line-color': ink.pathCasing,
         'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 12, 2, 16, 6],
       },
     },
@@ -122,7 +125,7 @@ function addPathLayers(
       ...zooms,
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
-        'line-color': '#8a3d2e',
+        'line-color': ink.pathLine,
         'line-width': [
           'interpolate',
           ['exponential', 1.5],
@@ -188,13 +191,20 @@ function regionLayerIds(map: MLMap, regionId: string): string[] {
 /**
  * Register a downloaded region's archives with the TileSourceRegistry and add its layers.
  * Idempotent — safe to call again after a style reload or a repeat download.
+ *
+ * `theme` is required, not defaulted: this used to hardcode the light flavour, which drew
+ * a downloaded region as a light patch on the dark map. A default would bring that back
+ * for whichever caller forgot. A theme change needs no extra handling here, since it
+ * replaces the whole style and installAppLayers re-adds every region with the new theme.
  */
 export async function addRegionToMap(
   map: MLMap,
   registry: TileSourceRegistry,
   region: Region,
+  theme: Theme,
 ): Promise<void> {
   const minzoom = regionMinZoom(region.bbox);
+  const ink = mapInk(theme);
 
   // Decided up front rather than by mutating the basemap's layers once the `paths`
   // artifact is reached: `setLayerZoomRange` throws "Style is not done loading" if it
@@ -250,6 +260,8 @@ export async function addRegionToMap(
               14,
               0.135,
             ],
+            'hillshade-highlight-color': ink.hillshadeHighlight,
+            'hillshade-shadow-color': ink.hillshadeShadow,
           },
         },
         // Under every label, not just under the peaks — see beneathLabels().
@@ -266,7 +278,7 @@ export async function addRegionToMap(
       // #cccccc over the entire global map, leaving only the area with region tiles
       // visible. A style needs exactly one background, and the global basemap already
       // supplies it.
-      const generated = basemapLayersWithBareRock(sourceId, namedFlavor('light'), { lang: 'en' });
+      const generated = basemapLayersWithBareRock(sourceId, ratmapFlavor(theme), { lang: 'en' });
       for (const layer of generated) {
         if (!('source' in layer) || !layer.source) continue;
         const scoped = {
@@ -278,6 +290,7 @@ export async function addRegionToMap(
       }
 
       addPathLayers(map, sourceId, {
+        ink,
         sourceLayer: 'roads',
         filter: ['==', ['get', 'kind'], 'path'] as unknown as FilterSpecification,
         // With the low-zoom artifact present this starts where that one stops, so the two
@@ -307,7 +320,7 @@ export async function addRegionToMap(
           minzoom: Math.max(minzoom, 11),
           maxzoom: 13,
           paint: {
-            'line-color': 'rgba(120, 85, 55, 0.55)',
+            'line-color': ink.contour,
             'line-width': 1.2,
           },
         },
@@ -323,7 +336,7 @@ export async function addRegionToMap(
           // Picks up exactly where the index-only layer above stops (its maxzoom: 13).
           minzoom: Math.max(minzoom, 13),
           paint: {
-            'line-color': 'rgba(120, 85, 55, 0.55)',
+            'line-color': ink.contour,
             // Index contours (every 5th) are drawn heavier, as on a paper map.
             //
             // `idx`, not `index`, and compared to 1, not true: build-contours.sh tags them
@@ -338,7 +351,7 @@ export async function addRegionToMap(
         beneathLabels(map, region.id),
       );
 
-      addContourLabels(map, sourceId, region.id, minzoom);
+      addContourLabels(map, sourceId, region.id, minzoom, ink);
     } else if (artifact.kind === 'paths') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
 
@@ -353,6 +366,7 @@ export async function addRegionToMap(
       const lowZoomMin = Math.max(12, minzoom);
       if (lowZoomMin < BASEMAP_PATHS_MIN_ZOOM) {
         addPathLayers(map, sourceId, {
+          ink,
           sourceLayer: PATHS_SOURCE_LAYER,
           minzoom: lowZoomMin,
           maxzoom: BASEMAP_PATHS_MIN_ZOOM,
@@ -424,6 +438,7 @@ function addContourLabels(
   sourceId: string,
   regionId: string,
   regionMin: number,
+  ink: MapInk,
 ): void {
   map.addLayer(
     {
@@ -457,10 +472,10 @@ function addContourLabels(
         'text-ignore-placement': false,
       },
       paint: {
-        'text-color': '#6b4a33',
+        'text-color': ink.contourLabel,
         // The halo is what stands in for breaking the line behind the label, which
         // MapLibre cannot do — without it the contour runs straight through the digits.
-        'text-halo-color': 'rgba(255,255,255,0.9)',
+        'text-halo-color': ink.labelHalo,
         'text-halo-width': 1.6,
       },
     },

@@ -7,6 +7,8 @@ import type {
 import { OSM_ATTRIBUTION, PEAKS_MAX_ZOOM, PEAKS_PMTILES_URL } from './config';
 import { isCoarsePointer } from './pointer';
 import type { TileSourceRegistry } from './tile-source-registry';
+import { mapInk } from './flavor';
+import type { Theme } from './theme';
 
 // Summits overlay, backed by our own peaks-global.pmtiles — Protomaps v4 dropped `ele`
 // from its POI layer (C6), so upstream peaks are unusable for a mountain map.
@@ -112,7 +114,8 @@ export const PEAKS_NOTABILITY_FILTER = [
  */
 export const PEAKS_RENDER_FILTER = ['any', PEAKS_NOTABILITY_FILTER, MUNRO_EXPR] as const;
 
-export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
+export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: Theme): void {
+  const ink = mapInk(theme);
   registry.addRemote(PEAKS_PMTILES_URL);
 
   map.addSource(PEAKS_SOURCE_ID, {
@@ -161,12 +164,12 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
       'text-allow-overlap': false,
     },
     paint: {
-      // Near-black, not the brown used previously — that brown sat one shade off the
-      // contour (#6b4a33) and footpath (#8a3d2e) colours, so a peak label read as more
-      // relief or path clutter than a distinct feature. Munro gold is kept but darkened
-      // for the same reason: it must pop off the halo, not blend into hillshade ochre.
-      'text-color': ['case', MUNRO_EXPR, '#8a5d00', '#1a1512'],
-      'text-halo-color': 'rgba(255,255,255,0.95)',
+      // Ink, not the brown used previously — that brown sat one shade off the contour
+      // and footpath colours, so a peak label read as more relief or path clutter than a
+      // distinct feature. Munro gold is kept, darkened by day and lifted at night, so it
+      // pops off the halo rather than blending into hillshade ochre. See mapInk().
+      'text-color': ['case', MUNRO_EXPR, ink.peakMunroText, ink.peakText],
+      'text-halo-color': ink.labelHalo,
       'text-halo-width': 1.6,
     },
   });
@@ -201,16 +204,12 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry): void {
           12,
           ['case', MUNRO_EXPR, 8.5, 6.5],
         ],
-        // Deep violet, not the near-black used for the text: colours render fixed
-        // regardless of light/dark map theme (see style.css's legend-section comment), and
-        // a near-black fill all but disappears against the dark-theme basemap — the fill
-        // is most of the dot's area, unlike the text, which always sits inside its own
-        // white halo and so doesn't care what's under it. Violet is otherwise unused on
-        // this map (browns are contours/paths, blue/red/orange are routes, green is
-        // offline coverage), and its mid lightness holds up against both a light terrain
-        // basemap and a dark one.
-        'circle-color': ['case', MUNRO_EXPR, '#c9910a', '#6d28d9'],
-        'circle-stroke-color': 'rgba(255,255,255,0.95)',
+        // The same ink as the label, per theme: near-black by day, near-white at night,
+        // each ringed in the opposite. This used to be a fixed violet, because one colour
+        // had to hold up on both basemaps; now the layer is rebuilt per theme, the dot
+        // can simply be the strongest neutral on each. Munro gold stays the one colour.
+        'circle-color': ['case', MUNRO_EXPR, ink.peakMunroDot, ink.peakDot],
+        'circle-stroke-color': ink.peakDotStroke,
         'circle-stroke-width': ['case', MUNRO_EXPR, 2.25, 1.75],
       },
     },

@@ -19,6 +19,7 @@ import { onPressHold } from './press-hold';
 import { WakeLock } from '../wake-lock';
 import type { Region } from '../regions/manifest';
 import type { TileSourceRegistry } from '../tile-source-registry';
+import type { Theme } from '../theme';
 
 // Ties the pieces together: the draft (route-model), the offline router (router), the
 // elevation profile (terrain-sampler + profile), the map layers and the draggable markers.
@@ -82,6 +83,8 @@ export interface RoutePlannerOptions {
   describePoint?: (event: MapMouseEvent) => Partial<Waypoint> | null;
   onChange: (summary: RouteSummary) => void;
   onStatus?: (message: string, kind: 'ok' | 'warn' | 'error') => void;
+  /** Read at the moment the route layers are (re)created, since the theme can change. */
+  theme: () => Theme;
 }
 
 /**
@@ -112,6 +115,7 @@ export class RoutePlanner {
   private readonly describePoint?: (event: MapMouseEvent) => Partial<Waypoint> | null;
   private readonly onChange: (summary: RouteSummary) => void;
   private readonly onStatus?: (message: string, kind: 'ok' | 'warn' | 'error') => void;
+  private readonly theme: () => Theme;
 
   private readonly router: OfflineRouter;
   private draft = new RouteDraft();
@@ -156,6 +160,7 @@ export class RoutePlanner {
     this.describePoint = options.describePoint;
     this.onChange = options.onChange;
     this.onStatus = options.onStatus;
+    this.theme = options.theme;
     this.router = new OfflineRouter({
       registry: options.registry,
       downloadedRegions: options.downloadedRegions,
@@ -188,7 +193,7 @@ export class RoutePlanner {
 
   activate(): void {
     if (this.active) return;
-    addRouteLayers(this.map);
+    addRouteLayers(this.map, this.theme());
     this.active = true;
     this.map.getCanvas().style.cursor = 'crosshair';
     // Markers are built with `draggable` fixed at creation time, so leaving them alone
@@ -616,7 +621,7 @@ export class RoutePlanner {
   }
 
   private renderGeometry(): void {
-    if (!this.map.getSource('route-geometry')) addRouteLayers(this.map);
+    if (!this.map.getSource('route-geometry')) addRouteLayers(this.map, this.theme());
     setRouteGeometry(this.map, this.draft.getLegs());
     if (this.draft.waypointCount === 0) clearRouteGeometry(this.map);
   }

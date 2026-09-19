@@ -13,6 +13,7 @@ import { addRegionToMap, removeRegionFromMap } from './region-layers';
 import { evaluateGate, readStorage } from './storage-budget';
 import { deleteOrphan, findOrphans, type OrphanRegion } from './orphans';
 import type { TileSourceRegistry } from '../tile-source-registry';
+import type { Theme } from '../theme';
 
 /** How long a delete stays armed before reverting to its safe label. */
 const ARM_TIMEOUT_MS = 5000;
@@ -41,6 +42,8 @@ let stopFollowingMap: (() => void) | null = null;
 export interface RegionsUiDeps {
   map: MLMap;
   registry: TileSourceRegistry;
+  /** A getter, not a value: the theme can change while a download is running. */
+  theme(): Theme;
   container: HTMLElement;
   onStatus(message: string, kind: 'ok' | 'warn' | 'error'): void;
 }
@@ -54,6 +57,7 @@ export async function restoreDownloadedRegions(
   map: MLMap,
   registry: TileSourceRegistry,
   regions: Region[],
+  theme: Theme,
 ): Promise<Region[]> {
   // One directory listing for the whole catalogue, not two OPFS lookups per artifact:
   // this runs before the map can show a downloaded region, on a phone, at startup.
@@ -74,7 +78,7 @@ export async function restoreDownloadedRegions(
     // object and looks each one up in the registry, so an artifact with no file behind it
     // is how the app comes to claim data it does not have.
     const onDisk = withArtifacts(region, disk.present);
-    await addRegionToMap(map, registry, onDisk);
+    await addRegionToMap(map, registry, onDisk, theme);
     restored.push(onDisk);
   }
   return restored;
@@ -542,7 +546,7 @@ async function startDownload(
       },
     });
 
-    await addRegionToMap(deps.map, deps.registry, region);
+    await addRegionToMap(deps.map, deps.registry, region, deps.theme());
     deps.onStatus(`${region.name} is available offline.`, 'ok');
   } catch (err) {
     if (err instanceof DownloadCancelled) {

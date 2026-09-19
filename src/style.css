@@ -4,21 +4,43 @@
 
    Dark is a real second design, not an inversion. Outdoors at dusk the screen is the
    brightest thing for miles, so the dark surfaces are genuinely dark rather than mid-grey,
-   and the accent is lifted to stay legible against them. */
-:root {
-  --surface: #ffffff;
-  --surface-sunken: #f1f5f9;
-  --surface-raised: #ffffff;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
+   and the accent is lifted to stay legible against them.
 
-  --text: #0f172a;
-  --text-muted: #475569;
-  --text-faint: #64748b;
+   The values follow plans/signature-style.md ("technical alpine"): graphite night, warm
+   bone-and-ink day, and one signal orange that means "act here" or "you are here". The
+   orange is chrome-only — it is already *data* on the map (SAC T4, avalanche 30°), so it
+   never paints a map layer. Contrast ratios for every pair are tabulated there. */
+:root {
+  /* Type, radius and scale. Theme-independent, so they live only here. Every stack ends
+     in the system fonts: the woff2 files are precached (vite.config.ts globPatterns), but
+     a font that fails to load must degrade to readable, not to invisible. */
+  --font-ui: 'Barlow', system-ui, -apple-system, sans-serif;
+  --font-display: 'Barlow Semi Condensed', 'Barlow', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+
+  --radius: 6px;
+  --radius-sm: 3px;
+
+  --surface: #f4f3ef;
+  --surface-sunken: #e9e7e1;
+  --surface-raised: #fbfaf7;
+  --border: #d6d3cb;
+  --border-strong: #b9b5ab;
+
+  --text: #14171a;
+  --text-muted: #5a5f66;
+  --text-faint: #62676d;
   --text-inverse: #ffffff;
 
-  --accent: #2563eb;
-  --accent-strong: #1d4ed8;
+  /* #c2410c, not the brighter #d9480f: white text on the latter is 4.3:1, under AA. */
+  --accent: #c2410c;
+  --accent-strong: #a8360a;
   --accent-text: #ffffff;
 
   --danger: #b91c1c;
@@ -29,18 +51,18 @@
 
   /* Status surfaces. Dark backgrounds in both themes: these sit over the map, which is
      never dark enough to carry light-on-light text. */
-  --status-neutral: #1e293b;
+  --status-neutral: #1c2127;
   --status-ok: #14532d;
   --status-warn: #78350f;
   --status-error: #7f1d1d;
   --status-text: #ffffff;
 
   /* The follow screen is dark in both themes — see the comment on .route-follow. */
-  --follow-surface: #0f172a;
-  --follow-text: #f8fafc;
-  --follow-muted: #94a3b8;
+  --follow-surface: #0e1114;
+  --follow-text: #e6e9ed;
+  --follow-muted: #9aa3ad;
   --follow-track: rgba(255, 255, 255, 0.15);
-  --follow-progress: #38bdf8;
+  --follow-progress: #ff5a1f;
   --follow-on: #4ade80;
   --follow-off: #fb7185;
 
@@ -86,8 +108,8 @@
   /* MapLibre's own controls — the scale bar and the attribution — ship a light palette.
      They sit on the map, so they follow the map's theme rather than the chrome's. */
   --ctrl-surface: rgba(255, 255, 255, 0.75);
-  --ctrl-text: #0f172a;
-  --ctrl-border: rgba(15, 23, 42, 0.6);
+  --ctrl-text: #14171a;
+  --ctrl-border: rgba(20, 23, 26, 0.6);
 
   color-scheme: light;
 }
@@ -112,20 +134,22 @@
   /* Lightened for the dark sheet, same reasoning as the SAC/avalanche ramps above. */
   --munro: #e0b34d;
 
-  --surface: #111827;
-  --surface-sunken: #1f2937;
-  --surface-raised: #1a2332;
-  --border: #273244;
-  --border-strong: #3a4658;
+  /* Graphite, not navy: the old #111827 family read as "Tailwind dark mode". Neutral
+     greys with the faintest cool cast, so the orange is the only colour in the chrome. */
+  --surface: #0e1114;
+  --surface-sunken: #161a1f;
+  --surface-raised: #1c2127;
+  --border: #2a3038;
+  --border-strong: #3a424c;
 
-  --text: #e8edf5;
-  --text-muted: #a9b6c8;
-  --text-faint: #8493a8;
-  --text-inverse: #0f172a;
+  --text: #e6e9ed;
+  --text-muted: #9aa3ad;
+  --text-faint: #7a838d;
+  --text-inverse: #0e1114;
 
-  --accent: #60a5fa;
-  --accent-strong: #93c5fd;
-  --accent-text: #0b1220;
+  --accent: #ff5a1f;
+  --accent-strong: #ff7a45;
+  --accent-text: #0e1114;
 
   --danger: #f87171;
   --success: #4ade80;
@@ -133,11 +157,11 @@
   --scrim: rgba(0, 0, 0, 0.55);
   --shadow-strong: rgba(0, 0, 0, 0.6);
 
-  --status-neutral: #1e293b;
+  --status-neutral: #1c2127;
   --status-ok: #14532d;
   --status-warn: #78350f;
   --status-error: #7f1d1d;
-  --status-text: #f8fafc;
+  --status-text: #e6e9ed;
 
   --marker-start: #22c55e;
   --marker-end: #f87171;
@@ -145,11 +169,11 @@
 
   --warn-text: #fbbf24;
 
-  --statusbar-scrim: rgba(9, 12, 20, 0.9);
+  --statusbar-scrim: rgba(14, 17, 20, 0.9);
 
-  --ctrl-surface: rgba(9, 12, 20, 0.72);
-  --ctrl-text: #e8edf5;
-  --ctrl-border: rgba(232, 237, 245, 0.55);
+  --ctrl-surface: rgba(14, 17, 20, 0.72);
+  --ctrl-text: #e6e9ed;
+  --ctrl-border: rgba(230, 233, 237, 0.55);
 
   color-scheme: dark;
 }
@@ -173,7 +197,7 @@ body {
      resolution bug.
      https://www.reddit.com/r/PWA/comments/1sdhsbu/pwa_on_ios_fighting_the_chin_gap/ */
   height: 100vh;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-ui);
   /* The map owns the whole screen and nothing here scrolls. Without this, iOS rubber-band
      scrolling drags the map off the top of the screen and exposes the page behind it. */
   overflow: hidden;
@@ -183,6 +207,16 @@ body {
      a white flash. */
   background: var(--surface);
   -webkit-text-size-adjust: 100%;
+}
+
+/* Form controls don't inherit the page's font-family by default, so without this every
+   button, chip and input stays in the system face while the prose around it is Barlow.
+   Family only, not the `font` shorthand: that would also reset each control's size. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 /* Fixed, not `height: 100%` — the same percentage-resolution trap the html/body rule
@@ -951,7 +985,9 @@ body {
 
 .sheet-body h2 {
   margin: 0 0 0.5rem;
+  font-family: var(--font-display);
   font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .sheet-body p {
@@ -1188,6 +1224,7 @@ body {
   font-size: 0.8rem;
   color: var(--text-faint);
   /* Tabular figures so the byte count and ETA don't jitter the line width as they tick. */
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1350,6 +1387,7 @@ body {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1398,6 +1436,7 @@ body {
 
 .sac-chip-distance {
   color: var(--text-muted);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 

@@ -2,6 +2,17 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { namedFlavor } from '@protomaps/basemaps';
 import { basemapLayersWithBareRock } from './landuse';
+// Self-hosted, Latin subset, only the weights style.css uses — see the --font-* tokens.
+// Bundled rather than linked so they precache with the shell and render offline (C7's
+// reasoning, applied to the chrome's fonts rather than the map's glyphs).
+import '@fontsource/barlow/latin-400.css';
+import '@fontsource/barlow/latin-500.css';
+import '@fontsource/barlow/latin-600.css';
+import '@fontsource/barlow-semi-condensed/latin-500.css';
+import '@fontsource/barlow-semi-condensed/latin-600.css';
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '@fontsource/jetbrains-mono/latin-500.css';
+import '@fontsource/jetbrains-mono/latin-600.css';
 import './style.css';
 import {
   BASEMAP_MAX_ZOOM,

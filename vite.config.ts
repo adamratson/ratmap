@@ -100,7 +100,12 @@ export default defineConfig(({ command, isPreview }) => ({
         // wasm + sqlite are here for offline search (C9): the SQLite WASM runtime and
         // the FTS5 index both have to be cached, or search silently fails on a cold
         // offline start — exactly what Phase 2's acceptance test checks.
-        globPatterns: ['**/*.{js,css,html,svg,pbf,png,json,wasm,sqlite}'],
+        //
+        // woff2 for the chrome's self-hosted fonts (the @fontsource imports in main.ts).
+        // Not woff: fontsource emits it as a fallback, but every browser that can run
+        // this app picks the woff2 source first, so caching both would only double the
+        // download.
+        globPatterns: ['**/*.{js,css,html,svg,pbf,png,json,wasm,sqlite,woff2}'],
         // Default is 2 MiB, which silently drops the sqlite index and the wasm runtime
         // from the precache manifest. Raised to cover them; still app-shell only —
         // .pmtiles archives go to OPFS, never here (C5).

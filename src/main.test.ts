@@ -414,15 +414,11 @@ describe('app bootstrap', () => {
 
   it('paints the theme before the map, so first paint is not a white flash', async () => {
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query === '(prefers-color-scheme: dark)',
-      media: query,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    }));
 
     await loadMainQuietly();
 
+    // Dark with nothing stored and whatever the device prefers: ratmap is dark because
+    // that is the app's own look.
     expect(document.documentElement.dataset.theme).toBe('dark');
     // The basemap flavour has to follow, or a dark UI frames a white map.
     expect(basemapLayersSpy).toHaveBeenCalledWith(
@@ -437,23 +433,32 @@ describe('app bootstrap', () => {
     );
   });
 
-  it('lets the user override the device, and remembers it', async () => {
-    // People turn the map dark before they turn the phone dark: dusk on a hill arrives
-    // long before the phone's schedule thinks it has.
+  it('turns the map light from settings, and remembers it', async () => {
+    // The one theme control there is now: a toggle in Settings, not a cycling chip in
+    // the peek row. Dark is the default, so the toggle starts off.
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
     await loadMainQuietly();
 
-    const button = document.querySelector<HTMLButtonElement>('#theme-btn')!;
-    button.click();
-    expect(document.documentElement.dataset.theme).toBe('light');
-    expect(button.getAttribute('aria-label')).toMatch(/light/i);
+    document.querySelector<HTMLButtonElement>('#settings-btn')!.click();
+    const toggle = document.querySelector<HTMLInputElement>('#light-theme-toggle')!;
+    expect(toggle.checked).toBe(false);
 
-    button.click();
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(store.get('ratmap.theme')).toBe('light');
+
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(store.get('ratmap.theme')).toBe('dark');
+  });
 
-    button.click();
-    expect(store.get('ratmap.theme')).toBe('system');
+  it('has no theme control left in the peek row', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    expect(document.querySelector('#theme-btn')).toBeNull();
   });
 
   it('walks iOS users through Add to Home Screen when storage is not persisted (C2)', async () => {

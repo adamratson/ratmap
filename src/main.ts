@@ -53,7 +53,7 @@ import { listPlaces, savePlace, deletePlace, type SavedPlace } from './saved-pla
 import { PlacesSearch, type SearchResult } from './search';
 import { parseLatLng } from './coords';
 import { describeDetailLimit } from './detail-limit';
-import { ThemeController, nextPreference, type Theme, type ThemePreference } from './theme';
+import { ThemeController, type Theme } from './theme';
 import { DebugOverlay, isDebugOverlayEnabled, setDebugOverlayEnabled } from './debug';
 import { isCoarsePointer } from './pointer';
 import {
@@ -139,7 +139,6 @@ sheet.peek.innerHTML = `
   </div>
   <div class="peek-row">
     <div id="chips"></div>
-    <button id="theme-btn" type="button" class="chip chip-icon"></button>
     <button id="legend-btn" type="button" class="chip chip-icon" aria-label="Map legend">▤</button>
     <button id="settings-btn" type="button" class="chip chip-icon" aria-label="Settings">⚙</button>
   </div>
@@ -276,36 +275,6 @@ document.addEventListener('keydown', (event) => {
   searchInput.select();
 });
 
-// --- Theme ---------------------------------------------------------------------------
-
-const themeBtn = sheet.peek.querySelector<HTMLButtonElement>('#theme-btn')!;
-
-const THEME_ICON: Record<ThemePreference, string> = { system: '◐', light: '☀', dark: '☾' };
-const THEME_LABEL: Record<ThemePreference, string> = {
-  system: 'Map theme: follows your device',
-  light: 'Map theme: light',
-  dark: 'Map theme: dark',
-};
-
-themeBtn.addEventListener('click', () => {
-  theme.set(nextPreference(theme.getPreference()));
-  renderThemeButton();
-});
-
-// Also on system changes, which move the effective theme without touching the preference.
-theme.onChange(() => renderThemeButton());
-
-function renderThemeButton(): void {
-  const preference = theme.getPreference();
-  themeBtn.textContent = THEME_ICON[preference];
-  // The label says the current state rather than the next one: a control that announces
-  // what it will become is unreadable when you are trying to work out where you are.
-  themeBtn.setAttribute('aria-label', THEME_LABEL[preference]);
-  themeBtn.title = THEME_LABEL[preference];
-}
-
-renderThemeButton();
-
 // --- Settings --------------------------------------------------------------------------
 
 const settingsBtn = sheet.peek.querySelector<HTMLButtonElement>('#settings-btn')!;
@@ -341,6 +310,16 @@ function openSettingsView(): void {
       <h2>Settings</h2>
       <label class="settings-row">
         <span class="settings-row-text">
+          <span class="settings-row-label">Light theme</span>
+          <span class="settings-row-note">
+            For a bright day. ratmap is dark by default &mdash; easier to read outdoors at
+            low brightness, and kinder to the night vision you are going to need.
+          </span>
+        </span>
+        <input id="light-theme-toggle" type="checkbox" />
+      </label>
+      <label class="settings-row">
+        <span class="settings-row-text">
           <span class="settings-row-label">Avalanche terrain</span>
           <span class="settings-row-note">
             Shades slopes by steepness, from the downloaded region's own elevation data.
@@ -361,6 +340,16 @@ function openSettingsView(): void {
         <input id="debug-overlay-toggle" type="checkbox" />
       </label>
     `;
+    const light = body.querySelector<HTMLInputElement>('#light-theme-toggle')!;
+    light.checked = theme.get() === 'light';
+    light.addEventListener('change', () => {
+      // Switching replaces the whole style (Protomaps ships flavours as whole layer
+      // sets); installAppLayers puts the app's own layers back — see theme.onChange
+      // below. The settings view itself is untouched, so the toggle stays under the
+      // finger that just moved it.
+      theme.set(light.checked ? 'light' : 'dark');
+    });
+
     const avalanche = body.querySelector<HTMLInputElement>('#avalanche-toggle')!;
     avalanche.checked = isAvalancheEnabled();
     avalanche.addEventListener('change', () => {

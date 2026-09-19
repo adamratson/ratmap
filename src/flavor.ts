@@ -21,8 +21,31 @@
 import { DARK, LIGHT, type Flavor } from '@protomaps/basemaps';
 import type { Theme } from './theme';
 
+/**
+ * The map's label fontstacks: Barlow, with Noto Sans baked in as the fallback for every
+ * codepoint Barlow lacks (Greek, Cyrillic, symbols). Built by scripts/build-map-glyphs.sh
+ * into public/fonts/<name>/; see its header for why the fallback is baked rather than
+ * listed. Every `text-font` in the app uses one of these, so the chrome's type and the
+ * map's type are one family.
+ *
+ * Medium does the job Noto Sans Medium did (peaks, low-zoom cities). There is no bold:
+ * Protomaps' `bold` slot is only ever a medium weight.
+ */
+export const MAP_FONTS = {
+  regular: 'Barlow Noto Regular',
+  medium: 'Barlow Noto Medium',
+  italic: 'Barlow Noto Italic',
+} as const;
+
+const FONT_SLOTS = {
+  regular: MAP_FONTS.regular,
+  bold: MAP_FONTS.medium,
+  italic: MAP_FONTS.italic,
+};
+
 const DAY: Flavor = {
   ...LIGHT,
+  ...FONT_SLOTS,
   background: '#d9d6cf',
   earth: '#ebe9e3',
   water: '#a9c3cc',
@@ -69,6 +92,7 @@ const DAY: Flavor = {
 
 const NIGHT: Flavor = {
   ...DARK,
+  ...FONT_SLOTS,
   background: '#0e1114',
   earth: '#161a1f',
   // Lifted and blue, not sunk: #0f1a22 was the first try, and at night the lochs

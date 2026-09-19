@@ -7,6 +7,11 @@
 # uses — Regular/Italic/Medium, matching our current {lang:'en'} usage in src/main.ts (see
 # @protomaps/basemaps' text-font defaults). Script-specific stacks (Devanagari, CJK, ...)
 # aren't vendored; add them if/when the app adds non-Latin language support.
+#
+# The Noto ranges are build *input*, not shipped as-is: they go to infra/.cache, and
+# scripts/build-map-glyphs.sh bakes them in as the fallback under Barlow, writing the
+# "Barlow Noto …" stacks the map actually requests into public/fonts
+# (plans/signature-style.md step 6).
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 ASSETS_BASE="https://protomaps.github.io/basemaps-assets"
@@ -16,7 +21,7 @@ FONTSTACKS=("Noto Sans Regular" "Noto Sans Italic" "Noto Sans Medium")
 
 fetch_fontstack() {
   local stack="$1"
-  local out_dir="$APP_PUBLIC/fonts/$stack"
+  local out_dir="$INFRA_DIR/.cache/glyphs-src/$stack"
   mkdir -p "$out_dir"
   echo "Fetching fontstack: $stack (256 range files)"
   # Range files are named "<start>-<end>.pbf" for every 256-codepoint block, 0..65535.
@@ -31,6 +36,8 @@ fetch_fontstack() {
 for stack in "${FONTSTACKS[@]}"; do
   fetch_fontstack "$stack"
 done
+
+"$INFRA_DIR/../scripts/build-map-glyphs.sh"
 
 echo "Fetching sprites (light + light@2x)"
 mkdir -p "$APP_PUBLIC/sprites"

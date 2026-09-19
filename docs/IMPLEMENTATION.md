@@ -204,7 +204,9 @@ native plan except for CORS.**
 - `places.sqlite`: FTS5 over `place=city|town|village|hamlet|suburb` joined with peaks.
 - Fork the Protomaps style into the repo — we rewrite `glyphs`/`sprite` URLs per
   environment anyway.
-- Vendor glyphs + sprites (C7).
+- Vendor glyphs + sprites (C7). (Since 2026-09-19 the map's glyphs are the "Barlow Noto"
+  stacks built by `scripts/build-map-glyphs.sh`, with Protomaps' Noto ranges as build input;
+  see plans/signature-style.md step 6.)
 
 **Acceptance:** `curl -H "Range: …"` against the custom domain returns 206 with correct
 bytes, **and a cross-origin `fetch` with a `Range` header from the app origin succeeds

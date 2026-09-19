@@ -78,18 +78,22 @@ test.describe('offline regions', () => {
 
     const files = await listOpfs(page);
 
-    // C16: artifacts are open-ended, so assert on what the row advertises rather than a
-    // hardcoded list — adding a new artifact kind must not require editing this test.
-    const advertised = (await page.locator('.region-meta').first().textContent()) ?? '';
-    for (const kind of ['basemap', 'terrain', 'contours']) {
-      if (!advertised.includes(kind)) continue;
-      expect(files.some((f) => f.includes(`-${kind}.pmtiles`))).toBe(true);
-    }
+    // C16: artifacts are open-ended, so the expectation comes from the manifest the app
+    // itself downloaded against — its localStorage copy — not from a list of kinds here.
+    // A hardcoded list is how this test broke once already: it knew basemap, terrain and
+    // contours, and failed the day the catalogue added avalanche, paths and sac.
+    const declared = await page.evaluate((name) => {
+      const manifest = JSON.parse(localStorage.getItem('ratmap:region-manifest') ?? 'null') as {
+        regions: Array<{ name: string; artifacts: Array<{ filename: string; bytes: number }> }>;
+      } | null;
+      return manifest?.regions.find((r) => r.name === name)?.artifacts ?? [];
+    }, TEST_REGION);
+    expect(declared.length).toBeGreaterThan(0);
 
-    // C3: OPFS keys are the unique artifact filenames, region-prefixed.
-    for (const file of files) {
-      expect(file).toMatch(/^[a-z0-9-]+-(basemap|terrain|contours)\.pmtiles: \d+$/);
-    }
+    // Every declared artifact is in OPFS, complete to the byte, under its manifest
+    // filename — which is the C3 guarantee (FileSource.getKey() is the file name, so the
+    // name is the registry key) — and nothing else is.
+    expect(files).toEqual(declared.map((a) => `${a.filename}: ${a.bytes}`).sort());
   });
 
   test('leaves no stray writable swap files behind', async ({ page }) => {

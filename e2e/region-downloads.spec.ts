@@ -6,6 +6,7 @@ import {
   gotoApp,
   openRegionsSheet,
   opfsFileSize,
+  opfsTotalBytes,
   simulateInstalledPwa,
 } from './helpers';
 
@@ -17,19 +18,37 @@ import {
 // browser network stack — a real hung fetch racing a real timer — which is exactly what
 // downloader.test.ts's mocked fetch cannot stand in for.
 //
-// TEST_REGION's artifacts, measured against the live manifest (2026-09-04):
+// TEST_REGION's artifacts, measured against the live manifest (2026-09-19): six of them,
+// 23.7 MB in total, of which
 //   andorra-basemap.pmtiles  7,101,792 bytes
 //   andorra-terrain.pmtiles  8,837,636 bytes
-// downloadRegion() requests region.artifacts in manifest order, and basemap sorts first —
-// so intercepting requests to the basemap file targets the download's first artifact. A
-// region can gain artifacts without touching this (C16 — SAC grades and the low-zoom path
-// network both arrived that way), and every assertion below is per-file rather than on a
-// region total, so that stays true.
+// downloadRegion() requests region.artifacts in manifest order, one artifact at a time.
+// That order is the manifest's, *not* alphabetical-with-basemap-first as this comment
+// claimed while the region had three artifacts: `avalanche` sorts ahead of `basemap`
+// today, so intercepting the basemap targets an artifact partway through the run, not the
+// first one. Nothing below may assume which artifact is in flight at a given moment (C16
+// — avalanche, SAC grades and the low-zoom path network all arrived without notice).
 // Re-check these if the fixture region is ever rebuilt; see TEST_REGION in helpers.ts.
 const BASEMAP_FILE = 'andorra-basemap.pmtiles';
 const BASEMAP_URL = '**/regions/andorra/andorra-basemap.pmtiles';
 const BASEMAP_BYTES = 7_101_792;
 const TERRAIN_URL = '**/regions/andorra/andorra-terrain.pmtiles';
+/** Every artifact of the test region, whatever kinds the catalogue currently ships. */
+const REGION_FILES_URL = '**/regions/andorra/*.pmtiles';
+
+/**
+ * How long a whole-region download may take here.
+ *
+ * Sized off the region (23.7 MB) and the bucket, which has been measured at well under
+ * 1 MB/s, plus whatever stall the individual test injects on purpose — the old 45 s and
+ * 60 s caps predate the region growing to six artifacts, and turned a slow-but-working
+ * download into a red test. Still far below the 300 s per-test timeout, so a genuinely
+ * stuck download fails the assertion rather than the whole file.
+ */
+const REGION_COMPLETE_MS = 180_000;
+
+/** How long to wait for the first bytes of a partial artifact to reach OPFS. */
+const FIRST_BYTES_MS = 60_000;
 
 /** Parse `Range: bytes=<start>-<end>` off a request. */
 function rangeOf(route: Route): { start: number; end: number } {
@@ -81,7 +100,7 @@ test.describe('pausing a download', () => {
     // before anything has been written into it.
     await expect
       .poll(async () => (await opfsFileSize(page, `${BASEMAP_FILE}.part`)) ?? 0, {
-        timeout: 20_000,
+        timeout: FIRST_BYTES_MS,
       })
       .toBeGreaterThan(0);
     const pausedAt = (await opfsFileSize(page, `${BASEMAP_FILE}.part`))!;
@@ -96,7 +115,7 @@ test.describe('pausing a download', () => {
 
     phase = 'after';
     await action(page).click(); // Resume
-    await expect(action(page)).toHaveText('Delete', { timeout: 60_000 });
+    await expect(action(page)).toHaveText('Delete', { timeout: REGION_COMPLETE_MS });
 
     // The actual proof: nothing requested after the resume reached back before the byte
     // the pause left off at. A restart-from-zero would show up here as a `start: 0` entry
@@ -128,7 +147,7 @@ test.describe('pausing a download', () => {
     // Bytes on disk, not merely a `.part` file — see the note in the test above.
     await expect
       .poll(async () => (await opfsFileSize(page, `${BASEMAP_FILE}.part`)) ?? 0, {
-        timeout: 20_000,
+        timeout: FIRST_BYTES_MS,
       })
       .toBeGreaterThan(0);
     const pausedAt = (await opfsFileSize(page, `${BASEMAP_FILE}.part`))!;
@@ -151,7 +170,7 @@ test.describe('pausing a download', () => {
 
     sawRequestAfterReload = true;
     await action(page).click(); // Resume, post-relaunch
-    await expect(action(page)).toHaveText('Delete', { timeout: 60_000 });
+    await expect(action(page)).toHaveText('Delete', { timeout: REGION_COMPLETE_MS });
 
     // The same proof as the in-session case, across the reload boundary: the first byte
     // requested after relaunching was not byte zero.
@@ -193,8 +212,9 @@ test.describe('a poor connection', () => {
     // No failure toast while this plays out — a timeout-and-retry is not, from the
     // user's side, an error at all.
     await expect(page.locator('.toast.error')).toHaveCount(0);
-    // >20s: the app's own retry has to actually fire, this test doesn't shortcut it.
-    await expect(action(page)).toHaveText('Delete', { timeout: 45_000 });
+    // The app's own retry has to actually fire, and this test doesn't shortcut it: the
+    // budget covers the injected 20 s stall on top of a full 23.7 MB download.
+    await expect(action(page)).toHaveText('Delete', { timeout: REGION_COMPLETE_MS });
 
     expect(await opfsFileSize(page, BASEMAP_FILE)).toBe(BASEMAP_BYTES);
   });
@@ -224,7 +244,7 @@ test.describe('a poor connection', () => {
     await openRegionsSheet(page);
     await startTestRegionDownload(page);
 
-    await expect(action(page)).toHaveText('Delete', { timeout: 60_000 });
+    await expect(action(page)).toHaveText('Delete', { timeout: REGION_COMPLETE_MS });
     await expect(page.locator('.toast.error')).toHaveCount(0);
 
     // Every chunk actually failed once and still recovered — not a vacuously-passing test
@@ -243,30 +263,46 @@ test.describe('a poor connection', () => {
     // lost download, and progress kept so Resume actually means something once back in
     // range.
     //
-    // The last chunk gets a real, finite delay — not held open like the other tests here
-    // — so there is a guaranteed window to go offline while genuinely partway through:
-    // on a fast connection the whole 16 MB region can otherwise finish inside the time it
-    // takes to poll for a `.part` file, leaving nothing left to interrupt.
-    await page.route(BASEMAP_URL, async (route) => {
-      const { end } = rangeOf(route);
-      if (end === BASEMAP_BYTES - 1) await new Promise((resolve) => setTimeout(resolve, 4000));
+    // The window to pull the plug in is made, not waited for. Timing it against one
+    // artifact's `.part` file used to work when the region had three artifacts and the
+    // basemap was slow enough to still be in flight; with six artifacts and 12 chunks in
+    // parallel the basemap often finished first, its `.part` was renamed away, and the
+    // test measured a file that no longer existed (a null size) while the download
+    // carried on into the next artifact.
+    //
+    // So: let the first couple of chunks through, hold every chunk after them at the gate
+    // below, and open it only once the context is offline — at which point `continue()`
+    // fails, exactly as a connection dropping mid-transfer does.
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    let allowance = 2;
+    await page.route(REGION_FILES_URL, async (route) => {
+      if (allowance > 0) {
+        allowance -= 1;
+        await route.continue();
+        return;
+      }
+      await gate;
       await route.continue();
     });
 
     await openRegionsSheet(page);
     await startTestRegionDownload(page);
 
-    // Some real progress first, so there is something worth resuming — bytes, not just
-    // the `.part` file the writer creates when it opens.
+    // Some real progress first, so there is something worth resuming — bytes on disk,
+    // not just the `.part` file the writer creates when it opens. Counted across all of
+    // OPFS, because which artifact those bytes belong to is not this test's business.
     await expect
-      .poll(async () => (await opfsFileSize(page, `${BASEMAP_FILE}.part`)) ?? 0, {
-        timeout: 20_000,
-      })
+      .poll(() => opfsTotalBytes(page), { timeout: FIRST_BYTES_MS })
       .toBeGreaterThan(0);
-    const beforeOffline = (await opfsFileSize(page, `${BASEMAP_FILE}.part`)) ?? 0;
-    expect(beforeOffline).toBeLessThan(BASEMAP_BYTES);
+    const beforeOffline = await opfsTotalBytes(page);
+    // Still mid-download, which is the whole point of the interruption.
+    await expect(action(page)).toHaveText('Cancel');
 
     await context.setOffline(true);
+    openGate();
 
     await expect(
       page.locator('.toast.error', { hasText: /Download failed/ }),
@@ -279,9 +315,7 @@ test.describe('a poor connection', () => {
     // main.ts), so the failure's own refresh leaves the regions list empty and the search
     // box hidden while still offline. That is a real, separate constraint from anything
     // about the download, which is why it's asserted here rather than routed around.
-    expect(await opfsFileSize(page, `${BASEMAP_FILE}.part`)).toBeGreaterThanOrEqual(
-      beforeOffline,
-    );
+    expect(await opfsTotalBytes(page)).toBeGreaterThanOrEqual(beforeOffline);
     await expect(page.locator('.regions-search')).toBeHidden();
 
     // Back in signal: close and reopen the sheet, the way someone actually would after
@@ -299,7 +333,7 @@ test.describe('a poor connection', () => {
     await expect(action(page)).toHaveText('Resume');
 
     await action(page).click(); // Resume
-    await expect(action(page)).toHaveText('Delete', { timeout: 60_000 });
+    await expect(action(page)).toHaveText('Delete', { timeout: REGION_COMPLETE_MS });
 
     expect(await opfsFileSize(page, BASEMAP_FILE)).toBe(BASEMAP_BYTES);
   });

@@ -3,6 +3,7 @@ import {
   clearConditions,
   clearSavedData,
   clickPeak,
+  emptyMapPoint,
   gotoApp,
   mapView,
   openChip,
@@ -46,7 +47,8 @@ test.describe('summits and saved places', () => {
     await expect(page.locator('#sheet-body h2')).toBeVisible();
 
     // A detail card, not a destination: it must not keep half the map it was opened on.
-    await page.mouse.click(40, 120);
+    const miss = await emptyMapPoint(page);
+    await page.mouse.click(miss.x, miss.y);
     await expect(page.locator('#sheet-body h2')).toHaveCount(0);
     await expect(page.locator('#sheet')).toHaveClass(/at-peek/);
   });

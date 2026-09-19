@@ -1,5 +1,5 @@
 import type { FilterSpecification, Map as MLMap } from 'maplibre-gl';
-import { mapInk, ratmapFlavor, type MapInk } from '../flavor';
+import { MAP_FONTS, mapInk, ratmapFlavor, type MapInk } from '../flavor';
 import type { Theme } from '../theme';
 import { basemapLayersWithBareRock } from '../landuse';
 import type { Region } from './manifest';
@@ -457,7 +457,7 @@ function addContourLabels(
         // covered in contours the unit is never ambiguous. Peak labels keep "m" because
         // there they sit alone against terrain.
         'text-field': ['to-string', ['round', ['get', 'ele']]],
-        'text-font': ['Noto Sans Regular'],
+        'text-font': [MAP_FONTS.regular],
         'text-size': 10,
         // Drawn along the line and rotated with it, the way a contour label reads on
         // paper, rather than sitting horizontally beside it.

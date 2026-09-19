@@ -1,5 +1,6 @@
 import type { Map as MLMap, MapGeoJSONFeature, PointLike } from 'maplibre-gl';
 import { isCoarsePointer } from './pointer';
+import { MAP_FONTS } from './flavor';
 
 // The SAC hiking scale (T1–T6) on the paths that carry it.
 //
@@ -184,7 +185,7 @@ export function addSacLayers(
       minzoom: Math.max(14, minzoom),
       layout: {
         'text-field': ['concat', 'T', ['to-string', ['get', 't']]],
-        'text-font': ['Noto Sans Regular'],
+        'text-font': [MAP_FONTS.regular],
         'text-size': 10,
         'symbol-placement': 'line',
         'symbol-spacing': 300,

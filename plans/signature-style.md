@@ -134,9 +134,10 @@ app silently falls back to `system-ui`.
 **Verify before building:** check each package's file listing for the weights and subsets
 imported. The system-ui fallback stack stays at the end of every `--font-*`.
 
-**Map labels stay Noto Sans.** Map glyphs are PBF ranges vendored by
-`infra/scripts/vendor-assets.sh`. Barlow on the map would mean generating glyph PBFs
-(e.g. with `font-maker`) and precaching roughly 256 more files per weight. Deferred to §7 step 6.
+**Map labels (step 6, done):** Barlow, with Noto Sans baked in as the fallback, as three
+"Barlow Noto" fontstacks built by `scripts/build-map-glyphs.sh`. They *replace* the Noto
+stacks rather than sitting beside them, so the precache grows by the fallback coverage
+added, not by a second full set. See the step 6 status below.
 
 ---
 
@@ -379,4 +380,61 @@ Splashes are `globIgnores`d from the precache. The build shows Vite rewriting th
 **Unverified: no iPhone or Android device was used.** Still to check: the Home Screen icon, the
 maskable crop under Android's launcher shapes, and whether iOS actually shows the splash
 (online and offline).
+
+**Step 6** is done.
+
+What ships: three fontstacks in `public/fonts`, `Barlow Noto Regular/Medium/Italic`, each
+Barlow with Noto Sans baked in as the fallback. `MAP_FONTS` in `src/flavor.ts` names them; the
+flavour's `regular/bold/italic` slots and the three app label layers (peaks, SAC grades,
+contour heights) all read it, and nothing requests plain Noto any more.
+
+How they're built:
+- `scripts/build-map-glyphs.sh` runs Stadia's `build_pbf_glyphs` 1.4.3 (source read first:
+  fontnik parameters, 24px / radius 8 / cutoff 0.25, and a built-in precedence-ordered
+  combine).
+  - Inputs: the committed Barlow 1.408 TTFs in `assets/fonts/barlow` (from google/fonts,
+    OFL) and the Noto ranges.
+  - Not 1.5.x, which needs rustc ≥ 1.87 (this machine has 1.86).
+- The Noto ranges are now build input in the gitignored `infra/.cache/glyphs-src`, moved out
+  of `public/fonts`. `infra/scripts/vendor-assets.sh` fetches them there and then runs the
+  build.
+- Both OFL licences ship beside the glyphs (`public/fonts/OFL-*.txt`).
+
+Fixed along the way: the vendored Noto Sans **Medium** never had `▲` (U+25B2, 1 glyph in
+that block against Regular's 96). So the Munro label prefix in `src/peaks.ts`, which exists
+so membership isn't carried by colour alone, has never rendered. Medium and Italic now fall
+back to Noto Regular last. That also gives peak labels, which use Medium, Regular's full
+script coverage (13k glyphs against Medium's 7k) in places like the Caucasus.
+
+Cost: the precache goes from 15.5 MB to 22.5 MB (the glyph sets from 13.2 to ~20.5 MB).
+
+Checked:
+- Metrics: cap height 17px in both fonts at the 24px glyph size. Barlow's baseline sits 1px
+  above Noto's, which only matters in a label that mixes scripts.
+- Headless Playwright, since the pane was hidden:
+  - The Mamores by day render in Barlow.
+  - Rila in Bulgaria at night falls back cleanly to Cyrillic.
+  - Every glyph request returned 200, and only the Barlow Noto stacks were requested.
+- New `src/flavor.test.ts` fails if any fontstack the generated style can request has no full
+  256-range directory on disk (checked by moving one aside). 516 unit tests pass.
+
+Not seen: a rendered `▲ Munro` label. The global peaks archive carries no `lists` property, so
+it needs a downloaded region; the fix is verified only as the glyph being present in the stack.
+
+## Theme default — 2026-09-19
+
+Dark is now the default and the only default: `theme.ts` is a two-state stored preference
+(`light` | `dark`, default dark) instead of the three-state `system | light | dark` cycled
+from a chip in the peek row. The device's `prefers-color-scheme` is no longer an input —
+ratmap is dark because that is the app's look, not because the phone happens to be — and
+the chip is gone. Light lives in Settings, as the first row.
+
+A stored `system` from the old preference resolves to dark; a stored `light` is kept, so
+someone who had explicitly chosen light still gets it.
+
+Checked in a real browser: with the device asking for light, the app starts dark
+(`data-theme=dark`, theme-color `#0e1114`, basemap earth `#161a1f`), `#theme-btn` is gone,
+and the toggle switches the map to the day flavour (`#ebe9e3`), stores `light`, and keeps
+the app's own layers. The checkbox takes `accent-color` so it is the signal orange rather
+than the browser's blue. 518 unit tests and the 14 sheet e2e tests pass.
 

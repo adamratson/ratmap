@@ -752,6 +752,9 @@ textarea {
   width: 2.75rem;
   height: 1.6rem;
   margin: 0;
+  /* Checked, it is the app's accent rather than the browser's blue — the one signal
+     colour, on the one control in the sheet that has a checked state. */
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -977,7 +980,7 @@ textarea {
   visibility: hidden;
 }
 
-/* The destinations, and the theme toggle pinned at the end of the row. */
+/* The destinations, and the legend and settings buttons pinned at the end of the row. */
 .peek-row {
   display: flex;
   align-items: center;

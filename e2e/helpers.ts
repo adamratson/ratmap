@@ -95,6 +95,25 @@ export async function opfsFileSize(page: Page, name: string): Promise<number | n
   }, name);
 }
 
+/**
+ * Every byte currently in OPFS, complete artifacts and `.part` files together.
+ *
+ * For "progress is kept" assertions. Naming one artifact's `.part` instead assumes the
+ * download is still on that artifact — which stopped being true once the fixture region
+ * grew past a couple of files, and showed up as a `null` size when the basemap had
+ * already finished and the downloader had moved on.
+ */
+export async function opfsTotalBytes(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    let total = 0;
+    for await (const [, handle] of root.entries()) {
+      if (handle.kind === 'file') total += (await handle.getFile()).size;
+    }
+    return total;
+  });
+}
+
 export async function clearOpfs(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const root = await navigator.storage.getDirectory();
@@ -400,6 +419,11 @@ export async function waitForPeak(page: Page): Promise<PeakOnScreen> {
         // and rail at the top — a tap there hits a control rather than the map.
         if (point.x < 80 || point.x > width - 80) continue;
         if (point.y < 100 || point.y > height * 0.5) continue;
+        // And ask the page what is actually there. The margins above describe the touch
+        // layout; on a desktop-width window the sheet docks as a 24rem panel down the left
+        // edge, over the canvas, and a summit under it is not a summit anyone can tap.
+        const rect = canvas.getBoundingClientRect();
+        if (document.elementFromPoint(rect.left + point.x, rect.top + point.y) !== canvas) continue;
 
         const ele = feature.properties?.ele;
         return {
@@ -424,10 +448,52 @@ export async function waitForPeak(page: Page): Promise<PeakOnScreen> {
   return peak;
 }
 
+/**
+ * A point on the map canvas with nothing on it: no control over it, and no summit or
+ * graded path close enough for the app's tap padding to pick up. For "the next tap
+ * misses" — a fixed coordinate is a guess about the layout, and the docked desktop panel
+ * made the old guess (40, 120) land on the panel rather than the map.
+ */
+export async function emptyMapPoint(page: Page): Promise<{ x: number; y: number }> {
+  const handle = await page.waitForFunction(() => {
+    const map = (window as unknown as { __ratmapMap?: MLMap }).__ratmapMap;
+    if (!map) return null;
+    const canvas = map.getCanvas();
+    const rect = canvas.getBoundingClientRect();
+    // Well clear of any feature: 40 px either way, against a tap padding of 22.
+    const CLEAR = 40;
+    for (let y = rect.height * 0.25; y < rect.height * 0.6; y += 30) {
+      for (let x = rect.width * 0.3; x < rect.width * 0.8; x += 30) {
+        if (document.elementFromPoint(rect.left + x, rect.top + y) !== canvas) continue;
+        const near = map.queryRenderedFeatures([
+          [x - CLEAR, y - CLEAR],
+          [x + CLEAR, y + CLEAR],
+        ]);
+        if (near.some((f) => f.layer.id.startsWith('peaks-') || f.layer.id.includes('sac'))) {
+          continue;
+        }
+        return { x: rect.left + x, y: rect.top + y };
+      }
+    }
+    return null;
+  });
+  const point = await handle.jsonValue();
+  if (!point) throw new Error('no empty map point on screen');
+  return point;
+}
+
 /** Tap a summit and return which one was tapped. */
 export async function clickPeak(page: Page): Promise<PeakOnScreen> {
   const peak = await waitForPeak(page);
-  await page.mouse.click(peak.x, peak.y);
+  // Canvas-relative from waitForPeak; the canvas fills the window, but say so rather than
+  // rely on it.
+  const offset = await page.evaluate(() => {
+    const rect = (window as unknown as { __ratmapMap: MLMap }).__ratmapMap
+      .getCanvas()
+      .getBoundingClientRect();
+    return { x: rect.left, y: rect.top };
+  });
+  await page.mouse.click(offset.x + peak.x, offset.y + peak.y);
   return peak;
 }
 

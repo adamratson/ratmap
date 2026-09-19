@@ -7,7 +7,7 @@ import type {
 import { OSM_ATTRIBUTION, PEAKS_MAX_ZOOM, PEAKS_PMTILES_URL } from './config';
 import { isCoarsePointer } from './pointer';
 import type { TileSourceRegistry } from './tile-source-registry';
-import { mapInk } from './flavor';
+import { MAP_FONTS, mapInk } from './flavor';
 import type { Theme } from './theme';
 
 // Summits overlay, backed by our own peaks-global.pmtiles — Protomaps v4 dropped `ele`
@@ -156,7 +156,7 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: T
       'text-field': ['case', MUNRO_EXPR, ['concat', '▲ ', baseTextField], baseTextField],
       // Medium, not Regular: the only weight above Regular we bundle (public/fonts has no
       // Bold), but heavy enough to hold up against a busy hillshaded background.
-      'text-font': ['Noto Sans Medium'],
+      'text-font': [MAP_FONTS.medium],
       'text-size': 12,
       'text-offset': [0, 0.7],
       'text-anchor': 'top',

@@ -26,25 +26,19 @@ test.describe('the sheet', () => {
     await expect(page.locator('#sheet')).toHaveClass(/at-peek/);
     await expect(page.locator('#search-input')).toBeVisible();
     await expect(page.locator('#chips .chip')).toHaveText(['Routes', 'Offline', 'Saved']);
-    await expect(page.locator('#theme-btn')).toBeVisible();
+    await expect(page.locator('#legend-btn')).toBeVisible();
     await expect(page.locator('#settings-btn')).toBeVisible();
-
-    // Even at rest it takes room, and everything positioned above it reads this number —
-    // the map attribution, which is legally required and must never end up underneath.
-    expect(await sheetHeight(page)).toBeGreaterThan(0);
   });
 
   test('opens a destination from its chip, and closes it from the same chip', async ({ page }) => {
     const routes = page.locator('#chips .chip', { hasText: 'Routes' });
     await expect(routes).toHaveAttribute('aria-expanded', 'false');
 
-    const resting = await sheetHeight(page);
     await openChip(page, 'Routes');
 
     // A disclosure, not a tab: the chip reports that its own view is open.
     await expect(routes).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#sheet-body')).toHaveAttribute('aria-label', 'Routes');
-    expect(await sheetHeight(page)).toBeGreaterThan(resting);
 
     // Tapping the open one puts the map back, so every chip is its own way out — there
     // are no per-panel close buttons left.
@@ -97,34 +91,109 @@ test.describe('the sheet', () => {
   });
 });
 
+// The bottom sheet's geometry — detents, and the --sheet-visible height everything above
+// it is lifted by — only exists on a touch screen. The project's Desktop Chrome window is
+// wide enough, with a fine pointer, to get the docked panel instead
+// (plans/desktop-ux-review.md), so these run as a phone. Behaviour that is the same in
+// both layouts (chips, Escape, one view at a time) stays in 'the sheet' above, on desktop.
+test.describe('the touch sheet', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test.beforeEach(async ({ page }) => {
+    await gotoApp(page);
+    await clearConditions(page);
+  });
+
+  test('is the bottom sheet, not the docked panel', async ({ page }) => {
+    // Guards the test setup as much as the app: if this emulation ever stops reading as
+    // a touch screen, everything below would be testing the docked panel by mistake.
+    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+    await expect(page.locator('.sheet-grip')).toBeVisible();
+  });
+
+  test('takes room even at rest, so nothing above it ends up underneath', async ({ page }) => {
+    await expect(page.locator('#sheet')).toHaveClass(/at-peek/);
+    // Everything positioned above the sheet reads this number — the map attribution,
+    // which is legally required and must never end up underneath.
+    expect(await sheetHeight(page)).toBeGreaterThan(0);
+  });
+
+  test('grows when a destination opens, and gives the room back when it closes', async ({
+    page,
+  }) => {
+    const resting = await sheetHeight(page);
+    await openChip(page, 'Routes');
+    expect(await sheetHeight(page)).toBeGreaterThan(resting);
+
+    await page.locator('#chips .chip', { hasText: 'Routes' }).click();
+    await expect(page.locator('#sheet')).toHaveClass(/at-peek/);
+    await expect.poll(() => sheetHeight(page)).toBe(resting);
+  });
+});
+
+test.describe('the docked panel', () => {
+  test.beforeEach(async ({ page }) => {
+    await gotoApp(page);
+    await clearConditions(page);
+  });
+
+  test('docks down the left edge on a mouse-width window, and lifts nothing', async ({
+    page,
+  }) => {
+    const panel = await page.locator('#sheet').boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(panel).not.toBeNull();
+    // Full height, on the left, a fixed width — not a bottom sheet stretched to 1280 px.
+    expect(panel!.x).toBe(0);
+    expect(panel!.height).toBeGreaterThanOrEqual(viewport.height - 1);
+    expect(panel!.width).toBeLessThan(viewport.width / 2);
+    await expect(page.locator('.sheet-grip')).toBeHidden();
+
+    // Nothing sits at the bottom any more, so nothing is lifted clear of it...
+    expect(await sheetHeight(page)).toBe(0);
+    // ...and opening a destination doesn't change that: it fills the panel, not the map.
+    await openChip(page, 'Routes');
+    expect(await sheetHeight(page)).toBe(0);
+
+    // The attribution (ODbL, legally required) is on the map, clear of the panel.
+    const attribution = await page.locator('.maplibregl-ctrl-attrib').boundingBox();
+    expect(attribution).not.toBeNull();
+    expect(attribution!.x).toBeGreaterThanOrEqual(panel!.x + panel!.width);
+    expect(attribution!.y + attribution!.height).toBeLessThanOrEqual(viewport.height);
+  });
+});
+
 test.describe('theme', () => {
   test.beforeEach(async ({ page }) => {
     await gotoApp(page);
     await clearConditions(page);
   });
 
-  test('cycles system → light → dark and remembers the choice', async ({ page }) => {
-    const button = page.locator('#theme-btn');
+  test('starts dark, and turns light from settings — and remembers it', async ({ page }) => {
     const root = page.locator('html');
 
-    // The label says the current state rather than the next one — a control that
-    // announces what it will become is unreadable when you are working out where you are.
-    await expect(button).toHaveAttribute('aria-label', 'Map theme: follows your device');
+    // Dark is the app's own look, whatever the device is set to. The peek row has no
+    // theme control at all any more.
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('#theme-btn')).toHaveCount(0);
 
-    await button.click();
-    await expect(button).toHaveAttribute('aria-label', 'Map theme: light');
+    await page.locator('#settings-btn').click();
+    const toggle = page.locator('#light-theme-toggle');
+    await expect(toggle).not.toBeChecked();
+
+    await toggle.check();
     await expect(root).toHaveAttribute('data-theme', 'light');
 
-    await button.click();
-    await expect(button).toHaveAttribute('aria-label', 'Map theme: dark');
-    await expect(root).toHaveAttribute('data-theme', 'dark');
-
-    // People turn the map dark before they turn the phone dark, so the choice is stored
-    // rather than re-derived from the system on every launch.
+    // Stored, not re-derived on every launch: someone who wants the light map on a
+    // glaring day should not have to ask for it again at the next screen lock.
     await page.reload();
     await page.locator('#map').waitFor();
+    await expect(root).toHaveAttribute('data-theme', 'light');
+
+    await page.locator('#settings-btn').click();
+    await expect(page.locator('#light-theme-toggle')).toBeChecked();
+    await page.locator('#light-theme-toggle').uncheck();
     await expect(root).toHaveAttribute('data-theme', 'dark');
-    await expect(page.locator('#theme-btn')).toHaveAttribute('aria-label', 'Map theme: dark');
   });
 
   test('keeps the app’s own layers across a theme change', async ({ page }) => {
@@ -136,8 +205,11 @@ test.describe('theme', () => {
       'peaks-symbol',
     );
 
-    await page.locator('#theme-btn').click();
-    await page.locator('#theme-btn').click();
+    // Switch away from the default and back, so the style really is replaced twice.
+    await page.locator('#settings-btn').click();
+    await page.locator('#light-theme-toggle').check();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.locator('#light-theme-toggle').uncheck();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
     await expect

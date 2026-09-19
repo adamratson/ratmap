@@ -90,7 +90,10 @@ export class ThemeController {
     // Keeps the iOS status bar and the Android task-switcher chrome in step. Without it
     // a dark map sits under a white status bar.
     const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    if (meta) meta.content = theme === 'dark' ? '#0f172a' : '#1e293b';
+    // Graphite at night (--surface). By day, the raised graphite used for status surfaces,
+    // not the bone chrome: the bar sits over the map, and with iOS's black-translucent
+    // style it carries light text. Also in index.html and vite.config.ts — keep in step.
+    if (meta) meta.content = theme === 'dark' ? '#0e1114' : '#1c2127';
 
     for (const listener of this.listeners) listener(theme);
   }

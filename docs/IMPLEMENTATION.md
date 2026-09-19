@@ -713,10 +713,13 @@ Small, compared to the native path — no review, no store, no privacy manifest.
 
 **Carried into this phase from earlier work:**
 
-- App icons are **placeholders** generated in Phase 0 (`scripts/gen-placeholder-icons.py`)
-  — a flat triangle, no real design. They become the app's face on a home screen.
-- **No iOS splash screens exist** (`apple-touch-startup-image`), so an installed iOS app
-  shows a blank screen while booting.
+- ~~App icons are placeholders~~ — replaced 2026-09-19 (plans/signature-style.md step 5):
+  `public/icons/mark.svg` rendered by `scripts/gen-icons.mjs` into the `any`, maskable and
+  apple-touch sizes.
+- ~~No iOS splash screens exist~~ — eleven portrait `apple-touch-startup-image`s from the
+  same script, linked in `index.html`. **Still unverified on a device**: that iOS picks
+  them up, and what an offline launch shows (they are deliberately not precached; see
+  `vite.config.ts`).
 - The bucket is on its raw `katapultobjects.com` URL rather than a custom domain. Unlike
   R2's `*.r2.dev` this isn't documented as rate-limited, but a custom domain is still
   cleaner long-term (own DNS, a future provider swap becomes a config change only) and

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 4 100 100">
+  <!-- ratmap's mark: a summit with one contour line cut through it, in the signal
+       orange (plans/signature-style.md §6.3). Drawn in a 100-unit box with no
+       background; scripts/gen-icons.mjs places it on graphite at the scale each
+       icon needs (full-bleed, maskable safe zone, splash). The viewBox starts at
+       y=4, not 0: a triangle's mass sits low, so the geometric centre looks low
+       and it is lifted to sit optically centred. -->
+  <path d="M8 84 L42 20 L53 40 L62 30 L92 84 Z" fill="#ff5a1f" />
+  <!-- The contour: a graphite cut, not a drawn line, so it reads as a gap in the
+       ground at 48px as well as at 512. -->
+  <path d="M0 62 C22 55 40 67 60 60 S88 53 100 58" fill="none" stroke="#0e1114" stroke-width="5.5" />
+</svg>

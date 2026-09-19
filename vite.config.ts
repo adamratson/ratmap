@@ -67,8 +67,11 @@ export default defineConfig(({ command, isPreview }) => ({
         // from the resolved `base` above. Hardcoding '/ratmap/' here too would just
         // be a second place for that path to go stale.
         display: 'standalone',
-        background_color: '#1e293b',
-        theme_color: '#1e293b',
+        // Graphite (--surface, night). Android builds its launch screen from this plus
+        // the icon, so it matches the icon's own ground. Also in index.html's theme-color
+        // meta and src/theme.ts — keep the three in step.
+        background_color: '#0e1114',
+        theme_color: '#0e1114',
         icons: [
           // Relative (no leading slash): resolved against the manifest's own URL,
           // so these survive being served from a subpath instead of the origin root.
@@ -106,6 +109,13 @@ export default defineConfig(({ command, isPreview }) => ({
         // this app picks the woff2 source first, so caching both would only double the
         // download.
         globPatterns: ['**/*.{js,css,html,svg,pbf,png,json,wasm,sqlite,woff2}'],
+        // The iOS splash screens are ~230 KB across eleven device sizes, and each device
+        // only ever uses one. Precaching all eleven would cost every install, Android
+        // included. Not verified on a device: whether iOS re-fetches its splash on an
+        // offline launch or keeps the copy it took at Home Screen install. If it
+        // re-fetches, an offline launch falls back to the graphite page background,
+        // which is what a splash-less launch showed before.
+        globIgnores: ['splash/**'],
         // Default is 2 MiB, which silently drops the sqlite index and the wasm runtime
         // from the precache manifest. Raised to cover them; still app-shell only —
         // .pmtiles archives go to OPFS, never here (C5).

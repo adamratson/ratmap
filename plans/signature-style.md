@@ -353,3 +353,30 @@ Failures:
 
 A downloaded region in the night theme is therefore covered by the unit regression test, not
 yet by a visual check on a real download.
+
+**Step 5** is done.
+
+The mark:
+- `public/icons/mark.svg` is a summit with a graphite contour cut through it, in signal orange.
+- `scripts/gen-icons.mjs` rasterises it through Playwright's Chromium (already a dev
+  dependency; this machine has no rsvg or ImageMagick) onto graphite:
+  - `any` icons at 72% of the width
+  - maskable at 56%: the farthest point sits 0.30 of the icon from centre, inside Android's
+    0.40 safe circle
+  - apple-touch at 64%
+  - eleven portrait iOS splash screens
+- `scripts/gen-placeholder-icons.py` is removed.
+- The viewBox starts at y=4 so the bottom-heavy triangle sits optically centred.
+
+Theme colour: `#0e1114` in `index.html`, the manifest (`theme_color` and `background_color`)
+and `theme.ts`. By day `theme.ts` uses `#1c2127`, not the bone chrome, because the status bar
+sits over the map with light text. Each of the three places carries a comment pointing at the
+other two. (§6.3 said `theme.test.ts` asserts the value. It doesn't; nothing does.)
+
+Splashes are `globIgnores`d from the precache. The build shows Vite rewriting their hrefs to
+`/ratmap/splash/…` and zero splash entries in `sw.js`.
+
+**Unverified: no iPhone or Android device was used.** Still to check: the Home Screen icon, the
+maskable crop under Android's launcher shapes, and whether iOS actually shows the splash
+(online and offline).
+

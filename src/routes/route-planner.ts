@@ -16,10 +16,10 @@ import { TerrainSampler } from './terrain-sampler';
 import { SacSampler, summariseSacGrades, type SacSummary } from './sac-sampler';
 import { RouteFollower, type FollowState } from './follow';
 import { onPressHold } from './press-hold';
-import { WakeLock } from '../wake-lock';
+import { WakeLock } from '../app/wake-lock';
 import type { Region } from '../regions/manifest';
-import type { TileSourceRegistry } from '../tile-source-registry';
-import type { Theme } from '../theme';
+import type { TileSourceRegistry } from '../map/tile-source-registry';
+import type { Theme } from '../ui/theme';
 
 // Ties the pieces together: the draft (route-model), the offline router (router), the
 // elevation profile (terrain-sampler + profile), the map layers and the draggable markers.

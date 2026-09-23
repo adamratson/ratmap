@@ -4,15 +4,15 @@ import { renderProfileChart } from './profile-chart';
 import { parseRouteFile, toGeoJson, toGpx } from './gpx';
 import { deleteRoute, listRoutes, saveRoute, type SavedRoute } from './route-store';
 import type { RoutePlanner, RouteSummary } from './route-planner';
-import { SAC_GRADES, sacCssColor, sacGradeInfo } from '../sac';
-import { fillReadout } from '../readout';
+import { SAC_GRADES, sacCssColor, sacGradeInfo } from '../overlays/sac';
+import { fillReadout } from '../ui/readout';
 
 // The route planner's interface: a panel that lives over the map while planning or
 // following, and a sheet listing saved routes.
 //
 // Text goes in through textContent, never interpolation — route names are user input and
 // waypoint names come from OSM, which is user-editable data. Same rule as the peak sheet
-// and the search results in main.ts.
+// and the search results (overlays/feature-sheets.ts, search/search-view.ts).
 
 export interface RoutesUiDeps {
   planner: RoutePlanner;

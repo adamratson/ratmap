@@ -1,5 +1,5 @@
 // Minimal ambient types for @sqlite.org/sqlite-wasm, which ships no .d.ts of its own.
-// Deliberately narrow: only the surface src/search.ts actually uses, so this stays easy
+// Deliberately narrow: only the surface src/search/search.ts actually uses, so this stays easy
 // to check against the real library rather than becoming a fictional API.
 
 declare module '@sqlite.org/sqlite-wasm' {

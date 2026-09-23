@@ -6,7 +6,7 @@ text to parse. This script exists for three things that still need doing before
 tippecanoe, not for parsing:
 
   * Rename `natural` to `kind` on the way out, so the tile property matches what
-    src/terrain-features.ts and every other artifact's convention expect (`kind`, not the
+    src/overlays/terrain-features.ts and every other artifact's convention expect (`kind`, not the
     OSM key it came from — same choice build-sac.sh made with `t`).
   * Drop the `natural` values this artifact does not cover — and this is load-bearing,
     not just defence in depth. Filtering `scotland-latest.osm.pbf` to

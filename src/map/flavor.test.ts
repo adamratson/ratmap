@@ -5,7 +5,7 @@ import { MAP_FONTS, ratmapFlavor } from './flavor';
 // Listed, not loaded: a glob of the glyph files actually in public/fonts, grouped by
 // fontstack directory. import.meta.glob rather than node:fs so the app tsconfig does not
 // have to take Node's types.
-const glyphFiles = Object.keys(import.meta.glob('../public/fonts/*/*.pbf'));
+const glyphFiles = Object.keys(import.meta.glob('../../public/fonts/*/*.pbf'));
 const onDisk = new Map<string, string[]>();
 for (const file of glyphFiles) {
   const [, stack, range] = /public\/fonts\/([^/]+)\/([^/]+)\.pbf$/.exec(file)!;

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PMTiles } from 'pmtiles';
 import { NodeFileSource } from './node-file-source';
-import { AVALANCHE_ENCODING, SLOPE_FLOOR_DEG, slopeClassFor } from '../src/avalanche';
+import { AVALANCHE_ENCODING, SLOPE_FLOOR_DEG, slopeClassFor } from '../src/overlays/avalanche';
 
 // Checks the **published bytes**, not the code that wrote them.
 //

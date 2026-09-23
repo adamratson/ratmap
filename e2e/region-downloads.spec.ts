@@ -311,8 +311,8 @@ test.describe('a poor connection', () => {
     // The bytes already on disk before the connection dropped must survive the failure —
     // a failed download is not a deleted one. Checked before touching the sheet again:
     // the catalogue itself is fetched over the network with no offline cache of its own
-    // (unlike the startup restore path, which does have one — see restoreRegions in
-    // main.ts), so the failure's own refresh leaves the regions list empty and the search
+    // (unlike the startup restore path, which does have one — see RegionCoverage.restore
+    // in src/regions/coverage.ts), so the failure's own refresh leaves the regions list empty and the search
     // box hidden while still offline. That is a real, separate constraint from anything
     // about the download, which is why it's asserted here rather than routed around.
     expect(await opfsTotalBytes(page)).toBeGreaterThanOrEqual(beforeOffline);

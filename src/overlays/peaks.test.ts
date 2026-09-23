@@ -10,7 +10,7 @@ import {
   PEAKS_RENDER_FILTER,
   PEAKS_SOURCE_ID,
 } from './peaks';
-import type { TileSourceRegistry } from './tile-source-registry';
+import type { TileSourceRegistry } from '../map/tile-source-registry';
 
 function fakeRegistry() {
   return {

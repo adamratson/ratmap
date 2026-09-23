@@ -19,7 +19,7 @@
 // so these are kept in step with style.css by hand, like the SAC ramp.
 
 import { DARK, LIGHT, type Flavor } from '@protomaps/basemaps';
-import type { Theme } from './theme';
+import type { Theme } from '../ui/theme';
 
 /**
  * The map's label fontstacks: Barlow, with Noto Sans baked in as the fallback for every

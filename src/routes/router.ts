@@ -3,7 +3,7 @@ import { boundsOf, distanceMetres, pathLengthMetres, type Bbox, type LngLat } fr
 import { PathGraph, type RouteLeg } from './path-graph';
 import { decodePathLines, tilesForBbox, type PathLine, type TileCoord } from './path-tiles';
 import type { Region } from '../regions/manifest';
-import type { TileSourceRegistry } from '../tile-source-registry';
+import type { TileSourceRegistry } from '../map/tile-source-registry';
 
 // Turns a downloaded region's basemap archive into a routable network, on the device,
 // with the network off.

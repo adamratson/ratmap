@@ -1,4 +1,4 @@
-import { TILES_BASE_URL } from '../config';
+import { TILES_BASE_URL } from '../app/config';
 
 // C16: the manifest schema is versioned and open-ended — a region is "a set of named
 // artifacts", not a fixed basemap+terrain pair. Nothing here may hardcode artifact names;

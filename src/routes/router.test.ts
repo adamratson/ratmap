@@ -5,7 +5,7 @@ import { globalToLngLat } from './path-tiles';
 import type { LngLat } from './geo';
 import { OfflineRouter, ROUTING_ZOOM } from './router';
 import type { Region } from '../regions/manifest';
-import type { TileSourceRegistry } from '../tile-source-registry';
+import type { TileSourceRegistry } from '../map/tile-source-registry';
 
 const EXTENT = 4096;
 const WORLD = EXTENT * 2 ** ROUTING_ZOOM;

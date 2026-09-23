@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Guards the update strategy at the point where it is actually decided: the generated
 // worker. Every part of it is a build-time switch in vite.config.ts, so a one-word edit
-// there — `registerType: 'autoUpdate'` — silently restores the behaviour src/update.ts
+// there — `registerType: 'autoUpdate'` — silently restores the behaviour src/app/update.ts
 // exists to avoid, with nothing at runtime to notice. That is precisely the kind of
 // regression this repo keeps hitting, so it gets a test rather than a comment.
 //
@@ -32,7 +32,7 @@ describe.skipIf(!existsSync(SW))('the generated service worker', () => {
 
   it('is registered by the app, not by an injected script', () => {
     // vite-plugin-pwa's own registerSW.js registers and then never checks again — no
-    // polling, no reload — which is the gap src/update.ts fills. Two registrars would
+    // polling, no reload — which is the gap src/app/update.ts fills. Two registrars would
     // also race each other over the same scope.
     expect(existsSync('dist/registerSW.js')).toBe(false);
     expect(readFileSync(INDEX, 'utf8')).not.toContain('registerSW.js');

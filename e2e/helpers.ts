@@ -315,13 +315,13 @@ export async function startNewRoute(page: Page): Promise<void> {
 export async function clearSavedData(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      // Same name and version as src/db.ts. Opening at a *lower* version than the app
+      // Same name and version as src/app/db.ts. Opening at a *lower* version than the app
       // uses would throw; opening at the same one just joins the existing database.
       const request = indexedDB.open('ratmap', 2);
       // This usually runs before the app has opened the database at all, and creating it
       // empty would leave the app holding a v2 connection with no stores in it — every
       // read and write then fails with NotFoundError and no upgrade is ever triggered to
-      // repair it. So mirror src/db.ts's schema here.
+      // repair it. So mirror src/app/db.ts's schema here.
       request.onupgradeneeded = () => {
         const created = request.result;
         for (const [store, index] of [

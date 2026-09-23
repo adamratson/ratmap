@@ -3,7 +3,7 @@ import Pbf from 'pbf';
 import type { PMTiles } from 'pmtiles';
 import { distanceMetres, type LngLat } from './geo';
 import { lngLatToGlobal, type TileCoord } from './path-tiles';
-import { SAC_SOURCE_LAYER } from '../sac';
+import { SAC_SOURCE_LAYER } from '../overlays/sac';
 
 // Reads SAC grades for a planned route out of a region's `<id>-sac.pmtiles`.
 //

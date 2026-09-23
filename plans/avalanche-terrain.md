@@ -285,7 +285,7 @@ generated, not extracted, so it sits beside contours rather than inside the extr
 
 | File | Change |
 |---|---|
-| `src/avalanche.ts` *(new)* | Class table, palette, `color-relief` ramp expression, legend copy, the standing "terrain only" line. The `sac.ts` shape: one module owning the domain, its colours and its honesty. |
+| `src/overlays/avalanche.ts` *(new)* | Class table, palette, `color-relief` ramp expression, legend copy, the standing "terrain only" line. The `sac.ts` shape: one module owning the domain, its colours and its honesty. |
 | `src/regions/region-layers.ts` | An `avalanche` branch: `raster-dem` source with the custom encoding, one `color-relief` layer, inserted at `beneathLabels()`. Plus the A10 contours-attribution fix. |
 | `src/avalanche-sampler.ts` *(new)* | Slope/aspect/runout at a point, by decoding the artifact's tiles directly. `TerrainSampler` already does exactly this — tile fetch, LRU cache, `premultiplyAlpha: 'none'`, `colorSpaceConversion: 'none'`, bilinear sampling — so this is that class generalised over which channels it reads, not a second copy. **Nearest, not bilinear, for slope**: interpolating across a class boundary invents a value that is in neither cell. |
 | `src/main.ts` | Settings toggle (default off); the layer's own line in the legend; slope/aspect/nearest-forecast-service in the coordinate and peak tap sheets. |
@@ -303,13 +303,13 @@ alpine entry in the catalogue — 124 kB, z11, lossless WebP):
 | `infra/scripts/assemble-avalanche.py` | per-level tiling, merge, and the lossless-WebP pass that proves itself |
 | `infra/scripts/build-avalanche.sh` | the region build, gated on `"avalanche": true` |
 | `build-manifest.py`, `build-global.sh`, `regions.json` | the new kind registered, an `avalanche` stage, the flag on one region |
-| `src/avalanche.ts` | classes, palette, `color-relief` ramp, encoding, the Settings toggle's state |
+| `src/overlays/avalanche.ts` | classes, palette, `color-relief` ramp, encoding, the Settings toggle's state |
 | `src/regions/region-layers.ts` | the `avalanche` branch — plus the A10 contours attribution fix |
 | `src/main.ts`, `src/style.css` | Settings toggle (default off), legend section, palette in both themes |
-| `src/avalanche.test.ts`, `test/avalanche-palette.test.ts`, `test/avalanche-archive.test.ts` | 17 tests; the archive one asserts the **published bytes**, skipping without build output or GDAL |
+| `src/overlays/avalanche.test.ts`, `test/avalanche-palette.test.ts`, `test/avalanche-archive.test.ts` | 17 tests; the archive one asserts the **published bytes**, skipping without build output or GDAL |
 
 Full suite 495 passing, both typechecks clean. The built artifact renders correctly through
-the shipping ramp and encoding — `spike/region-check.html` imports from `src/avalanche.ts`
+the shipping ramp and encoding — `spike/region-check.html` imports from `src/overlays/avalanche.ts`
 and reads `infra/dist` directly, so it always shows the current build rather than a copy.
 
 Four things the build taught, all now encoded in the scripts:

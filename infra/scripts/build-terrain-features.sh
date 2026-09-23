@@ -5,7 +5,7 @@
 # ingestion drops these four values outright (only reachable via Overture data, which is not
 # in our region extracts — checked directly against Protomaps' `Landuse.java`, see
 # plans/scree-terrain.md §1). `natural=bare_rock` is the one sibling value Protomaps *does*
-# carry; that gap was a styling fix (src/landuse.ts), not a pipeline problem, and is
+# carry; that gap was a styling fix (src/map/landuse.ts), not a pipeline problem, and is
 # deliberately excluded here to avoid shipping it twice.
 #
 # Global build, per-region delivery: build-region.sh cuts each region's

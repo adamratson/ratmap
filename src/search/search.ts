@@ -1,5 +1,5 @@
 import sqlite3InitModule, { type Database, type Sqlite3Static } from '@sqlite.org/sqlite-wasm';
-import { PLACES_DB_URL } from './config';
+import { PLACES_DB_URL } from '../app/config';
 
 // C9: search is a local SQLite FTS5 index. No geocoding API — works offline, needs no key
 // or quota, and queries never leave the device.

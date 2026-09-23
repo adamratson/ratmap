@@ -1,6 +1,6 @@
 import type { Map as MLMap } from 'maplibre-gl';
-import { PEAKS_LAYER_ID } from './peaks';
-import { FOOTPRINT_FILL_LAYER_ID, FOOTPRINT_LINE_LAYER_ID } from './regions/region-footprints';
+import { PEAKS_LAYER_ID } from '../overlays/peaks';
+import { FOOTPRINT_FILL_LAYER_ID, FOOTPRINT_LINE_LAYER_ID } from '../regions/region-footprints';
 
 // Which of the app's overlays are drawn — the Layers tab's state, and the one place that
 // knows which style layers each toggle means.

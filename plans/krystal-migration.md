@@ -159,13 +159,13 @@ reviewable, and it keeps the risky parts of the migration legible in `git log`.
 
 | File | Change |
 |---|---|
-| [src/config.ts](../src/config.ts) | `R2_BASE_URL` → `TILES_BASE_URL`; `VITE_R2_BASE_URL` → `VITE_TILES_BASE_URL`; new default URL; rewrite the header comment (it currently explains the `.r2.dev` rate limit and the Phase 3 custom-domain swap, both obsolete) |
+| [src/app/config.ts](../src/app/config.ts) | `R2_BASE_URL` → `TILES_BASE_URL`; `VITE_R2_BASE_URL` → `VITE_TILES_BASE_URL`; new default URL; rewrite the header comment (it currently explains the `.r2.dev` rate limit and the Phase 3 custom-domain swap, both obsolete) |
 | [src/vite-env.d.ts](../src/vite-env.d.ts) | rename the declared var |
 | [src/regions/manifest.ts](../src/regions/manifest.ts) | import + two use sites |
-| [src/config.test.ts](../src/config.test.ts) | var list, and two test names that say "R2 bucket" |
+| [src/app/config.test.ts](../src/app/config.test.ts) | var list, and two test names that say "R2 bucket" |
 | [e2e/helpers.ts](../e2e/helpers.ts) | two comments about `.r2.dev` being rate-limited — the new failure mode is egress quota, not rate limiting |
 
-**The production URL comes from the `src/config.ts` default, not from CI.**
+**The production URL comes from the `src/app/config.ts` default, not from CI.**
 [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) injects no `VITE_*` at all,
 so whatever is hardcoded there is what ships. Change the default. (Adding a repo variable
 instead would be more flexible and less greppable — not worth it for a value that changes

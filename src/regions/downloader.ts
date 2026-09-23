@@ -1,5 +1,5 @@
 import { artifactUrl, type Region, type RegionArtifact } from './manifest';
-import { WakeLock } from '../wake-lock';
+import { WakeLock } from '../app/wake-lock';
 import {
   deleteArtifact,
   finalizePartial,
@@ -609,7 +609,7 @@ async function downloadArtifactOnce(
 /**
  * How many region downloads are running right now.
  *
- * Read by the app-update controller (src/update.ts) to hold a reload back. A reload here
+ * Read by the app-update controller (src/app/update.ts) to hold a reload back. A reload here
  * aborts an in-flight multi-hundred-MB transfer, and C12 means nothing carries it on in
  * the background — on iOS there is no Background Fetch and no Background Sync. Resume
  * would recover the bytes already on disk, but interrupting someone's download to ship a

@@ -1,16 +1,16 @@
 import type { FilterSpecification, Map as MLMap } from 'maplibre-gl';
-import { MAP_FONTS, mapInk, ratmapFlavor, type MapInk } from '../flavor';
-import type { Theme } from '../theme';
-import { basemapLayersWithBareRock, TOWN_LABEL_LAYER_ID } from '../landuse';
+import { MAP_FONTS, mapInk, ratmapFlavor, type MapInk } from '../map/flavor';
+import type { Theme } from '../ui/theme';
+import { basemapLayersWithBareRock, TOWN_LABEL_LAYER_ID } from '../map/landuse';
 import type { Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
-import type { TileSourceRegistry } from '../tile-source-registry';
-import { COPERNICUS_ATTRIBUTION, OSM_ATTRIBUTION, TERRAIN_ATTRIBUTION } from '../config';
-import { PEAKS_LAYER_ID } from '../peaks';
-import { addSacLayers } from '../sac';
-import { addAvalancheLayer, avalancheSourceSpec } from '../avalanche';
-import { addTerrainFeatureLayers } from '../terrain-features';
-import { applyAllStoredVisibility } from '../layers';
+import type { TileSourceRegistry } from '../map/tile-source-registry';
+import { COPERNICUS_ATTRIBUTION, OSM_ATTRIBUTION, TERRAIN_ATTRIBUTION } from '../app/config';
+import { PEAKS_LAYER_ID } from '../overlays/peaks';
+import { addSacLayers } from '../overlays/sac';
+import { addAvalancheLayer, avalancheSourceSpec } from '../overlays/avalanche';
+import { addTerrainFeatureLayers } from '../overlays/terrain-features';
+import { applyAllStoredVisibility } from '../map/layers';
 
 // Renders a downloaded region *over* the low-zoom world catalog rather than replacing it,
 // so panning outside the region degrades to the global view instead of falling off the
@@ -430,7 +430,7 @@ export async function addRegionToMap(
       });
     } else if (artifact.kind === 'terrain-features') {
       // Scree, shingle, rock and boulders — OSM ground-surface detail Protomaps does not
-      // carry (see src/terrain-features.ts). Same attribution and z-order slot as the
+      // carry (see src/overlays/terrain-features.ts). Same attribution and z-order slot as the
       // rest of the region's ground-surface overlays (contours, avalanche terrain):
       // beneath the region's own labels, so text stays legible over a scree fill.
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });

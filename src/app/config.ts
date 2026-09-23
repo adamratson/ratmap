@@ -67,7 +67,7 @@ export const TERRAIN_ATTRIBUTION =
 export const PLACES_DB_URL = `${window.location.origin}${import.meta.env.BASE_URL}data/places.sqlite`;
 
 // C7: vendored locally (infra/scripts/vendor-assets.sh) into public/fonts, public/sprites
-// — Regular/Italic/Medium only, matching the app's current {lang:'en'} usage in main.ts.
+// — Regular/Italic/Medium only, matching the app's current {lang:'en'} usage in map/base-style.ts.
 // Origin-qualified, not left root-relative: MapLibre's style spec requires an *absolute*
 // sprite URL and rejects a root-relative one outright ("Invalid sprite URL ..., must be
 // absolute") — verified by hitting exactly that error during Phase 1 (2026-08-21).

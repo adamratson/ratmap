@@ -7,7 +7,7 @@ import type { Map as MLMap } from 'maplibre-gl';
 // data, which is not in this project's region extracts. So this rides on its own artifact,
 // `<region>-terrain-features.pmtiles`, built by infra/scripts/build-terrain-features.sh
 // from OSM and cut per region the same way sac and paths are (C16). `bare_rock` is
-// deliberately excluded here — see src/landuse.ts, which paints it from data the basemap
+// deliberately excluded here — see src/map/landuse.ts, which paints it from data the basemap
 // already carries, no new artifact needed.
 //
 // **Coverage is partial and non-uniform, the same shape as SAC's.** Most of the world's
@@ -31,7 +31,7 @@ export interface TerrainFeatureKindInfo {
 }
 
 /**
- * Grey-brown, distinct from `bare_rock`'s pale `landcover.barren` tint (src/landuse.ts) —
+ * Grey-brown, distinct from `bare_rock`'s pale `landcover.barren` tint (src/map/landuse.ts) —
  * that tint is tuned to read at z2 as a continent-scale landcover band; this is a
  * hiking-zoom feature and wants to read as *loose ground*, not as a lighter version of
  * solid rock. `rock` and `stone` share a colour: OSM has no field-vs-individual sub-tag
@@ -118,7 +118,7 @@ export function addTerrainFeatureLayers(
       minzoom,
       paint: {
         'fill-color': fillColorExpression() as never,
-        // Same fade-in shape as landuse_park (src/landuse.ts) — the layer sits in the
+        // Same fade-in shape as landuse_park (src/map/landuse.ts) — the layer sits in the
         // same visual family as the basemap's own landuse fills, not a separate overlay.
         'fill-opacity': ['interpolate', ['linear'], ['zoom'], minzoom, 0, minzoom + 2, 0.55],
       },

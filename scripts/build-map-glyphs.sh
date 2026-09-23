@@ -12,7 +12,7 @@
 # everything else come from Noto. Medium and Italic fall back to Noto Sans Regular last:
 # Protomaps' Medium and Italic ranges are far sparser than Regular's (7k and 3k glyphs
 # against 13k), and Medium has no ▲ at all. That glyph is the Munro label prefix
-# (src/peaks.ts), which as a result had never rendered. A Regular-weight glyph in a
+# (src/overlays/peaks.ts), which as a result had never rendered. A Regular-weight glyph in a
 # Medium label beats a missing one. The cost is size: ~20 MB of glyphs across the three
 # stacks, against ~13 MB for the plain Noto sets, all precached.
 #

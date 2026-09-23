@@ -455,7 +455,7 @@ rule would ever pick, and that is the whole point of the list.
   feature that makes a bagging app worth opening, and it is pure local computation over a
   few hundred points — no network, no index.
 - **Bag from the peak detail sheet.** The sheet already carries name, elevation, coords
-  and a Save action (`src/main.ts`); "Bag" sits next to "Save place" and records date and
+  and a Save action (`src/overlays/feature-sheets.ts`); "Bag" sits next to "Save place" and records date and
   an optional note. Storage is IndexedDB, a new store beside `saved-places` — a bagged
   ascent is a log entry, not a bookmark, and merging the two would lose the distinction.
 - **Map rendering: list membership must override the notability filter.**
@@ -505,10 +505,10 @@ count exactly — no editorial join needed, C19 is satisfied by the OSM tag alon
 `infra/scripts/normalize-peaks.py` derives a `lists` property (`"munro"`) straight from
 the tag; `infra/scripts/build-peaks.sh` bakes it into `peaks-global.pmtiles` and asserts
 the count is exactly 282 at build time, same standard as the Ben Nevis elevation check.
-App side (`src/peaks.ts`): a `▲` label prefix and a distinct marker colour/size for Munros,
+App side (`src/overlays/peaks.ts`): a `▲` label prefix and a distinct marker colour/size for Munros,
 with list membership added as an unconditional override to the zoom/prominence filter — a
 marginal-prominence Munro must not vanish, the same principle §Phase 3.5 states for the
-Wainwrights below. The tap sheet (`src/main.ts`) shows a "▲ Munro" badge. Verified in a
+Wainwrights below. The tap sheet (`src/overlays/feature-sheets.ts`) shows a "▲ Munro" badge. Verified in a
 real browser against a locally-rebuilt Scotland-only `peaks-global.pmtiles` (headless
 Chromium, both themes): correct styling on Munro and non-Munro peaks, correct sheet badge,
 no false positives.

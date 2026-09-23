@@ -9,7 +9,7 @@
 // version are global to the origin, so opening it from two places at two versions
 // deadlocks.
 
-import { newId, PLACES_STORE, tx } from './db';
+import { newId, PLACES_STORE, tx } from '../app/db';
 
 export interface SavedPlace {
   /** Stable id; generated on save if absent. */

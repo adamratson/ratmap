@@ -178,7 +178,7 @@ curl -s -H "Origin: https://example.github.io" -H "Range: bytes=0-126" -D - \
 
 Then load the app and confirm it renders — a browser enforces CORS on range requests where
 `curl` doesn't, so a clean `curl` result alone proves nothing. The app defaults to this
-bucket (`src/config.ts`); override with `VITE_TILES_BASE_URL` in a repo-root `.env.local`
+bucket (`src/app/config.ts`); override with `VITE_TILES_BASE_URL` in a repo-root `.env.local`
 to point at a different one.
 
 **Verified end-to-end 2026-08-21** against Cloudflare R2; **migrated to Krystal Object

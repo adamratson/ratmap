@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
 import type { Region } from './manifest';
-import type { TileSourceRegistry } from '../tile-source-registry';
-import { ratmapFlavor } from '../flavor';
+import type { TileSourceRegistry } from '../map/tile-source-registry';
+import { ratmapFlavor } from '../map/flavor';
 
 const getArtifactFileMock = vi.hoisted(() => vi.fn());
 vi.mock('./opfs-store', () => ({ getArtifactFile: getArtifactFileMock }));

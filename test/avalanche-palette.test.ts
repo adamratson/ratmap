@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { SLOPE_CLASSES } from '../src/avalanche';
+import { SLOPE_CLASSES } from '../src/overlays/avalanche';
 
 // Same hazard as the SAC ramp next door, and the same guard: the palette is written down
 // twice and cannot be written down once. The map paints literal hex (a MapLibre paint

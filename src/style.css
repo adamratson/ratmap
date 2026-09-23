@@ -85,7 +85,7 @@
   --marker-start: #15803d;
   --marker-end: #b91c1c;
   /* Intermediate waypoints: ink, not the old route blue. The route line is magenta now
-     (src/flavor.ts mapInk), and a pin the same colour as the line vanishes into it. */
+     (src/map/flavor.ts mapInk), and a pin the same colour as the line vanishes into it. */
   --marker-mid: #14171a;
   --marker-text: #ffffff;
   --marker-ring: #ffffff;
@@ -102,7 +102,7 @@
 
   /* SAC grade ramp (T1-T6). The map draws these as literal hex — a MapLibre paint
      property cannot read a CSS variable — so the values here must stay in step with
-     SAC_GRADES in src/sac.ts. What they add is a *text*-safe variant: the map paints the
+     SAC_GRADES in src/overlays/sac.ts. What they add is a *text*-safe variant: the map paints the
      band at 60% opacity over terrain, where the base colours read fine either way, but
      the same hex as small text on the dark sheet is only ~2.4:1 for T6. */
   --sac-t1: #2c7fb8;
@@ -114,7 +114,7 @@
 
   /* Avalanche terrain slope classes. Same rule as the SAC ramp: the map paints literal
      hex (a MapLibre paint property cannot read a CSS variable), so these must stay in step
-     with SLOPE_CLASSES in src/avalanche.ts. Deliberately not a green-amber-red danger
+     with SLOPE_CLASSES in src/overlays/avalanche.ts. Deliberately not a green-amber-red danger
      ramp, and deliberately not monotonic at the top — 45+ steps to blue because it is a
      different failure mode, not a worse one. */
   --avalanche-c25: #d9b800;
@@ -854,7 +854,7 @@ textarea {
 
 /* --- The debug overlay ---------------------------------------------------------------
    Opt-in (Settings → Debug overlay), off by default. Prints the sheet's own geometry
-   over the map — see src/debug.ts for why. */
+   over the map — see src/app/debug.ts for why. */
 .debug-overlay {
   position: fixed;
   left: 4px;
@@ -1448,7 +1448,7 @@ textarea {
 
 /* --- Readouts ------------------------------------------------------------------------
    A measured value: mono, tabular figures, the unit smaller and muted
-   (plans/signature-style.md principle 1). Applied by src/readout.ts, which splits the
+   (plans/signature-style.md principle 1). Applied by src/ui/readout.ts, which splits the
    formatter's "<number> <unit>" string into these two spans. */
 .readout {
   font-family: var(--font-mono);
@@ -2007,7 +2007,7 @@ textarea {
    full height, always fully open — sheet.ts's `prefersDockedSheet()` forces the applied
    transform offset to 0 regardless of detent, so there is nothing to animate open or
    closed here. The query itself must stay identical to the one in
-   src/pointer.ts#prefersDockedSheet — CSS and JS each need their own copy, not because
+   src/ui/pointer.ts#prefersDockedSheet — CSS and JS each need their own copy, not because
    the condition differs. `hover: hover` alongside `pointer: fine` is what excludes a
    large touch tablet, which still wants the touch sheet even at this width. */
 @media (pointer: fine) and (hover: hover) and (min-width: 60rem) {

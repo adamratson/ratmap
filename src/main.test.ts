@@ -96,7 +96,7 @@ vi.mock('maplibre-gl', () => ({
 
 const navigationControlSpy = vi.hoisted(() => vi.fn());
 // The flavour objects are tagged so a test can tell which base a ratmap flavour was
-// spread from (src/flavor.ts) by reading what reached layers().
+// spread from (src/map/flavor.ts) by reading what reached layers().
 const basemapLayersSpy = vi.hoisted(() => vi.fn((_source: string, _flavor: unknown) => []));
 const store = vi.hoisted(() => new Map<string, string>());
 
@@ -107,13 +107,13 @@ vi.mock('@protomaps/basemaps', () => ({
 }));
 const bootstrapStorageMock = vi.hoisted(() => vi.fn());
 const isStandaloneMock = vi.hoisted(() => vi.fn());
-vi.mock('./storage', () => ({
+vi.mock('./app/storage', () => ({
   bootstrapStorage: bootstrapStorageMock,
   isStandalone: isStandaloneMock,
 }));
 
 // IndexedDB isn't in jsdom; saved-places is exercised by its own tests.
-vi.mock('./saved-places', () => ({
+vi.mock('./search/saved-places', () => ({
   listPlaces: vi.fn().mockResolvedValue([]),
   savePlace: vi.fn().mockResolvedValue(undefined),
   deletePlace: vi.fn().mockResolvedValue(undefined),

@@ -201,7 +201,7 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
   async function performCheck(reg: ServiceWorkerRegistration): Promise<void> {
     // Only trusted in the negative direction. `navigator.onLine === true` is meaningless
     // here — it stays true behind a captive portal or a dead uplink, which is why the map
-    // detects offline from failed requests instead (see isNetworkFailure in main.ts). But
+    // detects offline from failed requests instead (see isNetworkFailure in map/network-status.ts). But
     // `false` does reliably mean "no link", so it's a sound reason to skip a check.
     if (navigator.onLine === false) return;
 

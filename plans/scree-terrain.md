@@ -1,7 +1,7 @@
 # Scree, boulder fields and bare rock — a terrain-features artifact
 
 **Status (2026-09-18): built and verified against real data.** Written the same day after
-[the bare-rock styling fix landed](../src/landuse.ts) surfaced the harder half of the same
+[the bare-rock styling fix landed](../src/map/landuse.ts) surfaced the harder half of the same
 question. Kind string settled as `terrain-features` and the layer ships always-on (Adam's
 call — §9 decisions 2 and 3, no longer open). Destined for `docs/IMPLEMENTATION.md` as a
 Phase 4/5 entry (own number TBD) once this lands on `main`.
@@ -22,12 +22,12 @@ Phase 4/5 entry (own number TBD) once this lands on `main`.
   cut a real `scotland-terrain-features.pmtiles` (4.3 MB, z11–15) and confirmed it appears
   correctly in a locally-generated `manifest.json` with real min/maxzoom read from the
   archive header.
-- `src/terrain-features.ts` (new) — the fill + point layers, palette and coverage-caveat
+- `src/overlays/terrain-features.ts` (new) — the fill + point layers, palette and coverage-caveat
   text. `src/regions/region-layers.ts` wired with a `terrain-features` branch. A legend
   section in `src/main.ts`. Full test suite (508 tests) and `tsc --noEmit` clean.
 - **Visually verified against the real built archive**, not just unit-tested: a standalone
   MapLibre page loaded `scotland-terrain-features.pmtiles` directly and rendered the exact
-  paint expressions from `src/terrain-features.ts`. Centred on a real named feature found
+  paint expressions from `src/overlays/terrain-features.ts`. Centred on a real named feature found
   in the data ("Caerketton Screes", Pentland Hills) — the fill, the point markers for
   nearby rock outcrops, and the name label all rendered correctly at real map zoom.
 
@@ -42,7 +42,7 @@ checklist below still describes what "done" means once this is live.
 **Already shipped (separate change, not this plan):** `natural=bare_rock` polygons ride in
 every basemap archive already — Protomaps' own ingestion puts them in the `landuse`
 source-layer at minzoom 2 — but no flavor's generated style paints them.
-[`src/landuse.ts`](../src/landuse.ts) splices a fill rule in after `landuse_park`. Zero new
+[`src/map/landuse.ts`](../src/map/landuse.ts) splices a fill rule in after `landuse_park`. Zero new
 data, zero pipeline change, done.
 
 **This plan is the harder half:** `natural=scree`, `shingle`, `rock`, `stone` are not
@@ -209,8 +209,8 @@ check should assert against its own pipeline's output, not against a different t
 
 | File | Change |
 |---|---|
-| `src/terrain-features.ts` *(new)* | Palette, filter-by-kind paint expressions, legend copy — the `sac.ts`/`avalanche.ts` shape: one module owning the domain and its honesty about coverage (§5). |
-| `src/regions/region-layers.ts` | A `terrain-features` branch, modelled on the existing `sac`/`paths` branches — vector source, `OSM_ATTRIBUTION`, layer(s) from `src/terrain-features.ts`, inserted at the same landuse z-order slot the bare-rock fix uses. |
+| `src/overlays/terrain-features.ts` *(new)* | Palette, filter-by-kind paint expressions, legend copy — the `sac.ts`/`avalanche.ts` shape: one module owning the domain and its honesty about coverage (§5). |
+| `src/regions/region-layers.ts` | A `terrain-features` branch, modelled on the existing `sac`/`paths` branches — vector source, `OSM_ATTRIBUTION`, layer(s) from `src/overlays/terrain-features.ts`, inserted at the same landuse z-order slot the bare-rock fix uses. |
 | Legend / settings | New legend rows for scree/shingle/rock, with the §5 coverage caveat in the same voice as the SAC and avalanche legend text. |
 
 No sampler, no route-panel integration proposed — unlike SAC grade or avalanche slope, scree

@@ -12,8 +12,8 @@ import {
 import { addRegionToMap, removeRegionFromMap } from './region-layers';
 import { evaluateGate, readStorage } from './storage-budget';
 import { deleteOrphan, findOrphans, type OrphanRegion } from './orphans';
-import type { TileSourceRegistry } from '../tile-source-registry';
-import type { Theme } from '../theme';
+import type { TileSourceRegistry } from '../map/tile-source-registry';
+import type { Theme } from '../ui/theme';
 
 /** How long a delete stays armed before reverting to its safe label. */
 const ARM_TIMEOUT_MS = 5000;

@@ -1,4 +1,4 @@
-import { newId, ROUTES_STORE, tx } from '../db';
+import { newId, ROUTES_STORE, tx } from '../app/db';
 import type { LngLat } from './geo';
 import type { LegSlot, Waypoint } from './route-model';
 

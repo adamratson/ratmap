@@ -98,7 +98,7 @@ replace long-press with a tap-to-open popover (`Remove` / `Make start`) on the m
 A visible affordance beats a hidden gesture on touch regardless of platform.
 
 **A2. Summit taps are unreliable.**
-`peakAt()` ([peaks.ts:150](../src/peaks.ts#L150)) queries a single pixel via
+`peakAt()` ([peaks.ts:150](../src/overlays/peaks.ts#L150)) queries a single pixel via
 `queryRenderedFeatures(point, ...)`. Probed against a rendered peak in the running app:
 a probe 18px from the peak's screen centre returns 0 hits; a 22px box returns 2 hits,
 and the nearest peak is not first in the result array. A miss is not a no-op — while
@@ -165,7 +165,7 @@ destructively.
 
 **B5. Search results don't show distance.**
 Results are ordered by distance from the viewport centre
-([search.ts:118](../src/search.ts#L118)) but display only `kind · elevation`
+([search.ts:118](../src/search/search.ts#L118)) but display only `kind · elevation`
 ([main.ts:596](../src/main.ts#L596)). Scotland has several "Ben More"s; the ranking
 that resolves the ambiguity is invisible to the user.
 
@@ -197,7 +197,7 @@ against an existing, tested class.
 
 **C2. The location dot has no heading.**
 The dot answers "where am I"; on a mountain the more urgent question is "which way am I
-facing." `LocationController` ([location.ts](../src/location.ts)) renders a plain
+facing." `LocationController` ([location.ts](../src/location/location.ts)) renders a plain
 circle with an accuracy halo, no bearing.
 
 Fix: add a heading cone from `deviceorientation`.
@@ -209,7 +209,7 @@ has no such field and the bundle contains no reference to `deviceorientation` at
 There is nothing upstream to borrow, so this has to be written from scratch, handling
 Safari's `webkitCompassHeading` (already true-north referenced) and Chromium's absolute
 `alpha` (which runs the opposite way) separately, plus the iOS motion-permission prompt,
-which must be raised from a user gesture. Implemented in `src/heading.ts`.
+which must be raised from a user gesture. Implemented in `src/location/heading.ts`.
 
 **C3. No dark mode.**
 `color-scheme: light` is hard-coded ([style.css](../src/style.css)), the basemap is
@@ -225,7 +225,7 @@ system setting: people are likely to want the map dark before the phone.
 Four named regions render as a plain list in a sheet
 ([regions-ui.ts](../src/regions/regions-ui.ts)). Nothing draws a region's footprint on
 the map, nothing indicates which region covers the area currently being viewed, and the
-detail-limit notice ([detail-limit.ts](../src/detail-limit.ts)) correctly reports
+detail-limit notice ([detail-limit.ts](../src/map/detail-limit.ts)) correctly reports
 "limited detail here" but offers no path to the region that would fix it.
 
 Fix: draw the catalogue's bounding boxes as a map layer (filled for downloaded,

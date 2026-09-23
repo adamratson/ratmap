@@ -1,7 +1,5 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { mapInk, ratmapFlavor, type MapInk } from './flavor';
-import { basemapLayersWithBareRock } from './landuse';
 // Self-hosted, Latin subset, only the weights style.css uses — see the --font-* tokens.
 // Bundled rather than linked so they precache with the shell and render offline (C7's
 // reasoning, applied to the chrome's fonts rather than the map's glyphs).
@@ -14,73 +12,45 @@ import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import '@fontsource/jetbrains-mono/latin-600.css';
 import './style.css';
-import { fillReadout } from './readout';
+import { BASEMAP_PMTILES_URL, TERRAIN_PMTILES_URL, USE_FALLBACK_TERRAIN } from './app/config';
+import { renderInstallSheet, startStorageOnboarding } from './app/onboarding';
+import { startAppUpdates } from './app/update';
+import { APP_VERSION } from './app/version';
+import { buildBaseStyle } from './map/base-style';
+import { mapInk } from './map/flavor';
+import { applyAllStoredVisibility } from './map/layers';
+import { watchMapHealth } from './map/network-status';
+import { TileSourceRegistry } from './map/tile-source-registry';
 import {
-  BASEMAP_MAX_ZOOM,
-  BASEMAP_PMTILES_URL,
-  FALLBACK_TERRAIN_RASTER_DEM_URL,
-  GLYPHS_URL,
-  OSM_ATTRIBUTION,
-  SPRITE_URL,
-  TERRAIN_ATTRIBUTION,
-  TERRAIN_MAX_ZOOM,
-  TERRAIN_PMTILES_URL,
-  USE_FALLBACK_TERRAIN,
-} from './config';
-import { TileSourceRegistry } from './tile-source-registry';
-import {
-  addPeaksLayer,
-  formatElevation,
-  isMunro,
-  peakAt,
-  PEAKS_SOURCE_ID,
-  type PeakProperties,
-} from './peaks';
-import { SAC_GRADES, sacCssColor, sacPathAt, type SacHit } from './sac';
-import { TERRAIN_FEATURE_KINDS } from './terrain-features';
-import { SLOPE_CLASSES, slopeCssColor } from './avalanche';
-import {
-  LAYER_GROUP_ORDER,
-  applyAllStoredVisibility,
-  applyLayerVisibility,
-  isLayerVisible,
-  setLayerVisible,
-  type LayerGroup,
-} from './layers';
-import { HeadingWatcher } from './heading';
-import { LocationController, type LocationState } from './location';
-import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS } from './install';
-import { bootstrapStorage, isStandalone } from './storage';
-import { listPlaces, savePlace, deletePlace, type SavedPlace } from './saved-places';
-import { PlacesSearch, type SearchResult } from './search';
-import { parseLatLng } from './coords';
-import { describeDetailLimit } from './detail-limit';
-import { ThemeController, type Theme } from './theme';
-import { DebugOverlay, isDebugOverlayEnabled, setDebugOverlayEnabled } from './debug';
-import { isCoarsePointer } from './pointer';
-import {
-  bestAvailableZoom,
-  fetchManifest,
-  loadCachedManifest,
-  type Region,
-} from './regions/manifest';
-import {
-  regionAt,
-  renderFootprints,
-  visibleFootprints,
-  type Footprint,
-} from './regions/region-footprints';
-import { renderRegionsSheet, restoreDownloadedRegions } from './regions/regions-ui';
+  PeakTooltip,
+  renderCoordsSheet,
+  renderPathSheet,
+  renderPeakSheet,
+} from './overlays/feature-sheets';
+import { addPeaksLayer, peakAt } from './overlays/peaks';
+import { sacPathAt } from './overlays/sac';
+import { setUpLocation } from './location/location-ui';
+import { RegionCoverage } from './regions/coverage';
 import { downloadsInFlight } from './regions/downloader';
-import { BottomSheet, type Detent } from './sheet';
-import { StatusCentre } from './status';
-import { startAppUpdates } from './update';
-import { APP_VERSION } from './version';
-import { compassBearing, distanceMetres, formatDistance } from './routes/geo';
-import { RoutePlanner, type RouteSummary } from './routes/route-planner';
+import { renderRegionsSheet } from './regions/regions-ui';
 import { onPressHold } from './routes/press-hold';
-import { renderRoutePanel, renderRoutesSheet, type RoutesUiDeps } from './routes/routes-ui';
 import { addRouteLayers } from './routes/route-layers';
+import { RoutePlanner, type RouteSummary } from './routes/route-planner';
+import { renderRoutePanel, renderRoutesSheet, type RoutesUiDeps } from './routes/routes-ui';
+import { renderPlacesSheet } from './search/places-view';
+import { SearchBox } from './search/search-view';
+import { setUpCompass } from './ui/compass';
+import { renderLayersView } from './ui/layers-view';
+import { renderLegend } from './ui/legend-view';
+import { isCoarsePointer } from './ui/pointer';
+import { renderSettingsView, syncDebugOverlay } from './ui/settings-view';
+import { BottomSheet } from './ui/sheet';
+import { SheetViews } from './ui/sheet-views';
+import { StatusCentre } from './ui/status';
+import { ThemeController } from './ui/theme';
+
+// The app's bootstrap: builds the page, the map and the sheet, and wires the feature
+// modules to each other. Anything with logic of its own lives in one of those modules.
 
 // C17: the registry is the single owner of addProtocol/Protocol.add for the whole app.
 const registry = TileSourceRegistry.install();
@@ -120,13 +90,15 @@ const status = new StatusCentre({
 
 // --- The sheet ----------------------------------------------------------------------
 
+const sheetElement = document.querySelector<HTMLDivElement>('#sheet')!;
+
 const sheet = new BottomSheet({
-  element: document.querySelector<HTMLDivElement>('#sheet')!,
+  element: sheetElement,
   onLayout: () => {
     // Everything positioned above the sheet reads this: the map attribution (which is
     // legally required and must never sit underneath it), toasts, and the detail notice.
     document.documentElement.style.setProperty('--sheet-visible', `${sheet.visibleHeight()}px`);
-    renderChips();
+    views.renderChips();
   },
 });
 
@@ -146,103 +118,21 @@ sheet.peek.innerHTML = `
   </div>
 `;
 
-/** What the sheet body is currently showing. `null` is the resting state. */
-type View =
-  | 'peak'
-  | 'path'
-  | 'coords'
-  | 'places'
-  | 'regions'
-  | 'routes'
-  | 'plan'
-  | 'install'
-  | 'settings'
-  | 'legend'
-  | 'layers';
+const legendBtn = sheet.peek.querySelector<HTMLButtonElement>('#legend-btn')!;
+const settingsBtn = sheet.peek.querySelector<HTMLButtonElement>('#settings-btn')!;
 
-let view: View | null = null;
+const views = new SheetViews({
+  sheet,
+  chipsHost: sheet.peek.querySelector<HTMLDivElement>('#chips')!,
+  iconButtons: { legend: legendBtn, settings: settingsBtn },
+});
 
-/**
- * Whether the `plan` view is planning or following.
- *
- * They are different modes with different rules — one takes map taps as waypoints, the
- * other does not — so the peek row has to name which one is on, or the mode is invisible
- * whenever the sheet is at rest.
- */
-let planMode: 'Planning' | 'Following' = 'Planning';
-
-/**
- * Show something in the sheet.
- *
- * The detent is only set when the view *changes*. A view that re-renders — the planner
- * does so on every waypoint drag — must not haul the sheet back up over a map the user
- * has just dragged it off.
- */
-function openView(name: View, render: (body: HTMLElement) => void, detent: Detent = 'content'): void {
-  const entering = view !== name;
-  view = name;
-  sheet.body.setAttribute('aria-label', VIEW_LABEL[name]);
-  render(sheet.body);
-  if (entering) {
-    sheet.scrollToTop();
-    sheet.open(detent);
-  }
-  renderChips();
-}
-
-function closeView(): void {
-  if (view === null) return;
-  view = null;
-  sheet.body.removeAttribute('aria-label');
-  sheet.body.innerHTML = '';
-  sheet.collapse();
-  renderChips();
-}
-
-/**
- * The peek row's destinations.
- *
- * These are what the four-button HUD used to be, moved off the map and into the one
- * surface — and now they also report which view is open, which the HUD could not do
- * because the planning panel covered it.
- */
-const CHIPS: { view: View; label: string; open: () => void }[] = [
+views.setDestinations([
   { view: 'routes', label: 'Routes', open: () => void openRoutesView() },
   { view: 'regions', label: 'Offline', open: () => openRegionsView() },
   { view: 'places', label: 'Saved', open: () => void openPlacesView() },
   { view: 'layers', label: 'Layers', open: () => openLayersView() },
-];
-
-const chipsHost = sheet.peek.querySelector<HTMLDivElement>('#chips')!;
-
-function renderChips(): void {
-  chipsHost.innerHTML = '';
-
-  // Planning is a mode, not a destination: it is entered from the routes list and left
-  // with Done, so its chip only exists while it is on. Without it the mode is invisible
-  // at peek, and a tap on the map silently means something different.
-  if (view === 'plan') {
-    const chip = chipEl(planMode, true, () =>
-      sheet.detent() === 'peek' ? sheet.open('content') : sheet.collapse(),
-    );
-    chip.classList.add('chip-mode');
-    chipsHost.append(chip);
-  }
-
-  for (const entry of CHIPS) {
-    const active = view === entry.view;
-    chipsHost.append(
-      chipEl(entry.label, active, () => {
-        // Tapping the open one puts the map back, so every chip is its own way out.
-        if (active && sheet.detent() !== 'peek') closeView();
-        else entry.open();
-      }),
-    );
-  }
-
-  legendBtn.classList.toggle('active', view === 'legend');
-  settingsBtn.classList.toggle('active', view === 'settings');
-}
+]);
 
 /**
  * Escape puts the map back.
@@ -254,11 +144,11 @@ function renderChips(): void {
  */
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
-  if (!searchResults.hidden) {
-    hideSearchResults();
+  if (searchBox.resultsOpen()) {
+    searchBox.hideResults();
     return;
   }
-  if (view !== null) closeView();
+  if (views.view() !== null) views.close();
   else if (sheet.detent() !== 'peek') sheet.collapse();
 });
 
@@ -274,449 +164,18 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return;
   event.preventDefault();
-  if (view !== null) closeView();
-  searchInput.focus();
-  searchInput.select();
+  if (views.view() !== null) views.close();
+  searchBox.focus();
 });
 
-// --- Settings --------------------------------------------------------------------------
+settingsBtn.addEventListener('click', () => views.toggle('settings', openSettingsView));
+legendBtn.addEventListener('click', () => views.toggle('legend', openLegendView));
 
-const settingsBtn = sheet.peek.querySelector<HTMLButtonElement>('#settings-btn')!;
-settingsBtn.addEventListener('click', () => {
-  // Same rule as every destination chip: tapping the one that's already open closes it.
-  if (view === 'settings' && sheet.detent() !== 'peek') closeView();
-  else openSettingsView();
-});
-
-/**
- * Debug overlay lifecycle. Created and destroyed with the setting, not just hidden — it
- * holds a ResizeObserver and a 500ms timer that have no reason to run for the far more
- * common case of the setting being off.
- */
-let debugOverlay: DebugOverlay | null = null;
-
-function syncDebugOverlay(): void {
-  const enabled = isDebugOverlayEnabled();
-  if (enabled && !debugOverlay) {
-    debugOverlay = new DebugOverlay(document.querySelector<HTMLElement>('#sheet')!);
-    debugOverlay.start();
-  } else if (!enabled && debugOverlay) {
-    debugOverlay.stop();
-    debugOverlay = null;
-  }
-}
-
-syncDebugOverlay();
-
-function openSettingsView(): void {
-  openView('settings', (body) => {
-    body.innerHTML = `
-      <h2>Settings</h2>
-      <label class="settings-row">
-        <span class="settings-row-text">
-          <span class="settings-row-label">Light theme</span>
-        </span>
-        <input id="light-theme-toggle" type="checkbox" />
-      </label>
-      <label class="settings-row">
-        <span class="settings-row-text">
-          <span class="settings-row-label">Debug overlay</span>
-          <span class="settings-row-note">
-            Prints the sheet's on-screen geometry over the map — for tracking down
-            layout bugs that only show up on a real device.
-          </span>
-        </span>
-        <input id="debug-overlay-toggle" type="checkbox" />
-      </label>
-    `;
-    const light = body.querySelector<HTMLInputElement>('#light-theme-toggle')!;
-    light.checked = theme.get() === 'light';
-    light.addEventListener('change', () => {
-      // Switching replaces the whole style (Protomaps ships flavours as whole layer
-      // sets); installAppLayers puts the app's own layers back — see theme.onChange
-      // below. The settings view itself is untouched, so the toggle stays under the
-      // finger that just moved it.
-      theme.set(light.checked ? 'light' : 'dark');
-    });
-
-    const toggle = body.querySelector<HTMLInputElement>('#debug-overlay-toggle')!;
-    toggle.checked = isDebugOverlayEnabled();
-    toggle.addEventListener('change', () => {
-      setDebugOverlayEnabled(toggle.checked);
-      syncDebugOverlay();
-    });
-  });
-}
-
-// --- Legend --------------------------------------------------------------------------
-
-const legendBtn = sheet.peek.querySelector<HTMLButtonElement>('#legend-btn')!;
-legendBtn.addEventListener('click', () => {
-  if (view === 'legend' && sheet.detent() !== 'peek') closeView();
-  else openLegendView();
-});
-
-/** One legend entry: a swatch (SVG, matched to the real map colours) plus a label and note. */
-function legendRow(swatch: string, label: string, note: string): string {
-  return `
-    <div class="legend-row">
-      <div class="legend-swatch">${swatch}</div>
-      <div class="legend-row-text">
-        <span class="legend-row-label">${label}</span>
-        <span class="legend-row-note">${note}</span>
-      </div>
-    </div>
-  `;
-}
-
-/**
- * A plain line swatch, optionally cased the way paths and routes are on the map — in the
- * casing colour passed, since that is white by day and graphite at night (mapInk()).
- */
-function lineSwatch(
-  color: string,
-  width: number,
-  {
-    dash,
-    casing: casingColor,
-    cap = 'round',
-  }: { dash?: string; casing?: string; cap?: 'round' | 'butt' } = {},
-): string {
-  const casing = casingColor
-    ? `<line x1="3" y1="12" x2="37" y2="12" stroke="${casingColor}" stroke-width="${width + 3}" stroke-linecap="round"/>`
-    : '';
-  const dashAttr = dash ? ` stroke-dasharray="${dash}"` : '';
-  return (
-    `<svg viewBox="0 0 40 24">${casing}` +
-    `<line x1="3" y1="12" x2="37" y2="12" stroke="${color}" stroke-width="${width}"${dashAttr} stroke-linecap="${cap}"/></svg>`
-  );
-}
-
-function openLegendView(): void {
-  openView('legend', (body) => {
-    // The swatches read the same inks the map layers do, for the theme showing now. A
-    // hardcoded swatch is how the legend drifted from the map last time: violet summits
-    // and a blue route, long after the map had moved on.
-    const ink = mapInk(theme.get());
-    body.innerHTML = `
-      <div class="legend-section">
-        <h3>Summits</h3>
-        ${legendRow(
-          `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="6" fill="${ink.peakDot}" stroke="${ink.peakDotStroke}" stroke-width="2"/></svg>`,
-          'Summit',
-          'Named and given a height once its prominence clears the zoom threshold — less prominent summits appear as you zoom in.',
-        )}
-      </div>
-
-      <div class="legend-section">
-        <h3>Paths</h3>
-        ${legendRow(
-          lineSwatch(ink.pathLine, 2, { dash: '4 3', casing: ink.pathCasing, cap: 'butt' }),
-          'Footpath',
-          'Dashed. Drawn once its region is downloaded, from zoom 12.',
-        )}
-        ${legendRow(
-          lineSwatch(ink.pathLine, 3.2, { casing: ink.pathCasing }),
-          'Track',
-          'Solid and heavier than a footpath — vehicle-width.',
-        )}
-      </div>
-
-      <div class="legend-section">
-        <h3>Path grade (SAC)</h3>
-        <p class="legend-note">
-          The Swiss Alpine Club's T1–T6 scale, where OpenStreetMap carries it — a coloured
-          band under the path, labelled from zoom 14. Most paths are not graded; an
-          unbanded path is untagged, not necessarily easy.
-        </p>
-        ${SAC_GRADES.map((entry) =>
-          legendRow(
-            lineSwatch(sacCssColor(entry.grade), 7, { cap: 'butt' }),
-            `${entry.short} · ${entry.label}`,
-            entry.note,
-          ),
-        ).join('')}
-      </div>
-
-      <div class="legend-section">
-        <h3>Relief</h3>
-        ${legendRow(
-          `<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="${ink.contour}" stroke-width="1.2"/></svg>`,
-          'Contour line',
-          '10 m interval, where a region is fully downloaded.',
-        )}
-        ${legendRow(
-          `<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="${ink.contourLabel}" stroke-width="1.8"/><text x="21" y="6.5" font-size="6.5" fill="${ink.contourLabel}" text-anchor="middle">620</text></svg>`,
-          'Index contour',
-          'Every 50 m, drawn heavier and labelled with height — count the thin lines between them for the rest.',
-        )}
-        ${legendRow(
-          '<div class="legend-hillshade-swatch"></div>',
-          'Hillshade',
-          'Shaded relief from downloaded terrain — fades out at close zoom, where contours carry the detail instead.',
-        )}
-      </div>
-
-      <div class="legend-section">
-        <h3>Ground surface</h3>
-        <p class="legend-note">
-          Scree, shingle, rock and boulders — OpenStreetMap detail the basemap has no room
-          for. Coverage is partial and uneven: a summit with nothing shown here is not
-          "there is no scree there", most of the world's surface tagging is simply
-          incomplete.
-        </p>
-        ${legendRow(
-          `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[0].fillColor}" fill-opacity="0.55"/></svg>`,
-          'Scree',
-          TERRAIN_FEATURE_KINDS[0].note,
-        )}
-        ${legendRow(
-          `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[1].fillColor}" fill-opacity="0.55"/></svg>`,
-          'Shingle',
-          TERRAIN_FEATURE_KINDS[1].note,
-        )}
-        ${legendRow(
-          `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[2].fillColor}" fill-opacity="0.55"/></svg>`,
-          'Rock / boulder field',
-          'Bare rock outcrop or boulder field, mapped as an area. OSM cannot distinguish "rock" from "boulders" as areas — both look like this.',
-        )}
-        ${legendRow(
-          `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="4" fill="${TERRAIN_FEATURE_KINDS[2].pointColor}" stroke="rgba(255,255,255,0.9)" stroke-width="1.25"/></svg>`,
-          'Rock outcrop / boulder',
-          'A point rather than an area — an isolated outcrop, or a single boulder.',
-        )}
-      </div>
-
-      <div class="legend-section">
-        <h3>Avalanche terrain</h3>
-        <p class="legend-note">
-          Off by default &mdash; switch it on in Layers. Slope steepness computed from
-          the downloaded region's elevation data, shaded where a slab could release.
-          <strong>This is terrain, not a forecast.</strong> Avalanche danger is snowpack
-          and weather as well as ground, and this map has never seen either. Unshaded is
-          not the same as safe: the runout of a slope above you is often gentle ground.
-        </p>
-        ${SLOPE_CLASSES.map((entry) =>
-          legendRow(
-            `<svg viewBox="0 0 40 24"><rect x="3" y="5" width="34" height="14" rx="2" fill="${slopeCssColor(
-              SLOPE_CLASSES.indexOf(entry),
-            )}" fill-opacity="0.75"/></svg>`,
-            entry.label,
-            entry.note,
-          ),
-        ).join('')}
-      </div>
-
-      <div class="legend-section">
-        <h3>Routes</h3>
-        ${legendRow(
-          lineSwatch(ink.routeLine, 3.5, { casing: ink.routeCasing }),
-          'Route',
-          'A planned or saved route, following real paths where the network allows.',
-        )}
-        ${legendRow(
-          lineSwatch(ink.routeStraight, 3.5, { dash: '5 4', casing: ink.routeCasing, cap: 'butt' }),
-          'Unsnapped leg',
-          'No path connects these two waypoints — a straight line only, not a real route. Move a waypoint onto a path to fix it.',
-        )}
-        ${legendRow(
-          lineSwatch(ink.offRoute, 2, { dash: '3 3' }),
-          'Off-route',
-          'Shown while following a route — the way back to it.',
-        )}
-      </div>
-
-      <div class="legend-section">
-        <h3>Offline coverage</h3>
-        ${legendRow(
-          '<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="#15803d" fill-opacity="0.12" stroke="#15803d" stroke-width="1.5"/></svg>',
-          'Downloaded region',
-          'Full detail, works offline.',
-        )}
-        ${legendRow(
-          '<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="#2563eb" fill-opacity="0.08" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="3 3"/></svg>',
-          'Available to download',
-          'Outlined below full detail zoom — get it from the Offline tab.',
-        )}
-      </div>
-    `;
-  });
-}
-
-// --- Layers ----------------------------------------------------------------------------
-
-/**
- * One row per switchable overlay. Swatches are the Legend's own, read from the same inks,
- * so a row shows what it switches in the colour the map draws it.
- */
-const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink: MapInk) => string }> = {
-  peaks: {
-    label: 'Summits',
-    note: 'Summit markers, names and heights.',
-    swatch: (ink) =>
-      `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="6" fill="${ink.peakDot}" stroke="${ink.peakDotStroke}" stroke-width="2"/></svg>`,
-  },
-  hillshade: {
-    label: 'Hillshade',
-    note: 'Shaded relief.',
-    swatch: () => '<div class="legend-hillshade-swatch"></div>',
-  },
-  contours: {
-    label: 'Contours',
-    note: 'Contour lines and heights, in downloaded regions.',
-    swatch: (ink) =>
-      `<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="${ink.contour}" stroke-width="1.2"/></svg>`,
-  },
-  paths: {
-    label: 'Paths and tracks',
-    note: 'Footpaths and tracks, in downloaded regions.',
-    swatch: (ink) => lineSwatch(ink.pathLine, 2, { dash: '4 3', casing: ink.pathCasing, cap: 'butt' }),
-  },
-  sac: {
-    label: 'Path grade (SAC)',
-    note: 'T1–T6 colour bands under graded paths.',
-    swatch: () => lineSwatch(sacCssColor(SAC_GRADES[2].grade), 7, { cap: 'butt' }),
-  },
-  terrainFeatures: {
-    label: 'Ground surface',
-    note: 'Scree, shingle, rock and boulders.',
-    swatch: () =>
-      `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[0].fillColor}" fill-opacity="0.55"/></svg>`,
-  },
-  avalanche: {
-    label: 'Avalanche terrain',
-    note: 'Slopes shaded by steepness. Terrain only — not a forecast. Off by default.',
-    swatch: () =>
-      `<svg viewBox="0 0 40 24"><rect x="3" y="5" width="34" height="14" rx="2" fill="${slopeCssColor(2)}" fill-opacity="0.75"/></svg>`,
-  },
-  footprints: {
-    label: 'Offline coverage',
-    note: 'Outlines of downloaded and available regions.',
-    swatch: () =>
-      '<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="#15803d" fill-opacity="0.12" stroke="#15803d" stroke-width="1.5"/></svg>',
-  },
-};
-
-function openLayersView(): void {
-  openView('layers', (body) => {
-    const ink = mapInk(theme.get());
-    body.innerHTML = `
-      ${LAYER_GROUP_ORDER.map((group) => {
-        const row = LAYER_ROWS[group];
-        return `
-          <label class="legend-row layer-row">
-            <div class="legend-swatch">${row.swatch(ink)}</div>
-            <span class="legend-row-text">
-              <span class="legend-row-label">${row.label}</span>
-              <span class="legend-row-note">${row.note}</span>
-            </span>
-            <input id="layer-toggle-${group}" type="checkbox" data-group="${group}" />
-          </label>
-        `;
-      }).join('')}
-    `;
-    for (const input of body.querySelectorAll<HTMLInputElement>('input[data-group]')) {
-      const group = input.dataset.group as LayerGroup;
-      input.checked = isLayerVisible(group);
-      input.addEventListener('change', () => {
-        setLayerVisible(group, input.checked);
-        applyLayerVisibility(map, group);
-      });
-    }
-  });
-}
+syncDebugOverlay(sheetElement);
 
 sheet.open('peek');
 
-
-function chipEl(label: string, active: boolean, onSelect: () => void): HTMLButtonElement {
-  const chip = document.createElement('button');
-  chip.type = 'button';
-  chip.className = 'chip';
-  // A disclosure, not a tab. Tabs imply a panel that is always showing one of a set;
-  // here the sheet is usually showing nothing at all, and each chip both opens and
-  // closes its own view.
-  chip.setAttribute('aria-expanded', String(active));
-  chip.setAttribute('aria-controls', 'sheet-body');
-  chip.classList.toggle('active', active);
-  chip.textContent = label;
-  chip.addEventListener('click', onSelect);
-  return chip;
-}
-
-/** What a screen reader should call the sheet's contents, per view. */
-const VIEW_LABEL: Record<View, string> = {
-  peak: 'Summit details',
-  path: 'Path grade',
-  coords: 'Coordinates',
-  places: 'Saved places',
-  regions: 'Offline regions',
-  routes: 'Routes',
-  plan: 'Route planner',
-  install: 'Add to Home Screen',
-  settings: 'Settings',
-  legend: 'Map legend',
-  layers: 'Map layers',
-};
-
-const terrainSource: maplibregl.SourceSpecification = USE_FALLBACK_TERRAIN
-  ? {
-      type: 'raster-dem',
-      tiles: [FALLBACK_TERRAIN_RASTER_DEM_URL],
-      tileSize: 256,
-      encoding: 'terrarium',
-      maxzoom: 15,
-      attribution: 'Terrain: AWS Open Data Terrain Tiles',
-    }
-  : {
-      type: 'raster-dem',
-      url: registry.sourceUrl(TERRAIN_PMTILES_URL),
-      encoding: 'terrarium',
-      // Coarse global extract — see config. Without this MapLibre asks for tiles above
-      // the archive's real maxzoom and hillshade silently disappears when you zoom in.
-      maxzoom: TERRAIN_MAX_ZOOM,
-      attribution: TERRAIN_ATTRIBUTION,
-    };
-
-/**
- * The base style, for a given theme.
- *
- * A function rather than a literal because the theme is switchable at runtime and
- * Protomaps ships the flavours as whole layer sets — there is no per-layer paint property
- * to flip. Only the basemap and the terrain live here; everything the app adds on top
- * (peaks, routes, downloaded regions, coverage) is re-installed by installAppLayers.
- */
-function buildStyle(theme: Theme): maplibregl.StyleSpecification {
-  return {
-    version: 8,
-    glyphs: GLYPHS_URL,
-    sprite: SPRITE_URL,
-    sources: {
-      basemap: {
-        type: 'vector',
-        url: registry.sourceUrl(BASEMAP_PMTILES_URL),
-        maxzoom: BASEMAP_MAX_ZOOM,
-        attribution: OSM_ATTRIBUTION,
-      },
-      terrain: terrainSource,
-    },
-    layers: [
-      ...basemapLayersWithBareRock('basemap', ratmapFlavor(theme), { lang: 'en' }),
-      {
-        id: 'hillshade',
-        type: 'hillshade',
-        source: 'terrain',
-        // Style-spec default is 0.5; dialled down 10% to match the region hillshade's own
-        // reduction in region-layers.ts.
-        paint: {
-          'hillshade-exaggeration': 0.45,
-          'hillshade-highlight-color': mapInk(theme).hillshadeHighlight,
-          'hillshade-shadow-color': mapInk(theme).hillshadeShadow,
-        },
-      },
-    ],
-  };
-}
+// --- The map ------------------------------------------------------------------------
 
 const map = new maplibregl.Map({
   container: 'map',
@@ -725,7 +184,7 @@ const map = new maplibregl.Map({
   // Attribution is legally required (ODbL) and must not be auto-hidden without user
   // action — so it stays expanded rather than collapsing to an "i" on narrow screens.
   attributionControl: { compact: false },
-  style: buildStyle(theme.get()),
+  style: buildBaseStyle(theme.get(), registry),
 });
 
 theme.onChange((next) => {
@@ -736,8 +195,8 @@ theme.onChange((next) => {
   //
   // Nothing may add a layer between these two lines: the old style's layers are already
   // gone and the new one is not installed yet.
-  styleReady = false;
-  map.setStyle(buildStyle(next));
+  coverage.setStyleReady(false);
+  map.setStyle(buildBaseStyle(next, registry));
   map.once('styledata', () => installAppLayers());
 });
 
@@ -750,111 +209,14 @@ if (!isCoarsePointer()) {
 }
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }));
 
-// --- Compass ------------------------------------------------------------------------
-
-const compassBtn = document.querySelector<HTMLButtonElement>('#compass-btn')!;
-const compassNeedle = compassBtn.querySelector<HTMLElement>('.compass-needle')!;
-
-compassBtn.addEventListener('click', () => {
-  map.easeTo({ bearing: 0, pitch: 0, duration: 300 });
-});
-
-// Only present when it has something to undo. A permanent compass on a map that is always
-// north-up is a control that never does anything, taking up the scarcest space there is.
-function renderCompass(): void {
-  const bearing = map.getBearing();
-  compassBtn.hidden = Math.abs(bearing) < 1 && map.getPitch() < 1;
-  compassNeedle.style.transform = `rotate(${-bearing}deg)`;
-}
-
-map.on('rotate', renderCompass);
-map.on('pitch', renderCompass);
-renderCompass();
+setUpCompass(map, document.querySelector<HTMLButtonElement>('#compass-btn')!);
 
 // Debug handle. Lets the e2e suite assert on real style state (which layers and sources
 // actually exist) rather than inferring it from screenshots, and is genuinely useful from
 // a devtools console. Read-only by convention — nothing in the app reads it back.
 (window as unknown as { __ratmapMap: maplibregl.Map }).__ratmapMap = map;
 
-/**
- * A tile request that failed because the network is unreachable, as opposed to a genuine
- * map/style fault.
- *
- * Deliberately keyed off the error rather than `navigator.onLine`: that flag reports the
- * OS link state, not whether requests actually succeed, so it stays `true` behind a
- * captive portal, a dead uplink, or a dropped connection mid-hike — precisely this app's
- * situation. Verified during Phase 3 testing, where a fully offline map still reported
- * `navigator.onLine === true` and produced the wrong banner.
- */
-export function isNetworkFailure(error: Error | undefined): boolean {
-  // Matched on message, not on `name === 'TypeError'`: a real style or data bug throws
-  // TypeErrors too, and misreporting those as "no connection" would hide actual faults.
-  // These three messages are how Chrome, Firefox and Safari respectively report a failed
-  // fetch.
-  return /failed to fetch|networkerror|load failed/i.test(error?.message ?? '');
-}
-
-map.on('error', (e) => {
-  console.error('MapLibre error', e.error);
-
-  // MapLibre raises one error per failed tile, so an offline map produces dozens within a
-  // second. As a condition rather than a message, re-reporting is free: the twentieth
-  // failed tile replaces the first instead of stacking a twentieth banner.
-  //
-  // Losing signal is an expected state for this app, not a fault: say it once, plainly,
-  // and take it back down when tiles start arriving again.
-  if (isNetworkFailure(e.error)) {
-    status.setCondition('offline', {
-      message: 'No connection. Downloaded areas still work; everywhere else is blank.',
-      kind: 'warn',
-    });
-    return;
-  }
-
-  status.setCondition('map-error', {
-    message: `Something went wrong drawing the map: ${e.error?.message ?? 'unknown error'}`,
-    kind: 'error',
-  });
-});
-
-/**
- * The sources whose tiles actually come over the network.
- *
- * An allow-list rather than "anything that is not a geojson source": a downloaded region's
- * archives are ordinary vector and raster-dem sources read out of OPFS, and their tiles
- * load perfectly well with the radio off — which is precisely the situation the banner
- * exists to describe. Clearing it on those would take the warning away from the one user
- * who has most reason to see it.
- */
-const REMOTE_SOURCE_IDS = new Set(['basemap', 'terrain', PEAKS_SOURCE_ID]);
-
-// Tiles arriving again is the only reliable signal that the connection is back:
-// `navigator.onLine` reports the OS link state and stays true behind a dead uplink, which
-// is exactly this app's situation (see isNetworkFailure above).
-map.on('sourcedata', (e) => {
-  // A tile that actually *arrived*, rather than a source that has merely stopped asking.
-  // This used to test `isSourceLoaded`, which flips true as soon as a source has no
-  // outstanding requests — including when every one of them failed — and which the app's
-  // own in-memory geojson sources (route geometry, the off-route line, the coverage
-  // outlines) report unconditionally on every pan. Measured offline: the "No connection"
-  // line went up and was retracted 2 ms later by the basemap reporting itself "loaded"
-  // with nothing loaded at all, so in practice the banner was never visible.
-  if (e.tile?.state !== 'loaded') return;
-  if (!REMOTE_SOURCE_IDS.has(e.sourceId)) return;
-  status.setCondition('offline', null);
-});
-
-/**
- * Whether the style is installed, i.e. whether it will accept sources and layers.
- *
- * Deliberately not `map.isStyleLoaded()`: that is also false while *tiles* are still
- * arriving, which is the normal state for a second or so after every pan, zoom and
- * download. Anything that gated on it and then deferred to `map.once('load', …)` was
- * waiting for an event that had already fired — see drawFootprints, where that combination
- * meant the coverage outlines were never drawn at all on a cold start. What `addSource`
- * actually requires is a ready style, which is precisely when this runs.
- */
-let styleReady = false;
+watchMapHealth(map, status);
 
 /**
  * Everything the app puts on top of the base style.
@@ -864,7 +226,7 @@ let styleReady = false;
  * safe even if a style event arrives twice.
  */
 function installAppLayers(): void {
-  styleReady = true;
+  coverage.setStyleReady(true);
   addPeaksLayer(map, registry, theme.get());
   // Added here rather than lazily on first use: adding a source before the style is
   // ready throws, and the planner can be opened at any moment after this point.
@@ -874,7 +236,7 @@ function installAppLayers(): void {
   // Downloaded regions are restored without any user action, so a cold offline launch
   // renders from OPFS immediately (Phase 3 acceptance). This also redraws the coverage
   // footprints.
-  void restoreRegions();
+  void coverage.restore();
   // A route being planned or followed has to survive a theme change — losing someone's
   // half-built route because they turned the map dark would be its own bug.
   planner.redrawGeometry();
@@ -884,148 +246,20 @@ function installAppLayers(): void {
 // arrive — the world catalog basemap and terrain, over the network — which can take
 // long enough on a slow connection that a downloaded region sits unrestored and the
 // detail-ceiling notice keeps citing the catalog's zoom 5 over ground that is already
-// on disk. `installAppLayers` only needs a style that will accept sources (`styleReady`
-// above), which `styledata` already gives it — the same event the theme-swap path below
-// uses for the same reason.
+// on disk. `installAppLayers` only needs a style that will accept sources (see
+// RegionCoverage.setStyleReady), which `styledata` already gives it — the same event the
+// theme-swap path above uses for the same reason.
 map.once('styledata', () => installAppLayers());
 
-/**
- * Regions whose archives are actually present in OPFS.
- *
- * The route planner reads its network and its elevation data straight out of these
- * archives (Phase 4), so it needs to know which ones are live — not which ones the
- * catalogue lists.
- */
-let downloadedRegions: Region[] = [];
-
-/**
- * Everything the catalogue offers, downloaded or not.
- *
- * Kept alongside {@link downloadedRegions} so the map can show where detail *could* come
- * from, not only where it already has some.
- */
-let catalogue: Region[] = [];
-
-async function restoreRegions(): Promise<void> {
-  try {
-    const manifest = await fetchManifest();
-    const restored = await restoreDownloadedRegions(map, registry, manifest.regions, theme.get());
-    downloadedRegions = restored;
-    catalogue = manifest.regions;
-    applyAvailableDetail(restored);
-    drawFootprints();
-  } catch {
-    // Offline with no cached catalogue is normal and not an error worth surfacing:
-    // any already-downloaded region still needs restoring from OPFS.
-    await restoreFromOpfsWithoutManifest();
-  }
-}
-
-/**
- * Set the detail ceiling from whatever regions are actually present.
- *
- * Assigned unconditionally rather than only raised: deleting a region has to lower it
- * again, or the app would keep claiming detail it no longer has.
- */
-function applyAvailableDetail(regions: Region[]): void {
-  maxDataZoom = bestAvailableZoom(regions, BASEMAP_MAX_ZOOM);
-  renderDetailLimit();
-}
-
-/**
- * Fallback restore for a cold *offline* start: the manifest lives on the network, but the
- * archives are already local. Without this, the very scenario Phase 3 exists for — no
- * signal, relaunch, expect your downloaded region — would show the blurry global map.
- */
-async function restoreFromOpfsWithoutManifest(): Promise<void> {
-  const cached = loadCachedManifest();
-  if (!cached) return;
-  const restored = await restoreDownloadedRegions(map, registry, cached.regions, theme.get());
-  downloadedRegions = restored;
-  catalogue = cached.regions;
-  applyAvailableDetail(restored);
-  drawFootprints();
-}
-
-/** Current coverage, downloaded state and all. */
-function footprints(): Footprint[] {
-  const have = new Set(downloadedRegions.map((region) => region.id));
-  return catalogue.map((region) => ({ region, downloaded: have.has(region.id) }));
-}
-
-/**
- * The one region the detail notice is currently offering, if any.
- *
- * Drawn alongside the downloaded ones so "get Lochaber" has a visible extent — otherwise
- * the notice names a place without showing how much of the screen it would cover.
- */
-let offeredRegionId: string | null = null;
-
-function drawFootprints(): void {
-  // The style has to exist first — this runs from a restore that can finish before the
-  // map has loaded, and addSource throws on a style that is not ready.
-  if (!styleReady) {
-    // `styledata` rather than `load`: it fires on the way to a ready style *and* on every
-    // theme swap, so a retry registered after load has already gone by still gets its
-    // chance. Re-entering here simply re-arms it.
-    map.once('styledata', drawFootprints);
-    return;
-  }
-  renderFootprints(map, visibleFootprints(footprints(), offeredRegionId));
-  applyAllStoredVisibility(map);
-}
-
-// --- Detail-limit notice (§8.2 catalog-only makes this reachable) --------------------
-
-const detailNotice = document.querySelector<HTMLButtonElement>('#detail-notice')!;
-
-// Raised once a downloaded region is loaded: the notice must reflect the best data
-// actually available, not the global catalogue's ceiling, or it would keep claiming
-// "limited detail" over a region the user has just downloaded.
-//
-// Derived from the artifacts' real PMTiles zoom ranges rather than a constant — a
-// hardcoded guess drifts from whatever the pipeline last built and made the notice fire
-// over a fully-downloaded region.
-let maxDataZoom = BASEMAP_MAX_ZOOM;
-
-// `move`, not `zoom`: the notice names whichever region covers the map's *centre*
-// (`covering` below), so it has to be re-evaluated on a pure pan too, not only when the
-// zoom level changes — `zoom` alone left the suggested region stuck on whatever was
-// centred when the last zoom happened, silently wrong after any drag. `move` fires for
-// zoom changes as well (they are a movement), so this also replaces the old listener
-// rather than adding a second one beside it.
-map.on('move', renderDetailLimit);
-map.on('load', renderDetailLimit);
-
-detailNotice.addEventListener('click', () => openRegionsView());
-
-function renderDetailLimit(): void {
-  const state = describeDetailLimit(map.getZoom(), maxDataZoom);
-  detailNotice.hidden = !state.overzoomed;
-  if (!state.overzoomed) return;
-
-  // Naming the region turns a complaint into an instruction. The notice reports that the
-  // map is stretched here; the thing that fixes it is a specific download, and until now
-  // nothing connected the two — you had to open a list of four names and work out for
-  // yourself which one you were looking at.
-  const centre = map.getCenter();
-  const covering = regionAt(footprints(), [centre.lng, centre.lat], { downloaded: false });
-
-  detailNotice.textContent = covering
-    ? `Limited detail here — get ${covering.name}`
-    : (state.label ?? '');
-  detailNotice.title = state.detail ?? '';
-
-  // Only when it changes: this runs on every zoom frame, and re-feeding the source on
-  // each one would be work for an identical result.
-  if ((covering?.id ?? null) !== offeredRegionId) {
-    offeredRegionId = covering?.id ?? null;
-    drawFootprints();
-  }
-}
+const coverage = new RegionCoverage({
+  map,
+  registry,
+  theme: () => theme.get(),
+  notice: document.querySelector<HTMLButtonElement>('#detail-notice')!,
+  onOpenRegions: () => openRegionsView(),
+});
 
 // --- Route planning (Phase 4) --------------------------------------------------------
-
 
 /**
  * True while a route is being planned or followed — i.e. while an unannounced reload
@@ -1045,7 +279,7 @@ const planner = new RoutePlanner({
   map,
   registry,
   theme: () => theme.get(),
-  downloadedRegions: () => downloadedRegions,
+  downloadedRegions: () => coverage.downloadedRegions(),
   // A tap that lands on a summit makes it a named waypoint, so a route reads
   // "Achintee → Ben Nevis" rather than as a list of coordinates.
   describePoint: (event) => {
@@ -1063,15 +297,15 @@ const planner = new RoutePlanner({
   },
   onChange: (summary: RouteSummary) => {
     routeInProgress = summary.active || summary.following;
-    planMode = summary.following ? 'Following' : 'Planning';
+    views.setPlanMode(summary.following ? 'Following' : 'Planning');
 
     if (routeInProgress) {
-      // openView only moves the sheet when the view *changes*, so the re-render fired by
+      // views.open only moves the sheet when the view *changes*, so the re-render fired by
       // every waypoint drag redraws the panel without hauling the sheet back over a map
       // the user has just dragged it off.
-      openView('plan', (body) => renderRoutePanel(summary, routesUi(body)));
-    } else if (view === 'plan') {
-      closeView();
+      views.open('plan', (body) => renderRoutePanel(summary, routesUi(body)));
+    } else if (views.view() === 'plan') {
+      views.close();
     }
   },
   onStatus: (message, kind) => status.toast(message, { kind }),
@@ -1087,7 +321,7 @@ function routesUi(container: HTMLElement = sheet.body): RoutesUiDeps {
   return {
     planner,
     container,
-    onPlanStarted: () => openView('plan', (body) => renderRoutePanel(planner.summary(), routesUi(body))),
+    onPlanStarted: () => views.open('plan', (body) => renderRoutePanel(planner.summary(), routesUi(body))),
     onPlanFinished: () => planner.deactivate(),
     onStatus: (message, kind) => status.toast(message, { kind }),
     onUndoableStatus: (message, action) => status.toast(message, { action }),
@@ -1099,10 +333,12 @@ function routesUi(container: HTMLElement = sheet.body): RoutesUiDeps {
 // rendered DOM. Read-only; nothing in the app reads it.
 (window as unknown as { __ratmapPlanner: RoutePlanner }).__ratmapPlanner = planner;
 
-// --- Peak detail sheet -------------------------------------------------------------
+// --- Tapping the map ----------------------------------------------------------------
+
+const peakTooltip = new PeakTooltip(document.querySelector<HTMLDivElement>('#peak-tooltip')!);
 
 map.on('click', (e) => {
-  hidePeakTooltip();
+  peakTooltip.hide();
 
   // While planning, a tap places a waypoint instead of opening a summit — including a tap
   // on a summit, which becomes a named waypoint rather than a detail sheet.
@@ -1113,16 +349,25 @@ map.on('click', (e) => {
     // The summit's own position, falling back to the tap only if the feature somehow
     // carried no geometry — otherwise the sheet reports, and "Save place" stores, the
     // spot the finger landed on rather than the summit.
-    showPeakSheet(hit.properties, hit.lngLat ? new maplibregl.LngLat(...hit.lngLat) : e.lngLat);
+    const lngLat = hit.lngLat ? new maplibregl.LngLat(...hit.lngLat) : e.lngLat;
+    views.open('peak', (body) => renderPeakSheet(body, hit.properties, lngLat, { status }));
     return;
   }
 
   // Summits win a shared tap: they are the smaller target, and a graded path is usually
   // running right past one.
   const graded = sacPathAt(map, e.point);
-  if (graded?.grade) showPathSheet(graded);
-  else hideSheet();
+  if (graded?.grade) {
+    const withGrade = { ...graded, grade: graded.grade };
+    views.open('path', (body) => renderPathSheet(body, withGrade));
+  } else {
+    views.closeDetailCard();
+  }
 });
+
+function showCoordsSheet(lngLat: maplibregl.LngLat): void {
+  views.open('coords', (body) => renderCoordsSheet(body, lngLat, { status }));
+}
 
 // Coordinates for a bare point are a secondary action, not the primary tap — a plain click
 // on empty map already means "dismiss the sheet" (see above), so reusing it here would make
@@ -1143,37 +388,6 @@ onPressHold(map.getCanvasContainer(), {
   },
 });
 
-const peakTooltip = document.querySelector<HTMLDivElement>('#peak-tooltip')!;
-
-/**
- * Name and elevation before the click, on a mouse only.
- *
- * Touch has no hover to give — the tap sheet is its only path, and stays it. A mouse can
- * hover, and nothing here used to: free information density a touch user loses nothing
- * by not having (plans/desktop-ux-review.md C2). Gated on the same "is this a mouse"
- * check `NavigationControl` already uses, rather than a second definition of it.
- */
-function showPeakTooltip(peak: PeakProperties, point: { x: number; y: number }): void {
-  const name = peak.name?.trim() || 'Unnamed summit';
-  const ele = formatElevation(peak.ele);
-  // Built from nodes, not innerHTML: the name is OSM data, which anyone can edit — the
-  // same reason showPeakSheet writes it with textContent.
-  peakTooltip.replaceChildren(name);
-  if (ele) {
-    const figure = document.createElement('span');
-    figure.className = 'peak-tooltip-ele';
-    fillReadout(figure, ele);
-    peakTooltip.append(' ', figure);
-  }
-  peakTooltip.style.left = `${point.x}px`;
-  peakTooltip.style.top = `${point.y}px`;
-  peakTooltip.hidden = false;
-}
-
-function hidePeakTooltip(): void {
-  peakTooltip.hidden = true;
-}
-
 map.on('mousemove', (e) => {
   // Planning mode owns the cursor (crosshair); don't fight it over summits.
   if (planner.isActive()) return;
@@ -1181,134 +395,29 @@ map.on('mousemove', (e) => {
   const hit = peakAt(map, e.point);
   map.getCanvas().style.cursor = hit || sacPathAt(map, e.point) ? 'pointer' : '';
 
-  if (isCoarsePointer()) return; // no hover on touch — see showPeakTooltip
-  if (hit) showPeakTooltip(hit.properties, e.point);
-  else hidePeakTooltip();
+  if (isCoarsePointer()) return; // no hover on touch — see PeakTooltip
+  if (hit) peakTooltip.show(hit.properties, e.point);
+  else peakTooltip.hide();
 });
 
-map.on('mouseout', hidePeakTooltip);
-
-function showPeakSheet(peak: PeakProperties, lngLat: maplibregl.LngLat): void {
-  const name = peak.name?.trim() || 'Unnamed summit';
-  const ele = formatElevation(peak.ele);
-  const wikidata = peak.wikidata;
-  const munro = isMunro(peak);
-
-  openView('peak', (body) => {
-    body.innerHTML = `
-      <h2></h2>
-      ${munro ? `<p class="sheet-munro-badge">▲ Munro</p>` : ''}
-      <p class="sheet-ele"></p>
-      <p class="sheet-coords"></p>
-      <div class="sheet-actions">
-        <button class="sheet-save" type="button">Save place</button>
-        ${wikidata ? `<a class="sheet-link" target="_blank" rel="noreferrer">Wikidata</a>` : ''}
-      </div>
-    `;
-    // textContent, not interpolation: names come from OSM, which is user-editable data.
-    body.querySelector('h2')!.textContent = name;
-    fillReadout(body.querySelector<HTMLElement>('.sheet-ele')!, ele ?? 'Elevation unknown');
-    body.querySelector('.sheet-coords')!.textContent =
-      `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
-    if (wikidata) {
-      const link = body.querySelector<HTMLAnchorElement>('.sheet-link')!;
-      link.href = `https://www.wikidata.org/wiki/${encodeURIComponent(wikidata)}`;
-    }
-
-    body.querySelector('.sheet-save')!.addEventListener('click', () => {
-      void savePlace({
-        name,
-        lng: lngLat.lng,
-        lat: lngLat.lat,
-        ...(typeof peak.ele === 'number' ? { ele: peak.ele } : {}),
-      })
-        .then(() => status.toast(`Saved “${name}”`))
-        .catch((err: Error) =>
-          status.toast(`Could not save “${name}”: ${err.message}`, { kind: 'error' }),
-        );
-    });
-  });
-}
-
-/**
- * What a tapped path's SAC grade means, in the grade's own words.
- *
- * The scale is the SAC's, so the sheet quotes what the grade demands rather than
- * paraphrasing it into "easy/hard" — the whole value of a graded scale is that T3 means
- * the same thing on every mountain.
- */
-function showPathSheet(hit: SacHit): void {
-  const grade = hit.grade;
-  if (!grade) return;
-  const name = hit.properties.name?.trim();
-
-  openView('path', (body) => {
-    body.innerHTML = `
-      <h2></h2>
-      <p class="sheet-sac-grade"></p>
-      <p class="sheet-sac-note"></p>
-      <p class="sheet-note"></p>
-    `;
-    // textContent throughout: path names come from OSM, which is user-editable data.
-    body.querySelector('h2')!.textContent = name || 'Path';
-
-    const gradeLine = body.querySelector<HTMLElement>('.sheet-sac-grade')!;
-    gradeLine.textContent = `${grade.short} · ${grade.label}`;
-    gradeLine.style.color = sacCssColor(grade.grade);
-
-    body.querySelector('.sheet-sac-note')!.textContent = grade.note;
-    body.querySelector('.sheet-note')!.textContent =
-      'SAC hiking scale, as tagged in OpenStreetMap. It describes the path in good summer conditions — snow, ice or bad weather put it up a grade or more.';
-  });
-}
-
-/**
- * Right-click or long-press anywhere on the map to read off its coordinates — just the raw
- * lat/lng, with copy and save as the only actions since there's no OSM feature behind a bare
- * point to link out to.
- */
-function showCoordsSheet(lngLat: maplibregl.LngLat): void {
-  const coordsText = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
-
-  openView('coords', (body) => {
-    body.innerHTML = `
-      <h2></h2>
-      <div class="sheet-actions">
-        <button class="sheet-copy" type="button">Copy</button>
-        <button class="sheet-save" type="button">Save place</button>
-      </div>
-    `;
-    body.querySelector('h2')!.textContent = coordsText;
-
-    body.querySelector('.sheet-copy')!.addEventListener('click', () => {
-      navigator.clipboard
-        .writeText(coordsText)
-        .then(() => status.toast('Copied coordinates'))
-        .catch((err: Error) => status.toast(`Could not copy: ${err.message}`, { kind: 'error' }));
-    });
-
-    body.querySelector('.sheet-save')!.addEventListener('click', () => {
-      void savePlace({ name: coordsText, lng: lngLat.lng, lat: lngLat.lat })
-        .then(() => status.toast(`Saved “${coordsText}”`))
-        .catch((err: Error) =>
-          status.toast(`Could not save “${coordsText}”: ${err.message}`, { kind: 'error' }),
-        );
-    });
-  });
-}
-
-/**
- * A summit or path sheet is a detail card, not a destination: it should not swallow half
- * the map you tapped it on. The coordinates sheet gets the same courtesy.
- */
-function hideSheet(): void {
-  if (view === 'peak' || view === 'path' || view === 'coords') closeView();
-}
+map.on('mouseout', () => peakTooltip.hide());
 
 // --- Sheet destinations --------------------------------------------------------------
 
+function openSettingsView(): void {
+  views.open('settings', (body) => renderSettingsView(body, { theme, sheetElement }));
+}
+
+function openLegendView(): void {
+  views.open('legend', (body) => renderLegend(body, mapInk(theme.get())));
+}
+
+function openLayersView(): void {
+  views.open('layers', (body) => renderLayersView(body, { map, ink: mapInk(theme.get()) }));
+}
+
 function openRegionsView(): void {
-  openView('regions', (body) => {
+  views.open('regions', (body) => {
     void renderRegionsSheet({
       map,
       registry,
@@ -1318,7 +427,7 @@ function openRegionsView(): void {
       onRegionsChanged: () => {
         // A download (or a delete) changes what detail is available, so re-derive the
         // ceiling from what is actually on disk rather than assuming.
-        void restoreRegions().then(() => {
+        void coverage.restore().then(() => {
           // The router caches decoded tiles per archive, including "there is nothing
           // here". A new region would otherwise stay unroutable until a reload.
           planner.invalidateRegions();
@@ -1329,459 +438,42 @@ function openRegionsView(): void {
 }
 
 async function openRoutesView(): Promise<void> {
-  openView('routes', () => {});
+  views.open('routes', () => {});
   await renderRoutesSheet(routesUi());
 }
 
 async function openPlacesView(): Promise<void> {
-  openView('places', () => {});
-  await showPlacesSheet();
-}
-
-async function showPlacesSheet(): Promise<void> {
-  let places: SavedPlace[];
-  try {
-    places = await listPlaces();
-  } catch (err) {
-    status.toast(`Could not open saved places: ${(err as Error).message}`, { kind: 'error' });
-    return;
-  }
-
-  sheet.body.innerHTML = `
-    <ul class="places-list"></ul>
-  `;
-
-  const list = sheet.body.querySelector<HTMLUListElement>('.places-list')!;
-  if (places.length === 0) {
-    const empty = document.createElement('li');
-    empty.className = 'places-empty';
-    empty.textContent = 'No saved places yet — tap a summit and choose “Save place”.';
-    list.append(empty);
-  }
-
-  for (const place of places) {
-    const item = document.createElement('li');
-
-    const goto = document.createElement('button');
-    goto.type = 'button';
-    goto.className = 'place-goto';
-    const ele = formatElevation(place.ele);
-    goto.textContent = ele ? `${place.name} · ${ele}` : place.name;
-    goto.addEventListener('click', () => {
-      map.easeTo({ center: [place.lng, place.lat], zoom: Math.max(map.getZoom(), 10) });
-      // Out of the way, but still one drag from the list — going to a place is usually
-      // the first of several.
-      sheet.collapse();
-    });
-
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'place-delete';
-    remove.setAttribute('aria-label', `Delete ${place.name}`);
-    remove.textContent = '×';
-    remove.addEventListener('click', () => {
-      // Deleted immediately, with a way back — rather than a confirmation dialog in front
-      // of every delete. savePlace takes an explicit id and savedAt, so undo restores the
-      // same record rather than a copy of it.
-      void deletePlace(place.id).then(() => {
-        void showPlacesSheet();
-        status.toast(`Deleted “${place.name}”`, {
-          action: {
-            label: 'Undo',
-            onSelect: () => void savePlace(place).then(() => void showPlacesSheet()),
-          },
-        });
-      });
-    });
-
-    item.append(goto, remove);
-    list.append(item);
-  }
-
+  views.open('places', () => {});
+  await renderPlacesSheet(sheet.body, { map, status, onGoTo: () => sheet.collapse() });
 }
 
 // --- Search (C9: local FTS5, no geocoding API) --------------------------------------
 
-const searchInput = document.querySelector<HTMLInputElement>('#search-input')!;
-const searchResults = document.querySelector<HTMLUListElement>('#search-results')!;
-const search = new PlacesSearch();
-
-let searchSeq = 0;
-
-/**
- * Arrow-key navigation through search results (plans/desktop-ux-review.md A2).
- *
- * Focus stays in the input rather than moving into the list — this is search-as-you-type,
- * so a keystroke has to keep filtering results whether or not one is highlighted. -1 means
- * nothing is highlighted, which is also the state every fresh render starts from: indices
- * from the previous result set don't mean anything once the list has been rebuilt.
- */
-let highlightedResult = -1;
-
-function resultButtons(): HTMLButtonElement[] {
-  return Array.from(searchResults.querySelectorAll<HTMLButtonElement>('li > button'));
-}
-
-function highlightResult(index: number): void {
-  const buttons = resultButtons();
-  highlightedResult = buttons.length === 0 ? -1 : Math.max(0, Math.min(index, buttons.length - 1));
-
-  buttons.forEach((button, i) => {
-    const active = i === highlightedResult;
-    button.classList.toggle('result-active', active);
-    button.setAttribute('aria-selected', String(active));
-    if (active) button.scrollIntoView({ block: 'nearest' });
-  });
-
-  if (highlightedResult === -1) searchInput.removeAttribute('aria-activedescendant');
-  else searchInput.setAttribute('aria-activedescendant', buttons[highlightedResult].id);
-}
-
-searchInput.addEventListener('input', () => {
-  void runSearch(searchInput.value);
+const searchBox = new SearchBox({
+  container: document.querySelector<HTMLElement>('#search')!,
+  input: document.querySelector<HTMLInputElement>('#search-input')!,
+  results: document.querySelector<HTMLUListElement>('#search-results')!,
+  map,
+  status,
+  onCoordinates: (coords) => showCoordsSheet(new maplibregl.LngLat(coords.lng, coords.lat)),
 });
-
-searchInput.addEventListener('keydown', (event) => {
-  if (searchResults.hidden) return;
-  const buttons = resultButtons();
-  if (buttons.length === 0) return;
-
-  switch (event.key) {
-    case 'ArrowDown':
-      event.preventDefault();
-      highlightResult(highlightedResult + 1 >= buttons.length ? 0 : highlightedResult + 1);
-      return;
-    case 'ArrowUp':
-      event.preventDefault();
-      highlightResult(highlightedResult <= 0 ? buttons.length - 1 : highlightedResult - 1);
-      return;
-    case 'Enter':
-      // Only when a result is actually highlighted — otherwise Enter falls through to
-      // whatever a plain `type="search"` input already does with it (nothing here), not a
-      // click on a result the user never selected.
-      if (highlightedResult === -1) return;
-      event.preventDefault();
-      buttons[highlightedResult].click();
-      return;
-    default:
-      return;
-  }
-});
-
-// Load the index on first focus rather than at startup: it pulls the SQLite runtime plus
-// the index, and the map should render first.
-searchInput.addEventListener('focus', () => {
-  void search.load().catch((err: Error) => {
-    status.toast(`Search is unavailable: ${err.message}`, { kind: 'warn' });
-  });
-});
-
-document.addEventListener('click', (event) => {
-  if (!(event.target instanceof Node)) return;
-  if (!document.querySelector('#search')!.contains(event.target)) hideSearchResults();
-});
-
-async function runSearch(query: string): Promise<void> {
-  const seq = ++searchSeq;
-
-  if (query.trim().length < 2) {
-    hideSearchResults();
-    return;
-  }
-
-  // A pasted coordinate pair is never also a place name, and needs neither the FTS index
-  // nor it being loaded — check for one first so it works even before search.load() has
-  // settled, or if it never does.
-  const coords = parseLatLng(query);
-  if (coords) {
-    renderCoordsResult(coords);
-    return;
-  }
-
-  try {
-    await search.load();
-  } catch (err) {
-    status.toast(`Search is unavailable: ${(err as Error).message}`, { kind: 'warn' });
-    return;
-  }
-
-  // A slower earlier keystroke must not overwrite a newer result set.
-  if (seq !== searchSeq) return;
-
-  const centre = map.getCenter();
-  const results = search.search(query, { lat: centre.lat, lon: centre.lng });
-  renderSearchResults(results);
-}
-
-/**
- * Clears the results list for a fresh render.
- *
- * Also drops the keyboard highlight: indices from the previous result set don't refer to
- * anything once the list is rebuilt, and leaving `aria-activedescendant` pointing at a
- * removed element would announce nothing to a screen reader.
- */
-function beginResultsRender(): void {
-  searchResults.innerHTML = '';
-  highlightedResult = -1;
-  searchInput.removeAttribute('aria-activedescendant');
-}
-
-/** A typed-in coordinate pair, offered as the one search result it is. */
-function renderCoordsResult(coords: { lat: number; lng: number }): void {
-  beginResultsRender();
-
-  const item = document.createElement('li');
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.id = 'search-result-0';
-  button.setAttribute('role', 'option');
-
-  const name = document.createElement('span');
-  name.className = 'result-name';
-  name.textContent = `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
-
-  const meta = document.createElement('span');
-  meta.className = 'result-meta';
-  meta.textContent = 'Coordinates';
-
-  button.append(name, meta);
-  button.addEventListener('click', () => {
-    map.easeTo({ center: [coords.lng, coords.lat], zoom: Math.max(map.getZoom(), 11) });
-    hideSearchResults();
-    searchInput.blur();
-    showCoordsSheet(new maplibregl.LngLat(coords.lng, coords.lat));
-  });
-
-  item.append(button);
-  searchResults.append(item);
-  searchResults.hidden = false;
-  searchInput.setAttribute('aria-expanded', 'true');
-}
-
-function renderSearchResults(results: SearchResult[]): void {
-  beginResultsRender();
-
-  if (results.length === 0) {
-    const empty = document.createElement('li');
-    empty.className = 'search-empty';
-    empty.textContent = 'No matches';
-    searchResults.append(empty);
-    searchResults.hidden = false;
-    searchInput.setAttribute('aria-expanded', 'true');
-    return;
-  }
-
-  results.forEach((result, index) => {
-    const item = document.createElement('li');
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.id = `search-result-${index}`;
-    button.setAttribute('role', 'option');
-
-    // textContent throughout — these names come from OSM, which is user-editable.
-    const name = document.createElement('span');
-    name.className = 'result-name';
-    name.textContent = result.name;
-
-    const meta = document.createElement('span');
-    meta.className = 'result-meta';
-    // Distance and direction, not just kind and height. The query already ranks by
-    // distance from the viewport centre, but showing only "peak · 1174 m" hid that
-    // ranking entirely — and Scotland has several Ben Mores, rendered as identical rows.
-    const centre = map.getCenter();
-    const from: [number, number] = [centre.lng, centre.lat];
-    const to: [number, number] = [result.lon, result.lat];
-    const parts = [result.kind];
-    const ele = formatElevation(result.ele);
-    if (ele) parts.push(ele);
-    parts.push(`${formatDistance(distanceMetres(from, to))} ${compassBearing(from, to)}`);
-    meta.textContent = parts.join(' · ');
-
-    button.append(name, meta);
-    button.addEventListener('click', () => {
-      map.easeTo({ center: [result.lon, result.lat], zoom: Math.max(map.getZoom(), 11) });
-      hideSearchResults();
-      searchInput.blur();
-    });
-
-    item.append(button);
-    searchResults.append(item);
-  });
-
-  searchResults.hidden = false;
-  searchInput.setAttribute('aria-expanded', 'true');
-}
-
-function hideSearchResults(): void {
-  searchResults.hidden = true;
-  searchResults.innerHTML = '';
-  highlightedResult = -1;
-  searchInput.setAttribute('aria-expanded', 'false');
-  searchInput.removeAttribute('aria-activedescendant');
-}
 
 // --- Location ----------------------------------------------------------------------
 
-const locateBtn = document.querySelector<HTMLButtonElement>('#locate-btn')!;
-const location = new LocationController({
+setUpLocation({
   map,
-  onStateChange: renderLocationState,
-  onDotClick: (position) =>
-    showCoordsSheet(new maplibregl.LngLat(position.coords.longitude, position.coords.latitude)),
+  button: document.querySelector<HTMLButtonElement>('#locate-btn')!,
+  status,
+  onPosition: (lngLat) => planner.updatePosition(lngLat),
+  onDotClick: ([lng, lat]) => showCoordsSheet(new maplibregl.LngLat(lng, lat)),
 });
-
-/**
- * The compass.
- *
- * Started from the button tap rather than at load, because iOS gates device orientation
- * behind a permission prompt that must be raised from a user gesture — asked for on page
- * load it is refused outright, and asked for before the user has shown any interest in
- * their own position it is a prompt with no context.
- */
-const heading = new HeadingWatcher((degrees) => location.setHeading(degrees));
-
-locateBtn.addEventListener('click', () => {
-  if (location.isFollowing()) {
-    location.stop();
-    heading.stop();
-  } else {
-    location.start();
-    // Not awaited and not reported: a missing compass costs the cone and nothing else,
-    // and the dot is the thing that was actually asked for.
-    void heading.start();
-  }
-});
-
-// Any deliberate pan drops follow mode, so the map doesn't fight the user.
-map.on('dragstart', () => location.cancelFollow());
-
-function renderLocationState(state: LocationState): void {
-  locateBtn.classList.toggle('active', location.isFollowing());
-
-  // Route following runs off the same watch as the location dot rather than starting a
-  // second one: two concurrent watchPosition calls double the GPS wake-ups for no extra
-  // information, and battery is the binding constraint on a long day out.
-  if (state.status === 'tracking') {
-    planner.updatePosition([state.position.coords.longitude, state.position.coords.latitude]);
-  }
-
-  // A location failure is a state, not an event: it stays true until the permission or
-  // the fix changes, and watchPosition re-reports it on every retry. As a toast that
-  // meant a new banner every few seconds.
-  // The rail button is an icon, and its state is carried by a class rather than by
-  // rewriting its label — a control that changes width as it changes state shifts
-  // everything next to it, and this one sits under a thumb.
-  locateBtn.classList.toggle('locating', state.status === 'locating');
-  locateBtn.setAttribute(
-    'aria-label',
-    location.isFollowing() ? 'Stop following my location' : 'Show my location',
-  );
-
-  switch (state.status) {
-    case 'locating':
-      status.setCondition('location', null);
-      break;
-    case 'tracking':
-      status.setCondition('location', null);
-      break;
-    case 'denied':
-      status.setCondition('location', {
-        message: 'ratmap cannot see your location. Allow it in your browser settings.',
-        kind: 'warn',
-      });
-      break;
-    case 'unavailable':
-      status.setCondition('location', {
-        message: `No position fix yet: ${state.message}`,
-        kind: 'warn',
-      });
-      break;
-    default:
-      status.setCondition('location', null);
-  }
-}
 
 // --- Storage + install onboarding (C1, C2) ------------------------------------------
 
-const installWatcher = createInstallWatcher();
-installWatcher.onChange(() => void renderStorageStatus());
-void renderStorageStatus();
-
-async function renderStorageStatus(): Promise<void> {
-  const storage = await bootstrapStorage();
-
-  // Nothing to say when it works. This used to announce "Persistent storage granted" on
-  // every single launch, which is a banner over the map for a state the user never has to
-  // do anything about.
-  if (storage.supported && storage.persisted) {
-    status.setCondition('storage', null);
-    return;
-  }
-
-  if (!storage.supported) {
-    status.setCondition('storage', {
-      message: 'This browser can’t promise to keep downloaded maps, so downloads are off.',
-      kind: 'warn',
-    });
-    return;
-  }
-
-  // Not persisted. Whether that's fixable depends on how this browser handles install.
-  const capability = installWatcher.capability();
-
-  if (capability.kind === 'prompt') {
-    status.setCondition('storage', {
-      message: 'Install ratmap to download maps for offline use.',
-      kind: 'warn',
-      action: {
-        label: 'Install',
-        onSelect: () => {
-          void capability.prompt().then((outcome) => {
-            if (outcome === 'accepted') void renderStorageStatus();
-          });
-        },
-      },
-    });
-    return;
-  }
-
-  if (capability.kind === 'manual-ios') {
-    status.setCondition('storage', {
-      message: 'Add ratmap to your Home Screen to download maps.',
-      kind: 'warn',
-      // The three Share-sheet steps are too long for a line over the map, and they used to
-      // sit there permanently as an ordered list. Behind a button they are available when
-      // wanted and gone the rest of the time.
-      action: { label: 'How', onSelect: showInstallSheet },
-    });
-    return;
-  }
-
-  status.setCondition('storage', {
-    message: isStandalone()
-      ? 'Your browser hasn’t granted ratmap permanent storage yet, so downloads are off.'
-      : 'Downloads are off until ratmap is installed — a browser tab can’t keep maps safely.',
-    kind: 'warn',
-  });
-}
-
-function showInstallSheet(): void {
-  openView('install', (body) => {
-    body.innerHTML = `
-      <h2>Add ratmap to your Home Screen</h2>
-      <p class="sheet-lede"></p>
-      <ol class="install-steps"></ol>
-    `;
-    body.querySelector('.sheet-lede')!.textContent = INSTALL_RATIONALE;
-
-    const steps = body.querySelector<HTMLOListElement>('.install-steps')!;
-    for (const step of IOS_INSTALL_STEPS) {
-      const item = document.createElement('li');
-      item.textContent = step;
-      steps.append(item);
-    }
-  });
-}
+startStorageOnboarding({
+  status,
+  showInstallSteps: () => views.open('install', renderInstallSheet),
+});
 
 // --- App updates --------------------------------------------------------------------
 

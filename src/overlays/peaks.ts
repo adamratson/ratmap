@@ -4,12 +4,12 @@ import type {
   Map as MLMap,
   PointLike,
 } from 'maplibre-gl';
-import { OSM_ATTRIBUTION, PEAKS_MAX_ZOOM, PEAKS_PMTILES_URL } from './config';
-import { isCoarsePointer } from './pointer';
-import type { TileSourceRegistry } from './tile-source-registry';
-import { MAP_FONTS, mapInk } from './flavor';
-import { TOWN_LABEL_LAYER_ID } from './landuse';
-import type { Theme } from './theme';
+import { OSM_ATTRIBUTION, PEAKS_MAX_ZOOM, PEAKS_PMTILES_URL } from '../app/config';
+import { isCoarsePointer } from '../ui/pointer';
+import type { TileSourceRegistry } from '../map/tile-source-registry';
+import { MAP_FONTS, mapInk } from '../map/flavor';
+import { TOWN_LABEL_LAYER_ID } from '../map/landuse';
+import type { Theme } from '../ui/theme';
 
 // Summits overlay, backed by our own peaks-global.pmtiles — Protomaps v4 dropped `ele`
 // from its POI layer (C6), so upstream peaks are unusable for a mountain map.

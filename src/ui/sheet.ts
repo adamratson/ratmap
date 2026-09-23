@@ -16,7 +16,7 @@
 // window doesn't have (plans/desktop-ux-review.md). Above `prefersDockedSheet()`'s
 // breakpoint the same element docks as a left-hand panel instead: full height, fixed
 // width (style.css), always open, no drag. That's a rendering change only — `current`
-// still tracks peek/content/full so main.ts's "is a view open" checks keep working.
+// still tracks peek/content/full so SheetViews' "is a view open" checks keep working.
 
 import { prefersDockedSheet } from './pointer';
 
@@ -263,7 +263,7 @@ export class BottomSheet {
     // Docked mode has no detents to speak of (see the module comment and
     // plans/desktop-ux-review.md §3) — the panel is always fully open, full height,
     // ordinarily scrollable. `current` still tracks the logical peek/content/full value
-    // for callers that use it as an "is a view open" signal (main.ts), and the at-*
+    // for callers that use it as an "is a view open" signal (sheet-views.ts), and the at-*
     // classes below still follow it, so a docked "peek" still hides the empty body — only
     // the *transform* collapses to "always shown".
     const offset = prefersDockedSheet() ? 0 : this.offsets()[detent];

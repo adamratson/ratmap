@@ -2,8 +2,8 @@ import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
 import type { Feature, FeatureCollection, LineString } from 'geojson';
 import type { LngLat } from './geo';
 import type { LegSlot } from './route-model';
-import { mapInk } from '../flavor';
-import type { Theme } from '../theme';
+import { mapInk } from '../map/flavor';
+import type { Theme } from '../ui/theme';
 
 // Map rendering for the planned route. Geometry only — the planner owns the waypoint
 // markers, because those are interactive DOM elements rather than style layers.

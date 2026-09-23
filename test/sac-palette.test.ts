@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { SAC_GRADES } from '../src/sac';
+import { SAC_GRADES } from '../src/overlays/sac';
 
 // The grade ramp is written down twice and cannot be written down once: the map needs
 // literal hex (a MapLibre paint property cannot read a CSS variable) and the sheet needs a

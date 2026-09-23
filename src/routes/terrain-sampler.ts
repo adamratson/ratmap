@@ -47,7 +47,7 @@ export interface TerrainSamplerOptions {
  * Terrarium encoding: elevation in metres = (R * 256 + G + B / 256) - 32768.
  *
  * This is the encoding Mapterhorn publishes and the one the map's `raster-dem` sources
- * already declare (`encoding: 'terrarium'` in main.ts and region-layers.ts). Decoding it
+ * already declare (`encoding: 'terrarium'` in map/base-style.ts and region-layers.ts). Decoding it
  * differently here than the renderer does would produce a profile that disagrees with the
  * hillshade under it.
  */

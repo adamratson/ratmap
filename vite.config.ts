@@ -14,7 +14,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 const GH_PAGES_BASE = '/ratmap/';
 
 /**
- * Build identity, from the commit — see src/version.ts for why it is a sha and not a
+ * Build identity, from the commit — see src/app/version.ts for why it is a sha and not a
  * clock. `GITHUB_SHA` first because Actions checks out a detached HEAD; `git` locally.
  * Falls back to 'dev' rather than throwing: a missing version string must not be able to
  * fail a build.
@@ -50,12 +50,12 @@ export default defineConfig(({ command, isPreview }) => ({
   },
   plugins: [
     VitePWA({
-      // 'prompt' + `injectRegister: false` means: generate the worker, but let src/update.ts
+      // 'prompt' + `injectRegister: false` means: generate the worker, but let src/app/update.ts
       // own registration and the decision to swap. Not cosmetic — 'autoUpdate' with the
       // default injectRegister forces `workbox.skipWaiting = true` (vite-plugin-pwa
       // resolves this internally), which activates a new worker the moment it installs and
       // lets `cleanupOutdatedCaches()` delete the precache under a page still running the
-      // old bundle. See the header comment in src/update.ts.
+      // old bundle. See the header comment in src/app/update.ts.
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icons/apple-touch-icon.png'],
@@ -69,7 +69,7 @@ export default defineConfig(({ command, isPreview }) => ({
         display: 'standalone',
         // Graphite (--surface, night). Android builds its launch screen from this plus
         // the icon, so it matches the icon's own ground. Also in index.html's theme-color
-        // meta and src/theme.ts — keep the three in step.
+        // meta and src/ui/theme.ts — keep the three in step.
         background_color: '#0e1114',
         theme_color: '#0e1114',
         icons: [
@@ -84,7 +84,7 @@ export default defineConfig(({ command, isPreview }) => ({
       workbox: {
         // Stated rather than inherited, because the pair is load-bearing for updates:
         //
-        // skipWaiting:false — a new build installs and *waits*. src/update.ts posts
+        // skipWaiting:false — a new build installs and *waits*. src/app/update.ts posts
         // SKIP_WAITING when reloading is safe, which is the only thing standing between a
         // deploy and a reload in the middle of someone's region download (C12).
         //

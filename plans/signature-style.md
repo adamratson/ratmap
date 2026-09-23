@@ -1,7 +1,7 @@
 # Ratmap Signature Style — "Technical alpine"
 
 **Audience: the implementing agent.** A visual identity for ratmap, written 2026-09-19 after
-reading `src/style.css`, `src/theme.ts` and `src/main.ts`'s `buildStyle`, and after viewing
+reading `src/style.css`, `src/ui/theme.ts` and `src/main.ts`'s `buildStyle`, and after viewing
 the app at 375×812 and at desktop width. §1 explains the problem. §2 gives the principles
 that every later styling change is checked against. §3–§6 give the specification, §7 the
 sequencing, and §8 the verification. This builds on
@@ -170,7 +170,7 @@ added, not by a second full set. See the step 6 status below.
 
 ### 6.1 Flavour
 
-Add a new `src/flavor.ts`: `ratmapFlavor(theme: Theme): Flavor` spreads Protomaps' exported
+Add a new `src/map/flavor.ts`: `ratmapFlavor(theme: Theme): Flavor` spreads Protomaps' exported
 `LIGHT` / `DARK` and overrides earth, water, landcover, roads and label colours.
 
 - **Day:** a cool, desaturated topo. It is quieter than stock so the brown contours and
@@ -186,7 +186,7 @@ A theme change already reinstalls app layers through `installAppLayers`.
 
 ### 6.2 Peaks
 
-`src/peaks.ts`: the label goes to ink (day) / `#e6e9ed` (night) with a matching halo. The dot is
+`src/overlays/peaks.ts`: the label goes to ink (day) / `#e6e9ed` (night) with a matching halo. The dot is
 ink/white with a hairline halo, replacing purple `#6d28d9`. Munro gold stays.
 
 ### 6.3 Icon, theme colour, splash
@@ -196,7 +196,7 @@ ink/white with a hairline halo, replacing purple `#6d28d9`. Munro gold stays.
   variants (content inside the 80% safe zone) and the apple-touch icon. It replaces
   `scripts/gen-placeholder-icons.py`.
 - **Theme colour** `#0e1114` goes in `index.html`, `vite.config.ts` (`background_color` and
-  `theme_color`) and `src/theme.ts`'s `apply()`. These are three places, and each gets a comment
+  `theme_color`) and `src/ui/theme.ts`'s `apply()`. These are three places, and each gets a comment
   pointing at the other two. `theme.test.ts` asserts on this value.
 - **iOS splash screens** (`apple-touch-startup-image`, missing today): graphite with the mark
   centred, rendered from the same SVG. This closes a Phase 6 carry-over item in
@@ -212,7 +212,7 @@ Each step is its own commit. Never push without asking.
 2. **Tokens and fonts:** new values, font, scale and radius tokens, and `woff2` in precache.
    On its own this changes most of the app's look.
 3. **Components:** chips, rail bezel, sheet, toasts, `.readout` plus the follow screen, and the profile chart.
-4. **Map:** `src/flavor.ts`, the region-layer flavour fix, the peaks recolour and the magenta route.
+4. **Map:** `src/map/flavor.ts`, the region-layer flavour fix, the peaks recolour and the magenta route.
 5. **Identity:** icon, theme colour and splash screens.
 6. **(Optional)** Barlow map glyphs.
 
@@ -270,7 +270,7 @@ themes, not only calculated offline. The browser pane showed Barlow loaded at 37
 - The profile chart uses ink line and fill tokens. On the follow screen it takes the follow
   palette, with the accent position dot.
 
-New `src/readout.ts` (`fillReadout`) splits a formatter's "<number> <unit>" into mono value and
+New `src/ui/readout.ts` (`fillReadout`) splits a formatter's "<number> <unit>" into mono value and
 muted unit spans. `textContent` is unchanged, so the e2e string assertions still hold. It is
 applied to route stats, follow figures, the summit sheet elevation (now `--text-lg`) and the peak
 tooltip. The tooltip is now built from DOM nodes instead of `innerHTML`, since it had been
@@ -291,7 +291,7 @@ viewport gets the docked panel) and `places.spec.ts:44`. Not verified: the follo
 real position fix, because the pane has no geolocation source. That DOM is covered by
 `routes-ui.test.ts`.
 
-**Step 4** is done. New `src/flavor.ts`:
+**Step 4** is done. New `src/map/flavor.ts`:
 - `ratmapFlavor(theme)` spreads Protomaps' `LIGHT` / `DARK` with ratmap's earth, water,
   landcover, roads and label colours. `mapInk(theme)` holds the inks for everything the app
   draws over the basemap.
@@ -384,7 +384,7 @@ maskable crop under Android's launcher shapes, and whether iOS actually shows th
 **Step 6** is done.
 
 What ships: three fontstacks in `public/fonts`, `Barlow Noto Regular/Medium/Italic`, each
-Barlow with Noto Sans baked in as the fallback. `MAP_FONTS` in `src/flavor.ts` names them; the
+Barlow with Noto Sans baked in as the fallback. `MAP_FONTS` in `src/map/flavor.ts` names them; the
 flavour's `regular/bold/italic` slots and the three app label layers (peaks, SAC grades,
 contour heights) all read it, and nothing requests plain Noto any more.
 
@@ -401,7 +401,7 @@ How they're built:
 - Both OFL licences ship beside the glyphs (`public/fonts/OFL-*.txt`).
 
 Fixed along the way: the vendored Noto Sans **Medium** never had `▲` (U+25B2, 1 glyph in
-that block against Regular's 96). So the Munro label prefix in `src/peaks.ts`, which exists
+that block against Regular's 96). So the Munro label prefix in `src/overlays/peaks.ts`, which exists
 so membership isn't carried by colour alone, has never rendered. Medium and Italic now fall
 back to Noto Regular last. That also gives peak labels, which use Medium, Regular's full
 script coverage (13k glyphs against Medium's 7k) in places like the Caucasus.
@@ -415,7 +415,7 @@ Checked:
   - The Mamores by day render in Barlow.
   - Rila in Bulgaria at night falls back cleanly to Cyrillic.
   - Every glyph request returned 200, and only the Barlow Noto stacks were requested.
-- New `src/flavor.test.ts` fails if any fontstack the generated style can request has no full
+- New `src/map/flavor.test.ts` fails if any fontstack the generated style can request has no full
   256-range directory on disk (checked by moving one aside). 516 unit tests pass.
 
 Not seen: a rendered `▲ Munro` label. The global peaks archive carries no `lists` property, so

@@ -25,7 +25,7 @@ test.describe('the sheet', () => {
   test('rests at peek with the controls that must always be in reach', async ({ page }) => {
     await expect(page.locator('#sheet')).toHaveClass(/at-peek/);
     await expect(page.locator('#search-input')).toBeVisible();
-    await expect(page.locator('#chips .chip')).toHaveText(['Routes', 'Offline', 'Saved']);
+    await expect(page.locator('#chips .chip')).toHaveText(['Routes', 'Offline', 'Saved', 'Layers']);
     await expect(page.locator('#legend-btn')).toBeVisible();
     await expect(page.locator('#settings-btn')).toBeVisible();
   });

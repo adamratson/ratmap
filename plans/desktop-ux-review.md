@@ -14,7 +14,7 @@ same layout ships unmodified to a mouse-and-keyboard window many times its targe
 
 §4 steps 1–3 are implemented:
 
-- **Step 1, the docked panel (C1, B1).** `prefersDockedSheet()` (`src/pointer.ts`) —
+- **Step 1, the docked panel (C1, B1).** `prefersDockedSheet()` (`src/ui/pointer.ts`) —
   `(pointer: fine) and (hover: hover) and (min-width: 60rem)`, the same string duplicated
   into the `@media` query in `style.css`'s "Desktop (docked panel)" block. Above it,
   `#sheet` becomes a fixed 24rem left panel, full height; `sheet.ts`'s `applyDetent` forces
@@ -130,11 +130,11 @@ and takes under a minute to confirm.
 Grepping `src/style.css` and `src/*.ts` for anything that branches on viewport width or
 pointer precision finds exactly two things:
 
-- `isCoarsePointer()` ([pointer.ts:11](../src/pointer.ts#L11)) gates `NavigationControl`
+- `isCoarsePointer()` ([pointer.ts:11](../src/ui/pointer.ts#L11)) gates `NavigationControl`
   ([main.ts:618](../src/main.ts#L618)) — the one place the app already asks "is this a
   mouse?" and acts on the answer.
 - `(max-height: 26rem) and (orientation: landscape)` ([style.css:1705](../src/style.css#L1705),
-  mirrored in [sheet.ts:53-56](../src/sheet.ts#L53-L56)) turns the sheet into a left-hand
+  mirrored in [sheet.ts:53-56](../src/ui/sheet.ts#L53-L56)) turns the sheet into a left-hand
   side panel — but the query is keyed on a *short phone held sideways*, not on desktop
   width, and a normal 900px-tall browser window never matches it.
 
@@ -177,7 +177,7 @@ Fix: `Cmd/Ctrl+K` (or `/`) focuses search from anywhere; arrow keys move through
 and list rows; confirm Tab order matches visual order once the panel is restructured (§3).
 
 **A3. The sheet's only interaction model is a touch drag.**
-`BottomSheet`'s detents ([sheet.ts:111](../src/sheet.ts#L111)) are driven entirely by
+`BottomSheet`'s detents ([sheet.ts:111](../src/ui/sheet.ts#L111)) are driven entirely by
 `onPointerDown/Move/Up` tracking a Y-delta and a flick velocity — a solution to *vertical*
 space scarcity on a phone. It technically also answers to a mouse (pointer events are
 pointer events), but a click-and-hold-drag on a 4px grip bar sized for a thumb
@@ -224,7 +224,7 @@ to 1440px with no width cap, producing a thin bar with a large dead zone to its 
 ### Tier C — Missing, and desktop specifically affords it
 
 **C1. No docked panel mode.** The one precedent for "sheet as a side panel" —
-[style.css:1697-1736](../src/style.css#L1697-L1736), [sheet.ts:53-57](../src/sheet.ts#L53-L57)
+[style.css:1697-1736](../src/style.css#L1697-L1736), [sheet.ts:53-57](../src/ui/sheet.ts#L53-L57)
 — is gated on `max-height: 26rem`, a short-screen signal that structurally cannot match a
 tall desktop window. There is no equivalent "wide window" mode, even though the mechanism
 (sheet becomes a fixed-width left panel, map keeps the rest) is already built and proven

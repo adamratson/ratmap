@@ -135,6 +135,7 @@ function fakeMap(ids: string[]) {
   return {
     visibility,
     getStyle: () => ({ layers: ids.map((id) => ({ id })) }),
+    getLayersOrder: () => [...ids],
     getLayer: (id: string) => (ids.includes(id) ? { id } : undefined),
     setLayoutProperty: vi.fn((id: string, name: string, value: unknown) => {
       if (name === 'visibility') visibility.set(id, value);

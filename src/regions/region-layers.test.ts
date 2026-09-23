@@ -47,11 +47,13 @@ function fakeMap() {
       if (i >= 0) layers.splice(i, 1);
     }),
     getStyle: vi.fn(() => ({ layers })),
+    getLayersOrder: vi.fn(() => layers.map((l) => String(l.id))),
   };
 }
 
 const registry = {
   addLocal: vi.fn(),
+  removeLocal: vi.fn(),
   sourceUrl: (key: string) => `pmtiles://${key}`,
 } as unknown as TileSourceRegistry;
 
@@ -328,10 +330,41 @@ describe('removeRegionFromMap', () => {
     await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
     expect(map.layers.length).toBeGreaterThan(0);
 
-    removeRegionFromMap(map as unknown as MLMap, region);
+    vi.mocked(registry.removeLocal).mockClear();
+    removeRegionFromMap(map as unknown as MLMap, registry, region);
 
     expect(map.layers).toEqual([]);
     expect([...map.sources]).toEqual([]);
+    // Its files are about to be deleted, so its archives must not outlive them.
+    expect(vi.mocked(registry.removeLocal).mock.calls.map(([f]) => f)).toEqual(
+      region.artifacts.map((a) => a.filename),
+    );
+  });
+
+  it('leaves a region whose id merely starts with the removed one', async () => {
+    // Real catalogue pairs: england-east / england-east-midlands, sachsen / sachsen-anhalt.
+    // Matching layers by `region-england-east-` stripped the Midlands too, sources left
+    // behind, so it went blank until a reload.
+    const regionOf = (id: string): Region => ({
+      ...region,
+      id,
+      artifacts: region.artifacts.map((a) => ({ ...a, filename: `${id}-${a.kind}.pmtiles` })),
+    });
+    const east = regionOf('england-east');
+    const midlands = regionOf('england-east-midlands');
+
+    const map = fakeMap();
+    await addRegionToMap(map as unknown as MLMap, registry, east, 'light');
+    await addRegionToMap(map as unknown as MLMap, registry, midlands, 'light');
+    const midlandsLayers = map.layers.filter((l) =>
+      String(l.id).startsWith('region-england-east-midlands-'),
+    );
+    expect(midlandsLayers.length).toBeGreaterThan(0);
+
+    removeRegionFromMap(map as unknown as MLMap, registry, east);
+
+    expect(map.layers).toEqual(midlandsLayers);
+    expect([...map.sources].every((s) => s.startsWith('region-england-east-midlands-'))).toBe(true);
   });
 });
 
@@ -490,7 +523,7 @@ describe('SAC grades', () => {
     const map = fakeMap();
 
     await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
-    removeRegionFromMap(map as unknown as MLMap, graded);
+    removeRegionFromMap(map as unknown as MLMap, registry, graded);
 
     expect(map.layers).toEqual([]);
     expect(map.sources.has('region-lochaber-sac')).toBe(false);

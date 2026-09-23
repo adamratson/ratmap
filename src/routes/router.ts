@@ -71,6 +71,11 @@ export interface OfflineRouterOptions {
   registry: TileSourceRegistry;
   /** The regions whose archives are actually present in OPFS right now. */
   downloadedRegions: () => Region[];
+  /**
+   * Decoded tiles to keep. Default is the per-leg tile budget: a leg re-routed while a
+   * waypoint is dragged reads the same tiles again, and they must all still be here.
+   */
+  cacheSize?: number;
 }
 
 export class OfflineRouter {
@@ -78,10 +83,12 @@ export class OfflineRouter {
   private readonly downloadedRegions: () => Region[];
   /** Decoded lines by `${filename}/${z}/${x}/${y}`. Decoding dominates the cost. */
   private readonly tileCache = new Map<string, PathLine[]>();
+  private readonly cacheSize: number;
 
   constructor(options: OfflineRouterOptions) {
     this.registry = options.registry;
     this.downloadedRegions = options.downloadedRegions;
+    this.cacheSize = options.cacheSize ?? MAX_TILES_PER_LEG;
   }
 
   /** True when some downloaded region could route between these points. */
@@ -182,19 +189,47 @@ export class OfflineRouter {
       if (signal?.aborted) throw new DOMException('Route cancelled', 'AbortError');
 
       const key = `${basemap.filename}/${tile.z}/${tile.x}/${tile.y}`;
-      let lines = this.tileCache.get(key);
-
-      if (!lines) {
-        const response = await archive.getZxy(tile.z, tile.x, tile.y, signal).catch(() => undefined);
-        // An absent tile is normal — most of a mountain region is empty at z15.
-        lines = response ? decodePathLines(response.data, tile).lines : [];
-        this.tileCache.set(key, lines);
-      }
-
+      const lines = this.tileCache.get(key) ?? (await this.readTile(archive, key, tile, signal));
       for (const line of lines) graph.addLine(line);
     }
 
     return graph;
+  }
+
+  /**
+   * Decode one tile's walkable lines, caching only answers that describe the archive.
+   *
+   * An absent tile is a real answer — most of a mountain region is empty at z15 — and is
+   * cached as `[]`. A *failed* read is not. This used to catch everything, AbortError
+   * included, and cache the empty result: pmtiles checks the signal between its header,
+   * directory and tile reads, so every waypoint drag that cancelled a leg left whichever
+   * tile was in flight permanently empty. Later legs then routed around a hole in the
+   * network — a detour, or a false "no connected path" — with nothing to say why.
+   */
+  private async readTile(
+    archive: PMTiles,
+    key: string,
+    tile: TileCoord,
+    signal?: AbortSignal,
+  ): Promise<PathLine[]> {
+    let lines: PathLine[];
+    try {
+      const response = await archive.getZxy(tile.z, tile.x, tile.y, signal);
+      lines = response ? decodePathLines(response.data, tile).lines : [];
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') throw err;
+      // An unreadable tile routes as empty for this leg, but is asked again next time.
+      return [];
+    }
+
+    // Bounded, oldest-first, like the samplers' caches: a session of planning across a
+    // region would otherwise hold every tile it ever touched.
+    if (this.tileCache.size >= this.cacheSize) {
+      const oldest = this.tileCache.keys().next().value;
+      if (oldest !== undefined) this.tileCache.delete(oldest);
+    }
+    this.tileCache.set(key, lines);
+    return lines;
   }
 }
 

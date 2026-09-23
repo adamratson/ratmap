@@ -62,6 +62,23 @@ export class TileSourceRegistry {
   }
 
   /**
+   * Forget a local archive, so the next `addLocal` for that filename registers the new file.
+   *
+   * Required whenever the file behind it is deleted. An OPFS `File` is a snapshot: after
+   * the file is removed it reads as NotFoundError, and once a new file exists under the
+   * same name, NotReadableError (both verified in Chromium, 2026-09-23). Without this, a
+   * region deleted and downloaded again in one session got its *old* archive back from
+   * `addLocal`, and drew blank until a reload.
+   *
+   * `protocol.tiles` is pmtiles' own registration map — public, though undocumented, and
+   * with no remove method of its own.
+   */
+  removeLocal(filename: string): void {
+    this.archives.delete(filename);
+    this.protocol.tiles.delete(filename);
+  }
+
+  /**
    * The value to put in a style source's `url`. Remote archives keep their full URL inside
    * the pmtiles:// scheme; local ones are referenced by bare filename.
    */

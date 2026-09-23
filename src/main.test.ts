@@ -33,6 +33,9 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances 
     getLayer(): undefined {
       return undefined;
     }
+    getLayersOrder(): string[] {
+      return [];
+    }
     removeLayer(): void {}
     removeSource(): void {}
     isStyleLoaded(): boolean {
@@ -463,6 +466,7 @@ describe('app bootstrap', () => {
     const ids = ['peaks-symbol', 'peaks-symbol-marker', 'hillshade'];
     const setLayoutProperty = vi.fn();
     map.getStyle = () => ({ layers: ids.map((id) => ({ id })) });
+    map.getLayersOrder = () => [...ids];
     map.getLayer = (id: string) => (ids.includes(id) ? { id } : undefined);
     map.setLayoutProperty = setLayoutProperty;
 

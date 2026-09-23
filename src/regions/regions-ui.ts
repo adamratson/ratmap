@@ -46,6 +46,12 @@ export interface RegionsUiDeps {
   theme(): Theme;
   container: HTMLElement;
   onStatus(message: string, kind: 'ok' | 'warn' | 'error'): void;
+  /**
+   * What is on disk may have changed: after every download attempt, since a paused or
+   * failed one can still have completed some artifacts, and after a delete. Not after a
+   * refusal, which changes nothing.
+   */
+  onRegionsChanged?(): void;
 }
 
 /**
@@ -473,9 +479,10 @@ function renderRegionRow(
 
       disarm();
       void (async () => {
-        removeRegionFromMap(deps.map, region);
+        removeRegionFromMap(deps.map, deps.registry, region);
         await deleteRegion(region);
         deps.onStatus(`Deleted ${region.name}. Download it again whenever you need it.`, 'ok');
+        deps.onRegionsChanged?.();
         refresh();
       })();
     });
@@ -567,6 +574,7 @@ async function startDownload(
     }
   } finally {
     action.removeEventListener('click', onCancel);
+    deps.onRegionsChanged?.();
     refresh();
   }
 }

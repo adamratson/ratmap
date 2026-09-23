@@ -42,14 +42,11 @@ export function regionSourceId(regionId: string, kind: string): string {
  * pick a global-basemap label, which sits below the region's fills — burying the relief
  * under the region's own opaque earth and landcover instead of showing it.
  */
-function beneathLabels(map: MLMap, regionId: string): string | undefined {
-  const layers = map.getStyle().layers;
-  const regionPrefix = `${REGION_SOURCE_PREFIX}-${regionId}-`;
-
-  const regionLabel = layers.find(
-    (layer) => layer.type === 'symbol' && layer.id.startsWith(regionPrefix),
+function beneathLabels(map: MLMap, region: Region): string | undefined {
+  const regionLabel = regionLayerIds(map, region).find(
+    (id) => map.getLayer(id)?.type === 'symbol',
   );
-  if (regionLabel) return regionLabel.id;
+  if (regionLabel) return regionLabel;
 
   // No region labels yet (e.g. contours downloaded without a basemap): fall back to
   // sitting under the peaks, which is still better than on top of them.
@@ -182,11 +179,24 @@ function regionMinZoom([west, south, east, north]: Region['bbox']): number {
   return Math.ceil(Math.log2(360 / span));
 }
 
-function regionLayerIds(map: MLMap, regionId: string): string[] {
-  return map
-    .getStyle()
-    .layers.map((layer) => layer.id)
-    .filter((id) => id.startsWith(`${REGION_SOURCE_PREFIX}-${regionId}-`));
+/**
+ * A region's layers, in style order, found by the exact sources they draw from.
+ *
+ * Not by id prefix: region ids can be prefixes of each other — the catalogue has both
+ * `england-east` and `england-east-midlands`, `sachsen` and `sachsen-anhalt` — so
+ * `region-england-east-` also matched every East Midlands layer. Deleting East England
+ * stripped the East Midlands of its layers while leaving its sources, and it went blank
+ * until a reload.
+ *
+ * `getLayersOrder()` + `getLayer()` rather than `getStyle()`, which serialises the entire
+ * style, and this runs once for every layer a region adds.
+ */
+function regionLayerIds(map: MLMap, region: Region): string[] {
+  const sources = new Set(region.artifacts.map((artifact) => regionSourceId(region.id, artifact.kind)));
+  return map.getLayersOrder().filter((id) => {
+    const source = (map.getLayer(id) as { source?: unknown } | undefined)?.source;
+    return typeof source === 'string' && sources.has(source);
+  });
 }
 
 /**
@@ -266,7 +276,7 @@ export async function addRegionToMap(
           },
         },
         // Under every label, not just under the peaks — see beneathLabels().
-        beneathLabels(map, region.id),
+        beneathLabels(map, region),
       );
     } else if (artifact.kind === 'basemap') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
@@ -336,7 +346,7 @@ export async function addRegionToMap(
             'line-width': 1.2,
           },
         },
-        beneathLabels(map, region.id),
+        beneathLabels(map, region),
       );
 
       map.addLayer(
@@ -360,10 +370,10 @@ export async function addRegionToMap(
         },
         // Contour lines drawn over place names would be just as unreadable as relief
         // over them, so these go under the labels too.
-        beneathLabels(map, region.id),
+        beneathLabels(map, region),
       );
 
-      addContourLabels(map, sourceId, region.id, minzoom, ink);
+      addContourLabels(map, sourceId, region, minzoom, ink);
     } else if (artifact.kind === 'paths') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
 
@@ -398,7 +408,7 @@ export async function addRegionToMap(
         maxzoom: artifact.maxzoom ?? 11,
         // Beneath the labels like the relief and contours — this shades the ground, so
         // painting it over the place names would be the same mistake the hillshade made.
-        before: beneathLabels(map, region.id),
+        before: beneathLabels(map, region),
       });
     } else if (artifact.kind === 'sac') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
@@ -415,8 +425,8 @@ export async function addRegionToMap(
         // Same floor as the paths themselves: a grade with no visible path under it is
         // an annotation on nothing.
         minzoom: Math.max(12, minzoom),
-        beforeBand: map.getLayer(casing) ? casing : beneathLabels(map, region.id),
-        beforeLabels: beneathLabels(map, region.id),
+        beforeBand: map.getLayer(casing) ? casing : beneathLabels(map, region),
+        beforeLabels: beneathLabels(map, region),
       });
     } else if (artifact.kind === 'terrain-features') {
       // Scree, shingle, rock and boulders — OSM ground-surface detail Protomaps does not
@@ -426,7 +436,7 @@ export async function addRegionToMap(
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
       addTerrainFeatureLayers(map, sourceId, {
         minzoom: Math.max(artifact.minzoom ?? minzoom, minzoom),
-        before: beneathLabels(map, region.id),
+        before: beneathLabels(map, region),
       });
     }
   }
@@ -450,7 +460,7 @@ export async function addRegionToMap(
 function addContourLabels(
   map: MLMap,
   sourceId: string,
-  regionId: string,
+  region: Region,
   regionMin: number,
   ink: MapInk,
 ): void {
@@ -493,17 +503,22 @@ function addContourLabels(
         'text-halo-width': 1.6,
       },
     },
-    beneathLabels(map, regionId),
+    beneathLabels(map, region),
   );
 }
 
-/** Remove a region's layers and sources — used when the user deletes a download. */
-export function removeRegionFromMap(map: MLMap, region: Region): void {
-  for (const layerId of regionLayerIds(map, region.id)) {
+/**
+ * Remove a region's layers and sources, and unregister its archives — used when the user
+ * deletes a download. The inverse of addRegionToMap, registry included: the files behind
+ * those archives are about to be deleted (see TileSourceRegistry.removeLocal).
+ */
+export function removeRegionFromMap(map: MLMap, registry: TileSourceRegistry, region: Region): void {
+  for (const layerId of regionLayerIds(map, region)) {
     if (map.getLayer(layerId)) map.removeLayer(layerId);
   }
   for (const artifact of region.artifacts) {
     const sourceId = regionSourceId(region.id, artifact.kind);
     if (map.getSource(sourceId)) map.removeSource(sourceId);
+    registry.removeLocal(artifact.filename);
   }
 }

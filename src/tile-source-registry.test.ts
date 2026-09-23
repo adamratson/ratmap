@@ -115,4 +115,20 @@ describe('TileSourceRegistry', () => {
     expect(registry.get('nope.pmtiles')).toBeUndefined();
     expect(registry.has('nope.pmtiles')).toBe(false);
   });
+
+  it('registers the new file after a local archive is removed and downloaded again', () => {
+    // An OPFS File is a snapshot that stops reading once its file is deleted. Returning the
+    // cached archive for a re-downloaded region handed back that dead snapshot.
+    const protocol = new Protocol();
+    const registry = new TileSourceRegistry(protocol);
+    const first = registry.addLocal(new File([new Uint8Array(8)], 'region-a-basemap.pmtiles'));
+
+    registry.removeLocal('region-a-basemap.pmtiles');
+    expect(registry.has('region-a-basemap.pmtiles')).toBe(false);
+    expect(protocol.get('region-a-basemap.pmtiles')).toBeUndefined();
+
+    const second = registry.addLocal(new File([new Uint8Array(8)], 'region-a-basemap.pmtiles'));
+    expect(second).not.toBe(first);
+    expect(protocol.get('region-a-basemap.pmtiles')).toBe(second);
+  });
 });

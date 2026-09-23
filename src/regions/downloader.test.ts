@@ -360,6 +360,128 @@ describe('downloadArtifact', () => {
       new Array(FETCH_CONCURRENCY - 1).fill(0),
     );
   });
+
+  describe('resuming against a republished artifact', () => {
+    const artifact: RegionArtifact = {
+      kind: 'basemap',
+      filename: 'test-region-basemap.pmtiles',
+      path: 'regions/test-region/test-region-basemap.pmtiles',
+      bytes: CHUNK_BYTES * 2,
+    };
+    const ETAG_KEY = `ratmap:part-etag:${artifact.filename}`;
+
+    let store: Map<string, string>;
+    let ranges: string[];
+
+    beforeEach(() => {
+      store = new Map();
+      vi.stubGlobal('localStorage', {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+      });
+      opfsMocks.deleteArtifact.mockClear();
+      ranges = [];
+    });
+
+    /** Every chunk comes back 206 from a bucket currently holding build `etag`. */
+    function bucketHolding(etag: string, onChunk?: () => void): void {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (_url: unknown, init?: RequestInit) => {
+          const range = new Headers(init?.headers).get('Range')!;
+          ranges.push(range);
+          onChunk?.();
+          const [start, end] = range.replace('bytes=', '').split('-').map(Number);
+          return {
+            status: 206,
+            headers: new Headers({ ETag: etag }),
+            arrayBuffer: async () => new ArrayBuffer(end - start + 1),
+          } as unknown as Response;
+        }),
+      );
+    }
+
+    it('starts again from zero rather than splicing a new build onto the old bytes', async () => {
+      // Half of the old build is on disk; the bucket now holds a rebuild under the same name.
+      store.set(ETAG_KEY, '"old-build"');
+      opfsMocks.partialSize.mockResolvedValueOnce(CHUNK_BYTES);
+      bucketHolding('"new-build"');
+
+      await downloadArtifact(artifact, new AbortController().signal, () => {});
+
+      expect(opfsMocks.deleteArtifact).toHaveBeenCalledWith(artifact.filename);
+      // First the resumed tail, refused; then the whole file from byte 0.
+      expect(ranges[0]).toBe(`bytes=${CHUNK_BYTES}-${2 * CHUNK_BYTES - 1}`);
+      expect(ranges).toContain(`bytes=0-${CHUNK_BYTES - 1}`);
+      expect(opfsMocks.finalizePartial).toHaveBeenCalledTimes(1);
+    });
+
+    it('resumes as before when the bucket still holds the same build', async () => {
+      store.set(ETAG_KEY, '"same-build"');
+      opfsMocks.partialSize.mockResolvedValueOnce(CHUNK_BYTES);
+      bucketHolding('"same-build"');
+
+      await downloadArtifact(artifact, new AbortController().signal, () => {});
+
+      expect(opfsMocks.deleteArtifact).not.toHaveBeenCalled();
+      expect(ranges).toEqual([`bytes=${CHUNK_BYTES}-${2 * CHUNK_BYTES - 1}`]);
+    });
+
+    it('records the build before the first byte is written, and forgets it once complete', async () => {
+      let recordedAtFirstWrite: string | undefined;
+      opfsMocks.appendToPartial.mockImplementationOnce(async () => {
+        recordedAtFirstWrite = store.get(ETAG_KEY);
+      });
+      bucketHolding('"this-build"');
+
+      await downloadArtifact(artifact, new AbortController().signal, () => {});
+
+      expect(recordedAtFirstWrite).toBe('"this-build"');
+      expect(store.has(ETAG_KEY)).toBe(false);
+    });
+  });
+
+  it('stops every other chunk once one has failed for good', async () => {
+    // A failed download used to leave the rest of the window running, each chunk carrying
+    // on through its own retries for minutes, with nothing left to write what they fetched.
+    vi.useFakeTimers();
+    try {
+      const artifact: RegionArtifact = {
+        kind: 'basemap',
+        filename: 'test-region-basemap.pmtiles',
+        path: 'regions/test-region/test-region-basemap.pmtiles',
+        bytes: CHUNK_BYTES * 4,
+      };
+
+      const others: AbortSignal[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((_url: unknown, init?: RequestInit) => {
+          const range = new Headers(init?.headers).get('Range') ?? '';
+          // Chunk 0 fails fast on every attempt; the rest hang until something aborts them.
+          if (range.startsWith('bytes=0-')) return Promise.resolve({ status: 500 } as Response);
+          others.push(init!.signal!);
+          return new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('The operation was aborted.', 'AbortError'));
+            });
+          });
+        }),
+      );
+
+      const done = downloadArtifact(artifact, new AbortController().signal, () => {});
+      const assertion = expect(done).rejects.toThrow(/Expected 206/);
+      // Chunk 0's five attempts and their backoff: 0.5 + 1 + 2 + 4 s.
+      await vi.advanceTimersByTimeAsync(8_000);
+      await assertion;
+
+      expect(others.length).toBeGreaterThan(0);
+      expect(others.every((s) => s.aborted)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('what a region looks like on disk', () => {

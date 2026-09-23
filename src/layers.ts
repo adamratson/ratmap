@@ -91,9 +91,13 @@ function readStored(): Partial<Record<LayerGroup, boolean>> {
   }
 }
 
+function visibleIn(stored: Partial<Record<LayerGroup, boolean>>, group: LayerGroup): boolean {
+  const value = stored[group];
+  return typeof value === 'boolean' ? value : DEFAULT_VISIBLE[group];
+}
+
 export function isLayerVisible(group: LayerGroup): boolean {
-  const stored = readStored()[group];
-  return typeof stored === 'boolean' ? stored : DEFAULT_VISIBLE[group];
+  return visibleIn(readStored(), group);
 }
 
 export function setLayerVisible(group: LayerGroup, visible: boolean): void {
@@ -104,14 +108,27 @@ export function setLayerVisible(group: LayerGroup, visible: boolean): void {
   }
 }
 
-/** Show or hide every layer in the style that belongs to `group`, per its stored state. */
-export function applyLayerVisibility(map: MLMap, group: LayerGroup): void {
-  const visibility = isLayerVisible(group) ? 'visible' : 'none';
-  for (const layer of map.getStyle().layers) {
-    if (matchesGroup(layer.id, group) && map.getLayer(layer.id)) {
-      map.setLayoutProperty(layer.id, 'visibility', visibility);
+/**
+ * Set every matching layer's visibility from one read of the stored state.
+ *
+ * `getLayersOrder()` rather than `getStyle()`: the latter serialises the entire style, and
+ * this runs after every region add and every footprint redraw — which happens mid-pan
+ * whenever the region the detail notice offers changes.
+ */
+function applyGroups(map: MLMap, groups: readonly LayerGroup[]): void {
+  const stored = readStored();
+  const layerIds = map.getLayersOrder();
+  for (const group of groups) {
+    const visibility = visibleIn(stored, group) ? 'visible' : 'none';
+    for (const id of layerIds) {
+      if (matchesGroup(id, group)) map.setLayoutProperty(id, 'visibility', visibility);
     }
   }
+}
+
+/** Show or hide every layer in the style that belongs to `group`, per its stored state. */
+export function applyLayerVisibility(map: MLMap, group: LayerGroup): void {
+  applyGroups(map, [group]);
 }
 
 /**
@@ -120,5 +137,5 @@ export function applyLayerVisibility(map: MLMap, group: LayerGroup): void {
  * after its toggle was switched off still comes out hidden.
  */
 export function applyAllStoredVisibility(map: MLMap): void {
-  for (const group of LAYER_GROUP_ORDER) applyLayerVisibility(map, group);
+  applyGroups(map, LAYER_GROUP_ORDER);
 }

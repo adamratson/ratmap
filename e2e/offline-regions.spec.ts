@@ -1,3 +1,4 @@
+import type { Map as MLMap } from 'maplibre-gl';
 import { expect, test } from '@playwright/test';
 import {
   clearOpfs,
@@ -135,6 +136,41 @@ test.describe('offline regions', () => {
     await expect.poll(async () => listOpfs(page)).toEqual([]);
     await expect.poll(async () => (await regionArchiveLayers(page)).length).toBe(0);
     await expect(page.locator('.region-action').first()).toHaveText('Download');
+  });
+
+  test('draws a region deleted and downloaded again, without a reload', async ({ page }) => {
+    // Regression: the tile registry kept each local archive by filename and never let go,
+    // so the second download got the *first* one's archive back, still wrapping the
+    // deleted OPFS File. Every read then failed (NotReadableError) and the region drew
+    // blank until the app was restarted.
+    const errors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+
+    const ANDORRA: [number, number] = [1.55, 42.53];
+    const basemapFeatures = () =>
+      page.evaluate(() => {
+        const map = (window as unknown as { __ratmapMap: MLMap }).__ratmapMap;
+        if (!map.getSource('region-andorra-basemap')) return 0;
+        return map.querySourceFeatures('region-andorra-basemap', { sourceLayer: 'roads' }).length;
+      });
+
+    await openRegionsSheet(page);
+    await downloadTestRegion(page);
+    await jumpTo(page, ANDORRA, 13);
+    await expect.poll(basemapFeatures, { timeout: 30_000 }).toBeGreaterThan(0);
+
+    const action = page.locator('.region-action').first();
+    await action.click();
+    await action.click();
+    await expect(action).toHaveText('Download');
+    await expect.poll(basemapFeatures).toBe(0);
+
+    await downloadTestRegion(page);
+    await jumpTo(page, ANDORRA, 13);
+    await expect.poll(basemapFeatures, { timeout: 30_000 }).toBeGreaterThan(0);
+    expect(errors.filter((e) => /NotReadable|NotFound/.test(e))).toEqual([]);
   });
 
   test('renders the region from OPFS after an offline cold start', async ({ context, page }) => {

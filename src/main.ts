@@ -1314,10 +1314,10 @@ function openRegionsView(): void {
       registry,
       theme: () => theme.get(),
       container: body,
-      onStatus: (message, kind) => {
-        status.toast(message, { kind });
-        // A completed download (or a delete) changes what detail is available, so
-        // re-derive the ceiling from what is actually on disk rather than assuming.
+      onStatus: (message, kind) => status.toast(message, { kind }),
+      onRegionsChanged: () => {
+        // A download (or a delete) changes what detail is available, so re-derive the
+        // ceiling from what is actually on disk rather than assuming.
         void restoreRegions().then(() => {
           // The router caches decoded tiles per archive, including "there is nothing
           // here". A new region would otherwise stay unroutable until a reload.

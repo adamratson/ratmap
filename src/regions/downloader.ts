@@ -194,6 +194,37 @@ export class DownloadStalled extends Error {
 }
 
 /**
+ * The object behind an artifact's URL is no longer the one this download started on.
+ *
+ * Only the avalanche artifact carries a version in its filename (build-manifest.py), so
+ * a rebuilt basemap or terrain is republished under the *same* name. Resume appends at
+ * the `.part` file's length, so a rebuild landing between two sessions of one download
+ * would otherwise be spliced onto the old build's bytes and promoted as a complete
+ * archive: the right size, internally wrong, and silent (C1).
+ */
+export class ArtifactChanged extends Error {
+  constructor(filename: string) {
+    super(`${filename} was republished while it was downloading.`);
+    this.name = 'ArtifactChanged';
+  }
+}
+
+/**
+ * Which build of an artifact a download is committed to, by its ETag.
+ *
+ * `etag` starts as whatever the `.part` file was begun with (null for a fresh start, or a
+ * partial from before this was recorded), and the first chunk to arrive fills it in.
+ */
+export interface ArtifactIdentity {
+  etag: string | null;
+}
+
+/** A usable ETag, or null. Weak validators say "equivalent", not "same bytes". */
+function strongEtag(value: string | null | undefined): string | null {
+  return value && !value.startsWith('W/') ? value : null;
+}
+
+/**
  * @param onBytes called every time the connection proves it is still alive — on the
  *   response headers, and on each block of body bytes. Resets the caller's stall
  *   watchdog, which is what lets a slow transfer run as long as it needs to.
@@ -205,6 +236,7 @@ async function fetchChunk(
   end: number,
   signal: AbortSignal,
   onBytes: () => void,
+  identity?: ArtifactIdentity,
 ): Promise<ArrayBuffer> {
   const response = await fetch(url, {
     headers: { Range: `bytes=${start}-${end}` },
@@ -222,6 +254,16 @@ async function fetchChunk(
       `Expected 206 Partial Content for ${filename}, got ${response.status}. ` +
         'The storage bucket may not support range requests.',
     );
+  }
+
+  // Compared on the response rather than sent as `If-Range`: that header is not
+  // CORS-safelisted, so it would add a preflight Krystal's fixed CORS policy was never
+  // checked against. The ETag itself is exposed (verified 2026-09-23: strong, and
+  // identical across ranges of one object).
+  const etag = strongEtag(response.headers?.get('ETag'));
+  if (identity && etag) {
+    if (identity.etag === null) identity.etag = etag;
+    else if (identity.etag !== etag) throw new ArtifactChanged(filename);
   }
 
   const expected = end - start + 1;
@@ -305,6 +347,7 @@ export async function fetchChunkWithRetry(
   start: number,
   end: number,
   signal: AbortSignal,
+  identity?: ArtifactIdentity,
 ): Promise<ArrayBuffer> {
   for (let attempt = 1; ; attempt += 1) {
     if (signal.aborted) throw new DownloadCancelled();
@@ -328,9 +371,11 @@ export async function fetchChunkWithRetry(
     watchdog();
 
     try {
-      return await fetchChunk(url, filename, start, end, attemptController.signal, watchdog);
+      return await fetchChunk(url, filename, start, end, attemptController.signal, watchdog, identity);
     } catch (err) {
       if (signal.aborted) throw new DownloadCancelled();
+      // Not a flaky connection: asking again gets the same new build.
+      if (err instanceof ArtifactChanged) throw err;
       const failure = stalled ? new DownloadStalled(filename, start) : err;
       if (attempt >= MAX_CHUNK_ATTEMPTS) throw failure;
       // Exponential backoff so a genuinely down connection doesn't hammer the bucket with
@@ -350,8 +395,56 @@ export async function fetchChunkWithRetry(
  *
  *   Driven by network arrival, not by disk writes: see the comment at the call site below
  *   for why those two had to be split apart.
+ *
+ *   Can go back down: an artifact republished mid-download restarts from zero, once.
  */
 export async function downloadArtifact(
+  artifact: RegionArtifact,
+  signal: AbortSignal,
+  onProgress: (bytesReceived: number) => void,
+): Promise<void> {
+  try {
+    await downloadArtifactOnce(artifact, signal, onProgress);
+  } catch (err) {
+    if (!(err instanceof ArtifactChanged)) throw err;
+    // The bytes already on disk belong to a build that no longer exists, so none of them
+    // are worth keeping. Once only: a second change mid-download is reported, not chased.
+    await deleteArtifact(artifact.filename);
+    forgetPartialEtag(artifact.filename);
+    await downloadArtifactOnce(artifact, signal, onProgress);
+  }
+}
+
+// The ETag a `.part` file was begun with, kept beside it so a resume in a later session
+// can tell whether the bucket still holds the same build. A few bytes per partial, so
+// localStorage, like the cached manifest.
+const PART_ETAG_KEY = 'ratmap:part-etag:';
+
+function loadPartialEtag(filename: string): string | null {
+  try {
+    return localStorage.getItem(PART_ETAG_KEY + filename);
+  } catch {
+    return null;
+  }
+}
+
+function savePartialEtag(filename: string, etag: string): void {
+  try {
+    localStorage.setItem(PART_ETAG_KEY + filename, etag);
+  } catch {
+    // Unrecorded, a later resume just goes unchecked — as every resume did before this.
+  }
+}
+
+function forgetPartialEtag(filename: string): void {
+  try {
+    localStorage.removeItem(PART_ETAG_KEY + filename);
+  } catch {
+    // Nothing to do.
+  }
+}
+
+async function downloadArtifactOnce(
   artifact: RegionArtifact,
   signal: AbortSignal,
   onProgress: (bytesReceived: number) => void,
@@ -369,6 +462,13 @@ export async function downloadArtifact(
     await deleteArtifact(artifact.filename);
     offset = 0;
   }
+
+  // Resuming commits to the build the `.part` was begun with; a fresh start commits to
+  // whichever build answers first. A partial begun before ETags were recorded has none,
+  // and resumes unchecked, as it always did.
+  if (offset === 0) forgetPartialEtag(artifact.filename);
+  const identity: ArtifactIdentity = { etag: offset > 0 ? loadPartialEtag(artifact.filename) : null };
+  let savedEtag = identity.etag;
 
   // Bytes confirmed downloaded, independent of `offset` (bytes actually written). See the
   // comment at the write site for why the two need to be tracked separately.
@@ -397,12 +497,24 @@ export async function downloadArtifact(
   const inFlight = new Map<number, Promise<ArrayBuffer>>();
   const ready = new Map<number, ArrayBuffer>();
 
+  // The chunks' own signal: the caller's cancel, plus this function giving up. When one
+  // chunk fails for good, the rest must stop too. They used to be "left to settle on their
+  // own", which meant up to FETCH_CONCURRENCY - 1 retry loops carrying on for minutes after
+  // the download had already failed: spending a weak connection on bytes nobody would
+  // write, and competing with the fresh download a tap on Resume starts.
+  const chunks = new AbortController();
+  const cancelChunks = (): void => chunks.abort();
+  signal.addEventListener('abort', cancelChunks, { once: true });
+
   const outstanding = (): number => inFlight.size + ready.size;
 
   const dispatch = (index: number): void => {
     const start = starts[index];
     const end = Math.min(start + CHUNK_BYTES, artifact.bytes) - 1;
-    inFlight.set(index, fetchChunkWithRetry(url, artifact.filename, start, end, signal));
+    inFlight.set(
+      index,
+      fetchChunkWithRetry(url, artifact.filename, start, end, chunks.signal, identity),
+    );
   };
 
   const fillWindow = (): void => {
@@ -412,21 +524,26 @@ export async function downloadArtifact(
     }
   };
 
-  fillWindow();
-
   // One writer for the whole artifact. It holds an exclusive lock on the `.part` file, so
   // it has to be released before finalizePartial() can rename it — hence the finally.
-  const writer = await openPartialWriter(artifact.filename);
+  // Opened before any fetch is dispatched, so a writer that fails to open strands nothing.
+  let writer: Awaited<ReturnType<typeof openPartialWriter>>;
+  try {
+    writer = await openPartialWriter(artifact.filename);
+  } catch (err) {
+    signal.removeEventListener('abort', cancelChunks);
+    throw err;
+  }
 
   try {
+    fillWindow();
+
     while (nextToWrite < starts.length) {
       if (signal.aborted) throw new DownloadCancelled();
 
       if (!ready.has(nextToWrite)) {
-        // Not an orphaned request: a rejection here (abort, bad status, network error)
-        // propagates out of this function, which is what we want — the other still-running
-        // fetches are left to settle on their own rather than needing a second abort path
-        // layered on top of the caller's own `signal`.
+        // A rejection here (abort, bad status, network error) propagates out of this
+        // function, and the finally below stops every other chunk still running.
         const [doneIndex, chunk] = await Promise.race(
           [...inFlight.entries()].map(async ([index, pending]) => [index, await pending] as const),
         );
@@ -456,6 +573,13 @@ export async function downloadArtifact(
       // The writer reports the length: it may have transferred the buffer, which leaves
       // `chunk.byteLength` reading 0 here. Only `offset` (the write position) needs it —
       // `received` was already taken above, before the transfer could zero it out.
+      //
+      // The ETag is recorded before the first byte lands, so no `.part` exists that a
+      // later session cannot check against the bucket.
+      if (identity.etag !== null && identity.etag !== savedEtag) {
+        savePartialEtag(artifact.filename, identity.etag);
+        savedEtag = identity.etag;
+      }
       offset += await writer.append(chunk, offset);
       nextToWrite += 1;
 
@@ -469,10 +593,17 @@ export async function downloadArtifact(
       fillWindow();
     }
   } finally {
+    signal.removeEventListener('abort', cancelChunks);
+    // A no-op on success, where nothing is left in flight. On failure it stops the rest,
+    // and their rejections are swallowed here: they are the consequence of the error
+    // already propagating, not news.
+    chunks.abort();
+    for (const pending of inFlight.values()) pending.catch(() => {});
     await writer.close();
   }
 
   await finalizePartial(artifact.filename);
+  forgetPartialEtag(artifact.filename);
 }
 
 /**

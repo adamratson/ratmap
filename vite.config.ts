@@ -41,6 +41,34 @@ export default defineConfig(({ command, isPreview }) => ({
   define: {
     __APP_VERSION__: JSON.stringify(BUILD_ID),
   },
+  // Dependencies in chunks of their own, so a deploy that only changes the app leaves them
+  // alone. Without this the app was one 1.42 MB chunk, 1.06 MB of it maplibre-gl, and every
+  // deploy changed its hash — if only through __APP_VERSION__ above — so every installed
+  // phone re-downloaded all of it to pick up an app change. Measured 2026-09-23: the app
+  // chunk is now 134 kB, and building with a different __APP_VERSION__ changes that name
+  // alone; maplibre (1.03 MB) and vendor (259 kB) keep theirs, so their precache entries
+  // stand and the service worker re-fetches only what changed.
+  //
+  // The CSS splits along the same lines — maplibre's and the fonts' stylesheets load ahead
+  // of style.css, in the order main.ts imports them — and the rules are the same, in the
+  // same order, as the single stylesheet this replaced.
+  //
+  // App code has to stay in the entry chunk: test/service-worker.test.ts reads index-*.js
+  // for the update wiring, and naming neither group "index" keeps that unambiguous.
+  // `codeSplitting` is Rolldown's option (Vite 8.2 / Rolldown 1.2); `manualChunks` still
+  // exists there only as a deprecated alias.
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'maplibre', test: /node_modules[\\/]maplibre-gl[\\/]/, priority: 2 },
+            { name: 'vendor', test: /node_modules[\\/]/, priority: 1 },
+          ],
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     // `test/` holds the node-side tests — the ones that read built artifacts off disk.

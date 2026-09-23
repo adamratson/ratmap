@@ -3,6 +3,29 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    # Only when the app could have changed. Every deploy is a new app version as far as
+    # installed phones are concerned: vite.config.ts stamps the commit sha into the bundle,
+    # so the bundle hash, the precache manifest and the service worker all change, and every
+    # install re-downloads the bundle and goes through src/app/update.ts's staged update —
+    # for a commit that touched none of it. 20 of the 95 commits before 2026-09-23 changed
+    # only paths listed here.
+    #
+    # An ignore list rather than an allow list on purpose. Get this wrong in one direction
+    # and a deploy happens that did not need to, which is today's behaviour; an allow list
+    # gets it wrong the other way, and a new file the build does read (a config, a new
+    # top-level source directory) silently never ships. GitHub skips the run only when every
+    # changed path matches. test/ is deliberately not here: its tests run below and gate
+    # the deploy. workflow_dispatch is the manual override for anything this misjudges.
+    paths-ignore:
+      - 'infra/**'            # data pipeline; its own workflow is infra-image.yml
+      - 'docs/**'
+      - 'plans/**'
+      - 'e2e/**'              # Playwright, run by hand against a local build, not here
+      - 'assets/**'           # glyph build inputs; their output is committed in public/
+      - 'scripts/**'          # icon and glyph generators, ditto
+      - '.claude/**'
+      - '**.md'               # every .md, the repository root included
+      - '.github/workflows/infra-image.yml'
   workflow_dispatch:
 
 permissions:

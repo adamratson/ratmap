@@ -343,7 +343,7 @@ describe('app bootstrap', () => {
     await loadMainQuietly();
 
     const chips = [...document.querySelectorAll('#chips .chip')].map((c) => c.textContent);
-    expect(chips).toEqual(['Routes', 'Offline', 'Saved']);
+    expect(chips).toEqual(['Routes', 'Offline', 'Saved', 'Layers']);
 
     const sheet = document.querySelector<HTMLElement>('#sheet')!;
     expect(sheet.classList.contains('at-peek')).toBe(true);
@@ -452,6 +452,59 @@ describe('app bootstrap', () => {
     toggle.dispatchEvent(new Event('change'));
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(store.get('ratmap.theme')).toBe('dark');
+  });
+
+  it('switches an overlay off from the Layers tab, on the map and for next time', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    // The mock map knows no layers; give it the peaks pair so the toggle has something to hit.
+    const map = mapInstances[0] as unknown as Record<string, unknown>;
+    const ids = ['peaks-symbol', 'peaks-symbol-marker', 'hillshade'];
+    const setLayoutProperty = vi.fn();
+    map.getStyle = () => ({ layers: ids.map((id) => ({ id })) });
+    map.getLayer = (id: string) => (ids.includes(id) ? { id } : undefined);
+    map.setLayoutProperty = setLayoutProperty;
+
+    const layersChip = [...document.querySelectorAll<HTMLButtonElement>('#chips .chip')].find(
+      (chip) => chip.textContent === 'Layers',
+    )!;
+    layersChip.click();
+
+    const groups = [...document.querySelectorAll<HTMLInputElement>('.sheet-body input[data-group]')].map(
+      (input) => input.dataset.group,
+    );
+    expect(groups).toEqual([
+      'peaks',
+      'hillshade',
+      'contours',
+      'paths',
+      'sac',
+      'terrainFeatures',
+      'avalanche',
+      'footprints',
+    ]);
+
+    const peaks = document.querySelector<HTMLInputElement>('#layer-toggle-peaks')!;
+    expect(peaks.checked).toBe(true);
+    // Avalanche terrain keeps its old default: off until asked for.
+    expect(document.querySelector<HTMLInputElement>('#layer-toggle-avalanche')!.checked).toBe(false);
+
+    peaks.checked = false;
+    peaks.dispatchEvent(new Event('change'));
+
+    expect(setLayoutProperty).toHaveBeenCalledWith('peaks-symbol', 'visibility', 'none');
+    expect(setLayoutProperty).toHaveBeenCalledWith('peaks-symbol-marker', 'visibility', 'none');
+    expect(setLayoutProperty).not.toHaveBeenCalledWith('hillshade', 'visibility', expect.anything());
+    expect(JSON.parse(store.get('ratmap:visible-layers')!)).toEqual({ peaks: false });
+  });
+
+  it('keeps avalanche terrain in Layers, not Settings', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+
+    document.querySelector<HTMLButtonElement>('#settings-btn')!.click();
+    expect(document.querySelector('.sheet-body')!.textContent).not.toMatch(/avalanche/i);
   });
 
   it('has no theme control left in the peek row', async () => {

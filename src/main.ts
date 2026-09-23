@@ -1,6 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { mapInk, ratmapFlavor } from './flavor';
+import { mapInk, ratmapFlavor, type MapInk } from './flavor';
 import { basemapLayersWithBareRock } from './landuse';
 // Self-hosted, Latin subset, only the weights style.css uses — see the --font-* tokens.
 // Bundled rather than linked so they precache with the shell and render offline (C7's
@@ -38,13 +38,15 @@ import {
 } from './peaks';
 import { SAC_GRADES, sacCssColor, sacPathAt, type SacHit } from './sac';
 import { TERRAIN_FEATURE_KINDS } from './terrain-features';
+import { SLOPE_CLASSES, slopeCssColor } from './avalanche';
 import {
-  SLOPE_CLASSES,
-  isAvalancheEnabled,
-  setAvalancheEnabled,
-  setAvalancheVisible,
-  slopeCssColor,
-} from './avalanche';
+  LAYER_GROUP_ORDER,
+  applyAllStoredVisibility,
+  applyLayerVisibility,
+  isLayerVisible,
+  setLayerVisible,
+  type LayerGroup,
+} from './layers';
 import { HeadingWatcher } from './heading';
 import { LocationController, type LocationState } from './location';
 import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS } from './install';
@@ -155,7 +157,8 @@ type View =
   | 'plan'
   | 'install'
   | 'settings'
-  | 'legend';
+  | 'legend'
+  | 'layers';
 
 let view: View | null = null;
 
@@ -207,6 +210,7 @@ const CHIPS: { view: View; label: string; open: () => void }[] = [
   { view: 'routes', label: 'Routes', open: () => void openRoutesView() },
   { view: 'regions', label: 'Offline', open: () => openRegionsView() },
   { view: 'places', label: 'Saved', open: () => void openPlacesView() },
+  { view: 'layers', label: 'Layers', open: () => openLayersView() },
 ];
 
 const chipsHost = sheet.peek.querySelector<HTMLDivElement>('#chips')!;
@@ -311,23 +315,8 @@ function openSettingsView(): void {
       <label class="settings-row">
         <span class="settings-row-text">
           <span class="settings-row-label">Light theme</span>
-          <span class="settings-row-note">
-            For a bright day. ratmap is dark by default &mdash; easier to read outdoors at
-            low brightness, and kinder to the night vision you are going to need.
-          </span>
         </span>
         <input id="light-theme-toggle" type="checkbox" />
-      </label>
-      <label class="settings-row">
-        <span class="settings-row-text">
-          <span class="settings-row-label">Avalanche terrain</span>
-          <span class="settings-row-note">
-            Shades slopes by steepness, from the downloaded region's own elevation data.
-            Terrain only &mdash; it has never seen the snow, and it is not a forecast.
-            Check your avalanche service before you go.
-          </span>
-        </span>
-        <input id="avalanche-toggle" type="checkbox" />
       </label>
       <label class="settings-row">
         <span class="settings-row-text">
@@ -348,13 +337,6 @@ function openSettingsView(): void {
       // below. The settings view itself is untouched, so the toggle stays under the
       // finger that just moved it.
       theme.set(light.checked ? 'light' : 'dark');
-    });
-
-    const avalanche = body.querySelector<HTMLInputElement>('#avalanche-toggle')!;
-    avalanche.checked = isAvalancheEnabled();
-    avalanche.addEventListener('change', () => {
-      setAvalancheEnabled(avalanche.checked);
-      setAvalancheVisible(map, avalanche.checked);
     });
 
     const toggle = body.querySelector<HTMLInputElement>('#debug-overlay-toggle')!;
@@ -417,8 +399,6 @@ function openLegendView(): void {
     // and a blue route, long after the map had moved on.
     const ink = mapInk(theme.get());
     body.innerHTML = `
-      <p class="sheet-lede">What the lines and markers on the map mean.</p>
-
       <div class="legend-section">
         <h3>Summits</h3>
         ${legendRow(
@@ -510,7 +490,7 @@ function openLegendView(): void {
       <div class="legend-section">
         <h3>Avalanche terrain</h3>
         <p class="legend-note">
-          Off by default &mdash; switch it on in Settings. Slope steepness computed from
+          Off by default &mdash; switch it on in Layers. Slope steepness computed from
           the downloaded region's elevation data, shaded where a slab could release.
           <strong>This is terrain, not a forecast.</strong> Avalanche danger is snowpack
           and weather as well as ground, and this map has never seen either. Unshaded is
@@ -563,6 +543,89 @@ function openLegendView(): void {
   });
 }
 
+// --- Layers ----------------------------------------------------------------------------
+
+/**
+ * One row per switchable overlay. Swatches are the Legend's own, read from the same inks,
+ * so a row shows what it switches in the colour the map draws it.
+ */
+const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink: MapInk) => string }> = {
+  peaks: {
+    label: 'Summits',
+    note: 'Summit markers, names and heights.',
+    swatch: (ink) =>
+      `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="6" fill="${ink.peakDot}" stroke="${ink.peakDotStroke}" stroke-width="2"/></svg>`,
+  },
+  hillshade: {
+    label: 'Hillshade',
+    note: 'Shaded relief.',
+    swatch: () => '<div class="legend-hillshade-swatch"></div>',
+  },
+  contours: {
+    label: 'Contours',
+    note: 'Contour lines and heights, in downloaded regions.',
+    swatch: (ink) =>
+      `<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="${ink.contour}" stroke-width="1.2"/></svg>`,
+  },
+  paths: {
+    label: 'Paths and tracks',
+    note: 'Footpaths and tracks, in downloaded regions.',
+    swatch: (ink) => lineSwatch(ink.pathLine, 2, { dash: '4 3', casing: ink.pathCasing, cap: 'butt' }),
+  },
+  sac: {
+    label: 'Path grade (SAC)',
+    note: 'T1–T6 colour bands under graded paths.',
+    swatch: () => lineSwatch(sacCssColor(SAC_GRADES[2].grade), 7, { cap: 'butt' }),
+  },
+  terrainFeatures: {
+    label: 'Ground surface',
+    note: 'Scree, shingle, rock and boulders.',
+    swatch: () =>
+      `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[0].fillColor}" fill-opacity="0.55"/></svg>`,
+  },
+  avalanche: {
+    label: 'Avalanche terrain',
+    note: 'Slopes shaded by steepness. Terrain only — not a forecast. Off by default.',
+    swatch: () =>
+      `<svg viewBox="0 0 40 24"><rect x="3" y="5" width="34" height="14" rx="2" fill="${slopeCssColor(2)}" fill-opacity="0.75"/></svg>`,
+  },
+  footprints: {
+    label: 'Offline coverage',
+    note: 'Outlines of downloaded and available regions.',
+    swatch: () =>
+      '<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="#15803d" fill-opacity="0.12" stroke="#15803d" stroke-width="1.5"/></svg>',
+  },
+};
+
+function openLayersView(): void {
+  openView('layers', (body) => {
+    const ink = mapInk(theme.get());
+    body.innerHTML = `
+      ${LAYER_GROUP_ORDER.map((group) => {
+        const row = LAYER_ROWS[group];
+        return `
+          <label class="legend-row layer-row">
+            <div class="legend-swatch">${row.swatch(ink)}</div>
+            <span class="legend-row-text">
+              <span class="legend-row-label">${row.label}</span>
+              <span class="legend-row-note">${row.note}</span>
+            </span>
+            <input id="layer-toggle-${group}" type="checkbox" data-group="${group}" />
+          </label>
+        `;
+      }).join('')}
+    `;
+    for (const input of body.querySelectorAll<HTMLInputElement>('input[data-group]')) {
+      const group = input.dataset.group as LayerGroup;
+      input.checked = isLayerVisible(group);
+      input.addEventListener('change', () => {
+        setLayerVisible(group, input.checked);
+        applyLayerVisibility(map, group);
+      });
+    }
+  });
+}
+
 sheet.open('peek');
 
 
@@ -593,6 +656,7 @@ const VIEW_LABEL: Record<View, string> = {
   install: 'Add to Home Screen',
   settings: 'Settings',
   legend: 'Map legend',
+  layers: 'Map layers',
 };
 
 const terrainSource: maplibregl.SourceSpecification = USE_FALLBACK_TERRAIN
@@ -805,6 +869,8 @@ function installAppLayers(): void {
   // Added here rather than lazily on first use: adding a source before the style is
   // ready throws, and the planner can be opened at any moment after this point.
   addRouteLayers(map, theme.get());
+  // Peaks and the catalog hillshade; regions and footprints re-apply their own as they land.
+  applyAllStoredVisibility(map);
   // Downloaded regions are restored without any user action, so a cold offline launch
   // renders from OPFS immediately (Phase 3 acceptance). This also redraws the coverage
   // footprints.
@@ -906,6 +972,7 @@ function drawFootprints(): void {
     return;
   }
   renderFootprints(map, visibleFootprints(footprints(), offeredRegionId));
+  applyAllStoredVisibility(map);
 }
 
 // --- Detail-limit notice (§8.2 catalog-only makes this reachable) --------------------

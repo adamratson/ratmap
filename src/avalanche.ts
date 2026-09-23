@@ -169,23 +169,20 @@ export function avalancheLayerId(sourceId: string): string {
   return `${sourceId}${SHADE_SUFFIX}`;
 }
 
-/** Every avalanche layer currently in the style. */
-export function avalancheLayerIds(map: MLMap): string[] {
-  return map
-    .getStyle()
-    .layers.map((layer) => layer.id)
-    .filter((id) => id.endsWith(`-avalanche${SHADE_SUFFIX}`));
-}
-
+/**
+ * Off by default: a walking map that arrives pre-shaded in five colours is not what most
+ * people want in June, and a safety layer that is always on is a layer people stop
+ * seeing. Visibility itself (on/off, and remembering it) is owned by layers.ts, alongside
+ * every other overlay's — see its `avalanche` LayerGroup.
+ */
 export function addAvalancheLayer(
   map: MLMap,
   sourceId: string,
-  { minzoom, maxzoom, before, visible }: {
+  { minzoom, maxzoom, before }: {
     minzoom: number;
     /** The archive's own top zoom, from the manifest — where `nearest` takes over. */
     maxzoom: number;
     before?: string;
-    visible: boolean;
   },
 ): void {
   map.addLayer(
@@ -194,7 +191,7 @@ export function addAvalancheLayer(
       type: 'color-relief',
       source: sourceId,
       minzoom,
-      layout: { visibility: visible ? 'visible' : 'none' },
+      layout: { visibility: 'none' },
       paint: {
         'color-relief-color': avalancheColorRamp() as never,
         // Translucent: this annotates the ground, it does not replace it. Contours and
@@ -210,37 +207,4 @@ export function addAvalancheLayer(
     },
     before,
   );
-}
-
-/** Show or hide every avalanche layer at once — the Settings toggle. */
-export function setAvalancheVisible(map: MLMap, visible: boolean): void {
-  for (const id of avalancheLayerIds(map)) {
-    if (map.getLayer(id)) {
-      map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
-    }
-  }
-}
-
-const STORAGE_KEY = 'ratmap:avalanche-layer';
-
-/**
- * Off by default, and remembered.
- *
- * A walking map that arrives pre-shaded in five colours is not what most people want in
- * June, and a safety layer that is always on is a layer people stop seeing.
- */
-export function isAvalancheEnabled(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function setAvalancheEnabled(enabled: boolean): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0');
-  } catch {
-    // Private mode: the toggle still works for this session, it just won't be remembered.
-  }
 }

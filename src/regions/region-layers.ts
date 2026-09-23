@@ -8,8 +8,9 @@ import type { TileSourceRegistry } from '../tile-source-registry';
 import { COPERNICUS_ATTRIBUTION, OSM_ATTRIBUTION, TERRAIN_ATTRIBUTION } from '../config';
 import { PEAKS_LAYER_ID } from '../peaks';
 import { addSacLayers } from '../sac';
-import { addAvalancheLayer, avalancheSourceSpec, isAvalancheEnabled } from '../avalanche';
+import { addAvalancheLayer, avalancheSourceSpec } from '../avalanche';
 import { addTerrainFeatureLayers } from '../terrain-features';
+import { applyAllStoredVisibility } from '../layers';
 
 // Renders a downloaded region *over* the low-zoom world catalog rather than replacing it,
 // so panning outside the region degrades to the global view instead of falling off the
@@ -398,9 +399,6 @@ export async function addRegionToMap(
         // Beneath the labels like the relief and contours — this shades the ground, so
         // painting it over the place names would be the same mistake the hillshade made.
         before: beneathLabels(map, region.id),
-        // Restored from the user's setting rather than defaulting to on: a region
-        // downloaded while the layer is switched off must not switch it back on.
-        visible: isAvalancheEnabled(),
       });
     } else if (artifact.kind === 'sac') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
@@ -432,6 +430,11 @@ export async function addRegionToMap(
       });
     }
   }
+
+  // Every layer above was added visible (avalanche hidden). A region restored or
+  // downloaded while one of its overlays is switched off in the Layers tab must come out
+  // with it off, not quietly switch it back on.
+  applyAllStoredVisibility(map);
 }
 
 /**

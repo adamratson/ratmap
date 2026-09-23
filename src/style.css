@@ -824,6 +824,25 @@ textarea {
   color: var(--text-muted);
 }
 
+/* A legend row with a switch on the end — the Layers tab. The row is the label, so the
+   whole of it is the tap target, not just the checkbox. */
+.layer-row {
+  cursor: pointer;
+}
+
+.layer-row .legend-row-text {
+  flex: 1;
+}
+
+.layer-row input[type='checkbox'] {
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 1.6rem;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 /* Sits under a legend heading, for a section that needs a sentence before its rows —
    the SAC scale, where what an *absent* band means matters as much as the colours. */
 .legend-note {

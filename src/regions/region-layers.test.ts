@@ -38,6 +38,10 @@ function fakeMap() {
       else layers.push(layer);
     }),
     getLayer: vi.fn((id: string) => layers.find((l) => l.id === id)),
+    setLayoutProperty: vi.fn((id: string, name: string, value: unknown) => {
+      const layer = layers.find((l) => l.id === id);
+      if (layer) layer.layout = { ...(layer.layout as object | undefined), [name]: value };
+    }),
     removeLayer: vi.fn((id: string) => {
       const i = layers.findIndex((l) => l.id === id);
       if (i >= 0) layers.splice(i, 1);
@@ -157,6 +161,35 @@ describe('addRegionToMap', () => {
     // Everything else in the region's basemap (roads, fills, ...) is unaffected — still
     // stacked beneath peaks as before.
     if (regionRoadsIdx > -1) expect(regionRoadsIdx).toBeLessThan(peaksIdx);
+  });
+
+  it('comes out with an overlay hidden when the Layers tab has it switched off', async () => {
+    // A region restored at startup, or finishing a download, while contours are off must
+    // not quietly switch them back on.
+    const stored = new Map([['ratmap:visible-layers', JSON.stringify({ contours: false })]]);
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+    });
+    try {
+      const map = fakeMap();
+
+      await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
+
+      const visibilityOf = (id: string) =>
+        (map.layers.find((l) => l.id === id)?.layout as Record<string, unknown> | undefined)
+          ?.visibility;
+      for (const id of [
+        'region-lochaber-contours-lines-index',
+        'region-lochaber-contours-lines',
+        'region-lochaber-contours-labels',
+      ]) {
+        expect(visibilityOf(id), id).toBe('none');
+      }
+      expect(visibilityOf('region-lochaber-terrain-hillshade')).toBe('visible');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('emphasises index contours using the attribute the pipeline actually emits', async () => {

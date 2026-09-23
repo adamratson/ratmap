@@ -129,6 +129,36 @@ describe('addRegionToMap', () => {
     }
   });
 
+  it("puts the region's own town labels ahead of peaks in collision priority", async () => {
+    // MapLibre gives placement priority to whatever's later in layer order (see peaks.ts).
+    // A downloaded region carries its own copy of places_locality (the Lake District's
+    // real Keswick/Penrith-level detail), but it was being inserted at PEAKS_LAYER_ID
+    // alongside every other region layer — landing *before* peaks-symbol in order, so the
+    // fells still won every collision even once real town data was on the map.
+    const map = fakeMap();
+    // Peaks already sits directly beneath the global catalog's own town labels (peaks.ts).
+    map.layers.push(
+      { id: 'peaks-symbol', type: 'symbol' },
+      { id: 'places_locality', type: 'symbol' },
+    );
+
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
+
+    const ids = map.layers.map((l) => String(l.id));
+    const peaksIdx = ids.indexOf('peaks-symbol');
+    const regionTownLabelIdx = ids.indexOf('region-lochaber-basemap-places_locality');
+    const regionRoadsIdx = ids.indexOf('region-lochaber-basemap-roads_minor');
+
+    expect(peaksIdx).toBeGreaterThan(-1);
+    expect(regionTownLabelIdx).toBeGreaterThan(-1);
+    // Higher index = later = placed first = wins collision — the region's town labels
+    // must outrank peaks, exactly like the catalog's do.
+    expect(regionTownLabelIdx).toBeGreaterThan(peaksIdx);
+    // Everything else in the region's basemap (roads, fills, ...) is unaffected — still
+    // stacked beneath peaks as before.
+    if (regionRoadsIdx > -1) expect(regionRoadsIdx).toBeLessThan(peaksIdx);
+  });
+
   it('emphasises index contours using the attribute the pipeline actually emits', async () => {
     const map = fakeMap();
 

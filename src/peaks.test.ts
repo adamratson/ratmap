@@ -39,7 +39,7 @@ describe('addPeaksLayer', () => {
     const registry = fakeRegistry();
     const addSource = vi.fn();
     const addLayer = vi.fn();
-    const map = { addSource, addLayer } as unknown as MLMap;
+    const map = { addSource, addLayer, getLayer: vi.fn() } as unknown as MLMap;
 
     addPeaksLayer(map, registry, 'light');
 
@@ -55,7 +55,7 @@ describe('addPeaksLayer', () => {
   it('adds both a marker and a label layer', () => {
     const registry = fakeRegistry();
     const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
+    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
 
     addPeaksLayer(map, registry, 'light');
 
@@ -64,10 +64,42 @@ describe('addPeaksLayer', () => {
     expect(ids).toContain(`${PEAKS_LAYER_ID}-marker`);
   });
 
+  it('inserts the label layer before the basemap town/city labels, not on top of everything', () => {
+    // MapLibre places layers in reverse style order — the topmost layer claims collision
+    // space first. Appending peaks on top (the default for addLayer with no beforeId) let
+    // the Lake District's fell density blank out every nearby town label. Placing peaks
+    // before `places_locality` instead lets towns place first.
+    const registry = fakeRegistry();
+    const addLayer = vi.fn();
+    const getLayer = vi.fn().mockReturnValue({ id: 'places_locality' });
+    const map = { addSource: vi.fn(), addLayer, getLayer } as unknown as MLMap;
+
+    addPeaksLayer(map, registry, 'light');
+
+    const labelCall = addLayer.mock.calls.find((call) => call[0].id === PEAKS_LAYER_ID)!;
+    const markerCall = addLayer.mock.calls.find(
+      (call) => call[0].id === `${PEAKS_LAYER_ID}-marker`,
+    )!;
+    expect(labelCall[1]).toBe('places_locality');
+    expect(markerCall[1]).toBe(PEAKS_LAYER_ID);
+  });
+
+  it('falls back to appending when the basemap has no places_locality layer', () => {
+    const registry = fakeRegistry();
+    const addLayer = vi.fn();
+    const getLayer = vi.fn().mockReturnValue(undefined);
+    const map = { addSource: vi.fn(), addLayer, getLayer } as unknown as MLMap;
+
+    addPeaksLayer(map, registry, 'light');
+
+    const labelCall = addLayer.mock.calls.find((call) => call[0].id === PEAKS_LAYER_ID)!;
+    expect(labelCall[1]).toBeUndefined();
+  });
+
   it('builds a label expression that degrades when name or ele is missing', () => {
     const registry = fakeRegistry();
     const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
+    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
 
     addPeaksLayer(map, registry, 'light');
 
@@ -141,7 +173,7 @@ describe('PEAKS_NOTABILITY_FILTER', () => {
   it('is applied to the marker layer as well as the labels, so they stay in sync', () => {
     const registry = fakeRegistry();
     const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
+    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
 
     addPeaksLayer(map, registry, 'light');
 
@@ -193,7 +225,7 @@ describe('PEAKS_RENDER_FILTER', () => {
   it('is what addPeaksLayer actually filters both layers on', () => {
     const registry = fakeRegistry();
     const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
+    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
 
     addPeaksLayer(map, registry, 'light');
 
@@ -206,7 +238,7 @@ describe('munro styling', () => {
   it('prefixes the label and swaps marker colour for a munro, not just a symbol change', () => {
     const registry = fakeRegistry();
     const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer } as unknown as MLMap;
+    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
 
     addPeaksLayer(map, registry, 'light');
 

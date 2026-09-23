@@ -8,6 +8,7 @@ import { OSM_ATTRIBUTION, PEAKS_MAX_ZOOM, PEAKS_PMTILES_URL } from './config';
 import { isCoarsePointer } from './pointer';
 import type { TileSourceRegistry } from './tile-source-registry';
 import { MAP_FONTS, mapInk } from './flavor';
+import { TOWN_LABEL_LAYER_ID } from './landuse';
 import type { Theme } from './theme';
 
 // Summits overlay, backed by our own peaks-global.pmtiles — Protomaps v4 dropped `ele`
@@ -142,37 +143,57 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: T
     '',
   ];
 
-  map.addLayer({
-    id: PEAKS_LAYER_ID,
-    type: 'symbol',
-    source: PEAKS_SOURCE_ID,
-    'source-layer': PEAKS_SOURCE_LAYER,
-    filter: PEAKS_RENDER_FILTER as unknown as FilterSpecification,
-    layout: {
-      // Name on the first line, elevation on the second — dropped cleanly when either is
-      // missing rather than leaving a stray separator or a blank line. A Munro gets a ▲
-      // prefix: colour alone isn't a safe way to mark list membership (washes out on a
-      // greyscale screen in rain), so shape carries it too.
-      'text-field': ['case', MUNRO_EXPR, ['concat', '▲ ', baseTextField], baseTextField],
-      // Medium, not Regular: the only weight above Regular we bundle (public/fonts has no
-      // Bold), but heavy enough to hold up against a busy hillshaded background.
-      'text-font': [MAP_FONTS.medium],
-      'text-size': 12,
-      'text-offset': [0, 0.7],
-      'text-anchor': 'top',
-      'text-optional': true,
-      'text-allow-overlap': false,
+  // Inserted below the basemap's town/city labels (TOWN_LABEL_LAYER_ID, from
+  // @protomaps/basemaps), not appended on top. MapLibre resolves symbol collisions in
+  // reverse layer order — the topmost layer places first and claims the screen space, and
+  // everything beneath it only gets a label if there's room left. With the Lake District's
+  // fell density, appending peaks last (the default for a plain addLayer) let them claim
+  // every collision box near a town before place labels got a turn, so Keswick, Penrith,
+  // Whitehaven etc. never rendered at all. Placing peaks before `places_locality` instead
+  // means towns place first and peaks yield around them, while peaks still draw above
+  // roads, landuse and hillshade — everything else in the basemap stack comes earlier
+  // still.
+  //
+  // Only the *global* catalog's copy exists yet — addPeaksLayer runs before any downloaded
+  // region's basemap is restored (installAppLayers' call order). region-layers.ts anchors
+  // each region's own town-label layer against this same id, so peaks ends up beneath
+  // both the catalog's and every downloaded region's town labels, not just the catalog's.
+  const beforeId = map.getLayer(TOWN_LABEL_LAYER_ID) ? TOWN_LABEL_LAYER_ID : undefined;
+
+  map.addLayer(
+    {
+      id: PEAKS_LAYER_ID,
+      type: 'symbol',
+      source: PEAKS_SOURCE_ID,
+      'source-layer': PEAKS_SOURCE_LAYER,
+      filter: PEAKS_RENDER_FILTER as unknown as FilterSpecification,
+      layout: {
+        // Name on the first line, elevation on the second — dropped cleanly when either is
+        // missing rather than leaving a stray separator or a blank line. A Munro gets a ▲
+        // prefix: colour alone isn't a safe way to mark list membership (washes out on a
+        // greyscale screen in rain), so shape carries it too.
+        'text-field': ['case', MUNRO_EXPR, ['concat', '▲ ', baseTextField], baseTextField],
+        // Medium, not Regular: the only weight above Regular we bundle (public/fonts has no
+        // Bold), but heavy enough to hold up against a busy hillshaded background.
+        'text-font': [MAP_FONTS.medium],
+        'text-size': 12,
+        'text-offset': [0, 0.7],
+        'text-anchor': 'top',
+        'text-optional': true,
+        'text-allow-overlap': false,
+      },
+      paint: {
+        // Ink, not the brown used previously — that brown sat one shade off the contour
+        // and footpath colours, so a peak label read as more relief or path clutter than a
+        // distinct feature. Munro gold is kept, darkened by day and lifted at night, so it
+        // pops off the halo rather than blending into hillshade ochre. See mapInk().
+        'text-color': ['case', MUNRO_EXPR, ink.peakMunroText, ink.peakText],
+        'text-halo-color': ink.labelHalo,
+        'text-halo-width': 1.6,
+      },
     },
-    paint: {
-      // Ink, not the brown used previously — that brown sat one shade off the contour
-      // and footpath colours, so a peak label read as more relief or path clutter than a
-      // distinct feature. Munro gold is kept, darkened by day and lifted at night, so it
-      // pops off the halo rather than blending into hillshade ochre. See mapInk().
-      'text-color': ['case', MUNRO_EXPR, ink.peakMunroText, ink.peakText],
-      'text-halo-color': ink.labelHalo,
-      'text-halo-width': 1.6,
-    },
-  });
+    beforeId,
+  );
 
   // Separate circle layer for the marker itself — symbol layers can't draw both an icon
   // and text without a sprite image, and we don't have a peak sprite yet.

@@ -1,7 +1,7 @@
 import type { FilterSpecification, Map as MLMap } from 'maplibre-gl';
 import { MAP_FONTS, mapInk, ratmapFlavor, type MapInk } from '../flavor';
 import type { Theme } from '../theme';
-import { basemapLayersWithBareRock } from '../landuse';
+import { basemapLayersWithBareRock, TOWN_LABEL_LAYER_ID } from '../landuse';
 import type { Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
 import type { TileSourceRegistry } from '../tile-source-registry';
@@ -279,6 +279,16 @@ export async function addRegionToMap(
       // visible. A style needs exactly one background, and the global basemap already
       // supplies it.
       const generated = basemapLayersWithBareRock(sourceId, ratmapFlavor(theme), { lang: 'en' });
+      const beforePeaks = map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined;
+      // The region's own town/city labels need the same collision priority over peaks as
+      // the global catalog's do (see peaks.ts) — otherwise a downloaded region's real
+      // Keswick/Penrith-level detail still loses to the Lake District's fell density,
+      // because everything in this loop would otherwise land *before* peaks-symbol in
+      // layer order and MapLibre gives placement priority to whatever's later (on top).
+      // Anchoring against the catalog's own TOWN_LABEL_LAYER_ID — which peaks.ts already
+      // placed peaks-symbol directly beneath — lands this region's copy right alongside
+      // it, one layer above peaks-symbol, rather than one layer below it.
+      const beforeTownLabels = map.getLayer(TOWN_LABEL_LAYER_ID) ? TOWN_LABEL_LAYER_ID : beforePeaks;
       for (const layer of generated) {
         if (!('source' in layer) || !layer.source) continue;
         const scoped = {
@@ -286,7 +296,8 @@ export async function addRegionToMap(
           id: `${sourceId}-${layer.id}`,
           minzoom: Math.max(layer.minzoom ?? 0, minzoom),
         };
-        map.addLayer(scoped, map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined);
+        const beforeId = layer.id === TOWN_LABEL_LAYER_ID ? beforeTownLabels : beforePeaks;
+        map.addLayer(scoped, beforeId);
       }
 
       addPathLayers(map, sourceId, {

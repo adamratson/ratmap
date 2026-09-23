@@ -1,6 +1,15 @@
 import type { LayerSpecification } from 'maplibre-gl';
 import { layers as basemapLayers, type Flavor } from '@protomaps/basemaps';
 
+/**
+ * @protomaps/basemaps' own id for the settlement layer (city/town/village/hamlet, styled
+ * by population_rank — see its base_layers.ts). Both the global catalog's copy and every
+ * downloaded region's own copy (prefixed `region-<id>-`, see region-layers.ts) carry this
+ * same base id, which is what lets peaks.ts and region-layers.ts each single it out for
+ * label-collision priority over the peaks layer.
+ */
+export const TOWN_LABEL_LAYER_ID = 'places_locality';
+
 // OSM `natural=bare_rock` rides in every basemap archive already — Protomaps' own
 // `Landuse.java` puts it in the `landuse` source-layer as `kind: "bare_rock"` at
 // minzoom 2, same as `wood`/`scrub`/`glacier`. But `landuse_park`, the layer that paints

@@ -28,6 +28,8 @@ PEAKS_SOURCE_URLS="${PEAKS_SOURCE_URLS:-$(python3 "$(dirname "${BASH_SOURCE[0]}"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
+PEAKS_FILTER="n/natural=peak,volcano,saddle n/mountain_pass=yes"
+
 filtered_pbfs=()
 i=0
 for url in $PEAKS_SOURCE_URLS; do
@@ -35,12 +37,11 @@ for url in $PEAKS_SOURCE_URLS; do
   echo "Source: $url"
   # Cached outside WORK_DIR so a rerun (or the places build) costs no re-download.
   src="$(cached_osm_extract "$url")"
+  # Filtered from the subset all five OSM stages share (lib.sh), not the whole extract.
+  src="$(osm_subset "$src" $PEAKS_FILTER)"
 
   filtered="$WORK_DIR/filtered-$i.osm.pbf"
-  osmium tags-filter "$src" \
-    n/natural=peak,volcano,saddle \
-    n/mountain_pass=yes \
-    -o "$filtered" --overwrite
+  osmium tags-filter "$src" $PEAKS_FILTER -o "$filtered" --overwrite
   filtered_pbfs+=("$filtered")
 done
 
@@ -78,7 +79,6 @@ python3 "$(dirname "${BASH_SOURCE[0]}")/normalize-peaks.py" \
 # Peaks outside every region bbox keep no `prom` and fall back to elevation in the app.
 SCRIPT_DIR_PK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROM_PY="$INFRA_DIR/.venv/bin/python"
-PROM_IN="$WORK_DIR/peaks-normalized.geojsonl"
 
 if [ ! -x "$PROM_PY" ]; then
   echo "Missing $PROM_PY — create it with:" >&2
@@ -91,34 +91,20 @@ fi
 # peak is not a 30 m-scale quantity.
 PROM_RES="${PROM_DEM_RES:-0.000833333}"
 
-while read -r region_id w s e n; do
-  echo "==> prominence: $region_id"
-  dem="$WORK_DIR/dem-$region_id.tif"
-  if ! bash "$SCRIPT_DIR_PK/fetch-dem.sh" "$w" "$s" "$e" "$n" "$dem" "$PROM_RES"; then
-    echo "  ! no DEM for $region_id — its peaks keep no prominence" >&2
-    continue
-  fi
-  "$PROM_PY" "$SCRIPT_DIR_PK/compute-prominence.py" \
-    "$dem" "$PROM_IN" "$WORK_DIR/peaks-prom-$region_id.geojsonl" \
-    --step "${PROM_STEP:-20}" --downsample 1
-  PROM_IN="$WORK_DIR/peaks-prom-$region_id.geojsonl"
-  rm -f "$dem"
-done < <(python3 - "$INFRA_DIR/regions.json" <<'PY_REGIONS'
-import json, sys
-with open(sys.argv[1]) as f:
-    regions = json.load(f)["regions"]
-# Smallest bbox first, so a larger region's pass overwrites a smaller overlapping one.
-# Lochaber and Cairngorms sit inside Scotland; prominence measured in the bigger box is
-# the better value, because a key col near the edge of a small box gets clipped to the
-# box and the peak's prominence is over-stated. Sorting makes that independent of the
-# order regions happen to appear in regions.json.
-for r in sorted(regions, key=lambda r: (r["bbox"][2] - r["bbox"][0]) * (r["bbox"][3] - r["bbox"][1])):
-    w, s, e, n = r["bbox"]
-    print(r["id"], w, s, e, n)
-PY_REGIONS
-)
-
-cp "$PROM_IN" "$WORK_DIR/peaks-final.geojsonl"
+# The whole catalogue in one run: the peaks are read once, each region's DEM is fetched
+# (fetch-dem.sh, cached in DEM_CACHE_DIR) PROM_FETCH_WORKERS at a time, and the regions are
+# scored smallest bbox first so a larger region overwrites a smaller overlapping one. This
+# used to be a loop here that re-ran the script — and re-parsed every peak — once per
+# region; the ordering rule and its reasons now live in compute-prominence.py's
+# run_regions(). A region with no DEM keeps no prominence and is listed at the end.
+"$PROM_PY" "$SCRIPT_DIR_PK/compute-prominence.py" \
+  --regions "$INFRA_DIR/regions.json" \
+  --fetch-dem "$SCRIPT_DIR_PK/fetch-dem.sh" \
+  --res "$PROM_RES" \
+  --work-dir "$WORK_DIR" \
+  --fetch-workers "${PROM_FETCH_WORKERS:-3}" \
+  --step "${PROM_STEP:-20}" --downsample 1 \
+  "$WORK_DIR/peaks-normalized.geojsonl" "$WORK_DIR/peaks-final.geojsonl"
 
 # Elevation regression check (plan §4 Phase 1 acceptance): a schema or parsing change that
 # silently breaks `ele` should fail the build here, not be discovered on a mountain.

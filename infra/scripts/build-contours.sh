@@ -117,7 +117,15 @@ echo "==> tiling"
 # fails-closed guard then refuses on it — correctly — but blocks publishing every OTHER
 # region too, since it scans everything under dist/regions/. Hit for real (austria,
 # 2026-09) before this fix.
-TMP_OUT="$OUT.building"
+#
+# The temporary name still ends in .pmtiles, deliberately: tippecanoe picks its output
+# *format* from the extension, and the "$OUT.building" this used to write came out as
+# MBTiles ("SQLite format 3" in the header, tippecanoe 2.79.0 — the image's version), which
+# then failed `pmtiles verify` — as any contours build since 0c483f6 (2026-09-04) would
+# have, until this was found on 2026-09-23. The same trap build-paths.sh's comment
+# describes, with the same fix. The leading dot keeps it out of upload.sh's glob, and
+# build-manifest.py skips it as an unrecognised suffix should a killed run leave one behind.
+TMP_OUT="$OUT_DIR/.$REGION_ID-contours.building.pmtiles"
 rm -f "$TMP_OUT"
 tippecanoe -o "$TMP_OUT" \
   -Z"$CONTOUR_MINZOOM" -z"$CONTOUR_MAXZOOM" \

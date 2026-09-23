@@ -32,18 +32,22 @@ SCRIPT_DIR_SAC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # discarding it is a graded path silently vanishing from the map.
 python3 "$SCRIPT_DIR_SAC/normalize-sac.py" --self-test
 
+# Ways only. `sac_scale` on a node or a relation is a tagging error — the scale describes a
+# stretch of path — and either would export as geometry the app cannot draw as a band or
+# match a route against.
+SAC_FILTER="w/sac_scale"
+
 filtered_pbfs=()
 i=0
 for url in $SAC_SOURCE_URLS; do
   i=$((i + 1))
   echo "Source: $url"
   src="$(cached_osm_extract "$url")"
+  # Filtered from the subset all five OSM stages share (lib.sh), not the whole extract.
+  src="$(osm_subset "$src" $SAC_FILTER)"
 
   filtered="$WORK_DIR/filtered-$i.osm.pbf"
-  # Ways only. `sac_scale` on a node or a relation is a tagging error — the scale
-  # describes a stretch of path — and either would export as geometry the app cannot draw
-  # as a band or match a route against.
-  osmium tags-filter "$src" w/sac_scale -o "$filtered" --overwrite
+  osmium tags-filter "$src" $SAC_FILTER -o "$filtered" --overwrite
   filtered_pbfs+=("$filtered")
 done
 

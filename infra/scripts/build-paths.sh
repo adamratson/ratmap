@@ -101,9 +101,21 @@ tile_one_source() {
   # more than one continent's worth.
   work="$(mktemp -d)"
 
-  osmium tags-filter "$src" $PATHS_FILTER -o "$work/filtered.osm.pbf" --overwrite
+  # Filtered from the subset all five OSM stages share (lib.sh), not the whole extract —
+  # asked for only here, past the cache check, so a cached tileset costs no subset. The
+  # tileset key above stays the extract's own name either way.
+  local subset
+  subset="$(osm_subset "$src" $PATHS_FILTER)"
+  osmium tags-filter "$subset" $PATHS_FILTER -o "$work/filtered.osm.pbf" --overwrite
+
+  # Lines only. tags-filter carries each way's tagged nodes along with it (gates, stiles,
+  # crossings), and osmium exports a closed way as an area as well as a line; the reduce
+  # below keeps only the lines, so emitting the rest was writing features to throw them
+  # away — 86,842 of 459,047 for Scotland, with the reduce's output byte-identical either
+  # way (2026-09-23).
   osmium export "$work/filtered.osm.pbf" -o "$work/raw.geojsonl" \
-    -f geojsonseq -x print_record_separator=false --overwrite
+    -f geojsonseq -x print_record_separator=false --overwrite \
+    --geometry-types=linestring
   rm -f "$work/filtered.osm.pbf"
 
   reduce_to_path_properties "$work/raw.geojsonl" "$work/final.geojsonl" "$key"
@@ -146,8 +158,8 @@ with open(sys.argv[1]) as src, open(sys.argv[2], "w") as dest:
         if not line:
             continue
         feature = json.loads(line)
-        # Ways only. `osmium tags-filter w/...` carries the ways' own tagged nodes along
-        # with them — gates, stiles, crossings — and a point is not a path.
+        # Ways only. The export already asks osmium for lines alone; this stays as the
+        # guard, since a point or an area slipping through would be drawn as a path.
         if feature.get("geometry", {}).get("type") not in ("LineString", "MultiLineString"):
             skipped += 1
             continue

@@ -25,15 +25,19 @@ SCRIPT_DIR_TF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 python3 "$SCRIPT_DIR_TF/normalize-terrain-features.py" --self-test
 
+TERRAIN_FEATURES_FILTER="nwr/natural=scree,shingle,rock,stone"
+
 filtered_pbfs=()
 i=0
 for url in $TERRAIN_FEATURES_SOURCE_URLS; do
   i=$((i + 1))
   echo "Source: $url"
   src="$(cached_osm_extract "$url")"
+  # Filtered from the subset all five OSM stages share (lib.sh), not the whole extract.
+  src="$(osm_subset "$src" $TERRAIN_FEATURES_FILTER)"
 
   filtered="$WORK_DIR/filtered-$i.osm.pbf"
-  osmium tags-filter "$src" nwr/natural=scree,shingle,rock,stone -o "$filtered" --overwrite
+  osmium tags-filter "$src" $TERRAIN_FEATURES_FILTER -o "$filtered" --overwrite
   filtered_pbfs+=("$filtered")
 done
 

@@ -98,6 +98,19 @@ services:
       # Threads build-manifest.py hashes with (default 2). Set 1 on a spinning disk.
       # Same passthrough reason as the rest: undeclared, an inline host value is dropped.
       MANIFEST_HASH_WORKERS: "${MANIFEST_HASH_WORKERS:-}"
+      # Range requests per `pmtiles extract` in build-region.sh (default 16), and regions
+      # built at once in the regions stage (default 1). Same passthrough reason.
+      REGION_DOWNLOAD_THREADS: "${REGION_DOWNLOAD_THREADS:-}"
+      RATMAP_REGIONS_PARALLEL: "${RATMAP_REGIONS_PARALLEL:-}"
+      # DEM fetches in flight during the peaks stage's prominence pass (default 3), and
+      # ahead of the contours stage's builds (default 2; 0 turns fetch-ahead off).
+      PROM_FETCH_WORKERS: "${PROM_FETCH_WORKERS:-}"
+      RATMAP_CONTOURS_FETCH_AHEAD: "${RATMAP_CONTOURS_FETCH_AHEAD:-}"
+      # 1 filters each OSM stage from the whole extract rather than the shared subset.
+      RATMAP_NO_OSM_SUBSET: "${RATMAP_NO_OSM_SUBSET:-}"
+      # DEM_CACHE_DIR is deliberately *not* passed through: declared here it would arrive
+      # as an empty string whenever the host leaves it unset, and empty means "no cache".
+      # Unset, it defaults to /work/cache/dem beside the OSM cache (lib.sh).
 
       # upload.sh's own unpublish guard — same passthrough gap as above, lower stakes
       # (an unset ALLOW_UNPUBLISH just makes the guard refuse, not silently do the wrong

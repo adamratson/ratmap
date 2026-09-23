@@ -17,6 +17,9 @@ PLACES_SOURCE_URLS="${PLACES_SOURCE_URLS:-${PEAKS_SOURCE_URLS:-$(python3 "$(dirn
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
+# Settlements and summits in one pass.
+PLACES_FILTER="n/place=city,town,village,hamlet,suburb n/natural=peak,volcano,saddle n/mountain_pass=yes"
+
 geojsons=()
 i=0
 for url in $PLACES_SOURCE_URLS; do
@@ -24,13 +27,10 @@ for url in $PLACES_SOURCE_URLS; do
   echo "Source: $url"
   # Shares build-peaks.sh's cache — running peaks then places downloads nothing twice.
   src="$(cached_osm_extract "$url")"
+  # Filtered from the subset all five OSM stages share (lib.sh), not the whole extract.
+  src="$(osm_subset "$src" $PLACES_FILTER)"
 
-  # Settlements and summits in one pass.
-  osmium tags-filter "$src" \
-    n/place=city,town,village,hamlet,suburb \
-    n/natural=peak,volcano,saddle \
-    n/mountain_pass=yes \
-    -o "$WORK_DIR/filtered-$i.osm.pbf" --overwrite
+  osmium tags-filter "$src" $PLACES_FILTER -o "$WORK_DIR/filtered-$i.osm.pbf" --overwrite
 
   # Line-delimited so normalize-peaks.py and build-places-db.py can stream it — a
   # continent's settlements+summits run to millions of features. See build-peaks.sh.

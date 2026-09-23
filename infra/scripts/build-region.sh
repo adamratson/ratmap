@@ -161,6 +161,13 @@ TERRAIN_FEATURES_MAXZOOM="$BASEMAP_MAXZOOM"
 # basemap starts carrying paths, not to duplicate it.
 PATHS_MAXZOOM=13
 
+# Range requests in flight per extract. go-pmtiles defaults to 4 (`--download-threads`,
+# read from main.go at v1.31.2, the image's version); a Praha basemap cutout (41 MB) took
+# 18.4 s and 26.0 s at 4 against 14.7 s and 14.0 s at 16, byte-identical output
+# (2026-09-23). The upstream archives answer range reads slowly rather than narrowly, so
+# more of them in flight is most of what makes a region faster.
+DOWNLOAD_THREADS="${REGION_DOWNLOAD_THREADS:-16}"
+
 OUT_DIR="$DIST_DIR/regions/$REGION_ID"
 mkdir -p "$OUT_DIR"
 
@@ -188,11 +195,19 @@ echo
 # empty *basemap* would be a broken region, so it stays an error by default.
 extract_verified() {
   local source="$1" out="$2" maxzoom="$3" allow_empty="${4:-}"
-  local tmp="$out.building"
 
-  rm -f "$tmp"
-  pmtiles extract "$source" "$tmp" --bbox="$BBOX" --maxzoom="$maxzoom" $DRY_RUN
+  rm -f "$out.building"
+  pmtiles extract "$source" "$out.building" --bbox="$BBOX" --maxzoom="$maxzoom" \
+    --download-threads="$DOWNLOAD_THREADS" $DRY_RUN
   [ -n "$DRY_RUN" ] && return 0
+  finish_extract "$out" "$allow_empty"
+}
+
+# The second half of extract_verified: check <out>.building and move it into place. Split
+# out so the terrain extract can download in the background and be finished here later.
+finish_extract() {
+  local out="$1" allow_empty="${2:-}"
+  local tmp="$out.building"
 
   # An empty extract does not merely contain nothing — it fails `pmtiles verify` outright
   # ("header MinZoom=12 does not match min tile z 31"), so it has to be recognised before
@@ -229,6 +244,25 @@ with open(sys.argv[1], "rb") as f:
 print(struct.unpack_from("<Q", header, 72)[0] if header[:7] == b"PMTiles" else "invalid")
 PY_COUNT
 }
+
+# Terrain comes from a different host (Mapterhorn) than the basemap (Source Cooperative),
+# and both are latency-bound range reads, so it downloads in the background while
+# everything else is cut: a region then costs about the longer of the two, not their sum.
+# The pmtiles process itself is the background job, so the EXIT trap can stop it if
+# anything in the foreground fails; verification happens in the terrain step below, once
+# it has finished. A dry run stays sequential, so its report reads in order.
+TERRAIN_OUT="$OUT_DIR/$REGION_ID-terrain.pmtiles"
+TERRAIN_PID=""
+TERRAIN_LOG=""
+if wants terrain && [ "$WANT_TERRAIN" = 1 ] && [ -z "$DRY_RUN" ]; then
+  TERRAIN_LOG="$(mktemp)"
+  trap 'if [ -n "$TERRAIN_PID" ]; then kill "$TERRAIN_PID" 2>/dev/null || true; fi; rm -f "$TERRAIN_LOG"' EXIT
+  rm -f "$TERRAIN_OUT.building"
+  pmtiles extract "$TERRAIN_SOURCE" "$TERRAIN_OUT.building" --bbox="$BBOX" \
+    --maxzoom="$TERRAIN_MAXZOOM" --download-threads="$DOWNLOAD_THREADS" > "$TERRAIN_LOG" 2>&1 &
+  TERRAIN_PID=$!
+  echo "==> terrain: downloading in the background"
+fi
 
 if wants basemap; then
   echo "==> basemap"
@@ -269,7 +303,20 @@ if ! wants terrain; then
   :
 elif [ "$WANT_TERRAIN" = 1 ]; then
   echo "==> terrain"
-  extract_verified "$TERRAIN_SOURCE" "$OUT_DIR/$REGION_ID-terrain.pmtiles" "$TERRAIN_MAXZOOM"
+  if [ -n "$TERRAIN_PID" ]; then
+    terrain_status=0
+    wait "$TERRAIN_PID" || terrain_status=$?
+    TERRAIN_PID=""
+    cat "$TERRAIN_LOG"
+    if [ "$terrain_status" != 0 ]; then
+      echo "  FAILED: pmtiles extract exited $terrain_status" >&2
+      rm -f "$TERRAIN_OUT.building"
+      exit 1
+    fi
+    finish_extract "$TERRAIN_OUT"
+  else
+    extract_verified "$TERRAIN_SOURCE" "$TERRAIN_OUT" "$TERRAIN_MAXZOOM"
+  fi
 else
   # C16: a region is a set of named artifacts, so basemap-only is a legitimate region and
   # not a broken one. Antarctica is the case that forced this — its terrain spans every

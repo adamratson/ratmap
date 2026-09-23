@@ -139,6 +139,34 @@ print(int(total * 1.1 / 1e9))
 ' "$INFRA_DIR/regions.json" "$DIST_DIR"
 }
 
+# Memory the peaks stage's prominence pass needs, as "<GB> <largest region> <its Mpx>".
+#
+# compute-prominence.py scores one region's 90 m DEM at a time, holding the raster, a mask
+# and a label array of the same shape: ~9.5 bytes a pixel, measured at 1.35 GB on
+# Scotland's 143 Mpx (2026-09-23). Beside it run up to PROM_FETCH_WORKERS DEM fetches for
+# the regions next in line, each a gdal_translate whose block cache fetch-dem.sh caps at
+# 512 MB, plus the image's 512 MB VSI cache and the process itself: FETCH_DEM_GB at most.
+# Regions are scored smallest first, so the fetches running ahead are always for bigger
+# regions than the one being scored; the peak is the worst of those pairings, computed
+# here in that same order — the largest region itself is scored with nothing left to fetch.
+PEAKS_BYTES_PER_PX=9.5
+FETCH_DEM_GB=1.25
+peaks_mem_gb() {
+  python3 -c '
+import json, math, sys
+res, workers, per_fetch, per_px = (float(sys.argv[2]), int(sys.argv[3]),
+                                   float(sys.argv[4]), float(sys.argv[5]))
+def area(r): w, s, e, n = r["bbox"]; return (e - w) * (n - s)
+with open(sys.argv[1]) as f:
+    order = sorted(json.load(f)["regions"], key=area)
+px = [area(r) / (res * res) for r in order]
+n = len(order)
+need = max(px[k] * per_px / 2**30 + per_fetch * min(workers, n - 1 - k) for k in range(n))
+print(math.ceil(need), order[-1]["id"], round(px[-1] / 1e6))
+' "$INFRA_DIR/regions.json" "${PROM_DEM_RES:-0.000833333}" "${PROM_FETCH_WORKERS:-3}" \
+    "$FETCH_DEM_GB" "$PEAKS_BYTES_PER_PX"
+}
+
 preflight() {
   local work_gb dist_gb mem_gb cpus fail=0
 
@@ -148,6 +176,11 @@ preflight() {
     local need_dist
     need_dist="$(catalogue_dist_gb)"
     [ "${need_dist:-0}" -gt "$MIN_DIST_GB" ] && MIN_DIST_GB="$need_dist"
+  fi
+  # Likewise only when this run builds peaks.
+  local peaks_need="" peaks_region="" peaks_mpx=""
+  if printf '%s\n' "${stages[@]}" | grep -qx peaks; then
+    read -r peaks_need peaks_region peaks_mpx < <(peaks_mem_gb)
   fi
   work_gb="$(gb_free "$WORK_DIR")"
   dist_gb="$(gb_free "$DIST_DIR")"
@@ -159,6 +192,9 @@ preflight() {
   printf '  %-28s %s GB free  (need >= %s)\n' "$WORK_DIR" "$work_gb" "$MIN_WORK_GB"
   printf '  %-28s %s GB free  (need >= %s)\n' "$DIST_DIR" "$dist_gb" "$MIN_DIST_GB"
   printf '  %-28s %s GB        (need >= %s, %s recommended)\n' "memory available" "$mem_gb" "$MIN_MEM_GB" "$REC_MEM_GB"
+  if [ -n "$peaks_need" ]; then
+    printf '  %-28s %s GB        (%s, %s Mpx at 90 m)\n' "peaks prominence needs" "$peaks_need" "$peaks_region" "$peaks_mpx"
+  fi
   printf '  %-28s %s\n' "cpus" "$cpus"
   printf '  %-28s %s\n' "source cache" "$OSM_CACHE"
 
@@ -171,7 +207,8 @@ preflight() {
     echo "  ~ $WORK_DIR is inside the Docker VM. If that VM's disk is a sparse image"
     echo "    (Docker Desktop's default), the $work_gb GB above is virtual — check the"
     echo "    HOST has room for it, or bind-mount $WORK_DIR to a real disk. A planet run"
-    echo "    needs ~105 GB live at peak (85 GB of extracts + contour scratch + output)."
+    echo "    needs ~105 GB live at peak (85 GB of extracts + contour scratch + output),"
+    echo "    plus the shared OSM subset (~9 GB) and the DEM cache as it grows."
   fi
 
   # Guarded on mountpoint existing: without the guard, a missing binary reads as
@@ -194,6 +231,14 @@ preflight() {
     fail=1
   elif [ "$mem_gb" -lt "$REC_MEM_GB" ]; then
     echo "  ~ ${mem_gb} GB is above the floor but tight; ${REC_MEM_GB} GB is the comfortable figure."
+  fi
+  if [ -n "$peaks_need" ] && [ "$mem_gb" -lt "$peaks_need" ]; then
+    echo "  ! ${mem_gb} GB of memory will not survive the peaks stage's prominence pass."
+    echo "    It scores one region's 90 m DEM at a time, ~${PEAKS_BYTES_PER_PX} bytes a pixel, with up"
+    echo "    to ${PROM_FETCH_WORKERS:-3} DEM fetches running ahead (the largest region here is"
+    echo "    $peaks_region, ${peaks_mpx} Mpx). Raise the Docker VM's memory, or set"
+    echo "    PROM_FETCH_WORKERS=1."
+    fail=1
   fi
   hr
 
@@ -571,6 +616,20 @@ with open(sys.argv[1]) as f:
 ' "$INFRA_DIR/regions.json" "${1:-}" "${RATMAP_REGION_FILTER:-}"
 }
 
+# "<id> <w> <s> <e> <n>" for each id given, in that order. The numbers are printed with
+# Python's str(), exactly as build-contours.sh and build-avalanche.sh hand them to
+# fetch-dem.sh — which is what makes a DEM fetched from here the cache entry those
+# scripts look for.
+region_bboxes() {
+  python3 -c '
+import json, sys
+with open(sys.argv[1]) as f:
+    bbox = {r["id"]: r["bbox"] for r in json.load(f)["regions"]}
+for rid in sys.argv[2:]:
+    print(rid, *bbox[rid])
+' "$INFRA_DIR/regions.json" "$@"
+}
+
 # One bad region must not end a run of several hundred. A malformed bbox failed on
 # Antarctica after Africa had finished, and took every continent not yet reached with it —
 # hours of downloads abandoned over one region that could have been skipped. Failures are
@@ -599,7 +658,7 @@ stage_regions() {
   done
 
   local id wants_terrain only
-  local -a failed=()
+  local -a jobs=() failed=()
   while read -r id wants_terrain; do
     only=""
     if [ -z "$FORCE" ] && [ -z "$DRY_RUN" ] \
@@ -628,12 +687,54 @@ stage_regions() {
     # re-checks it on every run. Measured at ~20 ms per region against a local
     # sac-global.pmtiles — 22 s for the whole catalogue (2026-09-06) — and it is what
     # makes the check self-correcting when the tagging does eventually arrive.
-    log "regions/$id${only:+ ($only)}"
-    if ! "$SCRIPTS_DIR/build-region.sh" "$id" $DRY_RUN $only; then
-      log "regions/$id FAILED — continuing with the rest"
-      failed+=("$id")
-    fi
+    jobs+=("$id${only:+ $only}")
   done < <(region_ids)
+
+  if [ "${#jobs[@]}" -eq 0 ]; then
+    log "regions: nothing to build"
+    return 0
+  fi
+
+  # Regions at once. One by default: a region is already two downloads overlapping
+  # (build-region.sh runs terrain beside everything else) at REGION_DOWNLOAD_THREADS range
+  # requests each, and what more buys depends on the link, not the box — raise it on a
+  # host whose bandwidth the default leaves idle. Each worker's output goes to its own log
+  # with one OK/FAILED line per region crossing back, the contours stage's idiom.
+  local parallel="${RATMAP_REGIONS_PARALLEL:-1}"
+  if [ "$parallel" -le 1 ]; then
+    local job
+    for job in "${jobs[@]}"; do
+      read -r id only <<<"$job"
+      log "regions/$id${only:+ ($only)}"
+      if ! "$SCRIPTS_DIR/build-region.sh" "$id" $DRY_RUN $only; then
+        log "regions/$id FAILED — continuing with the rest"
+        failed+=("$id")
+      fi
+    done
+  else
+    log "regions: building ${#jobs[@]} region(s), $parallel at a time"
+    build_one_region() {
+      local id="$1" only="${2:-}"
+      if "$SCRIPTS_DIR/build-region.sh" "$id" $DRY_RUN $only \
+           > "$LOG_DIR/${RUN_ID}-regions-$id.log" 2>&1; then
+        printf 'OK\t%s\n' "$id"
+      else
+        printf 'FAIL\t%s\n' "$id"
+      fi
+    }
+    export -f build_one_region
+    export SCRIPTS_DIR LOG_DIR RUN_ID DRY_RUN
+
+    local status rid
+    while IFS=$'\t' read -r status rid; do
+      if [ "$status" = OK ]; then
+        log "regions/$rid: done"
+      else
+        log "regions/$rid FAILED — see $LOG_DIR/${RUN_ID}-regions-$rid.log — continuing with the rest"
+        failed+=("$rid")
+      fi
+    done < <(printf '%s\n' "${jobs[@]}" | xargs -P "$parallel" -L 1 bash -c 'build_one_region "$@"' _)
+  fi
 
   if [ "${#failed[@]}" -gt 0 ]; then
     log "regions: ${#failed[@]} of the catalogue failed: ${failed[*]}"
@@ -684,6 +785,47 @@ stage_contours() {
   local parallel="${RATMAP_CONTOURS_PARALLEL:-1}"
   log "contours: building ${#ids[@]} region(s), $parallel at a time"
 
+  # Fetch ahead. A region's build is a DEM fetch — network-bound, ~1.25 GB at most — and
+  # then gdal_contour, which is cpu-bound and is what holds this stage to one region at a
+  # time. In sequence, every region waits for both. So a background fetcher walks the same
+  # list, RATMAP_CONTOURS_FETCH_AHEAD at a time (default 2), filling the DEM cache
+  # (fetch-dem.sh with `-` for its output) while earlier regions trace; each build's own
+  # fetch-dem.sh then finds its DEM cached. A build whose DEM is still on its way waits for
+  # it rather than fetching it again: on a link short of bandwidth — this one measured
+  # ~1.5 MB/s to the Copernicus bucket, 2026-09-23 — a duplicate download costs more than
+  # the wait. If the fetch-ahead fails, the build fetches for itself, exactly as before.
+  #
+  # Needs the cache: with DEM_CACHE_DIR set empty there is nowhere to fetch into. This is
+  # lib.sh's default restated, since this driver deliberately does not source lib.sh.
+  local ahead="${RATMAP_CONTOURS_FETCH_AHEAD:-2}"
+  local dem_cache="${DEM_CACHE_DIR-$(dirname "$OSM_CACHE")/dem}"
+  DEM_READY=""
+  DEM_FETCHER=""
+  if [ "$ahead" -gt 0 ] && [ -n "$dem_cache" ]; then
+    DEM_READY="$LOG_DIR/${RUN_ID}-contours-dems-ready"
+    : > "$DEM_READY"
+    fetch_one_dem() {  # fetch_one_dem <id> <w> <s> <e> <n>
+      local id="$1"
+      shift
+      if ! bash "$SCRIPTS_DIR/fetch-dem.sh" "$@" - > "$LOG_DIR/${RUN_ID}-contours-$id-dem.log" 2>&1; then
+        printf '[%s] contours/%s: fetch-ahead failed — its build will fetch for itself\n' \
+          "$(date -u +%H:%M:%S)" "$id"
+      fi
+      printf '%s\n' "$id" >> "$DEM_READY"
+    }
+    export -f fetch_one_dem
+    export SCRIPTS_DIR LOG_DIR RUN_ID DEM_READY
+    (
+      region_bboxes "${ids[@]}" | xargs -P "$ahead" -L 1 bash -c 'fetch_one_dem "$@"' _
+      echo "__done__" >> "$DEM_READY"
+    ) &
+    DEM_FETCHER=$!
+    log "contours: fetching DEMs ahead of the builds, $ahead at a time"
+  elif [ "$ahead" -gt 0 ]; then
+    log "contours: DEM_CACHE_DIR is empty — no fetch-ahead; each build fetches its own DEM"
+  fi
+  export DEM_READY DEM_FETCHER
+
   # Each worker's full build-contours.sh output goes to its own log rather than straight
   # to stdout — with several running at once, unredirected output would interleave line
   # by line into the shared stage log ($LOG_DIR/${RUN_ID}-contours.log, via the `tee` in
@@ -691,6 +833,14 @@ stage_contours() {
   # back, same idiom as fetch-dem.sh's check_one.
   build_one_contour() {
     local id="$1"
+    # This region's DEM from the fetch-ahead: wait for it rather than fetch it twice. The
+    # fetcher's closing "__done__", or the fetcher no longer running, ends the wait too.
+    if [ -n "$DEM_READY" ]; then
+      until grep -qxF -e "$id" -e "__done__" "$DEM_READY" \
+            || ! kill -0 "$DEM_FETCHER" 2>/dev/null; do
+        sleep 2
+      done
+    fi
     if "$SCRIPTS_DIR/build-contours.sh" "$id" > "$LOG_DIR/${RUN_ID}-contours-$id.log" 2>&1; then
       printf 'OK\t%s\n' "$id"
     else
@@ -710,6 +860,11 @@ stage_contours() {
       failed+=("$rid")
     fi
   done < <(printf '%s\n' "${ids[@]}" | xargs -P "$parallel" -I{} bash -c 'build_one_contour "$@"' _ {})
+
+  # Every build waited for its own DEM, so the fetcher has nothing left; this only reaps it.
+  if [ -n "$DEM_FETCHER" ]; then
+    wait "$DEM_FETCHER" 2>/dev/null || true
+  fi
 
   if [ "${#failed[@]}" -gt 0 ]; then
     log "contours: ${#failed[@]} failed: ${failed[*]}"

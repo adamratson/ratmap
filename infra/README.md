@@ -55,6 +55,29 @@ Geofabrik's continent extracts — that's 85 GB of source; don't kick it off by 
 known summit elevations (Ben Nevis 1345 m) so a parsing or schema regression fails the
 build rather than surfacing on a mountain.
 
+### One OSM pass for five stages
+
+Peaks, places, SAC, paths and terrain features each filter the same source extracts. They
+used to do it separately — at planet scale 85 GB per stage, and nine or ten passes over it
+in all, since osmium reads its input once for a node-only filter, twice for a way filter
+and up to four times for `nwr/`. Now the first of them to run builds a **shared subset**
+(`osm_subset` in `lib.sh`): one `tags-filter` for the union of all five filters, cached as
+`.cache/osm/subsets/<extract>.<key>.osm.pbf`. Each stage still runs its own filter,
+unchanged, over the subset instead of the extract.
+
+The output is the same file byte for byte — checked for all five stages on Scotland
+(2026-09-23) — because `tags-filter` keeps every matching object plus everything it
+references, and a stage's filter can only match and reference what the union kept. The
+subset is about a tenth of its extract (33 MB of Scotland's 325 MB). The saving was 18% of
+filter time on a laptop with the extract in page cache; the planet paths filter ran at
+~100 MB/s, bound by the disk, where skipping five or six full passes is worth more.
+
+The union lives in `RATMAP_OSM_SUBSET_FILTER` in `lib.sh`. A stage asking for an
+expression it does not list stops with an error rather than silently losing data, so a new
+filter goes there first. The cache key covers the union and the extract's size and mtime,
+so either changing builds a fresh subset. `RATMAP_NO_OSM_SUBSET=1` filters from the whole
+extract as before.
+
 ### SAC grades
 
 `build-sac.sh` is the same shape: filter `sac_scale` ways out of the OSM extracts,
@@ -332,6 +355,15 @@ plan's 1 TB/month included transfer is the number to watch as region downloads a
 since unlike R2 egress isn't free here. The cost that bites hardest either way is the days
 of extraction, which is why the build is resumable at every level.
 
+Extraction is latency-bound, not bandwidth-bound: the upstream archives answer each range
+request slowly, so what speeds a region up is having more of them in flight.
+`build-region.sh` runs `pmtiles extract` with 16 download threads rather than the
+default 4 (`REGION_DOWNLOAD_THREADS`). A Praha basemap cutout took 14.0–14.7 s against
+18.4–26.0 s, byte-identical (2026-09-23). It also downloads the terrain (Mapterhorn)
+alongside the basemap (Source Cooperative) and the smaller cutouts, so a region costs about
+the longer of the two. `RATMAP_REGIONS_PARALLEL` builds several regions at once in the
+container's regions stage; it defaults to 1, since what it buys depends on the link.
+
 ```sh
 ./scripts/build-region.sh lochaber --dry-run   # size it first
 ./scripts/build-region.sh lochaber             # extract basemap + terrain
@@ -448,3 +480,53 @@ across ten well-known Scottish summits, inside the 20 m quantisation step. Read
 `compute-prominence.py`'s docstring before treating any value as authoritative — notably,
 the highest peak in a bbox is over-ranked when the true high ground belongs to a peak
 outside the OSM extract (Montenegro's box clips higher Albanian terrain).
+
+The whole catalogue is one pass. `compute-prominence.py --regions` reads the peaks once,
+fetches each region's DEM (`PROM_FETCH_WORKERS` at a time, default 3) and scores the
+regions smallest bbox first, so a larger region's value overwrites a smaller overlapping
+one's. It used to be re-run per region, re-parsing and rewriting every peak each time —
+3.3 s and 1.1 GB per region at Europe scale (658 k features), 184 times over. The output is
+byte-identical to that loop's: checked 2026-09-23 on overlapping Balkan and northern
+England regions, a nested box and an equal-area tie, against the same DEMs. Memory is one
+region's 90 m raster at ~9.5 bytes a pixel (1.35 GB for Scotland's 143 Mpx, down from
+1.94 GB), so the largest bbox sets the floor: svalbard-janmayen's 712 Mpx is ~6.3 GB on
+its own, before the fetches running ahead (the container's preflight adds those up).
+
+### The DEM fetch is deterministic, and cached
+
+`fetch-dem.sh` — prominence, contours and avalanche all go through it — used to return a
+slightly different DEM every time. GDAL reads a VRT's sources on parallel threads by
+default; the Copernicus tiles abut, so at every 1° seam both neighbours write the same
+output pixels and whichever thread finishes last wins. Two identical Scotland fetches
+differed in 7,843 pixels, all on seams, by up to 53 m; Switzerland by up to 109 m
+(2026-09-23). Summit snapping and key cols read those pixels, so a peak near a seam could
+change prominence between two builds of identical data. The VRT is now read on one thread,
+in sorted tile order, and two fetches are byte-identical. **The first rebuild after this
+moves some seam values once** against what is published — the fix taking effect, not a
+regression.
+
+One thread is slower on a first fetch (Switzerland at 90 m: 66–70 s before, 156–220 s
+now), and two things pay for it:
+
+- **A cache.** GLO-30 is a static dataset, so each clip is kept in `DEM_CACHE_DIR` —
+  `infra/.cache/dem` on a laptop, `/work/cache/dem` in the container, empty to disable —
+  keyed on bbox and resolution. Rebuilding peaks re-fetches nothing, and the avalanche
+  stage reuses the contours stage's 30 m clips for the 36 regions that have both. Clear it
+  if Copernicus ever republishes GLO-30. **It costs disk.** Clips are stored
+  DEFLATE-compressed, with identical pixels, but land still takes 50–70% of raw:
+  ~3.3 MB/sq° at 90 m, against almost nothing for sea (Scotland, mostly sea by area:
+  63 MB). The whole catalogue at 90 m is roughly 3–14 GB depending on how much of its
+  4,389 sq° is sea. A 30 m clip has nine times the pixels, so caching every contours and
+  avalanche region (1,867 sq°) would reach ~55 GB. Set `DEM_CACHE_DIR=` for a run that
+  should not keep them.
+- **Concurrency.** The prominence pass fetches regions three at a time: three similar
+  regions took 70 s together against 146 s one after another, identical DEMs. The
+  container's contours stage fetches the next regions' DEMs into the cache while the
+  current one traces (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2), so its downloads hide
+  behind `gdal_contour`. That is new speed, not just recovered speed: native 30 m fetches
+  measured no slower single-threaded (Alsace 139.7 s, against 152.7 s threaded), because
+  at full resolution the link's bandwidth is the limit rather than round trips.
+
+A tile check that answers anything but 200 or 404 now fails the fetch. Only a 404 means an
+all-ocean cell; a timeout on a coastal tile used to be filed as "not published" too, and
+became a silent hole in the DEM that a cache would then have kept.

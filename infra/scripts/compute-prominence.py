@@ -52,11 +52,26 @@ Do not read these as published prominences. Zla Kolata is Montenegro's high poin
 scores 708 m here, correctly: higher Albanian ground sits inside the same bbox, so it is
 not the dominant summit of its range. Its "2535 m" under an earlier version was the
 box-summit artifact above, not a better answer.
+
+Running it
+----------
+build-peaks.sh runs this once for the whole catalogue (`--regions`). It reads the peaks'
+coordinates once, fetches each region's DEM with fetch-dem.sh, scores the regions one
+after another smallest bbox first, and writes the output once at the end. Until
+2026-09-23 build-peaks.sh ran it once per region instead, and every run parsed and rewrote
+every peak in the file: 3.3 s and 1.1 GB per region at Europe scale (658 k features),
+184 times over. The result is byte-identical: same order, same overwrites, same JSON.
+
+Given a single DEM instead of `--regions`, it scores that one raster, as it always did.
 """
 import argparse
 import json
 import math
+import os
+import subprocess
 import sys
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from scipy import ndimage
@@ -73,16 +88,114 @@ def downsample_max(dem, factor):
     return trimmed.reshape(h2 // factor, factor, w2 // factor, factor).max(axis=(1, 3))
 
 
-def load_peaks(path):
-    peaks = []
+def iter_features(path):
+    """Features of a line-delimited GeoJSON file, in order, one at a time."""
     with open(path) as f:
         for line in f:
             line = line.lstrip("\x1e").strip()
-            if not line:
-                continue
-            feature = json.loads(line)
-            peaks.append(feature)
-    return peaks
+            if line:
+                yield json.loads(line)
+
+
+def load_coords(path):
+    """Every feature's point as two float64 arrays indexed like the file — 16 bytes a peak,
+    where holding the parsed features cost 1.1 GB at Europe scale (658 k of them). NaN for
+    a feature with no coordinates: compute() skips those, and NaN fails every bounds test."""
+    lons, lats = [], []
+    for feature in iter_features(path):
+        coords = (feature.get("geometry") or {}).get("coordinates")
+        lons.append(coords[0] if coords else math.nan)
+        lats.append(coords[1] if coords else math.nan)
+    return np.array(lons, dtype=np.float64), np.array(lats, dtype=np.float64)
+
+
+def read_dem(path, factor):
+    """The DEM as a float32 array plus its geotransform, block-max downsampled by `factor`.
+
+    Through GDAL's CLI rather than Python bindings: gdal_translate to ENVI gives a plain
+    binary array plus a text header, which numpy reads directly. Avoids requiring the
+    osgeo bindings, which are awkward to install next to a venv.
+
+    Read with np.fromfile rather than memory-mapped. The mapping used to outlive the
+    temporary directory — `np.asarray(memmap)` does not copy, its `.base` is still the
+    memmap — and on a filesystem that renames a still-open file aside instead of unlinking
+    it (NFS's `.nfsXXXX`, FUSE/VirtioFS's `.fuse_hiddenXXXX`; /work is a mounted volume)
+    the cleanup then died with `[Errno 39] Directory not empty`, after the DEM fetch and
+    before a single peak was scored (2026-08-24 planet run, lochaber). A plain read holds
+    no mapping at all, and makes one copy of the raster where memmap plus np.array made
+    two resident at once.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        raw = os.path.join(tmp, "dem.img")
+        subprocess.run(
+            ["gdal_translate", "-q", "-of", "ENVI", "-ot", "Float32", path, raw],
+            check=True,
+        )
+        info = json.loads(
+            subprocess.run(
+                ["gdalinfo", "-json", path], check=True, capture_output=True, text=True
+            ).stdout
+        )
+        w, h = info["size"]
+        gt = info["geoTransform"]
+        dem = downsample_max(np.fromfile(raw, dtype="float32").reshape(h, w), factor)
+
+    if factor > 1:
+        gt = [gt[0], gt[1] * factor, gt[2], gt[3], gt[4], gt[5] * factor]
+    return dem, gt
+
+
+def score_region(dem, gt, lons, lats, step, floor):
+    """compute() over the peaks that can fall inside this raster, keyed by feature index.
+
+    Returns ({feature_index: prominence_m}, number_of_candidates).
+
+    Only a pre-filter: compute() still makes the exact in-raster decision itself. The box
+    is the raster's own extent padded by two pixels, a strict superset of what compute()
+    accepts — its `int()` truncates toward zero, so it takes peaks up to one pixel past the
+    west and north edges. Candidates keep file order, so compute() sees the same peaks in
+    the same order as when it was handed the whole file, and its ranking and tie-breaks
+    come out identical.
+    """
+    h, w = dem.shape
+    lon0, dlon, _, lat0, _, dlat = gt
+    pad_x, pad_y = 2 * abs(dlon), 2 * abs(dlat)
+    x_lo, x_hi = sorted((lon0, lon0 + w * dlon))
+    y_lo, y_hi = sorted((lat0, lat0 + h * dlat))
+    sel = np.flatnonzero(
+        (lons >= x_lo - pad_x) & (lons <= x_hi + pad_x)
+        & (lats >= y_lo - pad_y) & (lats <= y_hi + pad_y)
+    )
+    candidates = [
+        {"geometry": {"coordinates": [float(lons[j]), float(lats[j])]}} for j in sel
+    ]
+    local = compute(dem, gt, candidates, step, floor)
+    return {int(sel[pos]): value for pos, value in local.items()}, len(sel)
+
+
+def write_output(peaks_in, peaks_out, prom):
+    """Stream the input to the output, adding `prom` where scored. Every feature goes back
+    through json.dumps, exactly as each per-region pass used to write the whole file."""
+    with open(peaks_out, "w") as out:
+        for i, feature in enumerate(iter_features(peaks_in)):
+            if i in prom:
+                feature.setdefault("properties", {})["prom"] = prom[i]
+            out.write(json.dumps(feature))
+            out.write("\n")
+
+
+def report(scored, candidates, total, shape, factor, step):
+    values = sorted(scored.values(), reverse=True)
+    print(
+        f"prominence: {len(scored)} of {candidates} candidate peaks scored, {total} in all "
+        f"(raster {shape[1]}x{shape[0]} @ {factor}x, {step:g} m steps)"
+    )
+    if values:
+        print(
+            f"  max {values[0]:.0f} m | median {values[len(values) // 2]:.0f} m | "
+            f"P90 {values[len(values) // 10]:.0f} m"
+        )
+    sys.stdout.flush()
 
 
 def compute(dem, transform, peaks, step, floor):
@@ -139,17 +252,31 @@ def compute(dem, transform, peaks, step, floor):
     prominence = {}
     resolved = set()
     dem_max = float(np.nanmax(dem))
-    dem_min = float(np.nanmin(dem[dem > -1000])) if np.any(dem > -1000) else 0.0
+    # The minimum over cells above -1000 m, without materialising them: indexing with the
+    # mask would copy every valid cell, 4 bytes a pixel on top of the DEM itself. Same
+    # value — NaN is not > -1000, so the mask already leaves out what nanmin skipped.
+    valid = dem > -1000
+    dem_min = float(dem.min(where=valid, initial=np.inf)) if valid.any() else 0.0
+    del valid
 
     thresholds = np.arange(
         math.floor(dem_max / step) * step, max(floor, dem_min) - step, -step
     )
 
+    # Allocated once and refilled at every threshold. `labels, _ = ndimage.label(dem >= t)`
+    # allocated both afresh each time and held the previous labels until the call returned,
+    # which is what put the peak at ~13.5 bytes a pixel (1.94 GB on Scotland's 143 Mpx,
+    # 2026-09-23); reusing them holds it to the DEM plus one mask plus one label array.
+    # Identical labels either way — checked against the allocating call on a test array.
+    mask = np.empty(dem.shape, dtype=bool)
+    labels = np.empty(dem.shape, dtype=np.int32)
+
     for t in thresholds:
         if len(resolved) >= len(located) - 1:
             break  # only the summit of the box left; it has no key col by definition
 
-        labels, _ = ndimage.label(dem >= t)
+        np.greater_equal(dem, t, out=mask)
+        ndimage.label(mask, output=labels)
         peak_labels = labels[rows, cols]
 
         # Group peaks by component; within a component the highest peak "owns" it and
@@ -182,87 +309,119 @@ def compute(dem, transform, peaks, step, floor):
     return prominence
 
 
+def run_regions(args, lons, lats, factor):
+    """Score every region in the catalogue. Returns {feature_index: prominence_m}."""
+    with open(args.regions) as f:
+        regions = json.load(f)["regions"]
+
+    # Smallest bbox first, so a larger region's pass overwrites a smaller overlapping one.
+    # Lochaber and Cairngorms sit inside Scotland; prominence measured in the bigger box is
+    # the better value, because a key col near the edge of a small box gets clipped to the
+    # box and the peak's prominence is over-stated. Sorting makes that independent of the
+    # order regions happen to appear in regions.json — and sorted() is stable, so equal
+    # areas keep regions.json order, as they did when build-peaks.sh did this sort.
+    order = sorted(
+        regions,
+        key=lambda r: (r["bbox"][2] - r["bbox"][0]) * (r["bbox"][3] - r["bbox"][1]),
+    )
+
+    def fetch(region):
+        # str() of the JSON values, byte for byte what build-peaks.sh used to pass — and
+        # what fetch-dem.sh's cache key is built from.
+        w, s, e, n = (str(v) for v in region["bbox"])
+        dem = os.path.join(args.work_dir, f"dem-{region['id']}.tif")
+        proc = subprocess.run(
+            ["bash", args.fetch_dem, w, s, e, n, dem, args.res],
+            capture_output=True, text=True,
+        )
+        return proc.returncode, proc.stdout + proc.stderr, dem
+
+    # Fetches run ahead of the scoring, a few at a time. The fetch is the slow half and it
+    # is network-bound: three similar regions took 70 s at once against 146 s one after
+    # another (2026-09-23), with identical DEMs — each fetch is deterministic on its own
+    # (fetch-dem.sh). Scoring stays sequential and in `order`, so the overwrite rule above
+    # holds however the fetches finish, and only one DEM is ever in memory.
+    workers = max(1, args.fetch_workers)
+    prom = {}
+    no_dem = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        pending = {k: pool.submit(fetch, order[k]) for k in range(min(workers, len(order)))}
+        for k, region in enumerate(order):
+            code, log, dem_path = pending.pop(k).result()
+            if k + workers < len(order):
+                pending[k + workers] = pool.submit(fetch, order[k + workers])
+
+            print(f"==> prominence: {region['id']}", flush=True)
+            sys.stderr.write(log)
+            sys.stderr.flush()
+            if code != 0:
+                print(
+                    f"  ! no DEM for {region['id']} — its peaks keep no prominence",
+                    file=sys.stderr, flush=True,
+                )
+                no_dem.append(region["id"])
+                continue
+
+            dem, gt = read_dem(dem_path, factor)
+            os.remove(dem_path)
+            scored, candidates = score_region(dem, gt, lons, lats, args.step, args.floor)
+            shape = dem.shape
+            del dem  # before the next region's is read
+            prom.update(scored)
+            report(scored, candidates, len(lons), shape, factor, args.step)
+
+    # Said once at the end as well as per region: one line per region is easy to lose in a
+    # log this long, and a region with no `prom` falls back to elevation in the app.
+    if no_dem:
+        print(
+            f"prominence: {len(no_dem)} of {len(order)} regions had no DEM, so their peaks "
+            f"keep no prominence: {' '.join(no_dem)}",
+            file=sys.stderr, flush=True,
+        )
+    return prom
+
+
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("dem", help="GeoTIFF clipped to the region bbox")
-    ap.add_argument("peaks_in", help="line-delimited GeoJSON")
-    ap.add_argument("peaks_out", help="line-delimited GeoJSON with `prom` added")
+    ap = argparse.ArgumentParser(
+        description="Topographic prominence for peaks, from Copernicus DEM clips.",
+        epilog="With --regions: PEAKS_IN PEAKS_OUT, fetching every region's DEM. "
+        "Without: DEM PEAKS_IN PEAKS_OUT, scoring one raster (spot checks).",
+    )
+    ap.add_argument("paths", nargs="+", metavar="PATH",
+                    help="[DEM] PEAKS_IN PEAKS_OUT — line-delimited GeoJSON in and out")
+    ap.add_argument("--regions", help="regions.json — score every region in it")
+    ap.add_argument("--fetch-dem", help="fetch-dem.sh, with --regions")
+    ap.add_argument("--res", help="DEM degrees per pixel for fetch-dem.sh, with --regions")
+    ap.add_argument("--work-dir", help="where fetched DEMs land, with --regions")
+    ap.add_argument("--fetch-workers", type=int, default=3,
+                    help="DEM fetches in flight at once, with --regions (default 3)")
     ap.add_argument("--step", type=float, default=20.0, help="metres per level set")
     ap.add_argument("--floor", type=float, default=0.0, help="stop descending here")
     ap.add_argument("--downsample", type=int, default=3, help="block-max factor")
     args = ap.parse_args()
 
-    # Read the GeoTIFF via GDAL's CLI rather than Python bindings: gdal_translate to
-    # ENVI gives a plain binary array plus a text header, which numpy can memory-map.
-    # Avoids requiring the osgeo bindings, which are awkward to install next to a venv.
-    import subprocess
-    import tempfile
-    import os
+    if args.regions:
+        if len(args.paths) != 2:
+            ap.error("with --regions, give PEAKS_IN PEAKS_OUT")
+        if not (args.fetch_dem and args.res and args.work_dir):
+            ap.error("--regions needs --fetch-dem, --res and --work-dir")
+        peaks_in, peaks_out = args.paths
+    else:
+        if len(args.paths) != 3:
+            ap.error("give DEM PEAKS_IN PEAKS_OUT, or --regions with PEAKS_IN PEAKS_OUT")
+        dem_path, peaks_in, peaks_out = args.paths
 
     factor = max(1, args.downsample)
+    lons, lats = load_coords(peaks_in)
 
-    with tempfile.TemporaryDirectory() as tmp:
-        raw = os.path.join(tmp, "dem.img")
-        subprocess.run(
-            ["gdal_translate", "-q", "-of", "ENVI", "-ot", "Float32", args.dem, raw],
-            check=True,
-        )
-        info = json.loads(
-            subprocess.run(
-                ["gdalinfo", "-json", args.dem], check=True, capture_output=True, text=True
-            ).stdout
-        )
-        w, h = info["size"]
-        gt = info["geoTransform"]
+    if args.regions:
+        prom = run_regions(args, lons, lats, factor)
+    else:
+        dem, gt = read_dem(dem_path, factor)
+        prom, candidates = score_region(dem, gt, lons, lats, args.step, args.floor)
+        report(prom, candidates, len(lons), dem.shape, factor, args.step)
 
-        # Take the array off the mapping, and drop the mapping, *before* the directory
-        # is deleted. Both halves matter:
-        #
-        # `np.asarray(memmap)` does not copy — it returns a base-class view whose `.base`
-        # is still the memmap — so an earlier version left `dem.img` mapped after the
-        # block exited and did all of its work against a file the cleanup had just
-        # unlinked. On a local filesystem that quietly works: the unlink succeeds, the
-        # pages stay valid, nothing complains. On any filesystem that renames a still-open
-        # file aside instead of unlinking it — NFS's `.nfsXXXX`, FUSE/VirtioFS's
-        # `.fuse_hiddenXXXX`, and /work is a mounted volume — the rename leaves an entry
-        # behind and TemporaryDirectory's own rmdir dies with `[Errno 39] Directory not
-        # empty` — after the DEM fetch and before a single peak is scored (2026-08-24
-        # planet run, lochaber).
-        #
-        # `del` rather than trusting the end of the block: CPython drops the last
-        # reference here and closes the mapping deterministically, which is the point.
-        mm = np.memmap(raw, dtype="float32", mode="r", shape=(h, w))
-        try:
-            # Copy, not view. At 1x this is one in-RAM array the size of the DEM — small
-            # against what compute() allocates per threshold anyway (a bool mask plus an
-            # int32 label array of the same shape, several hundred times over).
-            dem = np.array(downsample_max(mm, factor))
-        finally:
-            del mm
-
-    if factor > 1:
-        gt = [gt[0], gt[1] * factor, gt[2], gt[3], gt[4], gt[5] * factor]
-
-    peaks = load_peaks(args.peaks_in)
-    prominence = compute(dem, gt, peaks, args.step, args.floor)
-
-    with open(args.peaks_out, "w") as out:
-        for i, feature in enumerate(peaks):
-            if i in prominence:
-                feature.setdefault("properties", {})["prom"] = prominence[i]
-            out.write(json.dumps(feature))
-            out.write("\n")
-
-    values = sorted(prominence.values(), reverse=True)
-    print(
-        f"prominence: {len(prominence)} of {len(peaks)} peaks scored "
-        f"(raster {dem.shape[1]}x{dem.shape[0]} @ {factor}x, {args.step:g} m steps)"
-    )
-    if values:
-        print(
-            f"  max {values[0]:.0f} m | median {values[len(values) // 2]:.0f} m | "
-            f"P90 {values[len(values) // 10]:.0f} m"
-        )
+    write_output(peaks_in, peaks_out, prom)
 
 
 if __name__ == "__main__":

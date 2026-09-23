@@ -58,6 +58,7 @@ background geolocation and no background downloads — accepted, see §7.
 | `persist()` granted heuristically, keyed on Home Screen install; persistent mode excluded from eviction → **C1, C2** | WebKit storage policy |
 | Protomaps v4 `pois` has `kind=peak`, no `ele` | Read v2 and v4 schema docs |
 | Mapterhorn planet terrain ≈ 706 GB, terrarium-encoded WebP from Copernicus DEM 30 m, as PMTiles | `content-length: 705886514815` + project docs |
+| GDAL reads a VRT's sources on parallel threads by default, and on abutting Copernicus tiles the threads race for the 1° seam pixels. So `fetch-dem.sh` (prominence, contours, avalanche) returned a different DEM every run until it pinned `VRT_NUM_THREADS=1` (2026-09-23). Two identical fetches differed by up to 109 m on seams, so `prom`, and any rule-derived list thresholded on it (Phase 3.5), could flip between builds of the same data | Read `frmts/vrt/vrtdataset.cpp` at v3.10.3 (`NUM_THREADS` → `VRT_NUM_THREADS` → `GDAL_NUM_THREADS`, default `ALL_CPUS`); reproduced run-to-run on Scotland and Switzerland, and single-threaded fetches came out byte-identical — see `infra/README.md` |
 
 ### Documented upstream, not tested here
 

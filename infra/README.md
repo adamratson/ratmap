@@ -415,6 +415,15 @@ the England/Scotland/Wales split (2026-09-04):
   `pmtiles verify`, and only then renames. An interrupted `pmtiles extract` leaves a file
   of exactly the right *size* whose header is all zeros — it looks fine in `ls` and only
   fails on "magic number not detected".
+
+  One valid kind of archive fails `verify` too: a sparse cutout. `pmtiles extract` writes
+  the zoom range it was *asked* for into the header, and a small region can hold tiles at
+  only some of those zooms, which `verify` rejects (`header MaxZoom=15 does not match max
+  tile z 12`). That stopped `monaco-terrain-features` on the 2026-09-23 run. Such a cutout
+  is now accepted only if a copy, with its header narrowed to the zooms it actually holds,
+  passes every `verify` check. The published file keeps its header, because the app reads
+  each source's zoom range from it, and a narrowed one would overzoom coarse neighbouring
+  features at high zoom. A failure now also prints `verify`'s own reason.
 - **The manifest fails closed.** `build-manifest.py` aborts if it can't read an archive's
   PMTiles header, rather than recording `zNone-None` and carrying on. That is precisely
   what it did for the corrupt terrain file, one command away from publishing it.

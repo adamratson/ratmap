@@ -224,13 +224,137 @@ finish_extract() {
     return 0
   fi
 
-  if ! pmtiles verify "$tmp" >/dev/null 2>&1; then
-    echo "  FAILED verification: $(basename "$out") is not a valid PMTiles archive" >&2
-    rm -f "$tmp"
-    return 1
+  local verdict
+  if ! verdict="$(pmtiles verify "$tmp" 2>&1)"; then
+    if ! verify_wide_header "$tmp"; then
+      echo "  FAILED verification: $(basename "$out") is not a valid PMTiles archive" >&2
+      # verify's own reason, which is what anyone reading this log needs next.
+      echo "    $(printf '%s\n' "$verdict" | tail -1)" >&2
+      rm -f "$tmp"
+      return 1
+    fi
   fi
   mv "$tmp" "$out"
   echo "  verified $(basename "$out") ($(du -h "$out" | cut -f1))"
+}
+
+# A sparse cutout is a valid archive that `pmtiles verify` still rejects, and this tells the
+# two apart.
+#
+# `pmtiles extract` writes the zoom range it was asked for into the header, not the range
+# of the tiles it found (read from pmtiles/extract.go at v1.31.2). A small or sparse region
+# can have tiles at only some of those zooms — its bbox overlaps big low-zoom tiles that
+# carry nearby features, while at z15 nothing falls inside it — and verify insists the
+# header's MinZoom and MaxZoom equal the lowest and highest tiles present ("header
+# MaxZoom=15 does not match max tile z 12"). That failed monaco-terrain-features on the
+# 2026-09-23 run, and 24 of 40 small test cutouts of Scotland and Montenegro.
+#
+# The header is left as it is. The app takes each source's zoom range from it, and a
+# terrain-features cutout re-labelled as ending at z12 would be overzoomed at z13-15,
+# stretching coarse z12 shapes of the neighbours' features across the map. Instead, a copy
+# gets its header narrowed to the tiles it holds (`pmtiles edit`, which rewrites only the
+# header) and must then pass every one of verify's checks. So a truncated or corrupt file
+# still fails, and only a header wider than its tiles is let through.
+verify_wide_header() {  # verify_wide_header <archive>
+  local archive="$1" zooms tile_min tile_max head_min head_max check ok=1
+  zooms="$(archive_zooms "$archive")" || return 1
+  read -r tile_min tile_max head_min head_max <<<"$zooms"
+  # Only ever a header range around the tiles' range — anything else is a real fault.
+  { [ "$tile_min" -ge "$head_min" ] && [ "$tile_max" -le "$head_max" ]; } || return 1
+
+  check="$(mktemp -d)"
+  cp "$archive" "$check/check.pmtiles"
+  # The centre zoom has to move inside the narrowed range too, or verify's next check
+  # ("CenterZoom not within MinZoom/MaxZoom") fails on the copy instead.
+  if pmtiles show --header-json "$check/check.pmtiles" 2>/dev/null \
+       | python3 -c '
+import json, sys
+h = json.load(sys.stdin)
+lo, hi = int(sys.argv[1]), int(sys.argv[2])
+h["minzoom"], h["maxzoom"] = lo, hi
+h["center"][2] = min(max(h["center"][2], lo), hi)
+json.dump(h, open(sys.argv[3], "w"))
+' "$tile_min" "$tile_max" "$check/header.json" \
+     && pmtiles edit "$check/check.pmtiles" --header-json "$check/header.json" >/dev/null 2>&1 \
+     && pmtiles verify "$check/check.pmtiles" >/dev/null 2>&1; then
+    ok=0
+    echo "  tiles only at z$tile_min-$tile_max of the z$head_min-$head_max cut: a sparse region, verified as such"
+  fi
+  rm -rf "$check"
+  return "$ok"
+}
+
+# "<tile min> <tile max> <header min> <header max>" for a PMTiles v3 archive: the lowest and
+# highest zoom it holds tiles at, read from its directories (spec v3), then the header's own
+# MinZoom and MaxZoom. Only the header and directories are read, never tile data.
+archive_zooms() {
+  python3 - "$1" <<'PY_ZOOMS'
+import gzip, struct, sys
+
+def varints(buf):
+    pos = 0
+    while pos < len(buf):
+        value = shift = 0
+        while True:
+            byte = buf[pos]
+            pos += 1
+            value |= (byte & 0x7F) << shift
+            shift += 7
+            if not byte & 0x80:
+                break
+        yield value
+
+def entries(raw):
+    it = varints(raw)
+    n = next(it)
+    ids, tile_id = [], 0
+    for _ in range(n):
+        tile_id += next(it)
+        ids.append(tile_id)
+    runs = [next(it) for _ in range(n)]
+    lengths = [next(it) for _ in range(n)]
+    offsets = []
+    for i in range(n):
+        v = next(it)
+        offsets.append(offsets[i - 1] + lengths[i - 1] if v == 0 and i > 0 else v - 1)
+    return zip(ids, runs, offsets, lengths)
+
+def zoom_of(tile_id):
+    z, first = 0, 0
+    while tile_id >= first + 4 ** z:
+        first += 4 ** z
+        z += 1
+    return z
+
+with open(sys.argv[1], "rb") as f:
+    header = f.read(127)
+    if header[:7] != b"PMTiles" or header[7] != 3:
+        sys.exit("not a PMTiles v3 archive")
+    root_off, root_len, _, _, leaf_off = struct.unpack_from("<5Q", header, 8)
+    compression, header_min, header_max = header[97], header[100], header[101]
+    if compression not in (1, 2):  # none or gzip — all this pipeline's sources use
+        sys.exit(f"unsupported internal compression {compression}")
+
+    def read_dir(offset, length):
+        f.seek(offset)
+        raw = f.read(length)
+        return entries(gzip.decompress(raw) if compression == 2 else raw)
+
+    lo = hi = None
+    pending = [(root_off, root_len)]
+    while pending:
+        for tile_id, run, offset, length in read_dir(*pending.pop()):
+            if run == 0:  # a leaf directory, not a tile
+                pending.append((leaf_off + offset, length))
+                continue
+            first, last = zoom_of(tile_id), zoom_of(tile_id + run - 1)
+            lo = first if lo is None else min(lo, first)
+            hi = last if hi is None else max(hi, last)
+
+if lo is None:
+    sys.exit("no tiles")
+print(lo, hi, header_min, header_max)
+PY_ZOOMS
 }
 
 # Tiles addressed by a PMTiles v3 archive: u64 little-endian at offset 72 of the fixed

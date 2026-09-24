@@ -47,6 +47,7 @@ Two modes:
 """
 import argparse
 import concurrent.futures
+import gzip
 import hashlib
 import json
 import os
@@ -283,12 +284,25 @@ def load_base_manifest(source):
     if source.startswith(("http://", "https://")):
         try:
             with urllib.request.urlopen(source, timeout=30) as response:
-                return json.load(response)
+                return parse_manifest_bytes(response.read())
         except urllib.error.URLError as err:
             raise SystemExit(f"FAIL: could not fetch base manifest from {source}: {err}")
 
-    with open(source) as f:
-        return json.load(f)
+    with open(source, "rb") as f:
+        return parse_manifest_bytes(f.read())
+
+
+def parse_manifest_bytes(data):
+    """Parse a manifest that may be gzipped.
+
+    upload.sh publishes it gzipped with `Content-Encoding: gzip` (387 kB -> 69 kB). A
+    browser undoes that transparently; urllib does not, and neither does `aws s3 cp`, which
+    returns the stored bytes. Detected by the gzip magic number rather than by the header,
+    so a local copy saved either way reads the same.
+    """
+    if data[:2] == b"\x1f\x8b":
+        data = gzip.decompress(data)
+    return json.loads(data)
 
 
 def build_local_regions(dist_dir, defined, only=None):

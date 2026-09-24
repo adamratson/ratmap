@@ -1,4 +1,4 @@
-import sqlite3InitModule, { type Database, type Sqlite3Static } from '@sqlite.org/sqlite-wasm';
+import type { Database, Sqlite3Static } from '@sqlite.org/sqlite-wasm';
 import { PLACES_DB_URL } from '../app/config';
 
 // C9: search is a local SQLite FTS5 index. No geocoding API — works offline, needs no key
@@ -66,7 +66,14 @@ export class PlacesSearch {
 
     this.loading = (async () => {
       const [sqlite3, bytes] = await Promise.all([
-        sqlite3InitModule({ print: () => {}, printErr: () => {} }) as Promise<Sqlite3Static>,
+        // Imported here, not at the top of the file: statically imported, SQLite's JS glue
+        // (~187 kB, 72% of the dependency chunk) was parsed on every startup by every
+        // visitor, for a search box most sessions never touch. The wasm itself was already
+        // deferred; now the code that loads it is too. See the `sqlite` chunk group in
+        // vite.config.ts, which keeps it out of the startup chunk.
+        import('@sqlite.org/sqlite-wasm').then(({ default: sqlite3InitModule }) =>
+          sqlite3InitModule({ print: () => {}, printErr: () => {} }) as Promise<Sqlite3Static>,
+        ),
         fetch(PLACES_DB_URL).then((response) => {
           if (!response.ok) {
             throw new Error(`places index HTTP ${response.status}`);

@@ -53,6 +53,10 @@ export default defineConfig(({ command, isPreview }) => ({
   // of style.css, in the order main.ts imports them — and the rules are the same, in the
   // same order, as the single stylesheet this replaced.
   //
+  // SQLite (search) has a group of its own for a different reason: it is only ever
+  // imported dynamically, and a lazy dependency folded into `vendor` would be loaded at
+  // startup with everything else.
+  //
   // App code has to stay in the entry chunk: test/service-worker.test.ts reads index-*.js
   // for the update wiring, and naming neither group "index" keeps that unambiguous.
   // `codeSplitting` is Rolldown's option (Vite 8.2 / Rolldown 1.2); `manualChunks` still
@@ -63,6 +67,9 @@ export default defineConfig(({ command, isPreview }) => ({
         codeSplitting: {
           groups: [
             { name: 'maplibre', test: /node_modules[\\/]maplibre-gl[\\/]/, priority: 2 },
+            // Search's SQLite, on its own: search.ts imports it only when the search box is
+            // first used, and inside `vendor` it would load at startup regardless.
+            { name: 'sqlite', test: /node_modules[\\/]@sqlite\.org[\\/]/, priority: 3 },
             { name: 'vendor', test: /node_modules[\\/]/, priority: 1 },
           ],
         },

@@ -133,14 +133,19 @@ if [ -f "$MANIFEST" ]; then
   # rebuilt, while its archives sit orphaned in the bucket. Nearly happened: a manifest
   # naming only Montenegro was one command away from delisting Lochaber.
   PUBLISHED_MANIFEST="$(mktemp)"
-  trap 'rm -f "$PUBLISHED_MANIFEST"' EXIT
+  MANIFEST_GZ="$(mktemp)"
+  trap 'rm -f "$PUBLISHED_MANIFEST" "$MANIFEST_GZ"' EXIT
   if aws s3 cp "${BUCKET_URL}/regions/manifest.json" "$PUBLISHED_MANIFEST" \
        --endpoint-url "$S3_ENDPOINT" --no-progress >/dev/null 2>&1; then
     MISSING="$(python3 - "$PUBLISHED_MANIFEST" "$MANIFEST" <<'PY'
-import json, sys
+import gzip, json, sys
 def ids(path):
-    with open(path) as f:
-        return {r["id"] for r in json.load(f).get("regions", [])}
+    # The published copy is stored gzipped (see below); `aws s3 cp` returns it as stored.
+    with open(path, "rb") as f:
+        data = f.read()
+    if data[:2] == b"\x1f\x8b":
+        data = gzip.decompress(data)
+    return {r["id"] for r in json.loads(data).get("regions", [])}
 print(" ".join(sorted(ids(sys.argv[1]) - ids(sys.argv[2]))))
 PY
 )"
@@ -154,8 +159,53 @@ PY
     fi
   fi
 
-  echo "Uploading regions/manifest.json"
-  s3_cp "$MANIFEST" "regions/manifest.json" --content-type application/json --no-progress
+  # Gzipped, with `Content-Encoding: gzip`: 387 kB of JSON -> 69 kB (measured 2026-09-24),
+  # and the app fetches it at every startup and on every visit to the Offline sheet. The
+  # bucket cannot compress on the fly, so it is stored compressed; browsers undo the
+  # encoding transparently, before `response.json()` ever sees it. `-n` leaves the name and
+  # time out of the gzip header, so an unchanged manifest uploads byte-identical.
+  gzip -9 -n -c "$MANIFEST" > "$MANIFEST_GZ"
+  echo "Uploading regions/manifest.json (gzip, $(wc -c < "$MANIFEST_GZ" | tr -d ' ') bytes)"
+  s3_cp "$MANIFEST_GZ" "regions/manifest.json" \
+    --content-type application/json --content-encoding gzip --no-progress
+
+  # Then prove it is served that way. Gzip bytes served *without* the header are not JSON
+  # to a browser, and every install would lose its catalogue at once — so if the gateway
+  # dropped the header, put the plain file back and stop loudly rather than leave that up.
+  if [ -n "${PUBLIC_BASE_URL:-}" ]; then
+    # curl, not Python's urllib: a python.org Python on macOS ships without a CA bundle
+    # until its "Install Certificates" step is run, and a verification that fails for
+    # that reason would roll back every upload. Without --compressed, curl saves the body
+    # as served, so a missing header shows up as gzip bytes where JSON should be.
+    SERVED_HEADERS="$(mktemp)"
+    SERVED_BODY="$(mktemp)"
+    trap 'rm -f "$PUBLISHED_MANIFEST" "$MANIFEST_GZ" "$SERVED_HEADERS" "$SERVED_BODY"' EXIT
+    if ! curl -sS --fail --max-time 30 -H 'Accept-Encoding: gzip' -H 'Cache-Control: no-cache' \
+           -D "$SERVED_HEADERS" -o "$SERVED_BODY" "${PUBLIC_BASE_URL%/}/regions/manifest.json" \
+       || ! python3 - "$SERVED_HEADERS" "$SERVED_BODY" "$MANIFEST" <<'PY'
+import gzip, json, sys
+headers, body, local = sys.argv[1:4]
+with open(headers) as f:
+    encodings = [line.split(":", 1)[1].strip().lower() for line in f if line.lower().startswith("content-encoding:")]
+if encodings[-1:] != ["gzip"]:
+    sys.exit(f"served without Content-Encoding: gzip (got {encodings or 'none'})")
+with open(body, "rb") as f:
+    served = json.loads(gzip.decompress(f.read()))
+with open(local) as f:
+    expected = json.load(f)
+if served != expected:
+    sys.exit("served manifest does not match the one just uploaded")
+print(f"Verified: served gzipped, {len(served['regions'])} regions")
+PY
+    then
+      echo >&2
+      echo "The gzipped manifest is not being served correctly — restoring the plain one." >&2
+      s3_cp "$MANIFEST" "regions/manifest.json" --content-type application/json --no-progress
+      exit 1
+    fi
+  else
+    echo "PUBLIC_BASE_URL unset — could not verify how the manifest is served." >&2
+  fi
 fi
 
 echo "Done. Public base URL: ${PUBLIC_BASE_URL:-<set PUBLIC_BASE_URL in infra/.env>}"

@@ -177,6 +177,13 @@ Uploads the archives in `dist/` that the bucket does not already hold at the sam
 `aws s3 cp` (S3-compatible, uses the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in `.env`) —
 not `pmtiles upload`; see `upload.sh`'s header comment for why. Then the manifest, last.
 
+The manifest goes up gzipped with `Content-Encoding: gzip` (387 kB → 69 kB), since the
+bucket cannot compress on the fly and the app fetches it on every start. The script then
+fetches it back over `PUBLIC_BASE_URL` and checks the header and contents; if the gateway
+has dropped the header — gzip bytes a browser would try to read as JSON — it re-uploads the
+plain file and exits non-zero. Anything that reads the stored copy directly (`aws s3 cp`,
+`build-manifest.py --base-live`) gets gzip bytes, and both handle that.
+
 What is already there is decided from a single bucket listing, so the first thing it prints
 is `Checking N archive(s)` followed by how many need sending. It used to `head-object` each
 archive in turn and print nothing for the ones already present — ~0.44 s a call, so a run

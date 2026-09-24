@@ -18,6 +18,11 @@ describe('SearchBox focus after choosing a result', () => {
   let onCoordinates: ReturnType<typeof vi.fn<(coords: { lat: number; lng: number }) => void>>;
 
   beforeEach(() => {
+    // jsdom does no layout, so it has no scrollIntoView; every browser does. Without this
+    // the arrow keys threw inside the listener — the tests still passed, but as uncaught
+    // errors, which fail the whole run.
+    Element.prototype.scrollIntoView ??= () => {};
+
     const container = document.createElement('div');
     input = document.createElement('input');
     results = document.createElement('ul');

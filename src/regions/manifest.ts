@@ -88,6 +88,22 @@ export function loadCachedManifest(): RegionManifest | null {
   }
 }
 
+/**
+ * The catalogue uses a schema this build does not understand.
+ *
+ * Its own type because it calls for a different answer from a network failure: the fix is
+ * updating the app, not finding signal, and the regions sheet has to say which.
+ */
+export class CatalogueTooNew extends Error {
+  constructor(schemaVersion: number) {
+    super(
+      `Region catalogue is newer than this app (schema ${schemaVersion} > ` +
+        `${SUPPORTED_SCHEMA_VERSION}). Update the app to download regions.`,
+    );
+    this.name = 'CatalogueTooNew';
+  }
+}
+
 export async function fetchManifest(signal?: AbortSignal): Promise<RegionManifest> {
   // `no-cache` = revalidate every time, don't skip the cache. The catalogue is the one
   // piece of app data at a stable URL with no content hash in it, so a cached copy is how
@@ -109,10 +125,7 @@ export async function fetchManifest(signal?: AbortSignal): Promise<RegionManifes
   // could describe artifacts in ways this build would silently mis-handle, and a wrong
   // offline map is worse than none (C1's principle).
   if (manifest.schemaVersion > SUPPORTED_SCHEMA_VERSION) {
-    throw new Error(
-      `Region catalogue is newer than this app (schema ${manifest.schemaVersion} > ` +
-        `${SUPPORTED_SCHEMA_VERSION}). Update the app to download regions.`,
-    );
+    throw new CatalogueTooNew(manifest.schemaVersion);
   }
 
   cacheManifest(manifest);

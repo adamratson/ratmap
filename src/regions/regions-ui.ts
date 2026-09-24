@@ -1,5 +1,13 @@
 import type { Map as MLMap } from 'maplibre-gl';
-import { fetchManifest, formatBytes, formatDuration, type Region } from './manifest';
+import {
+  CatalogueTooNew,
+  fetchManifest,
+  formatBytes,
+  formatDuration,
+  loadCachedManifest,
+  type Region,
+  type RegionManifest,
+} from './manifest';
 import {
   deleteRegion,
   downloadRegion,
@@ -64,6 +72,11 @@ export async function restoreDownloadedRegions(
   registry: TileSourceRegistry,
   regions: Region[],
   theme: Theme,
+  /**
+   * A region that is on disk but could not be drawn. The rest still are: one bad region
+   * used to abort the loop, leaving every region after it undrawn with nothing said.
+   */
+  onFailure?: (region: Region, error: Error) => void,
 ): Promise<Region[]> {
   // One directory listing for the whole catalogue, not two OPFS lookups per artifact:
   // this runs before the map can show a downloaded region, on a phone, at startup.
@@ -84,10 +97,49 @@ export async function restoreDownloadedRegions(
     // object and looks each one up in the registry, so an artifact with no file behind it
     // is how the app comes to claim data it does not have.
     const onDisk = withArtifacts(region, disk.present);
-    await addRegionToMap(map, registry, onDisk, theme);
-    restored.push(onDisk);
+    try {
+      await addRegionToMap(map, registry, onDisk, theme);
+      restored.push(onDisk);
+    } catch (err) {
+      onFailure?.(region, err instanceof Error ? err : new Error(String(err)));
+    }
   }
   return restored;
+}
+
+/**
+ * The catalogue to draw the sheet from, and what to tell the user about where it came from.
+ *
+ * Falls back to the copy cached on the phone rather than giving up. This used to hide the
+ * search box and return on any failure, leaving an empty sheet with nothing on it — out of
+ * signal, that hid the regions already downloaded, so they could not even be deleted; and
+ * it swallowed the one error written to be read, the "update the app" of a catalogue newer
+ * than this build.
+ */
+async function loadCatalogue(): Promise<{ manifest: RegionManifest | null; notice: string | null }> {
+  try {
+    return { manifest: await fetchManifest(), notice: null };
+  } catch (err) {
+    const cached = loadCachedManifest();
+    if (err instanceof CatalogueTooNew) {
+      return {
+        manifest: cached,
+        notice: cached
+          ? 'The region catalogue has moved on from this version of ratmap. Update the app to see new regions; the ones below are from the last catalogue it understood.'
+          : err.message,
+      };
+    }
+    const reason = (err as Error)?.message ?? 'unknown error';
+    return cached
+      ? {
+          manifest: cached,
+          notice: `Can’t reach the region catalogue (${reason}). Showing the copy saved on this phone — downloaded regions still work, but downloading needs a connection.`,
+        }
+      : {
+          manifest: null,
+          notice: `Can’t reach the region catalogue (${reason}). Check your connection and open this again.`,
+        };
+  }
 }
 
 /** The same region, described by a subset of its artifacts. */
@@ -114,6 +166,7 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   container.innerHTML = `
     <input class="regions-search" type="search" enterkeyhint="search" autocomplete="off"
            placeholder="Search regions" aria-label="Search regions" />
+    <p class="regions-notice" role="status" hidden></p>
     <p class="regions-hint" aria-live="polite"></p>
     <ul class="regions-list"></ul>
     <div class="regions-orphans" hidden>
@@ -124,13 +177,17 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   `;
 
   const hint = container.querySelector<HTMLParagraphElement>('.regions-hint')!;
+  const notice = container.querySelector<HTMLParagraphElement>('.regions-notice')!;
   const search = container.querySelector<HTMLInputElement>('.regions-search')!;
   const list = container.querySelector<HTMLUListElement>('.regions-list')!;
 
-  let manifest;
-  try {
-    manifest = await fetchManifest();
-  } catch {
+  const catalogue = await loadCatalogue();
+  if (catalogue.notice) {
+    notice.textContent = catalogue.notice;
+    notice.hidden = false;
+  }
+  const manifest = catalogue.manifest;
+  if (!manifest) {
     search.hidden = true;
     return;
   }
@@ -385,8 +442,13 @@ function renderOrphanRow(
 
     disarm();
     void (async () => {
-      await deleteOrphan(orphan);
-      deps.onStatus(`Deleted ${orphan.id} — ${formatBytes(orphan.bytes)} reclaimed.`, 'ok');
+      try {
+        await deleteOrphan(orphan);
+        deps.onStatus(`Deleted ${orphan.id} — ${formatBytes(orphan.bytes)} reclaimed.`, 'ok');
+      } catch (err) {
+        deps.onStatus(`Could not delete ${orphan.id}: ${(err as Error).message}`, 'error');
+      }
+      // Either way, redraw from what is actually on disk now.
       refresh();
     })();
   });
@@ -489,8 +551,14 @@ function renderRegionRow(
       disarm();
       void (async () => {
         removeRegionFromMap(deps.map, deps.registry, region);
-        await deleteRegion(region);
-        deps.onStatus(`Deleted ${region.name}. Download it again whenever you need it.`, 'ok');
+        try {
+          await deleteRegion(region);
+          deps.onStatus(`Deleted ${region.name}. Download it again whenever you need it.`, 'ok');
+        } catch (err) {
+          // Some of it is still on disk. Said plainly, rather than "Deleted" over storage
+          // that was never reclaimed; the restore below puts back whatever remains.
+          deps.onStatus(`Could not delete all of ${region.name}: ${(err as Error).message}`, 'error');
+        }
         deps.onRegionsChanged?.();
         refresh();
       })();
@@ -530,7 +598,20 @@ async function startDownload(
 ): Promise<void> {
   // C1: both gates checked immediately before starting, not at page load — persistence
   // and free space can both change while the app is open.
-  const gate = evaluateGate(region, await readStorage());
+  //
+  // Its own try: this ran before the one below, so a storage API that threw made the
+  // Download button do nothing at all. Failing closed is right for C1 — no download
+  // without the check — but it has to say so.
+  let gate: ReturnType<typeof evaluateGate>;
+  try {
+    gate = evaluateGate(region, await readStorage());
+  } catch (err) {
+    deps.onStatus(
+      `Couldn’t check storage before downloading ${region.name}: ${(err as Error).message}. Nothing was downloaded.`,
+      'error',
+    );
+    return;
+  }
   if (!gate.allowed) {
     deps.onStatus(gate.message, 'warn');
     return;
@@ -564,8 +645,17 @@ async function startDownload(
       },
     });
 
-    await addRegionToMap(deps.map, deps.registry, region, deps.theme());
-    deps.onStatus(`${region.name} is available offline.`, 'ok');
+    // Separate from the download's own failures: by here every byte is on disk, and
+    // "Download failed" would send someone to download it all again for nothing.
+    try {
+      await addRegionToMap(deps.map, deps.registry, region, deps.theme());
+      deps.onStatus(`${region.name} is available offline.`, 'ok');
+    } catch (err) {
+      deps.onStatus(
+        `${region.name} downloaded, but couldn’t be drawn on the map: ${(err as Error).message}. It’s saved; reopening the app should show it.`,
+        'error',
+      );
+    }
   } catch (err) {
     if (err instanceof DownloadCancelled) {
       // Partial data is kept deliberately, so Resume picks up where this left off.
@@ -578,6 +668,13 @@ async function startDownload(
       deps.onStatus(
         `${region.name} stopped downloading — the connection dropped or is too slow. ` +
           'Whatever arrived is kept, so Resume picks up from there.',
+        'error',
+      );
+    } else if ((err as { name?: unknown })?.name === 'QuotaExceededError') {
+      // The browser's own words for this are about "quota" and "origin". What the person
+      // needs is what ran out and what to do about it.
+      deps.onStatus(
+        `The phone ran out of storage for ${region.name}. What arrived is kept — free up some space, then tap Resume.`,
         'error',
       );
     } else {

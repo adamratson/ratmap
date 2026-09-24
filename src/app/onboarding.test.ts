@@ -88,6 +88,26 @@ describe('storage onboarding (C1, C2)', () => {
     await vi.waitFor(() => expect(lastCondition()).toEqual(['storage', null]));
   });
 
+  it('says what to do instead when the install prompt will not open', async () => {
+    env.capability = {
+      kind: 'prompt',
+      prompt: async () => {
+        // The watcher drops a failed prompt, so the next check finds none on offer.
+        env.capability = { kind: 'none', reason: 'unsupported' };
+        env.listeners.forEach((listener) => listener());
+        throw new DOMException('The prompt() method must be called with a user gesture', 'NotAllowedError');
+      },
+    };
+    await start();
+
+    banner().action.onSelect();
+
+    // Not overwritten by the re-check the dropped prompt triggers.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => expect(banner().message).toMatch(/install prompt didn’t open.*browser’s menu/));
+    expect(banner().message).toMatch(/NotAllowedError|user gesture/);
+  });
+
   it('puts the iOS walkthrough behind a button rather than over the map', async () => {
     env.capability = { kind: 'manual-ios' };
     await start();

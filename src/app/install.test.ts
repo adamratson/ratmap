@@ -112,6 +112,19 @@ describe('createInstallWatcher', () => {
     expect(watcher.capability().kind).toBe('none');
   });
 
+  it('drops a prompt that failed, too, rather than offering it to fail again', async () => {
+    stubUserAgent('Mozilla/5.0 (Linux; Android 14) Chrome/120');
+    const watcher = createInstallWatcher();
+    const { prompt } = firePrompt();
+    prompt.mockRejectedValue(new DOMException('must be called with a user gesture', 'NotAllowedError'));
+
+    const offered = watcher.capability();
+    if (offered.kind !== 'prompt') throw new Error('expected prompt capability');
+    await expect(offered.prompt()).rejects.toThrow('user gesture');
+
+    expect(watcher.capability().kind).toBe('none');
+  });
+
   it('notifies listeners when install capability changes', () => {
     stubUserAgent('Mozilla/5.0 (Linux; Android 14) Chrome/120');
     const watcher = createInstallWatcher();

@@ -98,6 +98,23 @@ describe('startAppUpdates', () => {
     updates.dispose();
   });
 
+  it('reports a worker that failed to register, instead of swallowing it', async () => {
+    // Without a worker there is no offline shell: the app will not start out of signal.
+    const container = installContainer(false);
+    container.register.mockRejectedValue(new TypeError('Failed to register a ServiceWorker: 404'));
+    const onRegistrationFailed = vi.fn();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn(), onRegistrationFailed });
+    await flush();
+
+    expect(onRegistrationFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('404') }),
+    );
+    expect(console.error).toHaveBeenCalled();
+    updates.dispose();
+  });
+
   it('does nothing where service workers are unsupported', async () => {
     Reflect.deleteProperty(navigator, 'serviceWorker');
     const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn() });

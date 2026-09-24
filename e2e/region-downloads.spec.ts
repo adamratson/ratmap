@@ -309,17 +309,18 @@ test.describe('a poor connection', () => {
     ).toBeVisible({ timeout: 30_000 });
 
     // The bytes already on disk before the connection dropped must survive the failure —
-    // a failed download is not a deleted one. Checked before touching the sheet again:
-    // the catalogue itself is fetched over the network with no offline cache of its own
-    // (unlike the startup restore path, which does have one — see RegionCoverage.restore
-    // in src/regions/coverage.ts), so the failure's own refresh leaves the regions list empty and the search
-    // box hidden while still offline. That is a real, separate constraint from anything
-    // about the download, which is why it's asserted here rather than routed around.
+    // a failed download is not a deleted one.
     expect(await opfsTotalBytes(page)).toBeGreaterThanOrEqual(beforeOffline);
-    await expect(page.locator('.regions-search')).toBeHidden();
 
-    // Back in signal: close and reopen the sheet, the way someone actually would after
-    // finding it blank, rather than reload — the point is that the *same session*
+    // The failure's own refresh can't reach the catalogue either. It used to leave the
+    // sheet blank — search hidden, nothing said. It now works from the copy saved on the
+    // phone and says so, so the interrupted region is still there to resume.
+    await expect(page.locator('.regions-notice')).toContainText('copy saved on this phone');
+    await focusTestRegionRow(page);
+    await expect(action(page)).toHaveText('Resume');
+
+    // Back in signal: close and reopen the sheet, the way someone actually would, rather
+    // than reload — the point is that the *same session*
     // recovers once the catalogue is reachable again.
     //
     // Not `openChip` for the close step: it waits for the sheet to reach an *open*

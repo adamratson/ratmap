@@ -13,6 +13,7 @@ import '@fontsource/jetbrains-mono/latin-500.css';
 import '@fontsource/jetbrains-mono/latin-600.css';
 import './style.css';
 import { BASEMAP_PMTILES_URL, TERRAIN_PMTILES_URL, USE_FALLBACK_TERRAIN } from './app/config';
+import { reportUncaughtErrors } from './app/error-reporting';
 import { renderInstallSheet, startStorageOnboarding } from './app/onboarding';
 import { startAppUpdates } from './app/update';
 import { APP_VERSION } from './app/version';
@@ -92,6 +93,10 @@ const status = new StatusCentre({
 // Debug handle, same convention as __ratmapMap below: "why is that banner up, and what
 // put it there?" is otherwise only answerable by reading the source.
 (window as unknown as { __ratmapStatus: StatusCentre }).__ratmapStatus = status;
+
+// Registered as soon as there is somewhere to say it, so a failure anywhere in the rest of
+// the bootstrap is reported too.
+reportUncaughtErrors(status);
 
 // --- The sheet ----------------------------------------------------------------------
 
@@ -263,6 +268,8 @@ const coverage = new RegionCoverage({
   theme: () => theme.get(),
   notice: document.querySelector<HTMLButtonElement>('#detail-notice')!,
   onOpenRegions: () => openRegionsView(),
+  onRestoreProblem: (message) =>
+    status.setCondition('regions-restore', message ? { message, kind: 'error' } : null),
 });
 
 // --- Route planning (Phase 4) --------------------------------------------------------
@@ -513,5 +520,10 @@ if (import.meta.env.PROD) {
         action: { label: 'Reload now', onSelect: apply },
       });
     },
+    onRegistrationFailed: (error) =>
+      status.setCondition('offline-shell', {
+        message: `ratmap couldn’t set itself up to open without signal (${error.message}). It works while you’re online; reopen it with a connection to try again.`,
+        kind: 'warn',
+      }),
   });
 }

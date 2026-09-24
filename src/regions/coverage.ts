@@ -20,6 +20,12 @@ export interface RegionCoverageOptions {
   notice: HTMLButtonElement;
   /** Tapping the notice. */
   onOpenRegions: () => void;
+  /**
+   * What went wrong restoring downloaded regions, in words for the user — or null once a
+   * restore has gone cleanly. A standing condition rather than a toast: it stays true
+   * until something changes it.
+   */
+  onRestoreProblem?: (message: string | null) => void;
 }
 
 export class RegionCoverage {
@@ -27,6 +33,7 @@ export class RegionCoverage {
   private readonly registry: TileSourceRegistry;
   private readonly theme: () => Theme;
   private readonly notice: HTMLButtonElement;
+  private readonly onRestoreProblem?: (message: string | null) => void;
 
   /**
    * Regions whose archives are actually present in OPFS.
@@ -80,6 +87,7 @@ export class RegionCoverage {
     this.registry = options.registry;
     this.theme = options.theme;
     this.notice = options.notice;
+    this.onRestoreProblem = options.onRestoreProblem;
 
     // `move`, not `zoom`: the notice names whichever region covers the map's *centre*
     // (`covering` below), so it has to be re-evaluated on a pure pan too, not only when the
@@ -103,19 +111,67 @@ export class RegionCoverage {
     this.styleReady = ready;
   }
 
-  /** Redraw every downloaded region from OPFS, and the coverage around them. */
+  /**
+   * Redraw every downloaded region from OPFS, and the coverage around them.
+   *
+   * Never rejects. It runs at startup and after every download, fire-and-forget, so a
+   * rejection here was an unhandled one: no regions on the map, and nothing on screen to
+   * say why.
+   */
   async restore(): Promise<void> {
     try {
-      const manifest = await fetchManifest();
-      const restored = await restoreDownloadedRegions(this.map, this.registry, manifest.regions, this.theme());
-      this.downloaded = restored;
-      this.catalogue = manifest.regions;
-      this.applyAvailableDetail(restored);
-      this.drawFootprints();
+      await this.restoreRegions();
+    } catch (err) {
+      this.onRestoreProblem?.(
+        `Couldn’t restore downloaded regions: ${(err as Error)?.message ?? 'unknown error'}`,
+      );
+    }
+  }
+
+  private async restoreRegions(): Promise<void> {
+    const regions = await this.catalogueRegions();
+    if (!regions) return;
+
+    const failed: string[] = [];
+    let restored: Region[];
+    try {
+      restored = await restoreDownloadedRegions(this.map, this.registry, regions, this.theme(), (region) =>
+        failed.push(region.name),
+      );
+    } catch (err) {
+      // Before any region was drawn: reading what is on disk failed outright.
+      this.onRestoreProblem?.(
+        `Couldn’t read downloaded regions from storage: ${(err as Error)?.message ?? 'unknown error'}`,
+      );
+      return;
+    }
+
+    this.downloaded = restored;
+    this.catalogue = regions;
+    this.applyAvailableDetail(restored);
+    this.drawFootprints();
+    this.onRestoreProblem?.(
+      failed.length > 0
+        ? `Couldn’t draw ${failed.join(', ')} from storage. The rest of the map is unaffected; deleting and downloading ${failed.length === 1 ? 'it' : 'them'} again should fix it.`
+        : null,
+    );
+  }
+
+  /**
+   * The catalogue's regions: fetched, or the copy cached from the last fetch.
+   *
+   * Only a failed *fetch* falls back to the cache — the cold offline start, which is the
+   * scenario Phase 3 exists for: no signal, relaunch, expect your downloaded region. This
+   * used to wrap the restore as well, so any restore error was mistaken for being offline
+   * and retried from the cache, and a second failure escaped as an unhandled rejection.
+   */
+  private async catalogueRegions(): Promise<Region[] | null> {
+    try {
+      return (await fetchManifest()).regions;
     } catch {
-      // Offline with no cached catalogue is normal and not an error worth surfacing:
-      // any already-downloaded region still needs restoring from OPFS.
-      await this.restoreFromOpfsWithoutManifest();
+      // Offline, or a catalogue newer than this build (the regions sheet says which):
+      // either way, what is on disk still needs drawing.
+      return loadCachedManifest()?.regions ?? null;
     }
   }
 
@@ -128,21 +184,6 @@ export class RegionCoverage {
   private applyAvailableDetail(regions: Region[]): void {
     this.maxDataZoom = bestAvailableZoom(regions, BASEMAP_MAX_ZOOM);
     this.renderDetailLimit();
-  }
-
-  /**
-   * Fallback restore for a cold *offline* start: the manifest lives on the network, but the
-   * archives are already local. Without this, the very scenario Phase 3 exists for — no
-   * signal, relaunch, expect your downloaded region — would show the blurry global map.
-   */
-  private async restoreFromOpfsWithoutManifest(): Promise<void> {
-    const cached = loadCachedManifest();
-    if (!cached) return;
-    const restored = await restoreDownloadedRegions(this.map, this.registry, cached.regions, this.theme());
-    this.downloaded = restored;
-    this.catalogue = cached.regions;
-    this.applyAvailableDetail(restored);
-    this.drawFootprints();
   }
 
   /** Current coverage, downloaded state and all. */

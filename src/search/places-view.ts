@@ -59,15 +59,26 @@ export async function renderPlacesSheet(body: HTMLElement, deps: PlacesViewDeps)
       // Deleted immediately, with a way back — rather than a confirmation dialog in front
       // of every delete. savePlace takes an explicit id and savedAt, so undo restores the
       // same record rather than a copy of it.
-      void deletePlace(place.id).then(() => {
-        void renderPlacesSheet(body, deps);
-        status.toast(`Deleted “${place.name}”`, {
-          action: {
-            label: 'Undo',
-            onSelect: () => void savePlace(place).then(() => void renderPlacesSheet(body, deps)),
-          },
-        });
-      });
+      void deletePlace(place.id).then(
+        () => {
+          void renderPlacesSheet(body, deps);
+          status.toast(`Deleted “${place.name}”`, {
+            action: {
+              label: 'Undo',
+              onSelect: () =>
+                void savePlace(place).then(
+                  () => void renderPlacesSheet(body, deps),
+                  // An Undo that fails quietly is worse than none: the place is gone, and
+                  // the person who pressed it believes it is back.
+                  (err: Error) =>
+                    status.toast(`Could not restore “${place.name}”: ${err.message}`, { kind: 'error' }),
+                ),
+            },
+          });
+        },
+        (err: Error) =>
+          status.toast(`Could not delete “${place.name}”: ${err.message}`, { kind: 'error' }),
+      );
     });
 
     item.append(goto, remove);

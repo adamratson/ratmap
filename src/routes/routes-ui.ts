@@ -474,7 +474,13 @@ function routeRow(route: SavedRoute, deps: RoutesUiDeps): HTMLLIElement {
         // rather than writing a duplicate of it.
         deps.onUndoableStatus?.(`Deleted “${route.name}”`, {
           label: 'Undo',
-          onSelect: () => void saveRoute(route).then(() => void renderRoutesSheet(deps)),
+          onSelect: () =>
+            void saveRoute(route).then(
+              () => void renderRoutesSheet(deps),
+              // An Undo that fails quietly is worse than none: the route is gone, and the
+              // person who pressed it believes it is back.
+              (err: Error) => onStatus(`Could not restore “${route.name}”: ${err.message}`, 'error'),
+            ),
         });
       },
       (err: Error) => onStatus(`Could not delete “${route.name}”: ${err.message}`, 'error'),

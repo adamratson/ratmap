@@ -13,6 +13,12 @@ export function startStorageOnboarding({
   showInstallSteps: () => void;
 }): void {
   const installWatcher = createInstallWatcher();
+  /**
+   * Why the last install prompt failed, if it did. Kept rather than shown once: a failed
+   * prompt is dropped, which re-runs this check, which would otherwise replace the reason
+   * a moment later with the generic "install to download" line.
+   */
+  let promptFailure: string | null = null;
   installWatcher.onChange(() => void renderStorageStatus());
   void renderStorageStatus();
 
@@ -45,9 +51,15 @@ export function startStorageOnboarding({
         action: {
           label: 'Install',
           onSelect: () => {
-            void capability.prompt().then((outcome) => {
-              if (outcome === 'accepted') void renderStorageStatus();
-            });
+            void capability.prompt().then(
+              (outcome) => {
+                if (outcome === 'accepted') void renderStorageStatus();
+              },
+              (err: Error) => {
+                promptFailure = err.message;
+                void renderStorageStatus();
+              },
+            );
           },
         },
       });
@@ -69,7 +81,9 @@ export function startStorageOnboarding({
     status.setCondition('storage', {
       message: isStandalone()
         ? 'Your browser hasn’t granted ratmap permanent storage yet, so downloads are off.'
-        : 'Downloads are off until ratmap is installed — a browser tab can’t keep maps safely.',
+        : promptFailure
+          ? `The install prompt didn’t open (${promptFailure}). Install ratmap from your browser’s menu to download maps.`
+          : 'Downloads are off until ratmap is installed — a browser tab can’t keep maps safely.',
       kind: 'warn',
     });
   }

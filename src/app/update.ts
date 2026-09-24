@@ -62,6 +62,12 @@ export interface AppUpdateOptions {
    * navigating: jsdom refuses to let `location.reload` be redefined.
    */
   reload?: () => void;
+  /**
+   * The service worker could not be registered, in a browser that supports them. Without
+   * one the app shell is never cached, so it will not start with no signal — the promise
+   * this app is built on — and until this existed that failed with no trace anywhere.
+   */
+  onRegistrationFailed?: (error: Error) => void;
 }
 
 export interface AppUpdates {
@@ -91,6 +97,7 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
     isBusy,
     onUpdateHeld,
     reload = () => window.location.reload(),
+    onRegistrationFailed,
   } = options;
 
   let registration: ServiceWorkerRegistration | null = null;
@@ -227,9 +234,14 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
       // deadlock the two on each other.
       void performCheck(reg);
     })
-    .catch(() => {
-      // No worker (unsupported, blocked, or a 404 in a non-PWA build): the app runs fine,
-      // it just can't self-update. Nothing actionable to show a user standing on a hill.
+    .catch((err: unknown) => {
+      // Unsupported browsers never get here (the guard above). What does get here is a
+      // worker that failed to install: a 404, a script error, storage refused. The app
+      // still runs while there is signal, but it has no offline shell — so it is logged
+      // in full and handed on, rather than swallowed as it used to be.
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error('Service worker registration failed', error);
+      onRegistrationFailed?.(error);
     });
 
   async function checkNow(): Promise<void> {

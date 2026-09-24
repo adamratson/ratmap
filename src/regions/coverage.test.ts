@@ -63,6 +63,7 @@ function fakeMap() {
 let map: ReturnType<typeof fakeMap>;
 let notice: HTMLButtonElement;
 let onOpenRegions: Mock<() => void>;
+let onRestoreProblem: Mock<(message: string | null) => void>;
 let coverage: InstanceType<typeof RegionCoverage>;
 
 beforeEach(() => {
@@ -73,12 +74,14 @@ beforeEach(() => {
   map = fakeMap();
   notice = document.createElement('button');
   onOpenRegions = vi.fn();
+  onRestoreProblem = vi.fn();
   coverage = new RegionCoverage({
     map: map as unknown as MLMap,
     registry: {} as TileSourceRegistry,
     theme: () => 'dark',
     notice,
     onOpenRegions,
+    onRestoreProblem,
   });
   coverage.setStyleReady(true);
 });
@@ -93,7 +96,13 @@ describe('restoring downloaded regions', () => {
 
     await coverage.restore();
 
-    expect(deps.restoreDownloadedRegions).toHaveBeenCalledWith(map, {}, MANIFEST.regions, 'dark');
+    expect(deps.restoreDownloadedRegions).toHaveBeenCalledWith(
+      map,
+      {},
+      MANIFEST.regions,
+      'dark',
+      expect.any(Function),
+    );
     expect(coverage.downloadedRegions()).toEqual([LOCHABER]);
     expect(drawnIds()).toEqual(['lochaber']);
   });
@@ -113,6 +122,42 @@ describe('restoring downloaded regions', () => {
 
     await expect(coverage.restore()).resolves.toBeUndefined();
     expect(coverage.downloadedRegions()).toEqual([]);
+  });
+
+  it('names a region it could not draw, and keeps the rest', async () => {
+    deps.restoreDownloadedRegions.mockImplementation(async (_m, _r, _regions, _t, onFailure) => {
+      onFailure(CAIRNGORMS, new Error('Layer with id already exists'));
+      return [LOCHABER];
+    });
+
+    await coverage.restore();
+
+    expect(coverage.downloadedRegions()).toEqual([LOCHABER]);
+    expect(onRestoreProblem).toHaveBeenLastCalledWith(expect.stringMatching(/Couldn’t draw Cairngorms/));
+  });
+
+  it('clears the problem once a restore goes cleanly', async () => {
+    await coverage.restore();
+    expect(onRestoreProblem).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reports a restore that fails outright, instead of rejecting unheard', async () => {
+    deps.restoreDownloadedRegions.mockRejectedValue(new Error('OPFS unavailable'));
+
+    await expect(coverage.restore()).resolves.toBeUndefined();
+    expect(onRestoreProblem).toHaveBeenLastCalledWith(expect.stringMatching(/OPFS unavailable/));
+  });
+
+  it('does not mistake a restore failure for being offline', async () => {
+    // The old catch-all retried from the cached catalogue on *any* error, drawing twice
+    // and then escaping as an unhandled rejection.
+    deps.loadCachedManifest.mockReturnValue(MANIFEST);
+    deps.restoreDownloadedRegions.mockRejectedValue(new Error('OPFS unavailable'));
+
+    await coverage.restore();
+
+    expect(deps.loadCachedManifest).not.toHaveBeenCalled();
+    expect(deps.restoreDownloadedRegions).toHaveBeenCalledTimes(1);
   });
 
   it('re-applies layer visibility after drawing the outlines', async () => {

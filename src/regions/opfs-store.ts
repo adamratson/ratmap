@@ -22,13 +22,28 @@ async function root(): Promise<FileSystemDirectoryHandle> {
   return navigator.storage.getDirectory();
 }
 
+/**
+ * Whether an OPFS error means "there is no such file".
+ *
+ * `NotFoundError` is the absent file; `TypeMismatchError` is a directory where the file
+ * would be, which is no more a file. Everything else — a read that failed, a quota or
+ * security error, a file locked by a writer — is a real fault, and must not be read as
+ * absence: that made an unreadable archive vanish from the map without a word, and a
+ * delete that had failed report that it had succeeded.
+ */
+export function isAbsent(err: unknown): boolean {
+  const name = (err as { name?: unknown } | null)?.name;
+  return name === 'NotFoundError' || name === 'TypeMismatchError';
+}
+
 async function tryGetFile(name: string): Promise<File | null> {
   const dir = await root();
   try {
     const handle = await dir.getFileHandle(name);
     return await handle.getFile();
-  } catch {
-    return null;
+  } catch (err) {
+    if (isAbsent(err)) return null;
+    throw err;
   }
 }
 
@@ -141,8 +156,10 @@ export async function deleteArtifact(filename: string): Promise<void> {
   for (const name of [filename, `${filename}${PARTIAL_SUFFIX}`]) {
     try {
       await dir.removeEntry(name);
-    } catch {
-      // Absent is the desired end state either way.
+    } catch (err) {
+      // Absent is the desired end state, so a file that was never there is fine. Anything
+      // else means the file is still on disk, and the caller must not say it was deleted.
+      if (!isAbsent(err)) throw err;
     }
   }
   await sweepSwapFiles();

@@ -62,6 +62,7 @@ class FakeDirectoryHandle {
   }
 
   async getFileHandle(name: string, options?: { create?: boolean }): Promise<FakeFileHandle> {
+    if (this.failWith) throw this.failWith;
     if (!this.files.has(name)) {
       if (!options?.create) throw new DOMException('not found', 'NotFoundError');
       this.files.set(name, new Uint8Array());
@@ -78,8 +79,13 @@ class FakeDirectoryHandle {
     return handle;
   }
 
+  /** Set to make every OPFS call fail the way a locked or unreadable file does. */
+  failWith: DOMException | null = null;
+
   async removeEntry(name: string): Promise<void> {
-    this.files.delete(name);
+    if (this.failWith) throw this.failWith;
+    // Like real OPFS: removing what is not there is an error, not a no-op.
+    if (!this.files.delete(name)) throw new DOMException('not found', 'NotFoundError');
   }
 
   async *entries(): AsyncGenerator<[string, FakeFileHandle]> {
@@ -170,5 +176,47 @@ describe('finalizePartial', () => {
 
     expect([...dir.files.keys()]).toEqual(['lochaber-basemap.pmtiles']);
     expect(dir.files.get('lochaber-basemap.pmtiles')).toEqual(new Uint8Array([1, 2, 3, 4]));
+  });
+});
+
+describe('telling an absent file from a failing one', () => {
+  it('reads a missing artifact as absent', async () => {
+    install(new FakeDirectoryHandle());
+    const { getArtifactFile, hasArtifact } = await import('./opfs-store');
+
+    expect(await getArtifactFile('nowhere.pmtiles')).toBeNull();
+    expect(await hasArtifact('nowhere.pmtiles')).toBe(false);
+  });
+
+  it('does not read a failing one as absent — it would vanish from the map unexplained', async () => {
+    const dir = install(new FakeDirectoryHandle());
+    dir.files.set('lochaber-basemap.pmtiles', new Uint8Array([1]));
+    dir.failWith = new DOMException('could not read', 'NotReadableError');
+    const { getArtifactFile } = await import('./opfs-store');
+
+    await expect(getArtifactFile('lochaber-basemap.pmtiles')).rejects.toMatchObject({
+      name: 'NotReadableError',
+    });
+  });
+
+  it('deletes an artifact whose partial was never there, without complaint', async () => {
+    const dir = install(new FakeDirectoryHandle());
+    dir.files.set('lochaber-basemap.pmtiles', new Uint8Array([1]));
+    const { deleteArtifact } = await import('./opfs-store');
+
+    await deleteArtifact('lochaber-basemap.pmtiles');
+
+    expect(dir.files.has('lochaber-basemap.pmtiles')).toBe(false);
+  });
+
+  it('reports a delete that failed, rather than letting the caller say "Deleted"', async () => {
+    const dir = install(new FakeDirectoryHandle());
+    dir.files.set('lochaber-basemap.pmtiles', new Uint8Array([1]));
+    dir.failWith = new DOMException('file is locked', 'NoModificationAllowedError');
+    const { deleteArtifact } = await import('./opfs-store');
+
+    await expect(deleteArtifact('lochaber-basemap.pmtiles')).rejects.toMatchObject({
+      name: 'NoModificationAllowedError',
+    });
   });
 });

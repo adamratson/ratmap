@@ -48,12 +48,17 @@ export function createInstallWatcher(): {
       return {
         kind: 'prompt',
         prompt: async () => {
-          await event.prompt();
-          const { outcome } = await event.userChoice;
-          // A prompt can only be used once; drop it either way.
-          deferred = null;
-          notify();
-          return outcome;
+          try {
+            await event.prompt();
+            const { outcome } = await event.userChoice;
+            return outcome;
+          } finally {
+            // A prompt can only be used once; drop it either way — including when it
+            // throws. It used to be dropped only on success, so a prompt that failed stayed
+            // on offer and failed again on every tap.
+            deferred = null;
+            notify();
+          }
         },
       };
     }

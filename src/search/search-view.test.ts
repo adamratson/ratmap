@@ -1,12 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
+import type { StatusCentre } from '../ui/status';
 
 // The FTS index needs the SQLite wasm runtime, which jsdom cannot load; the search itself
 // is covered by search.test.ts. Here only what the box does with a result matters.
+const searchImpl = vi.hoisted(() => ({
+  fail: null as Error | null,
+}));
+
 vi.mock('./search', () => ({
   PlacesSearch: class {
     load = vi.fn(async () => {});
-    search = vi.fn(() => [{ name: 'Ben Nevis', kind: 'peak', ele: 1345, lat: 56.797, lon: -5.004 }]);
+    search = vi.fn(() => {
+      if (searchImpl.fail) throw searchImpl.fail;
+      return [{ name: 'Ben Nevis', kind: 'peak', ele: 1345, lat: 56.797, lon: -5.004 }];
+    });
   },
 }));
 
@@ -15,6 +23,7 @@ const { SearchBox } = await import('./search-view');
 describe('SearchBox focus after choosing a result', () => {
   let input: HTMLInputElement;
   let results: HTMLUListElement;
+  let toast: ReturnType<typeof vi.fn<StatusCentre['toast']>>;
   let onCoordinates: ReturnType<typeof vi.fn<(coords: { lat: number; lng: number }) => void>>;
 
   beforeEach(() => {
@@ -36,7 +45,9 @@ describe('SearchBox focus after choosing a result', () => {
       getZoom: () => 8,
       getCenter: () => ({ lat: 56.8, lng: -5 }),
     } as unknown as MLMap;
-    new SearchBox({ container, input, results, map, status: { toast: vi.fn() }, onCoordinates });
+    toast = vi.fn();
+    searchImpl.fail = null;
+    new SearchBox({ container, input, results, map, status: { toast }, onCoordinates });
   });
 
   afterEach(() => {
@@ -77,5 +88,17 @@ describe('SearchBox focus after choosing a result', () => {
     press('Enter');
 
     expect(onCoordinates).toHaveBeenCalledWith({ lat: 56.79685, lng: -5.0036 });
+  });
+
+  it('says so when a search throws, and clears the stale results', async () => {
+    await typeAndWaitForResults('ben');
+    searchImpl.fail = new Error('SQLITE_ERROR: fts5 syntax error');
+
+    input.value = 'ben nevis';
+    input.dispatchEvent(new Event('input'));
+    await vi.waitFor(() => expect(toast).toHaveBeenCalled());
+
+    expect(toast).toHaveBeenCalledWith('Search failed: SQLITE_ERROR: fts5 syntax error', { kind: 'warn' });
+    expect(results.hidden).toBe(true);
   });
 });

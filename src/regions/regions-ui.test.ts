@@ -3,6 +3,7 @@ import type { Map as MLMap } from 'maplibre-gl';
 import type { Region } from './manifest';
 
 const fetchManifestMock = vi.hoisted(() => vi.fn());
+const loadCachedManifestMock = vi.hoisted(() => vi.fn((): unknown => null));
 const regionStatusesMock = vi.hoisted(() => vi.fn());
 const deleteRegionMock = vi.hoisted(() => vi.fn());
 const removeRegionFromMapMock = vi.hoisted(() => vi.fn());
@@ -14,6 +15,7 @@ const deleteOrphanMock = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('./manifest', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./manifest')>()),
   fetchManifest: fetchManifestMock,
+  loadCachedManifest: loadCachedManifestMock,
 }));
 
 vi.mock('./downloader', () => ({
@@ -22,6 +24,7 @@ vi.mock('./downloader', () => ({
   downloadRegion: vi.fn(),
   downloadsInFlight: downloadsInFlightMock,
   DownloadCancelled: class DownloadCancelled extends Error {},
+  DownloadStalled: class DownloadStalled extends Error {},
 }));
 
 vi.mock('./region-layers', () => ({
@@ -49,7 +52,10 @@ const LOCHABER: Region = {
   artifacts: [{ kind: 'basemap', url: 'x', bytes: 184_000_000 }],
 } as unknown as Region;
 
-async function openSheet(map: Partial<MLMap> = {}): Promise<HTMLElement> {
+async function openSheet(
+  map: Partial<MLMap> = {},
+  onStatus: (message: string, kind: 'ok' | 'warn' | 'error') => void = vi.fn(),
+): Promise<HTMLElement> {
   const container = document.createElement('div');
   document.body.append(container);
   await renderRegionsSheet({
@@ -57,7 +63,7 @@ async function openSheet(map: Partial<MLMap> = {}): Promise<HTMLElement> {
     registry: {} as never,
     theme: () => 'light',
     container,
-    onStatus: vi.fn(),
+    onStatus,
   });
   return container;
 }
@@ -114,6 +120,19 @@ describe('deleting a downloaded region', () => {
     await vi.waitFor(() => expect(deleteRegionMock).toHaveBeenCalledWith(LOCHABER));
 
     expect(removeRegionFromMapMock).toHaveBeenCalled();
+  });
+
+  it('says so when the files could not all be removed, rather than "Deleted"', async () => {
+    deleteRegionMock.mockRejectedValue(new DOMException('file is locked', 'NoModificationAllowedError'));
+    const onStatus = vi.fn();
+    const container = await openSheet({}, onStatus);
+    deleteButton(container).click();
+    deleteButton(container).click();
+
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith('Could not delete all of Lochaber & Ben Nevis: file is locked', 'error'),
+    );
+    expect(onStatus).not.toHaveBeenCalledWith(expect.stringMatching(/^Deleted/), 'ok');
   });
 
   it('disarms itself rather than lying in wait for the next tap', async () => {
@@ -484,6 +503,50 @@ describe('download progress', () => {
     vi.clearAllMocks();
   });
 
+  async function tapDownload() {
+    const onStatus = vi.fn();
+    const container = await openSheet({}, onStatus);
+    container.querySelector<HTMLButtonElement>('.region-action')!.click();
+    return onStatus;
+  }
+
+  it('says so when storage cannot be checked, rather than doing nothing (C1 still holds)', async () => {
+    const { downloadRegion } = await import('./downloader');
+    readStorageMock.mockRejectedValue(new Error('estimate() unavailable'));
+
+    const onStatus = await tapDownload();
+
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/Couldn’t check storage.*Nothing was downloaded/), 'error'),
+    );
+    expect(downloadRegion).not.toHaveBeenCalled();
+  });
+
+  it('does not call a finished download "failed" when only drawing it went wrong', async () => {
+    const { downloadRegion } = await import('./downloader');
+    const { addRegionToMap } = await import('./region-layers');
+    vi.mocked(downloadRegion).mockResolvedValue(undefined);
+    vi.mocked(addRegionToMap).mockRejectedValue(new Error('Style is not done loading'));
+
+    const onStatus = await tapDownload();
+
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/downloaded, but couldn’t be drawn/), 'error'),
+    );
+    expect(onStatus).not.toHaveBeenCalledWith(expect.stringMatching(/^Download failed/), 'error');
+  });
+
+  it('explains a full phone in plain words', async () => {
+    const { downloadRegion } = await import('./downloader');
+    vi.mocked(downloadRegion).mockRejectedValue(new DOMException('quota exceeded', 'QuotaExceededError'));
+
+    const onStatus = await tapDownload();
+
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/ran out of storage.*tap Resume/), 'error'),
+    );
+  });
+
   it('is a progressbar to assistive tech, with the same words the label shows', async () => {
     const { downloadRegion } = await import('./downloader');
     let reported!: () => void;
@@ -514,5 +577,99 @@ describe('download progress', () => {
     expect(bar.getAttribute('aria-valuetext')).toBe(
       container.querySelector('.region-progress-label')!.textContent,
     );
+  });
+});
+
+describe('when the catalogue cannot be fetched', () => {
+  beforeEach(() => {
+    findOrphansMock.mockResolvedValue([]);
+    regionStatusesMock.mockResolvedValue(new Map([[LOCHABER.id, complete(LOCHABER)]]));
+    loadCachedManifestMock.mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.clearAllMocks();
+  });
+
+  const notice = (container: HTMLElement) => container.querySelector<HTMLElement>('.regions-notice')!;
+  const rowNames = (container: HTMLElement) =>
+    [...container.querySelectorAll('.region-row .region-name')].map((el) => el.textContent);
+
+  it('says so, rather than showing an empty sheet', async () => {
+    // It used to hide the search box and return — a blank sheet, nothing said.
+    fetchManifestMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const container = await openSheet();
+
+    expect(notice(container).hidden).toBe(false);
+    expect(notice(container).textContent).toMatch(/Can’t reach the region catalogue \(Failed to fetch\)/);
+    expect(notice(container).textContent).toMatch(/Check your connection/);
+  });
+
+  it('works from the copy saved on the phone, so downloaded regions can still be managed', async () => {
+    fetchManifestMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    loadCachedManifestMock.mockReturnValue({ schemaVersion: 1, builtAt: 'x', regions: [LOCHABER] });
+
+    const container = await openSheet();
+
+    expect(rowNames(container)).toEqual([LOCHABER.name]);
+    expect(container.querySelector<HTMLElement>('.region-action')!.textContent).toBe('Delete');
+    expect(notice(container).textContent).toMatch(/copy saved on this phone/);
+  });
+
+  it('asks for an app update when the catalogue is newer than this build', async () => {
+    const { CatalogueTooNew } = await import('./manifest');
+    fetchManifestMock.mockRejectedValue(new CatalogueTooNew(2));
+
+    const container = await openSheet();
+
+    expect(notice(container).textContent).toMatch(/Update the app/);
+  });
+
+  it('still lists the regions from the last catalogue it understood, when updating', async () => {
+    const { CatalogueTooNew } = await import('./manifest');
+    fetchManifestMock.mockRejectedValue(new CatalogueTooNew(2));
+    loadCachedManifestMock.mockReturnValue({ schemaVersion: 1, builtAt: 'x', regions: [LOCHABER] });
+
+    const container = await openSheet();
+
+    expect(rowNames(container)).toEqual([LOCHABER.name]);
+    expect(notice(container).textContent).toMatch(/Update the app to see new regions/);
+  });
+
+  it('shows no notice when the catalogue arrives', async () => {
+    fetchManifestMock.mockResolvedValue({ regions: [LOCHABER] });
+
+    const container = await openSheet();
+
+    expect(notice(container).hidden).toBe(true);
+  });
+});
+
+describe('restoring downloaded regions at startup', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('draws the others when one region fails, and says which one', async () => {
+    const { addRegionToMap } = await import('./region-layers');
+    const SECOND = { ...LOCHABER, id: 'second', name: 'Second' } as Region;
+    regionStatusesMock.mockResolvedValue(
+      new Map([
+        [LOCHABER.id, complete(LOCHABER)],
+        [SECOND.id, complete(SECOND)],
+      ]),
+    );
+    vi.mocked(addRegionToMap).mockImplementation(async (_map, _registry, region) => {
+      if (region.id === LOCHABER.id) throw new Error('Layer with id already exists');
+    });
+    const onFailure = vi.fn();
+
+    const { restoreDownloadedRegions } = await import('./regions-ui');
+    const restored = await restoreDownloadedRegions({} as MLMap, {} as never, [LOCHABER, SECOND], 'light', onFailure);
+
+    expect(restored.map((r) => r.id)).toEqual(['second']);
+    expect(onFailure).toHaveBeenCalledWith(LOCHABER, expect.objectContaining({ message: 'Layer with id already exists' }));
   });
 });

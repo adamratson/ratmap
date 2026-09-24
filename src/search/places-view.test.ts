@@ -99,6 +99,32 @@ describe('the saved places sheet', () => {
     expect(body.textContent).toContain('Ben Nevis');
   });
 
+  it('says so when a delete fails, and leaves the place listed', async () => {
+    places.deletePlace.mockRejectedValue(new Error('transaction aborted'));
+    await render();
+    body.querySelector<HTMLButtonElement>('.place-delete')!.click();
+    await flush();
+
+    expect(status.toast).toHaveBeenCalledWith('Could not delete “Ben Nevis”: transaction aborted', {
+      kind: 'error',
+    });
+    expect(body.textContent).toContain('Ben Nevis');
+  });
+
+  it('says so when an Undo fails, rather than letting it look restored', async () => {
+    await render();
+    body.querySelector<HTMLButtonElement>('.place-delete')!.click();
+    await flush();
+    places.savePlace.mockRejectedValue(new Error('quota exceeded'));
+
+    status.toast.mock.calls[0][1]!.action!.onSelect();
+    await flush();
+
+    expect(status.toast).toHaveBeenLastCalledWith('Could not restore “Ben Nevis”: quota exceeded', {
+      kind: 'error',
+    });
+  });
+
   it('reports a store that will not open, rather than showing an empty list', async () => {
     places.listPlaces.mockRejectedValue(new Error('IndexedDB unavailable'));
     await render();

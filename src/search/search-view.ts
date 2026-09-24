@@ -168,7 +168,16 @@ export class SearchBox {
     if (seq !== this.seq) return;
 
     const centre = this.map.getCenter();
-    const results = this.search.search(query, { lat: centre.lat, lon: centre.lng });
+    let results: SearchResult[];
+    try {
+      results = this.search.search(query, { lat: centre.lat, lon: centre.lng });
+    } catch (err) {
+      // Otherwise the previous query's results stay up, answering a question no longer
+      // being asked, and the error escapes this listener with nothing said.
+      this.hideResults();
+      this.status.toast(`Search failed: ${(err as Error).message}`, { kind: 'warn' });
+      return;
+    }
     this.renderResults(results);
   }
 

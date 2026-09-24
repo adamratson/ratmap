@@ -80,14 +80,18 @@ test.describe('offline regions', () => {
     const files = await listOpfs(page);
 
     // C16: artifacts are open-ended, so the expectation comes from the manifest the app
-    // itself downloaded against — its localStorage copy — not from a list of kinds here.
+    // itself downloaded against — the copy it saved in OPFS — not from a list of kinds here.
     // A hardcoded list is how this test broke once already: it knew basemap, terrain and
     // contours, and failed the day the catalogue added avalanche, paths and sac.
-    const declared = await page.evaluate((name) => {
-      const manifest = JSON.parse(localStorage.getItem('ratmap:region-manifest') ?? 'null') as {
+    const declared = await page.evaluate(async (name) => {
+      // The copy the app saved for offline starts (src/regions/manifest.ts), in OPFS.
+      const root = await navigator.storage.getDirectory();
+      const dir = await root.getDirectoryHandle('app-data');
+      const text = await (await (await dir.getFileHandle('region-manifest.json')).getFile()).text();
+      const manifest = JSON.parse(text) as {
         regions: Array<{ name: string; artifacts: Array<{ filename: string; bytes: number }> }>;
-      } | null;
-      return manifest?.regions.find((r) => r.name === name)?.artifacts ?? [];
+      };
+      return manifest.regions.find((r) => r.name === name)?.artifacts ?? [];
     }, TEST_REGION);
     expect(declared.length).toBeGreaterThan(0);
 

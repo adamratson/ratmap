@@ -43,8 +43,8 @@ wants() {
 
 for requested in ${ONLY//,/ }; do
   case "$requested" in
-    basemap|paths|sac|terrain|terrain-features) ;;
-    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, sac, terrain, terrain-features)" >&2
+    basemap|paths|peaks|sac|terrain|terrain-features) ;;
+    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features)" >&2
        exit 2 ;;
   esac
 done
@@ -102,6 +102,21 @@ elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
   SAC_SOURCE="$PUBLIC_BASE_URL/sac-global.pmtiles"
 else
   SAC_SOURCE=""
+fi
+
+# Summits with heights, ours too (build-peaks.sh), resolved the same way. Cut per region
+# because the app otherwise reads them only from the published global archive — over the
+# network — so a downloaded region lost every summit height, marker and detail card as
+# soon as the signal did (found 2026-09-24: none drawn offline over Andorra). The app
+# serves a region's copy in place of the global archive's tiles inside that region.
+if [ -n "${PEAKS_SOURCE_URL:-}" ]; then
+  PEAKS_SOURCE="$PEAKS_SOURCE_URL"
+elif [ -s "$DIST_DIR/peaks-global.pmtiles" ]; then
+  PEAKS_SOURCE="$DIST_DIR/peaks-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  PEAKS_SOURCE="$PUBLIC_BASE_URL/peaks-global.pmtiles"
+else
+  PEAKS_SOURCE=""
 fi
 
 # The z12-13 walkable network, also ours (build-paths.sh), resolved the same way. The
@@ -400,6 +415,30 @@ elif [ -n "$PATHS_SOURCE" ]; then
   extract_verified "$PATHS_SOURCE" "$OUT_DIR/$REGION_ID-paths.pmtiles" "$PATHS_MAXZOOM" --allow-empty
 else
   echo "==> low-zoom paths: skipped (no paths-global.pmtiles — run ./scripts/build-paths.sh)"
+fi
+
+if ! wants peaks; then
+  :
+elif [ -n "$PEAKS_SOURCE" ]; then
+  # Which archive, said out loud: a local dist/ copy wins over the published one, and a
+  # stale local copy (a Scotland-only build from August, found 2026-09-24) would be cut
+  # into every region without a word. Rebuild it with build-peaks.sh first.
+  if [ -f "$PEAKS_SOURCE" ]; then
+    echo "==> summits (from $PEAKS_SOURCE, $(du -h "$PEAKS_SOURCE" | cut -f1), built $(date -r "$PEAKS_SOURCE" +%Y-%m-%d))"
+  else
+    echo "==> summits (from $PEAKS_SOURCE)"
+  fi
+  # The source archive's own top zoom, read from its header rather than written down here:
+  # a number written down is how the app came to cap summits at z5 over a z6 archive,
+  # hiding ~60% of them. Every zoom is needed — tippecanoe thins the lower ones.
+  PEAKS_MAXZOOM="$(pmtiles show --header-json "$PEAKS_SOURCE" \
+    | python3 -c 'import json, sys; print(json.load(sys.stdin)["maxzoom"])')"
+  # Versioned like the avalanche artifact: a region already downloaded only fetches a
+  # file whose name it does not hold, so a rebuilt summit set needs a new name to reach it.
+  # Bump the number here and in build-manifest.py's ARTIFACT_KINDS together.
+  extract_verified "$PEAKS_SOURCE" "$OUT_DIR/$REGION_ID-peaks-1.pmtiles" "$PEAKS_MAXZOOM" --allow-empty
+else
+  echo "==> summits: skipped (no peaks-global.pmtiles — run ./scripts/build-peaks.sh)"
 fi
 
 if ! wants sac; then

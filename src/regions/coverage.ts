@@ -4,7 +4,14 @@ import { describeDetailLimit } from '../map/detail-limit';
 import { applyAllStoredVisibility } from '../map/layers';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 import type { Theme } from '../ui/theme';
-import { bestAvailableZoom, fetchManifest, loadCachedManifest, type Region } from './manifest';
+import {
+  bestAvailableZoom,
+  fetchManifest,
+  loadCachedManifest,
+  type Region,
+  type RegionManifest,
+} from './manifest';
+import { listArtifactNames } from './opfs-store';
 import { regionAt, renderFootprints, visibleFootprints, type Footprint } from './region-footprints';
 import { restoreDownloadedRegions } from './regions-ui';
 
@@ -128,10 +135,38 @@ export class RegionCoverage {
     }
   }
 
+  /**
+   * Draw from the copy saved on the phone first, then from the network's if it differs.
+   *
+   * The other way round, as it used to be, the map waited on the network before drawing
+   * what was already on disk — fine offline, where the request fails at once, and useless
+   * on the connection a hillside actually has, which neither works nor fails: measured, no
+   * downloaded region at all after 15 s. What is on disk no longer waits for anything.
+   */
   private async restoreRegions(): Promise<void> {
-    const regions = await this.catalogueRegions();
-    if (!regions) return;
+    const cached = await loadCachedManifest();
+    if (cached) await this.drawFrom(cached.regions);
 
+    let fresh: RegionManifest | null = null;
+    try {
+      fresh = await fetchManifest();
+    } catch {
+      // Offline, a connection too weak to answer in time, or a catalogue newer than this
+      // build (the regions sheet says which). What is on disk is already drawn.
+    }
+
+    if (fresh) {
+      // A catalogue can gain an artifact kind or a region; drawing is idempotent, so
+      // anything already on the map is left alone and only what is new is added.
+      if (!cached || fresh.builtAt !== cached.builtAt) await this.drawFrom(fresh.regions);
+      return;
+    }
+
+    if (!cached) await this.reportUnreadableDownloads();
+  }
+
+  /** Restore the downloaded regions among `regions`, and report any that would not draw. */
+  private async drawFrom(regions: Region[]): Promise<void> {
     const failed: string[] = [];
     let restored: Region[];
     try {
@@ -158,20 +193,23 @@ export class RegionCoverage {
   }
 
   /**
-   * The catalogue's regions: fetched, or the copy cached from the last fetch.
+   * No catalogue from anywhere — but are there downloads on disk that it would describe?
    *
-   * Only a failed *fetch* falls back to the cache — the cold offline start, which is the
-   * scenario Phase 3 exists for: no signal, relaunch, expect your downloaded region. This
-   * used to wrap the restore as well, so any restore error was mistaken for being offline
-   * and retried from the cache, and a second failure escaped as an unhandled rejection.
+   * Then they cannot be drawn, and the person holding the phone should hear that from the
+   * app rather than find a blank map on the hill. (The saved copy is written by every
+   * catalogue fetch, so this takes losing it after downloading, and then no signal.)
    */
-  private async catalogueRegions(): Promise<Region[] | null> {
+  private async reportUnreadableDownloads(): Promise<void> {
+    let names: Set<string>;
     try {
-      return (await fetchManifest()).regions;
+      names = await listArtifactNames();
     } catch {
-      // Offline, or a catalogue newer than this build (the regions sheet says which):
-      // either way, what is on disk still needs drawing.
-      return loadCachedManifest()?.regions ?? null;
+      return; // No OPFS, so nothing downloaded either.
+    }
+    if ([...names].some((name) => name.endsWith('.pmtiles'))) {
+      this.onRestoreProblem?.(
+        'Your downloaded regions are on this phone, but the catalogue that describes them isn’t, so they can’t be drawn. Open ratmap once with a connection to fix it.',
+      );
     }
   }
 

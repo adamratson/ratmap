@@ -190,11 +190,78 @@ OUT="$DIST_DIR/peaks-global.pmtiles"
 # `prom` is the computed prominence the app's zoom filter ranks on; `prominence` is OSM's
 # own sparse tag, kept for reference. `lists` is the summit-list membership derived in
 # normalize-peaks.py (Phase 3.5, C19).
-tippecanoe -o "$OUT" -zg --drop-densest-as-needed \
+# `--extend-zooms-if-still-dropping`: `--drop-densest-as-needed` thins even the top zoom
+# when a tile is too big, and the top zoom is the complete set — the app overzooms from
+# it. Found 2026-09-24 decoding the published archive: "Sandpit Hil" (-0.108, 53.832) is
+# missing from its z6 tile and survives only in a neighbour's buffer. This adds zooms
+# until nothing needs dropping; the app and build-region.sh both read the top zoom from
+# the header, so a deeper archive needs no change anywhere else. The tile check below
+# fails the build if anything is still missing.
+tippecanoe -o "$OUT" -zg --drop-densest-as-needed --extend-zooms-if-still-dropping \
   --include=name --include=ele --include=prom --include=prominence --include=wikidata \
   --include=lists \
   -l peaks -n "ratmap peaks" --force \
   "$WORK_DIR/peaks-final.geojsonl"
+
+# Check the tiles, not only the input. The checks above run on the GeoJSONL; nothing
+# checked what tippecanoe made of it, and the published archive went two weeks with no
+# `lists` property at all — every Munro marker and badge silently absent (found
+# 2026-09-24). At the top zoom tippecanoe must not have thinned anything: every peak and
+# every Munro has to be there, since that is the zoom the app overzooms from.
+MAXZOOM="$(pmtiles show --header-json "$OUT" | python3 -c 'import json, sys; print(json.load(sys.stdin)["maxzoom"])')"
+tippecanoe-decode -z"$MAXZOOM" -Z"$MAXZOOM" "$OUT" \
+  | python3 - "$WORK_DIR/peaks-final.geojsonl" "$MAXZOOM" <<'PYCHECK_TILES'
+import json, math, re, sys
+
+source, maxzoom = sys.argv[1], sys.argv[2]
+expected = expected_munros = 0
+with open(source) as f:
+    for line in f:
+        line = line.lstrip("\x1e").strip()
+        if not line:
+            continue
+        expected += 1
+        if "munro" in json.loads(line).get("properties", {}).get("lists", "").split(";"):
+            expected_munros += 1
+
+# Streamed, a line at a time: decoded in one piece the global archive is hundreds of MB of
+# JSON. tippecanoe-decode writes each tile's header on a line of its own ("zoom", "x",
+# "y") and each feature on a line of its own — checked against a real extract.
+#
+# Counted, not matched by position: tippecanoe snaps coordinates to its tile grid, ~150 m
+# at z6, so positions do not match the input's. A peak near an edge is also copied into
+# the neighbouring tile's buffer, so only features inside their own tile's bounds count.
+TILE = re.compile(r'"zoom": (\d+), "x": (\d+), "y": (\d+)')
+
+def bounds(z, x, y):
+    n = 2 ** z
+    lat = lambda row: math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * row / n))))
+    return x / n * 360 - 180, lat(y + 1), (x + 1) / n * 360 - 180, lat(y)
+
+tile = None
+count = munros = 0
+for line in sys.stdin:
+    match = TILE.search(line)
+    if match and '"FeatureCollection"' in line:
+        tile = bounds(*map(int, match.groups()))
+        continue
+    text = line.strip().rstrip(",")
+    if tile is None or not text.startswith('{ "type": "Feature"'):
+        continue
+    feature = json.loads(text)
+    lon, lat = feature["geometry"]["coordinates"][:2]
+    west, south, east, north = tile
+    if west <= lon < east and south < lat <= north:
+        count += 1
+        if "munro" in str(feature.get("properties", {}).get("lists", "")).split(";"):
+            munros += 1
+
+if count != expected:
+    sys.exit(f"FAIL: {count} peaks in the z{maxzoom} tiles, {expected} in the input")
+if munros != expected_munros:
+    sys.exit(f"FAIL: {munros} munros in the z{maxzoom} tiles, {expected_munros} in the input")
+print(f"  OK z{maxzoom} tiles hold all {count} peaks and {munros} munros")
+PYCHECK_TILES
 
 pmtiles show "$OUT"
 echo "Built $OUT"

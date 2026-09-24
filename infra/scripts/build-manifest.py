@@ -76,6 +76,8 @@ ARTIFACT_KINDS = {
     # line with "-avalanche-2.pmtiles" rather than adding to it — two versions mapping to
     # one kind would race in the merge below.
     "-avalanche-1.pmtiles": "avalanche",
+    # Versioned for the same reason; bump together with build-region.sh.
+    "-peaks-1.pmtiles": "peaks",
 }
 
 

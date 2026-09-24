@@ -350,3 +350,96 @@ describe('startAppUpdates', () => {
     });
   });
 });
+
+describe('whether the app can open offline yet', () => {
+  it('says "installing" on a first visit, then "ready" once the shell is cached', async () => {
+    const container = installContainer(false);
+    const worker = new FakeWorker('installing');
+    container.registration.installing = worker;
+    const states: string[] = [];
+
+    const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn(), onOfflineStateChange: (s) => states.push(s) });
+    await flush();
+    expect(states).toEqual(['installing']);
+    expect(updates.offlineState()).toBe('installing');
+
+    worker.setState('installed');
+    worker.setState('activated');
+
+    expect(states).toEqual(['installing', 'ready']);
+    expect(updates.offlineState()).toBe('ready');
+    updates.dispose();
+  });
+
+  it('says "failed" when the first install dies part-way, instead of nothing', async () => {
+    // Lost signal or no room while precaching ~24 MB: the worker goes redundant, and the
+    // app will not open offline — while any region downloaded meanwhile sits on the phone.
+    const container = installContainer(false);
+    const worker = new FakeWorker('installing');
+    container.registration.installing = worker;
+    const states: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn(), onOfflineStateChange: (s) => states.push(s) });
+    await flush();
+    worker.setState('redundant');
+
+    expect(states).toEqual(['installing', 'failed']);
+    updates.dispose();
+  });
+
+  it('follows the retry a later check starts, back to "ready"', async () => {
+    const container = installContainer(false);
+    const first = new FakeWorker('installing');
+    container.registration.installing = first;
+    const states: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn(), onOfflineStateChange: (s) => states.push(s) });
+    await flush();
+    first.setState('redundant');
+
+    const retry = container.registration.startInstall();
+    retry.setState('activated');
+
+    expect(states).toEqual(['installing', 'failed', 'installing', 'ready']);
+    updates.dispose();
+  });
+
+  it('is simply "ready" when a worker is already active — every visit after the first', async () => {
+    const container = installContainer(true);
+    container.registration.active = new FakeWorker('activated');
+    const states: string[] = [];
+
+    const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn(), onOfflineStateChange: (s) => states.push(s) });
+    await flush();
+
+    expect(states).toEqual(['ready']);
+    updates.dispose();
+  });
+
+  it('does not treat an update installing beside an active worker as losing offline', async () => {
+    const container = installContainer(true);
+    container.registration.active = new FakeWorker('activated');
+    const states: string[] = [];
+    const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn(), onOfflineStateChange: (s) => states.push(s) });
+    await flush();
+
+    container.registration.startInstall().setState('redundant');
+
+    expect(states).toEqual(['ready']);
+    updates.dispose();
+  });
+
+  it('says "failed" when the worker cannot even register', async () => {
+    const container = installContainer(false);
+    container.register.mockRejectedValue(new TypeError('404'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const states: string[] = [];
+
+    const updates = startAppUpdates({ ...OPTIONS, reload: vi.fn(), onOfflineStateChange: (s) => states.push(s) });
+    await flush();
+
+    expect(states).toEqual(['failed']);
+    updates.dispose();
+  });
+});

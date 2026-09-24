@@ -132,3 +132,84 @@ describe('TileSourceRegistry', () => {
     expect(protocol.get('region-a-basemap.pmtiles')).toBe(second);
   });
 });
+
+describe('regional copies of a remote archive (summits offline)', () => {
+  const REMOTE = 'https://bucket/peaks-global.pmtiles';
+  const COPY = 'andorra-peaks-1.pmtiles';
+  // Andorra's bbox, as the catalogue gives it.
+  const ANDORRA = [1.4124, 42.4276, 1.7875, 42.6572] as const;
+  // z6 tiles: the one Andorra is in, and one over Scotland.
+  const INSIDE = [6, 32, 23] as const;
+  const OUTSIDE = [6, 31, 19] as const;
+
+  type Fake = { getHeader: ReturnType<typeof vi.fn>; getZxy: ReturnType<typeof vi.fn> };
+
+  function setUp() {
+    const protocol = new Protocol();
+    const registry = new TileSourceRegistry(protocol);
+    const remote = Object.assign(registry.addRemote(REMOTE, { regionalCopies: true }), {
+      getHeader: vi.fn(async () => ({ maxZoom: 6, minLon: -180, minLat: -85, maxLon: 180, maxLat: 85, from: 'remote' })),
+      getZxy: vi.fn(async () => ({ data: new ArrayBuffer(1), from: 'remote' })),
+    }) as unknown as Fake;
+    const copy = Object.assign(registry.addLocal(new File([new Uint8Array(8)], COPY)), {
+      getHeader: vi.fn(async () => ({ maxZoom: 6, minLon: 1.4, minLat: 42.4, maxLon: 1.8, maxLat: 42.7, from: 'copy' })),
+      getZxy: vi.fn(async () => ({ data: new ArrayBuffer(1), from: 'copy' })),
+    }) as unknown as Fake;
+    const served = protocol.get(REMOTE) as unknown as {
+      getHeader(): Promise<{ from: string; minLon: number }>;
+      getZxy(z: number, x: number, y: number): Promise<{ from: string } | undefined>;
+    };
+    return { registry, remote, copy, served };
+  }
+
+  it('serves tiles inside a downloaded region from its copy, and the rest from the network', async () => {
+    const { registry, served } = setUp();
+    registry.addRegionalCopy(REMOTE, COPY, ANDORRA);
+
+    expect((await served.getZxy(...INSIDE))?.from).toBe('copy');
+    expect((await served.getZxy(...OUTSIDE))?.from).toBe('remote');
+  });
+
+  it('asks the network when the copy has no such tile, rather than drawing nothing', async () => {
+    const { registry, copy, served } = setUp();
+    copy.getZxy.mockResolvedValue(undefined);
+    registry.addRegionalCopy(REMOTE, COPY, ANDORRA);
+
+    expect((await served.getZxy(...INSIDE))?.from).toBe('remote');
+  });
+
+  it('answers the header from a copy when offline, keeping the remote’s worldwide bounds', async () => {
+    const { registry, remote, served } = setUp();
+    remote.getHeader.mockRejectedValue(new TypeError('Failed to fetch'));
+    registry.addRegionalCopy(REMOTE, COPY, ANDORRA);
+
+    const header = await served.getHeader();
+    expect(header.from).toBe('copy');
+    expect(header.minLon).toBe(-180);
+  });
+
+  it('says the source needs reloading when it asked offline before any copy existed', async () => {
+    // An offline start: the style asks for the header before regions are restored.
+    const { registry, remote, served } = setUp();
+    remote.getHeader.mockRejectedValue(new TypeError('Failed to fetch'));
+    await expect(served.getHeader()).rejects.toThrow();
+
+    expect(registry.addRegionalCopy(REMOTE, COPY, ANDORRA)).toBe(true);
+    // Once is enough.
+    expect(registry.addRegionalCopy(REMOTE, COPY, ANDORRA)).toBe(false);
+  });
+
+  it('does not ask for a reload when nothing failed', () => {
+    const { registry } = setUp();
+    expect(registry.addRegionalCopy(REMOTE, COPY, ANDORRA)).toBe(false);
+  });
+
+  it('stops using a copy once its region is deleted', async () => {
+    const { registry, served } = setUp();
+    registry.addRegionalCopy(REMOTE, COPY, ANDORRA);
+
+    registry.removeLocal(COPY);
+
+    expect((await served.getZxy(...INSIDE))?.from).toBe('remote');
+  });
+});

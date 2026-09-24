@@ -74,7 +74,9 @@ describe('config', () => {
     // rather than overzoom, so these must match the built artifacts.
     expect(config.BASEMAP_MAX_ZOOM).toBe(5);
     expect(config.TERRAIN_MAX_ZOOM).toBe(4);
-    expect(config.PEAKS_MAX_ZOOM).toBe(5);
+    // No peaks cap: that archive's filename carries no date, so it can be rebuilt deeper
+    // under the same name, and a constant here pinned z5 over a z6 archive — ~60% of
+    // summits never drawn. The source reads its zoom range from the archive's header.
   });
 
   it('exposes local (C7-vendored) glyph/sprite URLs as origin-qualified absolute URLs', async () => {

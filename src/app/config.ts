@@ -33,9 +33,6 @@ export const BASEMAP_MAX_ZOOM = 5;
 // for a real elevation profile. Phase 4 region terrain replaces it locally.
 export const TERRAIN_MAX_ZOOM = 4;
 
-// Peaks are points; tippecanoe chose z0-5 for the current (Scotland-only) build. Overzoom
-// so markers stay visible when zoomed past the archive's own maxzoom.
-export const PEAKS_MAX_ZOOM = 5;
 
 // AWS Open Data terrarium terrain — the plan's documented §2 fallback. Kept as an opt-in
 // escape hatch (VITE_USE_FALLBACK_TERRAIN=1) now that our own terrain archive works, so

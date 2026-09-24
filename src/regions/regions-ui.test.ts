@@ -536,6 +536,28 @@ describe('download progress', () => {
     expect(onStatus).not.toHaveBeenCalledWith(expect.stringMatching(/^Download failed/), 'error');
   });
 
+  it('will not download a region the app itself could not open offline', async () => {
+    const { downloadRegion } = await import('./downloader');
+    const onStatus = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+    await renderRegionsSheet({
+      map: {} as MLMap,
+      registry: {} as never,
+      theme: () => 'light',
+      container,
+      onStatus,
+      offlineState: () => 'failed',
+    });
+
+    container.querySelector<HTMLButtonElement>('.region-action')!.click();
+
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/isn’t set up to open without signal/), 'warn'),
+    );
+    expect(downloadRegion).not.toHaveBeenCalled();
+  });
+
   it('explains a full phone in plain words', async () => {
     const { downloadRegion } = await import('./downloader');
     vi.mocked(downloadRegion).mockRejectedValue(new DOMException('quota exceeded', 'QuotaExceededError'));

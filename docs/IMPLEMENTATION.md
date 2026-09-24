@@ -384,6 +384,34 @@ There is a Playwright suite (`npm run test:e2e`) covering the download path, off
 start, and each of the regressions above; it runs against the production build via
 `vite preview`, so service workers, precaching and the `/ratmap/` base path are real.
 
+**Offline audit (2026-09-24).** An audit of C1–C19 and the offline paths found four gaps,
+each confirmed in the production build before being fixed:
+
+- **Summits were online-only.** `peaks-global.pmtiles` was read only from the bucket and
+  no region carried it, so offline — even inside a downloaded region — ratmap's own summit
+  markers, heights and detail cards were gone (0 drawn over Andorra; the basemap's
+  Protomaps labels gave names only, C6). Regions now carry `<id>-peaks-1.pmtiles`, a
+  `pmtiles extract` of the global archive (1.8 MB for Andorra, 2.3 MB for Scotland), and
+  `TileSourceRegistry.addRegionalCopy` serves its tiles in place of the network's inside
+  the region — the same bytes, so the existing layers draw them unchanged.
+- **~60% of summits were never drawn, online or offline.** The app capped the summit
+  source at z5 over an archive tippecanoe had built to z6, thinning z5 as it went (4,555 of
+  7,644 around Lochaber). The cap is gone; the source reads the header. The published
+  archive also predates the Munro `lists` property (built 4 Sep, Munros shipped 11 Sep),
+  and still thinned its top zoom; `build-peaks.sh` now extends zooms until nothing is
+  dropped and checks the built *tiles*. **Needs a peaks rebuild and upload to take effect.**
+- **A weak signal hid downloaded regions.** Restore waited for the catalogue before
+  drawing what was on disk, with no timeout: with the request hanging, no region at all
+  after 15 s. It now draws from the saved copy first (86 layers within 5 s), and the fetch
+  gives up after 5 s. The saved copy moved from localStorage to OPFS (`app-data/`), where
+  a failed save is no longer swallowed.
+- **Nothing said whether the app could open offline yet.** A first visit precaches ~24 MB;
+  until it finishes — or if it fails — a downloaded region is on the phone but the app
+  will not start without signal. The update controller now reports the state, a banner
+  shows it, and the download gate refuses while a failed setup stands.
+
+Still unverified: all of it on a real phone. See §4 Phase 6.
+
 ### Phase 3.5 — Summit lists (peak bagging)
 
 Numbered 3.5 rather than inserted as a new 4: it depends on Phase 3's manifest machinery

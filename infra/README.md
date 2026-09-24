@@ -78,6 +78,29 @@ filter goes there first. The cache key covers the union and the extract's size a
 so either changing builds a fresh subset. `RATMAP_NO_OSM_SUBSET=1` filters from the whole
 extract as before.
 
+### Summits per region
+
+`build-region.sh` cuts `<id>-peaks-1.pmtiles` out of `peaks-global.pmtiles`, like the SAC
+grades below, so summits and their heights work offline inside a downloaded region —
+before this, the app read them only from the bucket. The app serves a region's copy in
+place of the global archive's tiles inside that region (see `TileSourceRegistry` in the
+app). The name is versioned: a region already on a phone only fetches a file whose name it
+does not hold, so bump the `-1` in both `build-region.sh` and `build-manifest.py` when the
+summit set changes.
+
+To publish it (2026-09-24 — also fixes Munros and the thinned top zoom, see the spec's
+Phase 3 status):
+
+```sh
+./scripts/build-peaks.sh                          # checks the built tiles now, not just the input
+./scripts/upload.sh                               # the new peaks-global first
+for id in $(<regions to update>); do ./scripts/build-region.sh "$id" --only=peaks; done
+python3 ./scripts/build-manifest.py --base-live   # merge, don't rebuild
+./scripts/upload.sh                               # the region files, then the manifest
+```
+
+Phones that already hold a region see **Update** for it, and fetch only the new file.
+
 ### SAC grades
 
 `build-sac.sh` is the same shape: filter `sac_scale` ways out of the OSM extracts,

@@ -53,6 +53,7 @@ function fakeMap() {
 
 const registry = {
   addLocal: vi.fn(),
+  addRegionalCopy: vi.fn(() => false),
   removeLocal: vi.fn(),
   sourceUrl: (key: string) => `pmtiles://${key}`,
 } as unknown as TileSourceRegistry;
@@ -527,5 +528,34 @@ describe('SAC grades', () => {
 
     expect(map.layers).toEqual([]);
     expect(map.sources.has('region-lochaber-sac')).toBe(false);
+  });
+});
+
+describe('a region’s own copy of the summits', () => {
+  const withPeaks: Region = {
+    ...region,
+    artifacts: [...region.artifacts, { kind: 'peaks', filename: 'lochaber-peaks-1.pmtiles', path: 'p4', bytes: 1 }],
+  };
+
+  it('serves it in place of the network’s summits inside the region, adding no layers', async () => {
+    const { PEAKS_PMTILES_URL } = await import('../app/config');
+    const map = fakeMap();
+    await addRegionToMap(map as unknown as MLMap, registry, withPeaks, 'light');
+
+    expect(registry.addRegionalCopy).toHaveBeenCalledWith(PEAKS_PMTILES_URL, 'lochaber-peaks-1.pmtiles', region.bbox);
+    expect(map.sources.has(regionSourceId('lochaber', 'peaks'))).toBe(false);
+    expect(map.layers.some((l) => String(l.id).includes('-peaks-'))).toBe(false);
+  });
+
+  it('reloads the summit source when it failed before the copy existed — an offline start', async () => {
+    vi.mocked(registry.addRegionalCopy).mockReturnValueOnce(true);
+    const setUrl = vi.fn();
+    const map = fakeMap();
+    const peaksSource = { type: 'vector', setUrl };
+    map.getSource.mockImplementation((id: string) => (id === 'peaks' ? peaksSource : map.sources.has(id) ? {} : undefined));
+
+    await addRegionToMap(map as unknown as MLMap, registry, withPeaks, 'light');
+
+    expect(setUrl).toHaveBeenCalledWith(expect.stringMatching(/^pmtiles:\/\/.*peaks-global/));
   });
 });

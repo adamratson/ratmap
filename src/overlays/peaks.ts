@@ -4,7 +4,7 @@ import type {
   Map as MLMap,
   PointLike,
 } from 'maplibre-gl';
-import { OSM_ATTRIBUTION, PEAKS_MAX_ZOOM, PEAKS_PMTILES_URL } from '../app/config';
+import { OSM_ATTRIBUTION, PEAKS_PMTILES_URL } from '../app/config';
 import { isCoarsePointer } from '../ui/pointer';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 import { MAP_FONTS, mapInk } from '../map/flavor';
@@ -117,14 +117,18 @@ export const PEAKS_RENDER_FILTER = ['any', PEAKS_NOTABILITY_FILTER, MUNRO_EXPR] 
 
 export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: Theme): void {
   const ink = mapInk(theme);
-  registry.addRemote(PEAKS_PMTILES_URL);
+  // Downloaded regions carry their own copy, served in place of the network's inside
+  // them — see TileSourceRegistry.addRegionalCopy and the `peaks` artifact in
+  // region-layers.ts. Without it, summits vanished from a downloaded region offline.
+  registry.addRemote(PEAKS_PMTILES_URL, { regionalCopies: true });
 
   map.addSource(PEAKS_SOURCE_ID, {
     type: 'vector',
     url: registry.sourceUrl(PEAKS_PMTILES_URL),
-    // The archive only holds up to PEAKS_MAX_ZOOM; without this MapLibre requests tiles
-    // that don't exist above it and the markers vanish when you zoom in.
-    maxzoom: PEAKS_MAX_ZOOM,
+    // No `maxzoom` here: the archive's header says what it holds, and MapLibre reads it
+    // and overzooms past it. A constant here said z5 over an archive tippecanoe had built
+    // to z6 — thinning the lower zoom as it went — so ~60% of summits (4,555 of 7,644
+    // around Lochaber, measured 2026-09-24) were never drawn at any zoom.
     attribution: OSM_ATTRIBUTION,
   });
 

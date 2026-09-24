@@ -9,6 +9,7 @@ const deps = vi.hoisted(() => ({
   restoreDownloadedRegions: vi.fn(),
   renderFootprints: vi.fn(),
   applyAllStoredVisibility: vi.fn(),
+  listArtifactNames: vi.fn(async () => new Set<string>()),
 }));
 
 vi.mock('./manifest', async (importOriginal) => ({
@@ -22,6 +23,7 @@ vi.mock('./region-footprints', async (importOriginal) => ({
   renderFootprints: deps.renderFootprints,
 }));
 vi.mock('../map/layers', () => ({ applyAllStoredVisibility: deps.applyAllStoredVisibility }));
+vi.mock('./opfs-store', () => ({ listArtifactNames: deps.listArtifactNames }));
 
 const { RegionCoverage } = await import('./coverage');
 
@@ -69,7 +71,8 @@ let coverage: InstanceType<typeof RegionCoverage>;
 beforeEach(() => {
   vi.clearAllMocks();
   deps.fetchManifest.mockResolvedValue(MANIFEST);
-  deps.loadCachedManifest.mockReturnValue(null);
+  deps.loadCachedManifest.mockResolvedValue(null);
+  deps.listArtifactNames.mockResolvedValue(new Set());
   deps.restoreDownloadedRegions.mockResolvedValue([]);
   map = fakeMap();
   notice = document.createElement('button');
@@ -109,7 +112,7 @@ describe('restoring downloaded regions', () => {
 
   it('falls back to the last catalogue it saw when offline — the cold offline start', async () => {
     deps.fetchManifest.mockRejectedValue(new TypeError('Failed to fetch'));
-    deps.loadCachedManifest.mockReturnValue(MANIFEST);
+    deps.loadCachedManifest.mockResolvedValue(MANIFEST);
     deps.restoreDownloadedRegions.mockResolvedValue([LOCHABER]);
 
     await coverage.restore();
@@ -148,16 +151,45 @@ describe('restoring downloaded regions', () => {
     expect(onRestoreProblem).toHaveBeenLastCalledWith(expect.stringMatching(/OPFS unavailable/));
   });
 
-  it('does not mistake a restore failure for being offline', async () => {
-    // The old catch-all retried from the cached catalogue on *any* error, drawing twice
-    // and then escaping as an unhandled rejection.
-    deps.loadCachedManifest.mockReturnValue(MANIFEST);
-    deps.restoreDownloadedRegions.mockRejectedValue(new Error('OPFS unavailable'));
+  it('draws what is on disk without waiting for the network — the one-bar hillside', async () => {
+    // Measured before this: with the catalogue request hanging, no region at all after 15 s.
+    deps.loadCachedManifest.mockResolvedValue(MANIFEST);
+    deps.fetchManifest.mockReturnValue(new Promise(() => {})); // never answers
+    deps.restoreDownloadedRegions.mockResolvedValue([LOCHABER]);
+
+    void coverage.restore();
+    await vi.waitFor(() => expect(coverage.downloadedRegions()).toEqual([LOCHABER]));
+
+    expect(deps.restoreDownloadedRegions).toHaveBeenCalledWith(map, {}, MANIFEST.regions, 'dark', expect.any(Function));
+  });
+
+  it('draws once when the fresh catalogue is the one already saved', async () => {
+    deps.loadCachedManifest.mockResolvedValue(MANIFEST);
+    deps.fetchManifest.mockResolvedValue(MANIFEST);
 
     await coverage.restore();
 
-    expect(deps.loadCachedManifest).not.toHaveBeenCalled();
     expect(deps.restoreDownloadedRegions).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws again from a fresh catalogue that has changed', async () => {
+    const newer = { ...MANIFEST, builtAt: 'later', regions: [LOCHABER] };
+    deps.loadCachedManifest.mockResolvedValue(MANIFEST);
+    deps.fetchManifest.mockResolvedValue(newer);
+
+    await coverage.restore();
+
+    expect(deps.restoreDownloadedRegions).toHaveBeenCalledTimes(2);
+    expect(deps.restoreDownloadedRegions).toHaveBeenLastCalledWith(map, {}, newer.regions, 'dark', expect.any(Function));
+  });
+
+  it('says so when downloads are on disk but no catalogue survives to describe them', async () => {
+    deps.fetchManifest.mockRejectedValue(new TypeError('Failed to fetch'));
+    deps.listArtifactNames.mockResolvedValue(new Set(['lochaber-basemap.pmtiles']));
+
+    await coverage.restore();
+
+    expect(onRestoreProblem).toHaveBeenLastCalledWith(expect.stringMatching(/on this phone, but the catalogue/));
   });
 
   it('re-applies layer visibility after drawing the outlines', async () => {

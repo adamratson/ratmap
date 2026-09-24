@@ -1,12 +1,17 @@
-import type { FilterSpecification, Map as MLMap } from 'maplibre-gl';
+import type { FilterSpecification, Map as MLMap, VectorTileSource } from 'maplibre-gl';
 import { MAP_FONTS, mapInk, ratmapFlavor, type MapInk } from '../map/flavor';
 import type { Theme } from '../ui/theme';
 import { basemapLayersWithBareRock, TOWN_LABEL_LAYER_ID } from '../map/landuse';
 import type { Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
-import { COPERNICUS_ATTRIBUTION, OSM_ATTRIBUTION, TERRAIN_ATTRIBUTION } from '../app/config';
-import { PEAKS_LAYER_ID } from '../overlays/peaks';
+import {
+  COPERNICUS_ATTRIBUTION,
+  OSM_ATTRIBUTION,
+  PEAKS_PMTILES_URL,
+  TERRAIN_ATTRIBUTION,
+} from '../app/config';
+import { PEAKS_LAYER_ID, PEAKS_SOURCE_ID } from '../overlays/peaks';
 import { addSacLayers } from '../overlays/sac';
 import { addAvalancheLayer, avalancheSourceSpec } from '../overlays/avalanche';
 import { addTerrainFeatureLayers } from '../overlays/terrain-features';
@@ -235,6 +240,20 @@ export async function addRegionToMap(
     registry.addLocal(file);
     const sourceId = regionSourceId(region.id, artifact.kind);
     const url = registry.sourceUrl(artifact.filename);
+
+    if (artifact.kind === 'peaks') {
+      // No layers of its own: the region's summits are served in place of the global
+      // archive's tiles inside it, so the existing summit layers draw them — offline
+      // included. See TileSourceRegistry.addRegionalCopy.
+      if (registry.addRegionalCopy(PEAKS_PMTILES_URL, artifact.filename, region.bbox)) {
+        // An offline start asked for the summits before any region was restored, got
+        // nothing, and MapLibre does not ask twice. Ask again now there is an answer.
+        (map.getSource(PEAKS_SOURCE_ID) as VectorTileSource | undefined)?.setUrl(
+          registry.sourceUrl(PEAKS_PMTILES_URL),
+        );
+      }
+      continue;
+    }
 
     if (map.getSource(sourceId)) continue;
 

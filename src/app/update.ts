@@ -68,7 +68,21 @@ export interface AppUpdateOptions {
    * this app is built on — and until this existed that failed with no trace anywhere.
    */
   onRegistrationFailed?: (error: Error) => void;
+  /**
+   * Whether the app can open with no signal yet. A first visit precaches the app shell —
+   * ~24 MB — in the background; until that finishes, a region downloaded in the meantime
+   * sits on the phone but the app holding it will not start offline. Nothing used to say
+   * which of the two a phone was in, or that the setup had failed.
+   */
+  onOfflineStateChange?: (state: OfflineState) => void;
 }
+
+/**
+ * `installing` — first visit, the shell is still being cached. `ready` — it opens offline.
+ * `failed` — the install died (lost signal, no room) and will retry on the next visit
+ * with a connection. `unsupported` — no service workers here at all.
+ */
+export type OfflineState = 'installing' | 'ready' | 'failed' | 'unsupported';
 
 export interface AppUpdates {
   /** Force a check now, ignoring the throttle. */
@@ -77,6 +91,8 @@ export interface AppUpdates {
   apply(): void;
   /** True once a new build has installed and is waiting to take over. */
   isUpdateStaged(): boolean;
+  /** Whether the app can open with no signal — see {@link OfflineState}. */
+  offlineState(): OfflineState;
   dispose(): void;
 }
 
@@ -84,6 +100,7 @@ const NOOP_UPDATES: AppUpdates = {
   checkNow: () => Promise.resolve(),
   apply: () => {},
   isUpdateStaged: () => false,
+  offlineState: () => 'unsupported',
   dispose: () => {},
 };
 
@@ -98,7 +115,44 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
     onUpdateHeld,
     reload = () => window.location.reload(),
     onRegistrationFailed,
+    onOfflineStateChange,
   } = options;
+
+  let offline: OfflineState = 'installing';
+  let announced = false;
+  const setOffline = (next: OfflineState): void => {
+    // The first report always goes out — `installing` included — or a first visit would
+    // never be told it is not ready yet.
+    if (announced && next === offline) return;
+    announced = true;
+    offline = next;
+    onOfflineStateChange?.(next);
+  };
+
+  /**
+   * Follow a first install to its end. An *update* installing beside an active worker
+   * does not change whether the app opens offline — the active one still does — so only a
+   * registration with no active worker is watched here.
+   */
+  const trackFirstInstall = (reg: ServiceWorkerRegistration): void => {
+    if (reg.active) {
+      setOffline('ready');
+      return;
+    }
+    setOffline('installing');
+    const worker = reg.installing ?? reg.waiting;
+    if (!worker) return;
+    const onState = (): void => {
+      if (worker.state === 'activated') setOffline('ready');
+      else if (worker.state === 'redundant') {
+        // Precaching failed part-way: one of the ~800 shell files did not arrive.
+        console.error('Service worker install failed; the app will not open offline yet');
+        setOffline('failed');
+      }
+    };
+    worker.addEventListener('statechange', onState);
+    onState();
+  };
 
   let registration: ServiceWorkerRegistration | null = null;
   let staged: ServiceWorker | null = null;
@@ -229,6 +283,11 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
       if (disposed) return;
       registration = reg;
       watch(reg);
+      trackFirstInstall(reg);
+      // A failed first install is retried by every later update check; follow the retry.
+      reg.addEventListener('updatefound', () => {
+        if (!reg.active) trackFirstInstall(reg);
+      });
       // Fired and forgotten rather than awaited here: this callback is what settles
       // `ready`, and `checkNow()` below awaits `ready` — awaiting the check inline would
       // deadlock the two on each other.
@@ -242,6 +301,7 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
       const error = err instanceof Error ? err : new Error(String(err));
       console.error('Service worker registration failed', error);
       onRegistrationFailed?.(error);
+      setOffline('failed');
     });
 
   async function checkNow(): Promise<void> {
@@ -277,6 +337,7 @@ export function startAppUpdates(options: AppUpdateOptions): AppUpdates {
     checkNow,
     apply,
     isUpdateStaged: () => staged !== null,
+    offlineState: () => offline,
     dispose() {
       disposed = true;
       clearInterval(interval);

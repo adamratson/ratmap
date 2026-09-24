@@ -21,6 +21,7 @@ import { addRegionToMap, removeRegionFromMap } from './region-layers';
 import { evaluateGate, readStorage } from './storage-budget';
 import { deleteOrphan, findOrphans, type OrphanRegion } from './orphans';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
+import type { OfflineState } from '../app/update';
 import type { Theme } from '../ui/theme';
 
 /** How long a delete stays armed before reverting to its safe label. */
@@ -60,6 +61,11 @@ export interface RegionsUiDeps {
    * refusal, which changes nothing.
    */
   onRegionsChanged?(): void;
+  /**
+   * Whether the app itself can open with no signal (app/update.ts). A region is only
+   * worth downloading if it can be; see the gate in startDownload.
+   */
+  offlineState?(): OfflineState;
 }
 
 /**
@@ -120,7 +126,7 @@ async function loadCatalogue(): Promise<{ manifest: RegionManifest | null; notic
   try {
     return { manifest: await fetchManifest(), notice: null };
   } catch (err) {
-    const cached = loadCachedManifest();
+    const cached = await loadCachedManifest();
     if (err instanceof CatalogueTooNew) {
       return {
         manifest: cached,
@@ -129,7 +135,11 @@ async function loadCatalogue(): Promise<{ manifest: RegionManifest | null; notic
           : err.message,
       };
     }
-    const reason = (err as Error)?.message ?? 'unknown error';
+    // A connection too weak to answer in time is not "an operation was aborted".
+    const reason =
+      (err as Error)?.name === 'TimeoutError'
+        ? 'no answer within a few seconds'
+        : ((err as Error)?.message ?? 'unknown error');
     return cached
       ? {
           manifest: cached,
@@ -181,7 +191,10 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   const search = container.querySelector<HTMLInputElement>('.regions-search')!;
   const list = container.querySelector<HTMLUListElement>('.regions-list')!;
 
+  // Up to MANIFEST_TIMEOUT_MS on a weak connection: say something meanwhile.
+  hint.textContent = 'Loading regions…';
   const catalogue = await loadCatalogue();
+  hint.textContent = '';
   if (catalogue.notice) {
     notice.textContent = catalogue.notice;
     notice.hidden = false;
@@ -614,6 +627,17 @@ async function startDownload(
   }
   if (!gate.allowed) {
     deps.onStatus(gate.message, 'warn');
+    return;
+  }
+
+  // The same principle as the C1 gate above, one level up: a region on the phone is no use
+  // on the hill if the app holding it will not start there. Only a *failed* setup refuses;
+  // one still running goes ahead, since it finishes long before a region does.
+  if (deps.offlineState?.() === 'failed') {
+    deps.onStatus(
+      `Not downloading ${region.name}: ratmap itself isn’t set up to open without signal yet, so the map would be on your phone but you couldn’t open it offline. Reopen ratmap with a connection, then try again.`,
+      'warn',
+    );
     return;
   }
 

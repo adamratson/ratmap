@@ -15,7 +15,7 @@ import './style.css';
 import { BASEMAP_PMTILES_URL, TERRAIN_PMTILES_URL, USE_FALLBACK_TERRAIN } from './app/config';
 import { reportUncaughtErrors } from './app/error-reporting';
 import { renderInstallSheet, startStorageOnboarding } from './app/onboarding';
-import { startAppUpdates } from './app/update';
+import { startAppUpdates, type AppUpdates } from './app/update';
 import { APP_VERSION } from './app/version';
 import { buildBaseStyle } from './map/base-style';
 import { mapInk } from './map/flavor';
@@ -437,6 +437,7 @@ function openRegionsView(): void {
       theme: () => theme.get(),
       container: body,
       onStatus: (message, kind) => status.toast(message, { kind }),
+      offlineState: () => appUpdates?.offlineState() ?? 'unsupported',
       onRegionsChanged: () => {
         // A download (or a delete) changes what detail is available, so re-derive the
         // ceiling from what is actually on disk rather than assuming.
@@ -503,8 +504,15 @@ startStorageOnboarding({
 // Dev builds have no generated worker, so registering one would only 404. Everything
 // under test here — precaching, the update swap — exists solely in a real build, which is
 // also what `vite preview` and the e2e suite run.
+/**
+ * The update controller, where there is one: production builds only. Read by the regions
+ * sheet, which will not start a download for a phone where the app itself cannot open
+ * offline (see RegionsUiDeps.offlineState).
+ */
+let appUpdates: AppUpdates | null = null;
+
 if (import.meta.env.PROD) {
-  startAppUpdates({
+  appUpdates = startAppUpdates({
     swUrl: `${import.meta.env.BASE_URL}sw.js`,
     scope: import.meta.env.BASE_URL,
     isBusy: () => downloadsInFlight() > 0 || routeInProgress,
@@ -520,10 +528,22 @@ if (import.meta.env.PROD) {
         action: { label: 'Reload now', onSelect: apply },
       });
     },
-    onRegistrationFailed: (error) =>
-      status.setCondition('offline-shell', {
-        message: `ratmap couldn’t set itself up to open without signal (${error.message}). It works while you’re online; reopen it with a connection to try again.`,
-        kind: 'warn',
-      }),
+    // One condition for the whole of it, so a registration failure and the install
+    // failure that follows it do not flash two banners. The error itself is logged.
+    onOfflineStateChange: (state) =>
+      status.setCondition(
+        'offline-shell',
+        state === 'installing'
+          ? {
+              message: 'Setting ratmap up to open without signal — keep it open with a connection for a minute or two.',
+              kind: 'ok',
+            }
+          : state === 'failed'
+            ? {
+                message: 'ratmap couldn’t finish setting itself up to open without signal. It works while you’re online; reopen it with a connection to try again.',
+                kind: 'warn',
+              }
+            : null,
+      ),
   });
 }

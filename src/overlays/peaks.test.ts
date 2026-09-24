@@ -35,7 +35,7 @@ describe('formatElevation', () => {
 });
 
 describe('addPeaksLayer', () => {
-  it('registers the archive and caps maxzoom to what it contains', () => {
+  it('registers the archive for regional copies, and takes its zoom range from the archive', () => {
     const registry = fakeRegistry();
     const addSource = vi.fn();
     const addLayer = vi.fn();
@@ -43,12 +43,14 @@ describe('addPeaksLayer', () => {
 
     addPeaksLayer(map, registry, 'light');
 
-    expect(registry.addRemote).toHaveBeenCalledTimes(1);
+    // Downloaded regions' copies stand in for it inside them (offline summits).
+    expect(registry.addRemote).toHaveBeenCalledWith(expect.any(String), { regionalCopies: true });
     const [sourceId, spec] = addSource.mock.calls[0];
     expect(sourceId).toBe(PEAKS_SOURCE_ID);
     expect(spec.url).toMatch(/^pmtiles:\/\//);
-    // Without maxzoom the markers silently disappear past the archive's own max.
-    expect(spec.maxzoom).toBe(5);
+    // No cap of our own: the header's range, via the pmtiles:// TileJSON. A constant here
+    // said z5 over a z6 archive and hid ~60% of summits.
+    expect(spec).not.toHaveProperty('maxzoom');
     expect(spec.attribution).toContain('openstreetmap.org/copyright');
   });
 

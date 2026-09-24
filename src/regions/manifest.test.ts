@@ -6,9 +6,11 @@ import {
   formatBytes,
   formatDuration,
   loadCachedManifest,
+  MANIFEST_TIMEOUT_MS,
   SUPPORTED_SCHEMA_VERSION,
   type RegionManifest,
 } from './manifest';
+import { installFakeOpfs, type FakeDirectory } from '../test-support/fake-opfs';
 
 const manifest: RegionManifest = {
   schemaVersion: 1,
@@ -48,8 +50,11 @@ function memoryStorage(): Storage {
   };
 }
 
+let opfs: FakeDirectory;
+
 beforeEach(() => {
   vi.stubGlobal('localStorage', memoryStorage());
+  opfs = installFakeOpfs();
 });
 
 afterEach(() => {
@@ -69,7 +74,7 @@ describe('fetchManifest', () => {
     expect(result.regions[0].id).toBe('lochaber');
     // The archives live in OPFS but the catalogue describing them is on the network —
     // without a local copy, a cold offline start can't know what it has.
-    expect(loadCachedManifest()?.regions[0].id).toBe('lochaber');
+    expect((await loadCachedManifest())?.regions[0].id).toBe('lochaber');
   });
 
   it('throws on a non-OK response rather than returning an empty catalogue', async () => {
@@ -93,24 +98,75 @@ describe('fetchManifest', () => {
     });
 
     await expect(fetchManifest()).rejects.toThrow();
-    expect(loadCachedManifest()).toBeNull();
+    expect(await loadCachedManifest()).toBeNull();
+  });
+
+  it('gives up after a few seconds on a connection that neither works nor fails', async () => {
+    // What a hillside with one bar looks like: the request is accepted and nothing comes.
+    // The timer is the platform's (AbortSignal.timeout, which fake timers cannot drive), so
+    // stand one in whose firing the test controls.
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) =>
+            init.signal!.addEventListener('abort', () => reject(init.signal!.reason)),
+          ),
+      ),
+    );
+
+    const pending = fetchManifest();
+    controller.abort(new DOMException('signal timed out', 'TimeoutError'));
+
+    await expect(pending).rejects.toMatchObject({ name: 'TimeoutError' });
+    expect(timeout).toHaveBeenCalledWith(MANIFEST_TIMEOUT_MS);
   });
 });
 
 describe('manifest cache', () => {
-  it('round-trips', () => {
-    cacheManifest(manifest);
-    expect(loadCachedManifest()).toEqual(manifest);
+  it('round-trips through OPFS', async () => {
+    await cacheManifest(manifest);
+    expect(await loadCachedManifest()).toEqual(manifest);
+    expect(opfs.dirs.get('app-data')?.files.has('region-manifest.json')).toBe(true);
   });
 
-  it('returns null for absent or corrupt cache rather than throwing', () => {
-    expect(loadCachedManifest()).toBeNull();
+  it('stays out of the artifact listing — a subdirectory, not a file at the root', async () => {
+    await cacheManifest(manifest);
+    expect([...opfs.files.keys()]).toEqual([]);
+  });
 
-    localStorage.setItem('ratmap:region-manifest', '{not json');
-    expect(loadCachedManifest()).toBeNull();
+  it('returns null for an absent or corrupt copy rather than throwing', async () => {
+    expect(await loadCachedManifest()).toBeNull();
 
-    localStorage.setItem('ratmap:region-manifest', '{"schemaVersion":1}');
-    expect(loadCachedManifest()).toBeNull();
+    const dir = await opfs.getDirectoryHandle('app-data', { create: true });
+    dir.files.set('region-manifest.json', '{not json');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await loadCachedManifest()).toBeNull();
+
+    dir.files.set('region-manifest.json', '{"schemaVersion":1}');
+    expect(await loadCachedManifest()).toBeNull();
+  });
+
+  it('still reads a copy saved the old way, in localStorage, then moves it', async () => {
+    // An update must not cost anyone their offline start.
+    localStorage.setItem('ratmap:region-manifest', JSON.stringify(manifest));
+    expect(await loadCachedManifest()).toEqual(manifest);
+
+    await cacheManifest(manifest);
+    expect(localStorage.getItem('ratmap:region-manifest')).toBeNull();
+    expect(await loadCachedManifest()).toEqual(manifest);
+  });
+
+  it('says so when the copy cannot be saved, instead of failing silently', async () => {
+    // It used to swallow this, and the next offline start drew no regions.
+    opfs.failWrites = new DOMException('quota exceeded', 'QuotaExceededError');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(cacheManifest(manifest)).resolves.toBeUndefined();
+
+    expect(error).toHaveBeenCalledWith('Could not save the region catalogue for offline use', expect.anything());
   });
 });
 

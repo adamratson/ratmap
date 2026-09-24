@@ -793,6 +793,14 @@ State these plainly in the product, not just here.
   worldwide catalogue there is no path network to route over, and the global terrain layer
   is a z0-4 extract — roughly 5 km per pixel — so the app draws no profile rather than a
   smooth curve that means nothing.
+- **Route planning is pointer-only.** Waypoints are added by tapping the map, moved by
+  dragging and removed by long-press or right-click; there is no keyboard or
+  screen-reader equivalent yet, so those users can follow an imported GPX route but not
+  plan one. The same holds for reading a path's SAC grade and the location dot's
+  coordinates, which only open from a tap on the map. Summit details are reachable
+  without a pointer, through search. Found by the 2026-09-23 accessibility review and
+  left for a later decision (an "add waypoint at map centre" control plus a reorderable
+  waypoint list would close it, since the map already pans with the arrow keys).
 
 ### Platform matrix
 

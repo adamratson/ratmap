@@ -468,3 +468,51 @@ describe('a region whose catalogue entry has gained an artifact', () => {
     expect(container.textContent).toContain('1.8 MB');
   });
 });
+
+describe('download progress', () => {
+  beforeEach(() => {
+    findOrphansMock.mockResolvedValue([]);
+    fetchManifestMock.mockResolvedValue({ regions: [LOCHABER] });
+    regionStatusesMock.mockResolvedValue(
+      new Map([[LOCHABER.id, { state: 'absent', present: [], missingBytes: LOCHABER.totalBytes }]]),
+    );
+    readStorageMock.mockResolvedValue({ persisted: true, availableBytes: 1e12 });
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.clearAllMocks();
+  });
+
+  it('is a progressbar to assistive tech, with the same words the label shows', async () => {
+    const { downloadRegion } = await import('./downloader');
+    let reported!: () => void;
+    const reachedHalfway = new Promise<void>((resolve) => (reported = resolve));
+    vi.mocked(downloadRegion).mockImplementation(async (_region, options) => {
+      options.onProgress?.({
+        regionId: LOCHABER.id,
+        receivedBytes: 92_000_000,
+        totalBytes: 184_000_000,
+        currentArtifact: 'basemap',
+        done: false,
+        bytesPerSecond: null,
+        etaSeconds: null,
+      });
+      reported();
+      // Stay "running", so the row is inspected mid-download rather than after a refresh.
+      await new Promise(() => {});
+    });
+
+    const container = await openSheet();
+    container.querySelector<HTMLButtonElement>('.region-action')!.click();
+    await reachedHalfway;
+
+    const bar = container.querySelector('.region-progress')!;
+    expect(bar.getAttribute('role')).toBe('progressbar');
+    expect(bar.getAttribute('aria-label')).toBe('Downloading Lochaber & Ben Nevis');
+    expect(bar.getAttribute('aria-valuenow')).toBe('50');
+    expect(bar.getAttribute('aria-valuetext')).toBe(
+      container.querySelector('.region-progress-label')!.textContent,
+    );
+  });
+});

@@ -57,7 +57,13 @@ const registry = TileSourceRegistry.install();
 registry.addRemote(BASEMAP_PMTILES_URL);
 if (!USE_FALLBACK_TERRAIN) registry.addRemote(TERRAIN_PMTILES_URL);
 
+// The sheet comes first in the source, although it is drawn over the map (z-index): it
+// holds search and the destinations, and on the docked desktop layout it is the panel on
+// the left. Placed after the map, a keyboard user tabbed through the map's zoom controls,
+// attribution links and the rail before reaching the first thing on screen.
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
+  <h1 class="visually-hidden">ratmap</h1>
+  <div id="sheet"></div>
   <div id="map"></div>
   <div id="conditions" hidden></div>
   <button id="detail-notice" type="button" hidden></button>
@@ -71,7 +77,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </button>
   </div>
   <div id="toasts"></div>
-  <div id="sheet"></div>
 `;
 
 // Constructed before anything reads it: it stamps `data-theme` on the document in its
@@ -105,8 +110,9 @@ const sheet = new BottomSheet({
 (window as unknown as { __ratmapSheet: BottomSheet }).__ratmapSheet = sheet;
 
 sheet.peek.innerHTML = `
-  <div id="search">
+  <div id="search" role="search">
     <input id="search-input" type="search" placeholder="Search places and summits"
+           aria-label="Search places and summits"
            autocomplete="off" autocorrect="off" spellcheck="false"
            role="combobox" aria-expanded="false" aria-controls="search-results" />
     <ul id="search-results" role="listbox" aria-label="Search results" hidden></ul>
@@ -365,8 +371,8 @@ map.on('click', (e) => {
   }
 });
 
-function showCoordsSheet(lngLat: maplibregl.LngLat): void {
-  views.open('coords', (body) => renderCoordsSheet(body, lngLat, { status }));
+function showCoordsSheet(lngLat: maplibregl.LngLat, { focus = false } = {}): void {
+  views.open('coords', (body) => renderCoordsSheet(body, lngLat, { status }), { focus });
 }
 
 // Coordinates for a bare point are a secondary action, not the primary tap — a plain click
@@ -455,7 +461,10 @@ const searchBox = new SearchBox({
   results: document.querySelector<HTMLUListElement>('#search-results')!,
   map,
   status,
-  onCoordinates: (coords) => showCoordsSheet(new maplibregl.LngLat(coords.lng, coords.lat)),
+  // Focus follows into the sheet: it is what was just asked for, and the search box it
+  // came from has nothing more to offer.
+  onCoordinates: (coords) =>
+    showCoordsSheet(new maplibregl.LngLat(coords.lng, coords.lat), { focus: true }),
 });
 
 // --- Location ----------------------------------------------------------------------
@@ -472,7 +481,9 @@ setUpLocation({
 
 startStorageOnboarding({
   status,
-  showInstallSteps: () => views.open('install', renderInstallSheet),
+  // Opened from a banner at the top of the screen: move focus to the steps, or a
+  // keyboard or screen-reader user is left on a button that has already done its job.
+  showInstallSteps: () => views.open('install', renderInstallSheet, { focus: true }),
 });
 
 // --- App updates --------------------------------------------------------------------

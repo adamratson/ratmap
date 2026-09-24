@@ -316,6 +316,27 @@ textarea {
   outline-offset: 2px;
 }
 
+/* Placeholders at the muted text colour, which clears 4.5:1 in both themes. The browser
+   default measured 3.7:1 — and in the search boxes the placeholder is what tells you
+   what the field is for. `opacity: 1` because Firefox fades placeholders by default. */
+::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+/* Present for screen readers and the document outline, absent from the screen. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* --- The control rail ---------------------------------------------------------------
    Two buttons on the right edge, positioned down the screen where a thumb actually
    reaches — not in a top corner, and never underneath the sheet. The four-button HUD this
@@ -1014,6 +1035,19 @@ textarea {
   gap: 0.4rem;
   overflow-x: auto;
   scrollbar-width: none;
+  /* Room for the focus ring (2px outline + 2px offset) inside the scroll box, which clips
+     in both axes once it scrolls in one; the negative margin gives the space back so the
+     row sits where it did. Without it only a sliver of the ring showed. */
+  padding: 4px;
+  margin: -4px;
+}
+
+/* The row scrolls with its scrollbar hidden, so a chip past the edge had no sign it was
+   there — "Layers" read as "LAYER" and nothing more. Set by SheetViews only while there
+   is more to the right. */
+#chips.overflowing {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
 }
 
 #chips::-webkit-scrollbar {
@@ -2023,6 +2057,17 @@ textarea {
   /* Nothing to drag any more. */
   .sheet-grip {
     display: none;
+  }
+
+  /* The panel is narrower than the chips; wrap them rather than hide one past an edge a
+     mouse user has no gesture to scroll. */
+  #chips {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .peek-row {
+    align-items: flex-start;
   }
 
   /* With the grip gone, nothing else puts space above the search field — it would

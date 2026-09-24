@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ACTIONABLE_TOAST_MS, StatusCentre, TOAST_MS } from './status';
+import { ACTIONABLE_TOAST_MS, StatusCentre, TOAST_MS, TOAST_RESUME_MS } from './status';
 
 describe('StatusCentre', () => {
   let toasts: HTMLElement;
@@ -69,6 +69,40 @@ describe('StatusCentre', () => {
     it('announces itself to a screen reader', () => {
       expect(toasts.getAttribute('aria-live')).toBe('polite');
     });
+
+    it('stays up while keyboard focus is on its undo, however long that takes', () => {
+      status.toast('Deleted', { action: { label: 'Undo', onSelect: () => {} } });
+      const undo = toasts.querySelector<HTMLButtonElement>('.toast-action')!;
+
+      // Tabbed to with a second of its life left.
+      vi.advanceTimersByTime(ACTIONABLE_TOAST_MS - 1000);
+      undo.focus();
+      vi.advanceTimersByTime(ACTIONABLE_TOAST_MS * 5);
+      expect(toasts.children).toHaveLength(1);
+
+      // Leaving it starts the clock again, with a moment to spare rather than none.
+      undo.blur();
+      vi.advanceTimersByTime(TOAST_RESUME_MS - 1);
+      expect(toasts.children).toHaveLength(1);
+      vi.advanceTimersByTime(1);
+      expect(toasts.children).toHaveLength(0);
+    });
+
+    it('stays up while the pointer rests on it', () => {
+      status.toast('Deleted', { action: { label: 'Undo', onSelect: () => {} } });
+      const toast = toasts.firstElementChild!;
+
+      vi.advanceTimersByTime(ACTIONABLE_TOAST_MS - 1000);
+      toast.dispatchEvent(new Event('pointerenter'));
+      vi.advanceTimersByTime(60_000);
+      expect(toasts.children).toHaveLength(1);
+
+      // The second it had left, not the whole lifetime over again, but never less than the
+      // resume floor.
+      toast.dispatchEvent(new Event('pointerleave'));
+      vi.advanceTimersByTime(TOAST_RESUME_MS);
+      expect(toasts.children).toHaveLength(0);
+    });
   });
 
   describe('conditions', () => {
@@ -113,6 +147,38 @@ describe('StatusCentre', () => {
       vi.advanceTimersByTime(60_000);
 
       expect(conditions.querySelectorAll('.condition')).toHaveLength(1);
+    });
+
+    it('leaves the screen alone when an unchanged condition is re-reported', () => {
+      // Offline, the map re-reports once per failed tile. Rebuilding the banner each time
+      // churned an aria-live region and knocked keyboard focus off its button.
+      const onSelect = vi.fn();
+      const condition = { message: 'Install ratmap', kind: 'warn' as const, action: { label: 'Install', onSelect } };
+      status.setCondition('storage', condition);
+      const button = conditions.querySelector<HTMLButtonElement>('.condition-action')!;
+      button.focus();
+
+      const mutations: MutationRecord[] = [];
+      const observer = new MutationObserver((records) => mutations.push(...records));
+      observer.observe(conditions, { childList: true, subtree: true, characterData: true });
+      for (let i = 0; i < 20; i++) status.setCondition('storage', { ...condition });
+      observer.takeRecords().forEach((r) => mutations.push(r));
+      observer.disconnect();
+
+      expect(mutations).toEqual([]);
+      expect(document.activeElement).toBe(button);
+    });
+
+    it('runs the newest action even when a re-report did not redraw the button', () => {
+      const first = vi.fn();
+      const second = vi.fn();
+      status.setCondition('update', { message: 'New version ready', action: { label: 'Reload', onSelect: first } });
+      status.setCondition('update', { message: 'New version ready', action: { label: 'Reload', onSelect: second } });
+
+      conditions.querySelector<HTMLButtonElement>('.condition-action')!.click();
+
+      expect(first).not.toHaveBeenCalled();
+      expect(second).toHaveBeenCalledOnce();
     });
 
     it('offers an action without dismissing itself when it is taken', () => {

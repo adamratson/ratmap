@@ -51,6 +51,9 @@ export const TOAST_MS: Record<StatusKind, number> = { ok: 4000, warn: 6000, erro
  */
 export const ACTIONABLE_TOAST_MS = 7000;
 
+/** The least a paused toast stays up once the pointer or focus has left it. */
+export const TOAST_RESUME_MS = 2000;
+
 /** Newest first; beyond this the oldest are dropped rather than filling the screen. */
 const MAX_TOASTS = 3;
 
@@ -66,7 +69,7 @@ export interface StatusCentreElements {
 export class StatusCentre {
   private readonly toastHost: HTMLElement;
   private readonly conditionHost: HTMLElement;
-  private readonly conditions = new Map<string, Condition & { ordinal: number }>();
+  private readonly conditions = new Map<string, Condition & { key: string; ordinal: number }>();
   private ordinal = 0;
   private expanded = false;
 
@@ -106,13 +109,52 @@ export class StatusCentre {
       element.append(button);
     }
 
-    const timer = setTimeout(
-      () => element.remove(),
-      options.durationMs ?? Math.max(TOAST_MS[kind], options.action ? ACTIONABLE_TOAST_MS : 0),
-    );
+    // Paused while the pointer or keyboard focus is on the toast (WCAG 2.2.1). An Undo that
+    // expires while someone has tabbed to it, or is reading it with a screen reader's
+    // cursor on it, is the same failure as one that expires while they reach for it.
+    let remaining =
+      options.durationMs ?? Math.max(TOAST_MS[kind], options.action ? ACTIONABLE_TOAST_MS : 0);
+    let startedAt = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => element.remove(), remaining);
+    let hovered = false;
+    let focused = false;
+
+    const pause = (): void => {
+      if (timer === undefined) return;
+      clearTimeout(timer);
+      timer = undefined;
+      remaining -= Date.now() - startedAt;
+    };
+    const resume = (): void => {
+      if (timer !== undefined || hovered || focused || !element.isConnected) return;
+      startedAt = Date.now();
+      // A moment to finish reading after looking away, rather than vanishing on the spot
+      // when the pause outlasted the toast's own lifetime.
+      remaining = Math.max(remaining, TOAST_RESUME_MS);
+      timer = setTimeout(() => element.remove(), remaining);
+    };
+
+    element.addEventListener('pointerenter', () => {
+      hovered = true;
+      pause();
+    });
+    element.addEventListener('pointerleave', () => {
+      hovered = false;
+      resume();
+    });
+    element.addEventListener('focusin', () => {
+      focused = true;
+      pause();
+    });
+    element.addEventListener('focusout', (event) => {
+      if (event.relatedTarget instanceof Node && element.contains(event.relatedTarget)) return;
+      focused = false;
+      resume();
+    });
 
     dismiss = () => {
       clearTimeout(timer);
+      timer = undefined;
       element.remove();
     };
 
@@ -140,8 +182,16 @@ export class StatusCentre {
     const unchanged = existing?.message === condition.message && existing?.kind === condition.kind;
     this.conditions.set(key, {
       ...condition,
+      key,
       ordinal: unchanged ? existing.ordinal : ++this.ordinal,
     });
+
+    // Nothing on screen would change, so the screen is left alone. Rebuilding anyway
+    // replaced every node in an aria-live region dozens of times a second while offline:
+    // chatter for a screen reader, and keyboard focus knocked off the banner's own button
+    // onto <body> before anyone could press it. The stored copy is still refreshed, and the
+    // button reads its action from there, so a newer `onSelect` is not lost.
+    if (unchanged && existing.action?.label === condition.action?.label) return;
     this.renderConditions();
   }
 
@@ -152,7 +202,7 @@ export class StatusCentre {
    * persistent storage travel together — and the one that just changed is the one worth
    * a line of the map.
    */
-  private ranked(): (Condition & { ordinal: number })[] {
+  private ranked(): (Condition & { key: string; ordinal: number })[] {
     return [...this.conditions.values()].sort(
       (a, b) => SEVERITY[b.kind ?? 'warn'] - SEVERITY[a.kind ?? 'warn'] || b.ordinal - a.ordinal,
     );
@@ -189,7 +239,7 @@ export class StatusCentre {
     }
   }
 
-  private conditionRow(condition: Condition): HTMLElement {
+  private conditionRow(condition: Condition & { key: string }): HTMLElement {
     const row = document.createElement('div');
     row.className = `condition ${condition.kind ?? 'warn'}`;
 
@@ -198,12 +248,13 @@ export class StatusCentre {
     row.append(text);
 
     if (condition.action) {
-      const { label, onSelect } = condition.action;
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'condition-action';
-      button.textContent = label;
-      button.addEventListener('click', onSelect);
+      button.textContent = condition.action.label;
+      // Looked up at click time: see setCondition, which can update the action without
+      // redrawing this button.
+      button.addEventListener('click', () => this.conditions.get(condition.key)?.action?.onSelect());
       row.append(button);
     }
 

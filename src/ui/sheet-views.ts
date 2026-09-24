@@ -69,6 +69,10 @@ export class SheetViews {
     this.sheet = options.sheet;
     this.chipsHost = options.chipsHost;
     this.iconButtons = options.iconButtons;
+    this.chipsHost.addEventListener('scroll', () => this.updateOverflowCue(), { passive: true });
+    this.chipsHost.addEventListener('focusin', (event) => {
+      if (event.target instanceof HTMLElement) this.revealChip(event.target);
+    });
   }
 
   view(): View | null {
@@ -90,8 +94,18 @@ export class SheetViews {
    * The detent is only set when the view *changes*. A view that re-renders — the planner
    * does so on every waypoint drag — must not haul the sheet back up over a map the user
    * has just dragged it off.
+   *
+   * `focus` moves keyboard focus into the sheet, which announces it by its label. For
+   * views opened from outside the peek row — a search result, a banner's button — where
+   * focus would otherwise stay on a control that has nothing more to do with what just
+   * opened, and a screen reader would say nothing had. Chips don't use it: they toggle
+   * their view, so focus belongs on the chip.
    */
-  open(name: View, render: (body: HTMLElement) => void, detent: Detent = 'content'): void {
+  open(
+    name: View,
+    render: (body: HTMLElement) => void,
+    { detent = 'content', focus = false }: { detent?: Detent; focus?: boolean } = {},
+  ): void {
     const entering = this.current !== name;
     this.current = name;
     this.sheet.body.setAttribute('aria-label', VIEW_LABEL[name]);
@@ -101,6 +115,7 @@ export class SheetViews {
       this.sheet.open(detent);
     }
     this.renderChips();
+    if (focus) this.sheet.body.focus({ preventScroll: true });
   }
 
   close(): void {
@@ -129,13 +144,21 @@ export class SheetViews {
   }
 
   renderChips(): void {
+    // Rebuilt rather than patched, so the chip holding keyboard focus is about to be
+    // destroyed — and focus with it, to <body>, back at the top of the page. That happened
+    // on every chip press (opening a view re-renders the row) and on every sheet layout
+    // change. Remember which chip it was and hand focus to its replacement.
+    const focused = this.chipsHost.contains(document.activeElement)
+      ? (document.activeElement as HTMLElement).dataset.chip
+      : undefined;
+
     this.chipsHost.innerHTML = '';
 
     // Planning is a mode, not a destination: it is entered from the routes list and left
     // with Done, so its chip only exists while it is on. Without it the mode is invisible
     // at peek, and a tap on the map silently means something different.
     if (this.current === 'plan') {
-      const chip = chipEl(this.planMode, true, () =>
+      const chip = chipEl('plan', this.planMode, true, () =>
         this.sheet.detent() === 'peek' ? this.sheet.open('content') : this.sheet.collapse(),
       );
       chip.classList.add('chip-mode');
@@ -145,7 +168,7 @@ export class SheetViews {
     for (const entry of this.destinations) {
       const active = this.current === entry.view;
       this.chipsHost.append(
-        chipEl(entry.label, active, () => {
+        chipEl(entry.view, entry.label, active, () => {
           // Tapping the open one puts the map back, so every chip is its own way out.
           if (active && this.sheet.detent() !== 'peek') this.close();
           else entry.open();
@@ -156,13 +179,58 @@ export class SheetViews {
     for (const [name, button] of Object.entries(this.iconButtons)) {
       button.classList.toggle('active', this.current === name);
     }
+
+    if (focused) {
+      this.chipsHost
+        .querySelector<HTMLElement>(`[data-chip="${focused}"]`)
+        ?.focus({ preventScroll: true });
+    }
+
+    this.updateOverflowCue();
+  }
+
+  /**
+   * Scroll a chip that has keyboard focus wholly into view, clear of the edge fade.
+   *
+   * Measured, not left to the browser: on a phone-width row Chromium left a focused chip
+   * half past the edge, under the fade — "LAYE…", ring and all — rather than scrolling
+   * to it. At the far end the browser clamps the scroll, and the fade goes with it.
+   */
+  private revealChip(chip: HTMLElement): void {
+    const host = this.chipsHost;
+    const row = host.getBoundingClientRect();
+    const box = chip.getBoundingClientRect();
+    if (box.right > row.right - CHIP_FADE_PX) {
+      host.scrollLeft += box.right - (row.right - CHIP_FADE_PX);
+    } else if (box.left < row.left + CHIP_RING_PX) {
+      host.scrollLeft -= row.left + CHIP_RING_PX - box.left;
+    }
+    this.updateOverflowCue();
+  }
+
+  /**
+   * Fade the chip row's right edge while a chip is past it. The row scrolls with its
+   * scrollbar hidden, so otherwise nothing says there is more — see `#chips.overflowing`.
+   * Runs on every render, which the sheet also triggers on resize, and on scroll.
+   */
+  private updateOverflowCue(): void {
+    const host = this.chipsHost;
+    const hidden = host.scrollWidth - host.clientWidth - host.scrollLeft;
+    host.classList.toggle('overflowing', hidden > 1);
   }
 }
 
-function chipEl(label: string, active: boolean, onSelect: () => void): HTMLButtonElement {
+/** Width of `#chips.overflowing`'s edge fade (2rem), in px. */
+const CHIP_FADE_PX = 32;
+/** Room the focus ring needs around a chip: 2px outline + 2px offset. */
+const CHIP_RING_PX = 4;
+
+function chipEl(view: View, label: string, active: boolean, onSelect: () => void): HTMLButtonElement {
   const chip = document.createElement('button');
   chip.type = 'button';
   chip.className = 'chip';
+  // Which chip this is, across re-renders — see renderChips's focus handling.
+  chip.dataset.chip = view;
   // A disclosure, not a tab. Tabs imply a panel that is always showing one of a set;
   // here the sheet is usually showing nothing at all, and each chip both opens and
   // closes its own view.

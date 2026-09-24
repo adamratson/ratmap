@@ -81,6 +81,19 @@ export class SearchBox {
     this.input.removeAttribute('aria-activedescendant');
   }
 
+  /**
+   * After a result is chosen: put the phone keyboard away, but only for a tap.
+   *
+   * `blur()` is what dismisses an on-screen keyboard that would otherwise cover the map
+   * the result just moved. Done unconditionally, it also dropped a keyboard user's focus
+   * to <body> — back to the start of the page — after every Enter. A result chosen with
+   * Enter is `.click()`ed from the keydown handler, which dispatches with `detail` 0; a
+   * real tap or click counts at least 1.
+   */
+  private releaseInput(event: MouseEvent): void {
+    if (event.detail > 0) this.input.blur();
+  }
+
   private resultButtons(): HTMLButtonElement[] {
     return Array.from(this.results.querySelectorAll<HTMLButtonElement>('li > button'));
   }
@@ -196,10 +209,10 @@ export class SearchBox {
     meta.textContent = 'Coordinates';
 
     button.append(name, meta);
-    button.addEventListener('click', () => {
+    button.addEventListener('click', (event) => {
       this.map.easeTo({ center: [coords.lng, coords.lat], zoom: Math.max(this.map.getZoom(), 11) });
       this.hideResults();
-      this.input.blur();
+      this.releaseInput(event);
       this.onCoordinates(coords);
     });
 
@@ -247,10 +260,10 @@ export class SearchBox {
       meta.textContent = parts.join(' · ');
 
       button.append(name, meta);
-      button.addEventListener('click', () => {
+      button.addEventListener('click', (event) => {
         this.map.easeTo({ center: [result.lon, result.lat], zoom: Math.max(this.map.getZoom(), 11) });
         this.hideResults();
-        this.input.blur();
+        this.releaseInput(event);
       });
 
       item.append(button);

@@ -439,6 +439,15 @@ function renderRegionRow(
   const progress = document.createElement('div');
   progress.className = 'region-progress';
   progress.hidden = true;
+  // A progressbar to assistive tech, not just a coloured div: the value and the same
+  // "X of Y · N min left" the label shows are readable on demand. Deliberately not a live
+  // region — reading every chunk aloud would drown everything else; the completion toast
+  // announces the end.
+  progress.setAttribute('role', 'progressbar');
+  progress.setAttribute('aria-label', `Downloading ${region.name}`);
+  progress.setAttribute('aria-valuemin', '0');
+  progress.setAttribute('aria-valuemax', '100');
+  progress.setAttribute('aria-valuenow', '0');
   const bar = document.createElement('div');
   bar.className = 'region-progress-bar';
   progress.append(bar);
@@ -543,12 +552,14 @@ async function startDownload(
       onProgress: (p) => {
         const pct = p.totalBytes > 0 ? Math.min((p.receivedBytes / p.totalBytes) * 100, 100) : 0;
         bar.style.width = `${pct.toFixed(1)}%`;
+        progress.setAttribute('aria-valuenow', String(Math.round(pct)));
 
         const transferred = `${formatBytes(p.receivedBytes)} of ${formatBytes(p.totalBytes)}`;
         // No ETA until the estimator has settled — before that it says nothing rather than
         // quoting a number that would visibly halve on the next tick.
         const remaining = p.etaSeconds === null ? '' : ` · ${formatDuration(p.etaSeconds)} left`;
         progressLabel.textContent = `${transferred}${remaining}`;
+        progress.setAttribute('aria-valuetext', `${transferred}${remaining}`);
         action.title = `${transferred}${remaining}`;
       },
     });

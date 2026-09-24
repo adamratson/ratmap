@@ -8,7 +8,7 @@ import {
   type LayerGroup,
 } from '../map/layers';
 import { SAC_GRADES, sacCssColor } from '../overlays/sac';
-import { TERRAIN_FEATURE_KINDS } from '../overlays/terrain-features';
+import { terrainSwatch } from '../overlays/terrain-features';
 import { slopeCssColor } from '../overlays/avalanche';
 import { lineSwatch } from './legend-view';
 
@@ -49,9 +49,8 @@ const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink
   },
   terrainFeatures: {
     label: 'Ground surface',
-    note: 'Scree, shingle, rock and boulders.',
-    swatch: () =>
-      `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[0].fillColor}" fill-opacity="0.55"/></svg>`,
+    note: 'Scree, shingle and rock outcrops.',
+    swatch: (ink) => terrainSwatch('scree', ink),
   },
   avalanche: {
     label: 'Avalanche terrain',

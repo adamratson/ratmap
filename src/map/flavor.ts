@@ -190,6 +190,12 @@ export interface MapInk {
   routeCasing: string;
   offRoute: string;
   /**
+   * Ground-surface texture (scree, shingle, rock outcrops): the stipple dots and the outcrop
+   * outline. Ink on a light ground, chalk on a dark one — dark dots would vanish at night.
+   */
+  terrainDot: string;
+  terrainRock: string;
+  /**
    * Hillshade. By day these are MapLibre's own defaults. At night a pure-white highlight
    * turns every sunlit slope into a pale blob on the graphite ground, brighter than the
    * route. So the highlight drops to a translucent grey: relief still reads, and it
@@ -214,6 +220,8 @@ const DAY_INK: MapInk = {
   routeStraight: '#b45309',
   routeCasing: 'rgba(255,255,255,0.9)',
   offRoute: '#dc2626',
+  terrainDot: '#5a5048',
+  terrainRock: '#6b5d4f',
   hillshadeHighlight: '#ffffff',
   hillshadeShadow: '#000000',
 };
@@ -235,6 +243,8 @@ const NIGHT_INK: MapInk = {
   routeStraight: '#f59e0b',
   routeCasing: 'rgba(14,17,20,0.9)',
   offRoute: '#f87171',
+  terrainDot: '#c2b8a8',
+  terrainRock: '#a89a86',
   hillshadeHighlight: 'rgba(154,163,173,0.45)',
   hillshadeShadow: '#000000',
 };

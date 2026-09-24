@@ -432,9 +432,10 @@ export async function addRegionToMap(
       // Scree, shingle, rock and boulders — OSM ground-surface detail Protomaps does not
       // carry (see src/overlays/terrain-features.ts). Same attribution and z-order slot as the
       // rest of the region's ground-surface overlays (contours, avalanche terrain):
-      // beneath the region's own labels, so text stays legible over a scree fill.
+      // beneath the region's own labels, so text stays legible over the scree stipple.
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
       addTerrainFeatureLayers(map, sourceId, {
+        ink,
         minzoom: Math.max(artifact.minzoom ?? minzoom, minzoom),
         before: beneathLabels(map, region),
       });

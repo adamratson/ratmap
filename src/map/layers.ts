@@ -68,7 +68,12 @@ const LAYER_ID_SUFFIXES: Record<LayerGroup, readonly string[]> = {
   // low-zoom paths artifact below it (`…-paths-paths`).
   paths: ['-paths-casing', '-paths'],
   sac: ['-sac-band', '-sac-labels'],
-  terrainFeatures: ['-terrain-features-fill', '-terrain-features-points'],
+  terrainFeatures: [
+    '-terrain-features-scree',
+    '-terrain-features-shingle',
+    '-terrain-features-rock',
+    '-terrain-features-rock-outline',
+  ],
   avalanche: ['-avalanche-shade'],
   footprints: [FOOTPRINT_FILL_LAYER_ID, FOOTPRINT_LINE_LAYER_ID],
 };

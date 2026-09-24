@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { mapInk } from '../map/flavor';
 import { SAC_GRADES } from '../overlays/sac';
 import { SLOPE_CLASSES } from '../overlays/avalanche';
-import { TERRAIN_FEATURE_KINDS } from '../overlays/terrain-features';
 import { legendRow, lineSwatch, renderLegend } from './legend-view';
 
 function legendFor(theme: 'light' | 'dark'): HTMLElement {
@@ -41,9 +40,14 @@ describe('renderLegend', () => {
     expect(text).toMatch(/switch it on in Layers/);
   });
 
-  it('uses each ground-surface kind’s own colour', () => {
-    const html = legendFor('dark').innerHTML;
-    for (const entry of TERRAIN_FEATURE_KINDS.slice(0, 3)) expect(html).toContain(entry.fillColor);
+  it('draws ground surface in the theme’s own ink, and never as individual boulders', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      const ink = mapInk(theme);
+      const html = legendFor(theme).innerHTML;
+      expect(html).toContain(ink.terrainDot);
+      expect(html).toContain(ink.terrainRock);
+    }
+    expect(legendFor('dark').textContent).not.toMatch(/boulder\b(?! field)/i);
   });
 });
 

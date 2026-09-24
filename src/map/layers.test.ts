@@ -43,8 +43,10 @@ const IDS_BY_GROUP: Record<LayerGroup, string[]> = {
   ],
   sac: ['region-lochaber-sac-band', 'region-lochaber-sac-labels'],
   terrainFeatures: [
-    'region-lochaber-terrain-features-fill',
-    'region-lochaber-terrain-features-points',
+    'region-lochaber-terrain-features-scree',
+    'region-lochaber-terrain-features-shingle',
+    'region-lochaber-terrain-features-rock',
+    'region-lochaber-terrain-features-rock-outline',
   ],
   avalanche: ['region-lochaber-avalanche-shade'],
   footprints: ['region-footprints-fill', 'region-footprints-line'],

@@ -1,6 +1,6 @@
 import type { MapInk } from '../map/flavor';
 import { SAC_GRADES, sacCssColor } from '../overlays/sac';
-import { TERRAIN_FEATURE_KINDS } from '../overlays/terrain-features';
+import { TERRAIN_FEATURE_KINDS, terrainSwatch } from '../overlays/terrain-features';
 import { SLOPE_CLASSES, slopeCssColor } from '../overlays/avalanche';
 
 // The map legend: every symbol the map draws, in the colours it draws them.
@@ -108,31 +108,18 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
     <div class="legend-section">
       <h3>Ground surface</h3>
       <p class="legend-note">
-        Scree, shingle, rock and boulders — OpenStreetMap detail the basemap has no room
-        for. Coverage is partial and uneven: a summit with nothing shown here is not
+        Scree, shingle and rock outcrops — OpenStreetMap detail the basemap has no room
+        for. Coverage is partial and uneven: a hillside with nothing shown here is not
         "there is no scree there", most of the world's surface tagging is simply
         incomplete.
       </p>
-      ${legendRow(
-        `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[0].fillColor}" fill-opacity="0.55"/></svg>`,
-        'Scree',
-        TERRAIN_FEATURE_KINDS[0].note,
-      )}
-      ${legendRow(
-        `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[1].fillColor}" fill-opacity="0.55"/></svg>`,
-        'Shingle',
-        TERRAIN_FEATURE_KINDS[1].note,
-      )}
-      ${legendRow(
-        `<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="${TERRAIN_FEATURE_KINDS[2].fillColor}" fill-opacity="0.55"/></svg>`,
-        'Rock / boulder field',
-        'Bare rock outcrop or boulder field, mapped as an area. OSM cannot distinguish "rock" from "boulders" as areas — both look like this.',
-      )}
-      ${legendRow(
-        `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="4" fill="${TERRAIN_FEATURE_KINDS[2].pointColor}" stroke="rgba(255,255,255,0.9)" stroke-width="1.25"/></svg>`,
-        'Rock outcrop / boulder',
-        'A point rather than an area — an isolated outcrop, or a single boulder.',
-      )}
+      ${TERRAIN_FEATURE_KINDS.map((entry) =>
+        legendRow(
+          terrainSwatch(entry.kind === 'stone' ? 'rock' : entry.kind, ink),
+          entry.label,
+          entry.note,
+        ),
+      ).join('')}
     </div>
 
     <div class="legend-section">

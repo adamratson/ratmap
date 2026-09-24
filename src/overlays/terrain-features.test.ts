@@ -21,6 +21,7 @@ describe('addTerrainFeatureLayers', () => {
 
     expect(added.map(({ layer }) => [layer.id, layer.type])).toEqual([
       [terrainFeaturesFillLayerId('region-x-terrain-features'), 'fill'],
+      ['region-x-terrain-features-points-named', 'circle'],
       ['region-x-terrain-features-points', 'circle'],
     ]);
     expect(added.every(({ before }) => before === 'labels')).toBe(true);
@@ -35,10 +36,11 @@ describe('addTerrainFeatureLayers', () => {
     }
   });
 
-  it('keeps single points off the map until z13, where one boulder means something', () => {
-    expect(addTo(8)[1].layer.minzoom).toBe(13);
+  it('shows named points from z14 but leaves unnamed boulders to z17, where they stop being a blanket', () => {
+    expect(addTo(8)[1].layer.minzoom).toBe(14);
+    expect(addTo(8)[2].layer.minzoom).toBe(17);
     // …but never below the region's own floor.
-    expect(addTo(14)[1].layer.minzoom).toBe(14);
+    expect(addTo(15)[1].layer.minzoom).toBe(15);
   });
 
   it('fades the areas in from the region floor, not all at once', () => {

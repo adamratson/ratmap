@@ -126,23 +126,41 @@ export function addTerrainFeatureLayers(
     before,
   );
 
+  // Individual boulders are far denser than the first sample suggested: 1,618 points across
+  // Scotland + Montenegro, but the Lake District (Kirk Fell, on-device 2026-09-24) has
+  // thousands per screen at z15 and buried every path and label. Unnamed ones are
+  // therefore a close-in detail only; named ones are landmarks and stay useful earlier.
+  const named: unknown = ['has', 'name'];
+  map.addLayer(
+    {
+      id: `${sourceId}-points-named`,
+      type: 'circle',
+      source: sourceId,
+      'source-layer': TERRAIN_FEATURES_SOURCE_LAYER,
+      filter: named as never,
+      minzoom: Math.max(14, minzoom),
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 2.5, 17, 5],
+        'circle-color': pointColorExpression() as never,
+        'circle-stroke-color': 'rgba(255,255,255,0.9)',
+        'circle-stroke-width': 1.25,
+      },
+    },
+    before,
+  );
+
   map.addLayer(
     {
       id: `${sourceId}-points`,
       type: 'circle',
       source: sourceId,
       'source-layer': TERRAIN_FEATURES_SOURCE_LAYER,
-      // A point marker at the same zoom as a scattering of fills would be visual noise;
-      // these are a small minority against the area count — measured (2026-09-18, real
-      // build against scotland-latest.osm.pbf + montenegro-latest.osm.pbf) 1,618 points
-      // against 10,153 areas — and read better once the map is close enough to place them
-      // precisely.
-      minzoom: Math.max(13, minzoom),
+      filter: ['!', named] as never,
+      minzoom: Math.max(17, minzoom),
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 2.5, 17, 5],
+        'circle-radius': 2,
         'circle-color': pointColorExpression() as never,
-        'circle-stroke-color': 'rgba(255,255,255,0.9)',
-        'circle-stroke-width': 1.25,
+        'circle-opacity': 0.6,
       },
     },
     before,

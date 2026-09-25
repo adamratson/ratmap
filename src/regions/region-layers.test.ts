@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
 import type { Region } from './manifest';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
-import { ratmapFlavor } from '../map/flavor';
+import { mapInk, ratmapFlavor } from '../map/flavor';
+import { paintValue, styleColor } from '../test-support/paint-value';
 
 const getArtifactFileMock = vi.hoisted(() => vi.fn());
 vi.mock('./opfs-store', () => ({ getArtifactFile: getArtifactFileMock }));
@@ -209,6 +210,33 @@ describe('addRegionToMap', () => {
     expect(width).toContain('idx');
     expect(width).not.toContain('index');
     expect(width).not.toContain('true');
+  });
+
+  it('draws index contours in their own ink, and brings the z11-13 preview up to it', async () => {
+    for (const theme of ['light', 'dark'] as const) {
+      const map = fakeMap();
+      await addRegionToMap(map as unknown as MLMap, registry, region, theme);
+      const ink = mapInk(theme);
+      const paint = (suffix: string) =>
+        map.layers.find((l) => String(l.id).endsWith(suffix))!.paint as Record<string, unknown>;
+      const lines = paint('contours-lines');
+      const preview = paint('contours-lines-index');
+
+      const colour = (idx: number) => paintValue('line', 'line-color', lines['line-color'], 14, { idx });
+      expect(colour(1)).toEqual(styleColor(ink.contourIndex));
+      expect(colour(0)).toEqual(styleColor(ink.contour));
+
+      // No step at z13, where the all-contours layer takes over from the preview.
+      expect(paintValue('line', 'line-color', preview['line-color'], 12)).toEqual(
+        styleColor(ink.contourIndex),
+      );
+      expect(paintValue('line', 'line-opacity', preview['line-opacity'], 13)).toBe(1);
+      expect(paintValue('line', 'line-width', preview['line-width'], 13)).toBe(
+        paintValue('line', 'line-width', lines['line-width'], 13, { idx: 1 }),
+      );
+      // Fainter further out, where these lines sit so close they become a texture.
+      expect(paintValue('line', 'line-opacity', preview['line-opacity'], 11)).toBeLessThan(0.5);
+    }
   });
 
   it('draws paths visibly, rather than leaving them as the near-invisible default', async () => {

@@ -168,7 +168,11 @@ export function addSacLayers(
         'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 12, 4, 16, 12],
         // Translucent so contours and hillshade still read through it — the band marks a
         // path, it does not replace the ground under it.
-        'line-opacity': 0.6,
+        //
+        // Fainter at low zoom: at z12-13 every graded path in view glowed at full strength
+        // and the bands, not the ground, became the map. By z14.5 — the zoom a grade is
+        // read at, labels and all — they are back to full.
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.25, 14.5, 0.6],
       },
     },
     beforeBand,

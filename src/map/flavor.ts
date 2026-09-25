@@ -174,7 +174,15 @@ export interface MapInk {
   labelHalo: string;
   pathLine: string;
   pathCasing: string;
+  /**
+   * Contours. Two inks, not one width: the 10 m lines are read by counting and must stay
+   * recessive; the 50 m index lines are what the relief is read from and must not be.
+   * Both used to be a single ~2:1 ink at two widths, measured 2026-09-25 — the index
+   * lines barely separated from the rest, and at night neither held against the ground.
+   * Contrast over earth / forest / bare rock is noted beside each value.
+   */
   contour: string;
+  contourIndex: string;
   contourLabel: string;
   peakText: string;
   peakMunroText: string;
@@ -209,7 +217,8 @@ const DAY_INK: MapInk = {
   labelHalo: 'rgba(255,255,255,0.9)',
   pathLine: '#8a3d2e',
   pathCasing: 'rgba(255,255,255,0.85)',
-  contour: 'rgba(120, 85, 55, 0.55)',
+  contour: 'rgba(110, 74, 44, 0.62)', // 2.8 / 2.6 / 2.7:1
+  contourIndex: 'rgba(92, 56, 28, 0.9)', // 6.8 / 5.7 / 6.2:1
   contourLabel: '#6b4a33',
   peakText: '#14171a',
   peakMunroText: '#8a5d00',
@@ -232,7 +241,8 @@ const NIGHT_INK: MapInk = {
   labelHalo: 'rgba(14,17,20,0.9)',
   pathLine: '#d08a6e',
   pathCasing: 'rgba(14,17,20,0.8)',
-  contour: 'rgba(196, 160, 122, 0.35)',
+  contour: 'rgba(212, 176, 136, 0.45)', // 2.7 / 2.6 / 2.6:1
+  contourIndex: 'rgba(226, 192, 150, 0.85)', // 7.6 / 7.2 / 6.9:1
   contourLabel: '#b8977a',
   peakText: '#e6e9ed',
   peakMunroText: '#e0b34d',

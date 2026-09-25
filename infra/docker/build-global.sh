@@ -637,20 +637,25 @@ for rid in sys.argv[2:]:
 # partial catalogue as complete.
 stage_regions() {
   # Artifact kinds that are cut from a global archive rather than from upstream, as
-  # "<kind>:<global file>". Both are additive (C16), so a missing one is a region built
-  # before that kind existed, not a broken region.
+  # "<kind>:<global file>[:<file suffix>]". All additive (C16), so a missing one is a
+  # region built before that kind existed, not a broken region. The suffix is the
+  # region file's name after "<id>-" when it is not simply the kind — peaks is versioned
+  # (`<id>-peaks-1.pmtiles`, see build-region.sh), and without it this would look for a
+  # file that never exists and re-cut peaks on every run.
   local -a cut_from_global=(
     sac:sac-global.pmtiles
     paths:paths-global.pmtiles
     terrain-features:terrain-features-global.pmtiles
+    peaks:peaks-global.pmtiles:peaks-1
   )
 
   # Not a failure — but worth one line up front rather than a "skipped" per region,
   # several hundred times over.
-  local pair kind global
+  local pair kind global suffix rest
   for pair in "${cut_from_global[@]}"; do
     kind="${pair%%:*}"
-    global="${pair##*:}"
+    rest="${pair#*:}"
+    global="${rest%%:*}"
     if [ ! -f "$DIST_DIR/$global" ]; then
       log "regions: no $global — regions will be built without $kind"
       log "         (run the '$kind' stage first, or point at a published copy)"
@@ -671,9 +676,12 @@ stage_regions() {
       local -a missing=()
       for pair in "${cut_from_global[@]}"; do
         kind="${pair%%:*}"
-        global="${pair##*:}"
+        rest="${pair#*:}"
+        global="${rest%%:*}"
+        suffix="$kind"
+        [ "$rest" != "$global" ] && suffix="${rest#*:}"
         [ -f "$DIST_DIR/$global" ] || continue
-        [ -f "$DIST_DIR/regions/$id/$id-$kind.pmtiles" ] || missing+=("$kind")
+        [ -f "$DIST_DIR/regions/$id/$id-$suffix.pmtiles" ] || missing+=("$kind")
       done
 
       if [ "${#missing[@]}" -gt 0 ]; then

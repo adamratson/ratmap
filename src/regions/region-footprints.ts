@@ -1,4 +1,4 @@
-import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
+import type { GeoJSONSource, Map as MLMap, ExpressionSpecification } from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 import type { Region } from './manifest';
 
@@ -97,6 +97,27 @@ export function footprintCollection(footprints: Footprint[]): FeatureCollection 
  * Idempotent: called again whenever a download finishes or a region is deleted, which is
  * exactly when the fills need to change.
  */
+/** Zooms over which a downloaded region's footprint fades from full to nothing. */
+export const DOWNLOADED_FADE: readonly [number, number] = [9, 10.5];
+
+/**
+ * An opacity that holds for regions on offer but fades out, zooming in, for downloaded
+ * ones. `zoom` has to be the input of the outermost interpolate, so the per-feature choice
+ * goes inside each stop.
+ */
+function downloadedFades(downloaded: number, offered: number): ExpressionSpecification {
+  const [from, to] = DOWNLOADED_FADE;
+  return [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    from,
+    ['case', ['get', 'downloaded'], downloaded, offered],
+    to,
+    ['case', ['get', 'downloaded'], 0, offered],
+  ] as ExpressionSpecification;
+}
+
 export function renderFootprints(map: MLMap, footprints: Footprint[]): void {
   const data = footprintCollection(footprints);
 
@@ -114,9 +135,14 @@ export function renderFootprints(map: MLMap, footprints: Footprint[]): void {
     source: FOOTPRINT_SOURCE_ID,
     paint: {
       'fill-color': ['case', ['get', 'downloaded'], '#15803d', '#2563eb'],
-      // Very light. This is a hint about the data, not a feature of the landscape, and it
-      // sits under everything a walker is actually reading.
-      'fill-opacity': ['case', ['get', 'downloaded'], 0.1, 0.05],
+      // Very light. This is a hint about the data, not a feature of the landscape.
+      //
+      // A downloaded region's fades out as you zoom in (DOWNLOADED_FADE). It sits above the
+      // region's own layers, so at hiking zoom it was a green cast over everything inside
+      // the region — contours included — and its edge a hard seam, found reviewing the
+      // map 2026-09-24. Zoomed in, the detail itself shows where the region is. A region on
+      // offer keeps its outline: the "Limited detail — get X" notice points at it.
+      'fill-opacity': downloadedFades(0.1, 0.05),
     },
   });
 
@@ -127,7 +153,7 @@ export function renderFootprints(map: MLMap, footprints: Footprint[]): void {
     paint: {
       'line-color': ['case', ['get', 'downloaded'], '#15803d', '#2563eb'],
       'line-width': 1.5,
-      'line-opacity': 0.55,
+      'line-opacity': downloadedFades(0.55, 0.55),
       // Downloaded regions are solid, available ones dashed — the difference has to
       // survive being read in sunlight, where a colour difference alone may not.
       'line-dasharray': ['case', ['get', 'downloaded'], ['literal', [1]], ['literal', [2, 2]]],

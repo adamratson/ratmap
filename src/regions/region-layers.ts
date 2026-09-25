@@ -361,8 +361,12 @@ export async function addRegionToMap(
           minzoom: Math.max(minzoom, 11),
           maxzoom: 13,
           paint: {
-            'line-color': ink.contour,
-            'line-width': 1.2,
+            // Ramped up to the full index stroke at z13, where the all-contours layer takes
+            // over. At z11–12 these lines sit a millimetre apart on steep ground, and at
+            // full ink they turn into a texture that buries the trails.
+            'line-color': ink.contourIndex,
+            'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.3, 12, 0.5, 13, 1],
+            'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.8, 13, 1.4],
           },
         },
         beneathLabels(map, region),
@@ -377,14 +381,15 @@ export async function addRegionToMap(
           // Picks up exactly where the index-only layer above stops (its maxzoom: 13).
           minzoom: Math.max(minzoom, 13),
           paint: {
-            'line-color': ink.contour,
-            // Index contours (every 5th) are drawn heavier, as on a paper map.
+            // Index contours (every 5th) are drawn darker and heavier, as on a paper map —
+            // their own ink, not only a wider stroke (see MapInk.contourIndex).
+            'line-color': ['case', ['==', ['get', 'idx'], 1], ink.contourIndex, ink.contour],
             //
             // `idx`, not `index`, and compared to 1, not true: build-contours.sh tags them
             // via SQLite, which yields an integer 0/1 under the alias `idx`. The original
             // expression matched neither the name nor the type, so every contour silently
             // drew at the thin weight and the emphasis never appeared.
-            'line-width': ['case', ['==', ['get', 'idx'], 1], 1.2, 0.6],
+            'line-width': ['case', ['==', ['get', 'idx'], 1], 1.4, 0.7],
           },
         },
         // Contour lines drawn over place names would be just as unreadable as relief

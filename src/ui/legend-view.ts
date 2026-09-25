@@ -94,7 +94,7 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
         '10 m interval, where a region is fully downloaded.',
       )}
       ${legendRow(
-        `<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="${ink.contourLabel}" stroke-width="1.8"/><text x="21" y="6.5" font-size="6.5" fill="${ink.contourLabel}" text-anchor="middle">620</text></svg>`,
+        `<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="${ink.contourIndex}" stroke-width="1.8"/><text x="21" y="6.5" font-size="6.5" fill="${ink.contourLabel}" text-anchor="middle">620</text></svg>`,
         'Index contour',
         'Every 50 m, drawn heavier and labelled with height — count the thin lines between them for the rest.',
       )}

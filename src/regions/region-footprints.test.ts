@@ -12,6 +12,7 @@ import {
   type Footprint,
 } from './region-footprints';
 import type { Region } from './manifest';
+import { paintValue } from '../test-support/paint-value';
 
 const region = (id: string, bbox: Region['bbox']): Region =>
   ({ id, name: id, bbox, totalBytes: 1, artifacts: [] }) as unknown as Region;
@@ -121,6 +122,28 @@ describe('renderFootprints', () => {
     const line = layers.get(FOOTPRINT_LINE_LAYER_ID)!;
     expect(JSON.stringify(line.paint!['line-dasharray'])).toContain('downloaded');
     expect(JSON.stringify(line.paint!['line-color'])).toContain('downloaded');
+  });
+
+  it('lets a downloaded region go once zoomed in, and keeps offering the others', () => {
+    // Drawn above the region's own layers, the downloaded fill put a green cast over
+    // everything inside it and its edge read as a seam. By the time the region's own
+    // detail is showing, the outline has done its job.
+    const { map, layers } = mapStub();
+    renderFootprints(map, ALL);
+    const fill = layers.get(FOOTPRINT_FILL_LAYER_ID)!.paint!['fill-opacity'];
+    const line = layers.get(FOOTPRINT_LINE_LAYER_ID)!.paint!['line-opacity'];
+    const at = (type: 'fill' | 'line', value: unknown, zoom: number, downloaded: boolean) =>
+      paintValue(type, `${type}-opacity`, value, zoom, { downloaded });
+
+    for (const zoom of [11, 14]) {
+      expect(at('fill', fill, zoom, true)).toBe(0);
+      expect(at('line', line, zoom, true)).toBe(0);
+      expect(at('fill', fill, zoom, false)).toBeGreaterThan(0);
+      expect(at('line', line, zoom, false)).toBeGreaterThan(0);
+    }
+    // Zoomed out, where it says which part of the world is on the phone, it is there.
+    expect(at('fill', fill, 8, true)).toBeGreaterThan(0);
+    expect(at('line', line, 8, true)).toBeGreaterThan(0);
   });
 
   it('takes itself back off cleanly', () => {

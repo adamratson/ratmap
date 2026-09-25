@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
 import { SAC_GRADES, addSacLayers, sacGradeInfo, sacPathAt } from './sac';
+import { paintValue } from '../test-support/paint-value';
 
 function fakeMap(layerIds: string[], features: Array<Record<string, unknown>> = []) {
   return {
@@ -81,5 +82,18 @@ describe('addSacLayers', () => {
     for (const entry of SAC_GRADES) expect(color).toContain(entry.color);
     // A grade the ramp does not know must not borrow another grade's colour.
     expect(color).toContain('#8b8b8b');
+  });
+
+  it('keeps the bands quiet at the zooms where every graded path is in view', () => {
+    const map = fakeMap([]);
+
+    addSacLayers(map, 'region-lochaber-sac', { minzoom: 12 });
+
+    const band = vi.mocked(map.addLayer).mock.calls[0][0] as unknown as Record<string, unknown>;
+    const opacity = (band.paint as Record<string, unknown>)['line-opacity'];
+    const at = (zoom: number) => paintValue('line', 'line-opacity', opacity, zoom) as number;
+    expect(at(12)).toBeLessThan(at(14.5) / 2);
+    expect(at(13)).toBeLessThan(at(14.5));
+    expect(at(16)).toBe(at(14.5));
   });
 });

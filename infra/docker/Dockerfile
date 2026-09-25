@@ -80,13 +80,13 @@ RUN set -eux; \
 ########################################################################
 # Stage 3 — Go toolchain, checksum-verified
 #
-# build-contours.sh compiles scripts/contour-cell, and build-peaks.sh and
-# build-avalanche.sh compile scripts/dem-tools, from the working copy on every run
+# build-contours.sh compiles scripts/contour-cell, and build-peaks.sh, build-avalanche.sh
+# and build-paths.sh compile scripts/tools, from the working copy on every run
 # rather than this image carrying the binaries: the scripts are bind-mounted over the
 # image's copy, and a baked binary would go on running old logic after the source moved.
 # So the image carries the compiler instead. Same fail-closed checksums as pmtiles above,
 # from https://go.dev/dl/?mode=json; bump them with GO_VERSION. 1.27.1 is the Go
-# contour-cell and dem-tools were written and tested with (2026-09-25).
+# contour-cell and scripts/tools were written and tested with (2026-09-25).
 ########################################################################
 FROM debian:${DEBIAN_TAG} AS go-fetch
 
@@ -220,13 +220,14 @@ RUN chmod +x /usr/local/bin/ratmap /usr/local/bin/ratmap-global \
 # /tmp and is thrown away: TMPDIR and HOME point at the /work volume, which only exists
 # at run time, where Go caches its builds under $HOME.
 #
-# Same for dem-tools (compute-prominence, encode-avalanche — the Go ports that replaced
-# the numpy/scipy virtualenv this image used to carry): their tests include the slope
-# maths' self-test, the union-find checked against per-threshold relabelling, and
-# Python's float formatting checked against CPython's own output.
+# Same for scripts/tools (compute-prominence, encode-avalanche — the Go ports that
+# replaced the numpy/scipy virtualenv this image used to carry — and reduce-paths): their
+# tests include the slope maths' self-test, the union-find checked against per-threshold
+# relabelling, Python's float formatting checked against CPython's own output, and the
+# paths reduce checked against what the Python it replaced kept.
 RUN cd /opt/ratmap/infra/scripts/contour-cell \
     && TMPDIR=/tmp HOME=/tmp GOCACHE=/tmp/go-build go test -count=1 ./... \
-    && cd /opt/ratmap/infra/scripts/dem-tools \
+    && cd /opt/ratmap/infra/scripts/tools \
     && TMPDIR=/tmp HOME=/tmp GOCACHE=/tmp/go-build go test -count=1 ./... \
     && rm -rf /tmp/go-build /tmp/go
 

@@ -22,7 +22,7 @@ multi-day unattended run needs and a laptop run doesn't.
 | GDAL | Debian trixie (3.10.3) | `gdal_contour`, `ogr2ogr` with the GeoJSONSeq driver |
 | python3 + sqlite3 | Debian trixie | The image build **fails** if FTS5 with `unicode61 remove_diacritics 2` doesn't work — C9's whole search index depends on it, and it's a distro build flag, not a guarantee |
 | awscli | Debian trixie (v2) | uploads (`upload.sh` uses `aws s3 cp`, not `pmtiles upload` — see its header comment); request checksums forced to `when_required` so an aws-cli-v2 checksum disagreement with a non-AWS S3 gateway (hit against both R2 and Krystal) can't fail the last step of a multi-day run |
-| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/dem-tools` (prominence, avalanche slope) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25) |
+| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/tools` (prominence, avalanche slope, the paths reduce step) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25) |
 
 Build args move any version without editing the Dockerfile:
 `--build-arg TIPPECANOE_VERSION=2.80.0`. Bumping `PMTILES_VERSION` also requires bumping
@@ -407,13 +407,13 @@ allows, not the fastest on a large one. These are the measured per-worker costs
 | Stage | What dominates memory | Peak RSS per worker | Scales with |
 |---|---|---|---|
 | `paths`, `sac` — `osmium tags-filter` | id bitmap over OSM's *global* id space | **1.89 GB** on a 33 MB extract, **1.96 GB** on a 310 MB one | nothing — it is flat, which is why 33 GB europe passes on a box this size |
-| `paths` — reduce step | streams a line at a time | 17 MB | nothing |
+| `paths` — reduce step (`tools/cmd/reduce-paths`) | streams a line at a time | 10 MB (the Python it replaced, 17 MB) | nothing |
 | `paths` — `tippecanoe` | disk-backed sort | 172 MB at 259 k features, 227 MB at 1.04 M | sublinearly |
 | `contours` — `gdal_contour`, one cell | lines open in the sweep, within one 3600-pixel cell | **281 MB** worst measured (synthetic mountains denser than Corsica); budgeted 1 GB | nothing: every region is cells. It was ~6.4 GB (Corsica) and grew with the region, when it wrote GeoJSON in one pass |
 | `places` — `build-places-db.py` | rows + dedupe set held whole | ~1.6 GB for the planet | feature count |
-| `peaks` — prominence scoring (`dem-tools/cmd/compute-prominence`) | one region's 90 m DEM and an int32 union-find of the same shape | **9.1 bytes/px**: 1.30 GB on Scotland's 143 Mpx, budgeted at 9.5 (the Python it replaced was 1.35 GB, 1.94 GB before its buffers were reused) | the region's bbox — svalbard-janmayen's 712 Mpx is ~6.3 GB |
+| `peaks` — prominence scoring (`tools/cmd/compute-prominence`) | one region's 90 m DEM and an int32 union-find of the same shape | **9.1 bytes/px**: 1.30 GB on Scotland's 143 Mpx, budgeted at 9.5 (the Python it replaced was 1.35 GB, 1.94 GB before its buffers were reused) | the region's bbox — svalbard-janmayen's 712 Mpx is ~6.3 GB |
 | `peaks` — DEM fetch (`fetch-dem.sh`), `PROM_FETCH_WORKERS` of them | `gdal_translate`'s block cache (capped at 512 MB) + the VSI cache | **229 MB** for Bosnia at 90 m; ~1.25 GB at most | region size, up to the cap |
-| `avalanche` — `gdalwarp`, then `dem-tools/cmd/encode-avalanche` | the warp's block cache; then three DEM rows | **694 MB** warping; the encode **15 MB** on Aragón's 113 Mpx (2026-09-25) — the Python it replaced was 792 MB at 108 Mpx and 1459 MB at 216, most of it evictable page cache | the warp; the encode only with raster width |
+| `avalanche` — `gdalwarp`, then `tools/cmd/encode-avalanche` | the warp's block cache; then three DEM rows | **694 MB** warping; the encode **15 MB** on Aragón's 113 Mpx (2026-09-25) — the Python it replaced was 792 MB at 108 Mpx and 1459 MB at 216, most of it evictable page cache | the warp; the encode only with raster width |
 
 **Defaults, and what they assume.** There are no fixed defaults any more: each stage
 takes the per-worker cost measured above, divides it into the memory this box can

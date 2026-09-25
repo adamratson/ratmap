@@ -126,11 +126,11 @@ echo "  bbox: $BBOX"
 echo "  zoom $ZMIN-$ZMAX (capped at the DEM's own ~30 m resolution)"
 echo
 
-# Slope, aspect and the pyramid are Go (dem-tools/cmd/encode-avalanche), the port of
+# Slope, aspect and the pyramid are Go (tools/cmd/encode-avalanche), the port of
 # encode-avalanche.py: the same files out, without numpy. Built from this checkout
 # (lib.sh), into this region's own WORK_DIR.
 echo "==> building encode-avalanche"
-ENCODE_BIN="$(dem_tool encode-avalanche "$WORK_DIR")"
+ENCODE_BIN="$(go_tool encode-avalanche "$WORK_DIR")"
 
 # The maths that decides which slopes get drawn earns a test of its own, run on every
 # build — same standard as normalize-sac.py. Its last case fails loudly if the Mercator

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"testing"
 
-	"ratmap/infra/dem-tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/pyfloat"
 )
 
 // referenceCompute is compute-prominence.py's compute() transcribed as literally as Go

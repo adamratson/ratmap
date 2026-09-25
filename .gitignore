@@ -37,6 +37,6 @@ blob-report
 infra/.cache
 
 # Python venv the prominence and slope scripts needed (numpy/scipy), before they were
-# ported to Go (infra/scripts/dem-tools). Nothing uses it now.
+# ported to Go (infra/scripts/tools). Nothing uses it now.
 infra/.venv
 __pycache__/

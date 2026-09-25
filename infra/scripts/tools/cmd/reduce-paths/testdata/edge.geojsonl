@@ -1,0 +1,17 @@
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-5.8111547,57.0117204],[-5.810982,57.0108136]]},"properties":{"highway":"path","name":"Allt a' Mhuilinn","sac_scale":"mountain_hiking"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[1,2],[3.0,4.50]]},"properties":{"highway":"track","tracktype":"grade3"}}
+{"type":"Feature","geometry":{"type":"MultiLineString","coordinates":[[[0.1,0.2],[0.3,0.4]],[[1e-5,-0.0]]]},"properties":{"highway":"steps"}}
+
+   
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1,2]},"properties":{"highway":"path"}}
+{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]},"properties":{"highway":"footway"}}
+{"type":"Feature","properties":{"highway":"path"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]},"properties":{"highway":["path"]}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]},"properties":{"highway":null}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]},"properties":{"highway":5}}
+{"id":"w123","type":"Feature","properties":{"highway":"bridleway","name":"Chemin de l’église 😀"},"geometry":{"type":"LineString","coordinates":[[179.9999999,-89.9999999],[-180,90]]}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]},"properties":{"highway":"path"},"properties":{"highway":"track"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]},"properties":{"highway":""}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}, "properties": {"highway": "path"}}  
+{"type":"Feature","geometry":{"type":"linestring","coordinates":[[0,0],[1,1]]},"properties":{"highway":"path"}}

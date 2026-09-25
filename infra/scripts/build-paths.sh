@@ -16,6 +16,14 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_cmd osmium
 require_cmd tippecanoe
+require_cmd go
+
+# The reduce step below is Go (tools/cmd/reduce-paths), built once here from this checkout
+# (lib.sh) and shared by every continent worker.
+TOOLS_DIR="$(mktemp -d)"
+trap 'rm -rf "$TOOLS_DIR"' EXIT
+echo "==> building reduce-paths"
+REDUCE_BIN="$(go_tool reduce-paths "$TOOLS_DIR")"
 
 # Space-separated .osm.pbf URLs, same convention (and same cache) as build-peaks.sh and
 # build-sac.sh. Defaults to the union of every region's `osmExtract`.
@@ -40,7 +48,7 @@ mkdir -p "$PATHS_TILE_CACHE"
 # A worker costs 2-3 GB, measured 2026-09-08: `osmium tags-filter` peaks at ~1.9 GB and
 # stays there whatever the extract (1.89 GB on 33 MB of Montenegro, 1.96 GB on 310 MB of
 # Scotland — it is an id bitmap over OSM's global id space, not a function of the input),
-# the reduce step is 17 MB, and tippecanoe went 172 MB to 227 MB for a 4x larger input
+# the reduce step is 17 MB (10 MB since it moved to Go), and tippecanoe went 172 MB to 227 MB for a 4x larger input
 # because its sort is disk-backed. So the default of 3 is ~9 GB and the limit becomes cpu;
 # more than 3 buys little, since only europe, asia and north-america are big enough to be
 # worth overlapping.
@@ -144,38 +152,13 @@ tile_one_source() {
 # both this source and the basemap's `roads` layer (see addPathLayers in
 # src/regions/region-layers.ts) — the handoff at z14 has to be invisible, and the surest
 # way to make two layers look identical is to give them the same expressions.
+#
+# Every walkable way on the planet passes through here, ~85 M of them, which is why it is
+# Go: the Python it replaces rewrote Scotland's 372 k ways in 3.5 s and this does it in
+# 1.4 s, keeping the same features and tiling to identical tiles (2026-09-25). What it
+# keeps and how it writes them is in tools/cmd/reduce-paths/main.go.
 reduce_to_path_properties() {
-  python3 - "$1" "$2" "$3" <<'PY_REDUCE'
-import json, sys
-
-kept = 0
-skipped = 0
-with open(sys.argv[1]) as src, open(sys.argv[2], "w") as dest:
-    for line in src:
-        line = line.lstrip("\x1e").strip()
-        if not line:
-            continue
-        feature = json.loads(line)
-        # Ways only. The export already asks osmium for lines alone; this stays as the
-        # guard, since a point or an area slipping through would be drawn as a path.
-        if feature.get("geometry", {}).get("type") not in ("LineString", "MultiLineString"):
-            skipped += 1
-            continue
-        highway = feature.get("properties", {}).get("highway")
-        if not isinstance(highway, str):
-            skipped += 1
-            continue
-        feature["properties"] = {
-            "kind": "path",
-            # Vehicle-width or not: the one distinction the styling makes, and the only
-            # one worth two zoom levels of bytes.
-            "kind_detail": "track" if highway == "track" else "path",
-        }
-        dest.write(json.dumps(feature) + "\n")
-        kept += 1
-
-print(f"  {sys.argv[3]}: {kept} walkable ways, skipped {skipped} non-line features")
-PY_REDUCE
+  "$REDUCE_BIN" "$1" "$2" "$3"
 }
 
 LOG_DIR_PATHS="${RATMAP_WORK:-$INFRA_DIR}/logs"

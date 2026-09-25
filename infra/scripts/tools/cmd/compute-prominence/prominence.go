@@ -5,7 +5,7 @@ import (
 	"math"
 	"sort"
 
-	"ratmap/infra/dem-tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/pyfloat"
 )
 
 // downsampleMax is a block-max downsample. Max, not mean: it preserves summit

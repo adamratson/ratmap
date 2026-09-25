@@ -50,9 +50,9 @@ import (
 	"strconv"
 	"strings"
 
-	"ratmap/infra/dem-tools/internal/cli"
-	"ratmap/infra/dem-tools/internal/gdal"
-	"ratmap/infra/dem-tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/cli"
+	"ratmap/infra/tools/internal/gdal"
+	"ratmap/infra/tools/internal/pyfloat"
 )
 
 const usage = `usage: compute-prominence [--regions R --fetch-dem F --res X --work-dir D] [DEM] PEAKS_IN PEAKS_OUT

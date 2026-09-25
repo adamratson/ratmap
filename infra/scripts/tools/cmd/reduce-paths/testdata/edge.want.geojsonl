@@ -1,0 +1,7 @@
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.8111547, 57.0117204], [-5.810982, 57.0108136]]}, "properties": {"kind": "path", "kind_detail": "path"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[1, 2], [3.0, 4.5]]}, "properties": {"kind": "path", "kind_detail": "track"}}
+{"type": "Feature", "geometry": {"type": "MultiLineString", "coordinates": [[[0.1, 0.2], [0.3, 0.4]], [[1e-05, -0.0]]]}, "properties": {"kind": "path", "kind_detail": "path"}}
+{"id": "w123", "type": "Feature", "properties": {"kind": "path", "kind_detail": "path"}, "geometry": {"type": "LineString", "coordinates": [[179.9999999, -89.9999999], [-180, 90]]}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}, "properties": {"kind": "path", "kind_detail": "track"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}, "properties": {"kind": "path", "kind_detail": "path"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}, "properties": {"kind": "path", "kind_detail": "path"}}

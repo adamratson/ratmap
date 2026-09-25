@@ -12,7 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"ratmap/infra/dem-tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/pyfloat"
 )
 
 // eachLine calls fn with every non-blank line of a line-delimited GeoJSON file, in order,

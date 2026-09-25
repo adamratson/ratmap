@@ -230,7 +230,7 @@ print(int(total * 1.1 / 1e9))
 
 # Memory the peaks stage's prominence pass needs, as "<GB> <largest region> <its Mpx>".
 #
-# compute-prominence (scripts/dem-tools) scores one region's 90 m DEM at a time, holding
+# compute-prominence (scripts/tools) scores one region's 90 m DEM at a time, holding
 # the raster and a union-find of the same shape: ~9.1 bytes a pixel, measured at 1.30 GB
 # on Scotland's 143 Mpx (2026-09-25), and it hands each region's memory back before
 # reading the next. Budgeted at the 9.5 the Python it replaced measured (1.35 GB,

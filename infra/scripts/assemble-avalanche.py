@@ -9,7 +9,7 @@ stops warning about exactly the feature it exists for, and it does so in the dir
 under-warns. `gdaladdo -r max` does not exist — GDAL 3.13 answers "Unsupported resampling
 method 'max'" for single- and multi-band alike — and `gdal_translate -tr ... -r max`,
 which looks like the way round it, only *warns* ("GDAL_RASTERIO_RESAMPLING = max not
-supported") and silently falls back to nearest. So encode-avalanche (Go, scripts/dem-tools) does
+supported") and silently falls back to nearest. So encode-avalanche (Go, scripts/tools) does
 the reduction itself and hands the whole stack to this script, which only has to tile and merge.
 
 Aspect is not reduced independently: it follows whichever cell won the slope maximum, so a

@@ -81,10 +81,10 @@ python3 "$(dirname "${BASH_SOURCE[0]}")/normalize-peaks.py" \
 #
 # Peaks outside every region bbox keep no `prom` and fall back to elevation in the app.
 SCRIPT_DIR_PK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Go (dem-tools/cmd/compute-prominence), the port of compute-prominence.py: the same
+# Go (tools/cmd/compute-prominence), the port of compute-prominence.py: the same
 # output, byte for byte, without numpy or scipy. Built from this checkout (lib.sh).
 echo "==> building compute-prominence"
-PROM_BIN="$(dem_tool compute-prominence "$WORK_DIR")"
+PROM_BIN="$(go_tool compute-prominence "$WORK_DIR")"
 
 # 90 m rather than the DEM's native 30 m: GDAL serves it straight from the COG overviews,
 # and Scotland at 30 m would be a 2.7 GB raster for no gain — prominence of a *notable*

@@ -882,7 +882,7 @@ them yet.
    exists, and the current values are defensible defaults rather than a tuned model.
    **Partly resolved 2026-08-23:** peak *selection* no longer needs per-region tuning.
    It ranks on topographic prominence computed from the DEM at build time
-   (`infra/scripts/dem-tools/cmd/compute-prominence`, a Go port of the original
+   (`infra/scripts/tools/cmd/compute-prominence`, a Go port of the original
    `compute-prominence.py` with byte-identical output, 2026-09-25)
    rather than absolute elevation, which encoded
    an assumption about Scottish terrain — at `ele >= 1000` Montenegro carried 268x

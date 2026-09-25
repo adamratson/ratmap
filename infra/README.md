@@ -525,7 +525,7 @@ own maximum.
 ## Peak prominence
 
 `build-peaks.sh` computes topographic prominence per region bbox and writes it as `prom`;
-the app's zoom filter ranks on that. The scoring is Go, `scripts/dem-tools/cmd/compute-prominence`,
+the app's zoom filter ranks on that. The scoring is Go, `scripts/tools/cmd/compute-prominence`,
 compiled from the working copy on every run (so it needs `go` on PATH, nothing else).
 
 It is a port of `compute-prominence.py`, which needed numpy and scipy in a venv, and it
@@ -546,7 +546,7 @@ against Savin kuk's 81 m though they stand 2523 m and 2313 m.
 
 Accuracy was checked against published figures rather than assumed: median error 19 m
 across ten well-known Scottish summits, inside the 20 m quantisation step. Read
-the notes at the top of `scripts/dem-tools/cmd/compute-prominence/main.go` (carried over
+the notes at the top of `scripts/tools/cmd/compute-prominence/main.go` (carried over
 from `compute-prominence.py`'s docstring) before treating any value as authoritative — notably,
 the highest peak in a bbox is over-ranked when the true high ground belongs to a peak
 outside the OSM extract (Montenegro's box clips higher Albanian terrain).

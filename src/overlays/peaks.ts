@@ -84,7 +84,7 @@ export function formatElevation(ele: unknown): string | null {
  * is 2.8x — which is a genuine difference in how mountainous the two places are, rather
  * than an artefact of the measure.
  *
- * `prom` is computed from the DEM at build time (infra/scripts/dem-tools/cmd/compute-prominence);
+ * `prom` is computed from the DEM at build time (infra/scripts/tools/cmd/compute-prominence);
  * OSM's own `prominence` tag is far too sparse to filter on. Prominence also separates a
  * massif properly where elevation cannot: on Durmitor, Bobotov Kuk scores 1483 m against
  * Savin kuk's 93 m, though their elevations are 2523 m and 2313 m.

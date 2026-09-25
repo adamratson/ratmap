@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"ratmap/infra/dem-tools/internal/gdal"
+	"ratmap/infra/tools/internal/gdal"
 )
 
 // Web Mercator sphere radius, as EPSG:3857 defines it.

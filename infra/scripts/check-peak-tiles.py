@@ -15,14 +15,18 @@ and each feature on a line of its own.
 
 Counted, not matched by position: tippecanoe snaps coordinates to its tile grid, so
 positions do not match the input's, and a peak near an edge is also copied into the
-neighbouring tile's buffer. So a feature counts only in the tile whose bounds hold it.
-A peak snapped exactly onto an edge is on the boundary of two tiles and counts in one of
-them, the one to the east or south, whose buffer copy is identical. Except at the top and
-bottom of the world, where there is no tile beyond: there the edge counts as inside, with
-half a unit of slack, because tippecanoe-decode prints six decimals and the edge
-(-85.0511287798) prints as -85.051129, past itself. Without that, a peak at -85.05112
-is in the tiles and counts nowhere (found 2026-09-25). The antimeridian needs nothing: a
-peak snapped to 180° has a wrapped copy at -180° in column 0, which counts.
+neighbouring tile's buffer. A feature counts where MapLibre would draw it: only in the tile
+that holds it, 0 <= x, y < extent in that tile's own pixels. MapLibre skips the rest so
+nothing is drawn twice (`addSymbolAtAnchor` in symbol_layout.ts, and circle_bucket.ts,
+read at maplibre-gl 5.24.0). A peak in no tile by that rule is on no map. See
+prepare-peak-tiles.py for the two ways tippecanoe leaves one there.
+
+Tested in pixels, not degrees. tippecanoe-decode prints six decimals, and a point snapped
+onto a latitude edge could print on either side of it, so a comparison in degrees counted
+a point at pixel 4096, which no tile draws, about half the time (found 2026-09-25).
+Printed to 1e-6 degrees, a pixel is recovered to within 1/100 at z7 anywhere, and to
+within a quarter up to z11 even at the Mercator limit, where a latitude pixel is shortest. A point that cannot be pinned to a pixel that
+well fails the check rather than being guessed.
 
 On failure it names the missing peaks. It decodes the archive a second time and matches
 every input peak to a counted one of the same name within a few pixels, greedily. What
@@ -41,9 +45,6 @@ import sys
 from collections import defaultdict
 
 TILE = re.compile(r'"zoom": (\d+), "x": (\d+), "y": (\d+)')
-# Half the last printed digit of tippecanoe-decode's coordinates. Nothing lies beyond the
-# top or bottom edge of the world, so there is nothing for this much slack to let in twice.
-EDGE_SLACK = 0.5e-6
 EXTENT = re.compile(r'"extent": (\d+)')
 MAX_LISTED = 50
 
@@ -60,25 +61,26 @@ def is_munro(props):
     return "munro" in str(props.get("lists", "")).split(";")
 
 
-def bounds(z, x, y):
-    n = 2 ** z
-    lat = lambda row: math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * row / n))))
-    return x / n * 360 - 180, lat(y + 1), (x + 1) / n * 360 - 180, lat(y)
+def pixel(value):
+    """The whole pixel a decoded coordinate stands for, or None if it is too near a half."""
+    whole = round(value)
+    return whole if abs(value - whole) <= 0.25 else None
 
 
-def counted_features(stream, z):
-    """(properties, lon, lat, extent) for every feature that counts in its own tile."""
+def counted_features(stream, z, unclear=None):
+    """(properties, lon, lat, extent) for every feature MapLibre would draw from its tile.
+
+    Features that cannot be pinned to a pixel are appended to `unclear`, and not counted.
+    """
     n = 2 ** z
     tile = None
-    top_row = bottom_row = False
     extent = 4096
     for line in stream:
         match = TILE.search(line)
         if match and '"FeatureCollection"' in line:
             tz, tx, ty = map(int, match.groups())
             # Only the zoom asked for: a tile from any other zoom has no business here.
-            tile = bounds(tz, tx, ty) if tz == z else None
-            top_row, bottom_row = ty == 0, ty == n - 1
+            tile = (tx, ty) if tz == z else None
             continue
         if '"FeatureCollection"' in line:
             found = EXTENT.search(line)
@@ -90,10 +92,14 @@ def counted_features(stream, z):
             continue
         feature = json.loads(text)
         lon, lat = feature["geometry"]["coordinates"][:2]
-        west, south, east, north = tile
-        in_south = south < lat or (bottom_row and lat >= south - EDGE_SLACK)
-        in_north = lat <= north or (top_row and lat <= north + EDGE_SLACK)
-        if west <= lon < east and in_south and in_north:
+        tx, ty = tile
+        px = pixel(((lon + 180) / 360 * n - tx) * extent)
+        py = pixel(((1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n - ty) * extent)
+        if px is None or py is None:
+            if unclear is not None:
+                unclear.append((tile, feature))
+            continue
+        if 0 <= px < extent and 0 <= py < extent:
             yield feature.get("properties", {}), lon, lat, extent
 
 
@@ -153,14 +159,20 @@ def main():
             expected_munros += 1
 
     count = munros = 0
-    for props, _, _, _ in counted_features(sys.stdin, z):
+    unclear = []
+    for props, _, _, _ in counted_features(sys.stdin, z, unclear):
         count += 1
         if is_munro(props):
             munros += 1
 
-    if count == expected and munros == expected_munros:
+    if count == expected and munros == expected_munros and not unclear:
         print(f"  OK z{z} tiles hold all {count} peaks and {munros} munros")
         return 0
+
+    for (tx, ty), feature in unclear[:MAX_LISTED]:
+        name = feature.get("properties", {}).get("name", "(unnamed)")
+        lon, lat = feature["geometry"]["coordinates"][:2]
+        print(f"FAIL: cannot tell which pixel of tile {z}/{tx}/{ty} holds {name} ({lon}, {lat})")
 
     if count != expected:
         print(f"FAIL: {count} peaks in the z{z} tiles, {expected} in the input")

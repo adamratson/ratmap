@@ -204,30 +204,13 @@ OUT="$DIST_DIR/peaks-global.pmtiles"
 PARTIAL="$DIST_DIR/.peaks-global.partial.pmtiles"
 trap 'rm -rf "$WORK_DIR" "$PARTIAL"' EXIT
 
-# Only what Web Mercator can hold. Tiles end at +-85.0511 degrees, and tippecanoe drops
-# anything beyond without a word; the app could never show it on any map. On 2026-09-25
-# that was 181 summits of the Transantarctic Mountains, and the tile check below failed the
-# build over them. Left out here, said out loud, and the check compares like with like.
-# The places database still has them, from its own copy of the peaks.
-python3 - "$WORK_DIR/peaks-final.geojsonl" "$WORK_DIR/peaks-tiled.geojsonl" <<'PYMERCATOR'
-import json, math, sys
+# Only peaks the app can draw: tippecanoe loses some without a word, beyond Web Mercator's
+# edge and on a rounding tie at a tile edge (181 and 1 of them on the planet, 2026-09-25).
+# prepare-peak-tiles.py leaves the first out and moves the second 1 cm, and says so. The
+# places database still has every peak, from its own copy.
+python3 "$(dirname "${BASH_SOURCE[0]}")/prepare-peak-tiles.py" \
+  "$WORK_DIR/peaks-final.geojsonl" "$WORK_DIR/peaks-tiled.geojsonl"
 
-LIMIT = math.degrees(math.atan(math.sinh(math.pi)))  # 85.0511287798...
-kept = 0
-beyond = []
-with open(sys.argv[1]) as src, open(sys.argv[2], "w") as out:
-    for line in src:
-        if not line.strip():
-            continue
-        lat = json.loads(line)["geometry"]["coordinates"][1]
-        if abs(lat) > LIMIT:
-            beyond.append(json.loads(line)["properties"].get("name", "(unnamed)"))
-            continue
-        out.write(line)
-        kept += 1
-print(f"  {kept} peaks to tile, {len(beyond)} beyond Web Mercator's +-{LIMIT:.4f} left out"
-      + (f" (e.g. {', '.join(beyond[:5])})" if beyond else ""))
-PYMERCATOR
 # `prom` is the computed prominence the app's zoom filter ranks on; `prominence` is OSM's
 # own sparse tag, kept for reference. `lists` is the summit-list membership derived in
 # normalize-peaks.py (Phase 3.5, C19).

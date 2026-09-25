@@ -103,12 +103,22 @@ Phones that already hold a region see **Update** for it, and fetch only the new 
 
 **The tile check.** `build-peaks.sh` builds the archive under a dotted name and moves it
 into place only once `check-peak-tiles.py` agrees that the top zoom holds every peak and
-every Munro. A failed check exits non-zero and names the peaks that went missing. It also
-keeps the archive and its input in `dist/.peaks-failed/`, which `upload.sh` never sees, so
-a failure after hours of prominence scoring can be looked at without running it all again.
-Peaks beyond ±85.0511° are left out before tiling, with a count in the log: Web Mercator
-tiles stop there, and tippecanoe drops anything beyond without a word. On the planet that
-is 181 Antarctic summits, and no map in the app can show them anyway.
+every Munro. It counts each peak where MapLibre would draw it: only inside its own tile,
+never from a neighbour's buffer. A failed check exits non-zero and names the peaks that
+went missing. It also keeps the archive and its input in `dist/.peaks-failed/`, which
+`upload.sh` never sees, so a failure after hours of prominence scoring can be looked at
+without running it all again.
+
+tippecanoe can silently lose a peak in two ways, and `prepare-peak-tiles.py` deals with
+both before tiling, with counts in the log:
+
+- **Beyond Web Mercator.** Tiles stop at ±85.0511°, so peaks beyond ±85.0501° are left
+  out. The 0.001° margin keeps any peak from snapping onto the edge of the world. On the
+  planet that is 181 Antarctic summits, which no map in the app can show anyway.
+- **On a rounding tie.** A peak exactly half a pixel short of a tile edge rounds out of its
+  own tile and out of its neighbour's too, so it is drawn by neither. It is moved 1e-7°
+  (~1 cm) into its own tile. On the planet that was one summit at z7, Хонголдойский Голец
+  (node 4707311223).
 
 ### SAC grades
 

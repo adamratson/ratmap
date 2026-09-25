@@ -1,59 +1,85 @@
 // Light or dark, for the chrome and the map together.
 //
-// Dark is the default and the app's own look (plans/signature-style.md): a full-white
-// screen at last light is unpleasant, and it wrecks the night vision of someone who is
-// going to need it. Light is a setting for a bright day, reached from Settings.
+// The device decides until the person does. `system` is the default: an app that opens
+// bright white on a phone that has been in night mode since dusk is wrong in exactly the
+// situation ratmap is for, and one that opens dark on a sunlit screen is just as wrong.
+// Both mistakes are avoidable, because the phone already knows.
 //
-// This used to be a three-state preference — system, light, dark — cycled from a chip in
-// the peek row. The device setting is gone as an input: ratmap is dark because that is
-// what the app looks like, not because the phone happens to be. What is kept is the part
-// that mattered, a stored explicit choice: people turn the map light on a glaring day,
-// and dusk on a hill arrives long before the phone's schedule thinks it has, so the
-// person holding it is the one who decides.
+// The explicit choice still wins and is still stored, because the device setting is a
+// blunt instrument outdoors: dusk on a hill arrives long before the phone's schedule
+// thinks it has, and the person holding it is the one who can tell. Settings carries a
+// single Light theme switch; flipping it commits to that theme and stops following.
 
 export type Theme = 'light' | 'dark';
 
+/** What the app has been *told*, as opposed to what it shows. */
+export type ThemePreference = 'system' | Theme;
+
 const STORAGE_KEY = 'ratmap.theme';
 
-export const DEFAULT_THEME: Theme = 'dark';
+export const DEFAULT_PREFERENCE: ThemePreference = 'system';
 
 /**
- * The theme a stored value means, including the values the old three-state preference
- * wrote. `system` was whatever the device said at the time; it resolves to the new
- * default rather than being honoured, so upgrading lands everyone on the app's own look
- * unless they had explicitly chosen light.
+ * The preference a stored value means.
+ *
+ * Unrecognised values — and no value at all — mean "follow the device", which is also
+ * what a brief spell of `dark`-by-default wrote for people who never opened Settings.
+ * There is no way to tell those apart from a deliberate choice of dark made in that
+ * window, so this keeps an explicit `dark`: honouring a stored choice is worth more than
+ * migrating people off one.
  */
-export function themeFromStored(raw: string | null): Theme {
-  return raw === 'light' ? 'light' : DEFAULT_THEME;
+export function preferenceFromStored(raw: string | null): ThemePreference {
+  return raw === 'light' || raw === 'dark' ? raw : DEFAULT_PREFERENCE;
 }
 
-function readStored(): Theme {
+export function resolveTheme(preference: ThemePreference, system: Theme): Theme {
+  return preference === 'system' ? system : preference;
+}
+
+function systemTheme(): Theme {
+  // Optional-chained: `matchMedia` is absent in jsdom, and a missing media-query API is
+  // not evidence of anything — light is the browser default.
+  return globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function readStored(): ThemePreference {
   try {
-    return themeFromStored(localStorage.getItem(STORAGE_KEY));
+    return preferenceFromStored(localStorage.getItem(STORAGE_KEY));
   } catch {
-    // Private mode, or storage blocked. The default is the right answer and losing the
-    // preference is not worth failing startup over.
-    return DEFAULT_THEME;
+    // Private mode, or storage blocked. Following the device is the right default and
+    // losing the preference is not worth failing startup over.
+    return DEFAULT_PREFERENCE;
   }
 }
 
 export class ThemeController {
-  private theme: Theme = readStored();
+  private preference: ThemePreference = readStored();
   private readonly listeners = new Set<(theme: Theme) => void>();
+  private readonly query = globalThis.matchMedia?.('(prefers-color-scheme: dark)');
 
   constructor() {
+    // Always bound, not only while the preference is 'system': someone who switches back
+    // to following the device should start following it again without a reload.
+    this.query?.addEventListener('change', () => {
+      if (this.preference === 'system') this.apply();
+    });
     this.apply();
   }
 
-  /** What is being shown. */
+  /** What is actually being shown, after resolving `system`. */
   get(): Theme {
-    return this.theme;
+    return resolveTheme(this.preference, systemTheme());
   }
 
-  set(theme: Theme): void {
-    this.theme = theme;
+  /** What the app has been told: `system` until someone chooses. */
+  getPreference(): ThemePreference {
+    return this.preference;
+  }
+
+  set(preference: ThemePreference): void {
+    this.preference = preference;
     try {
-      localStorage.setItem(STORAGE_KEY, theme);
+      localStorage.setItem(STORAGE_KEY, preference);
     } catch {
       // Not being able to remember it is survivable; not applying it is not.
     }
@@ -67,7 +93,7 @@ export class ThemeController {
   }
 
   private apply(): void {
-    const theme = this.theme;
+    const theme = this.get();
     // The attribute drives the CSS; `color-scheme` drives the form controls, scrollbars
     // and the canvas the browser paints behind the page, which the attribute cannot.
     document.documentElement.dataset.theme = theme;

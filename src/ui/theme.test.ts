@@ -1,27 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_THEME, themeFromStored } from './theme';
+import { DEFAULT_PREFERENCE, preferenceFromStored, resolveTheme } from './theme';
 
-describe('themeFromStored', () => {
-  it('defaults to dark, which is what the app looks like', () => {
-    expect(DEFAULT_THEME).toBe('dark');
-    expect(themeFromStored(null)).toBe('dark');
+describe('preferenceFromStored', () => {
+  it('follows the device when nothing has been chosen', () => {
+    expect(DEFAULT_PREFERENCE).toBe('system');
+    expect(preferenceFromStored(null)).toBe('system');
   });
 
-  it('keeps an explicit light choice across launches', () => {
-    // People turn the map light on a glaring day and dark at dusk, and the person
-    // holding it is the one who can tell — so the choice is stored, not re-derived.
-    expect(themeFromStored('light')).toBe('light');
-    expect(themeFromStored('dark')).toBe('dark');
+  it('keeps an explicit choice across launches, in both directions', () => {
+    // The device setting is a blunt instrument outdoors: dusk on a hill arrives long
+    // before the phone's schedule thinks it has.
+    expect(preferenceFromStored('light')).toBe('light');
+    expect(preferenceFromStored('dark')).toBe('dark');
   });
 
-  it('lands anyone who was following their device on the default', () => {
-    // 'system' is what the old three-state preference wrote. It is not honoured now:
-    // ratmap is dark because that is the app's own look, not because a phone said so.
-    expect(themeFromStored('system')).toBe('dark');
+  it('reads an old stored "system" as following the device', () => {
+    expect(preferenceFromStored('system')).toBe('system');
   });
 
   it('ignores a stored value it does not recognise', () => {
-    expect(themeFromStored('')).toBe('dark');
-    expect(themeFromStored('midnight')).toBe('dark');
+    expect(preferenceFromStored('')).toBe('system');
+    expect(preferenceFromStored('midnight')).toBe('system');
+  });
+});
+
+describe('resolveTheme', () => {
+  it('takes the device theme only when following it', () => {
+    expect(resolveTheme('system', 'dark')).toBe('dark');
+    expect(resolveTheme('system', 'light')).toBe('light');
+  });
+
+  it('lets an explicit choice beat the device in both directions', () => {
+    expect(resolveTheme('dark', 'light')).toBe('dark');
+    expect(resolveTheme('light', 'dark')).toBe('light');
   });
 });

@@ -146,31 +146,34 @@ workers_for_budget() {
   echo "$affordable"
 }
 
-# What one gdal_contour worker costs for the largest region in <ids>, in GB.
+# How the contours stage spends the box, as "<regions at once> <cells each>".
 #
-# Measured: ~6.4 GB tracing a 2.66 sq-degree region (Corsica, 2026-09-03). The cost tracks
-# the raster's *width* and the terrain rather than its area, and width goes as the square
-# root of area for a roughly square bbox — so that is how the measured figure is carried
-# to a bigger region, floored at the figure itself and never below it.
+# build-contours.sh traces every region in cells of at most 3600 DEM pixels a side and
+# budgets CONTOURS_CELL_GB for one (measured at 281 MB, 2026-09-25; see there), so the
+# cost of a region no longer depends on its size. It used to be estimated from Corsica's
+# 6.4 GB, scaled by the square root of area, which came to 70 GB for morocco; that figure
+# was GDAL's GeoJSON writer, not the tracing, and cells bound the rest.
 #
-# It is an approximation standing in for a measurement nobody has taken on the big
-# regions, and it is deliberately the pessimistic direction: the enabled list runs from
-# 0.04 to 269 sq degrees, and the failure it exists to prevent is a blanket "2" pairing
-# morocco with turkey. A run filtered down to small regions gets real parallelism; a run
-# that includes a continent-sized one stays at one worker, which is what it did before.
-CONTOURS_REF_GB=7
-CONTOURS_REF_SQ_DEG=2.66
-contours_gb_per_worker() {
-  python3 -c '
-import json, sys
-ids = set(sys.argv[2:])
-with open(sys.argv[1]) as f:
-    regions = [r for r in json.load(f)["regions"] if r["id"] in ids]
-def area(r): w, s, e, n = r["bbox"]; return (e - w) * (n - s)
-largest = max((area(r) for r in regions), default=0.0)
-ref_gb, ref_area = '"$CONTOURS_REF_GB"', '"$CONTOURS_REF_SQ_DEG"'
-print(round(max(ref_gb, ref_gb * (largest / ref_area) ** 0.5), 1))
-' "$INFRA_DIR/regions.json" "$@"
+# So the box is <slots> cells at once, after the DEM fetch-ahead that runs beside them
+# (RATMAP_CONTOURS_FETCH_AHEAD fetches, FETCH_DEM_GB each), and no more than its cores.
+# They are split between regions: two at a time by default, so one region's serial tail
+# (joining its cells, tippecanoe) overlaps the next one's tracing, and each gets half the
+# cells. RATMAP_CONTOURS_PARALLEL sets the regions and RATMAP_CONTOURS_CELL_WORKERS the
+# cells each, both still held to what the box can hold.
+CONTOURS_CELL_GB=1
+contours_workers() {
+  local slots regions cells
+  slots="$(awk -v m="$(usable_mem_gb)" -v a="${RATMAP_CONTOURS_FETCH_AHEAD:-2}" \
+             -v f="$FETCH_DEM_GB" -v c="$CONTOURS_CELL_GB" \
+             'BEGIN { s = int((m - a * f) / c); print (s < 1 ? 1 : s) }')"
+  [ "$slots" -gt "$(nproc)" ] && slots="$(nproc)"
+  regions="${RATMAP_CONTOURS_PARALLEL:-2}"
+  [ "$regions" -gt "$slots" ] && regions="$slots"
+  [ "$regions" -lt 1 ] && regions=1
+  cells="${RATMAP_CONTOURS_CELL_WORKERS:-$(( slots / regions ))}"
+  [ "$(( cells * regions ))" -gt "$slots" ] && cells=$(( slots / regions ))
+  [ "$cells" -lt 1 ] && cells=1
+  echo "$regions $cells"
 }
 
 # overlapping_io_parallel <gb_per_worker> <max> — for the stages whose workers spend most
@@ -311,16 +314,10 @@ preflight() {
         printf '  %-28s %s region(s)   (~1.5 GB each)\n' "avalanche parallel" \
           "${RATMAP_AVALANCHE_PARALLEL:-$(overlapping_io_parallel 1.5 4)}" ;;
       contours)
-        # Sized per run from the largest region in it, so this is the whole enabled list
-        # unless RATMAP_REGION_FILTER narrows it — the stage prints the same figure again
-        # against the list it actually builds.
-        local c_ids c_gb
-        c_ids="$(region_ids contours | awk '{print $1}')"
-        # shellcheck disable=SC2086
-        c_gb="$(contours_gb_per_worker $c_ids)"
-        printf '  %-28s %s region(s)   (~%s GB each for the largest in the list)\n' \
-          "contours parallel" \
-          "${RATMAP_CONTOURS_PARALLEL:-$(workers_for_budget "$c_gb" 8)}" "$c_gb" ;;
+        local c_regions c_cells
+        read -r c_regions c_cells < <(contours_workers)
+        printf '  %-28s %s region(s)   (%s cells each, ~%s GB a cell, whatever the region)\n' \
+          "contours parallel" "$c_regions" "$c_cells" "$CONTOURS_CELL_GB" ;;
     esac
   done
 
@@ -908,28 +905,13 @@ stage_contours() {
     return 0
   fi
 
-  # gdal_contour has no multithreading of its own, and each region is fully independent
-  # work — own bbox, own tmp dir, own output file — so in principle the parallelism worth
-  # having is across regions, not inside one. In practice a single region's own peak RSS
-  # is the limit. Measured on a real 2.66 sq-degree region (Corsica, 2026-09-03):
-  # gdal_contour's own tracing peaked at ~6.4 GB; the index-tagging step used to add
-  # another ~9.8 GB on top (ogr2ogr -dialect SQLite, materializing the whole region as a
-  # SQLite virtual table just to evaluate one modulo) until it was replaced with a plain
-  # streaming pass over the GeoJSONSeq output (~133 MB, see build-contours.sh) — so
-  # gdal_contour's tracing is now the actual ceiling, at roughly a third of the old one.
-  # N concurrent workers still cost roughly N times that, not a shared pool, and it grows
-  # with region size — so rather than a blanket number, the per-worker figure is carried
-  # from the measured one to the largest region *in this run* (contours_gb_per_worker)
-  # and divided into the memory this box actually has. A planet run, whose list includes
-  # morocco at 269 sq degrees, still comes out at 1; a run filtered to small regions gets
-  # the parallelism the box can hold, to a cap of 8 — past that the stage is waiting on
-  # DEM fetches (RATMAP_CONTOURS_FETCH_AHEAD is 2) and on disk, not on cores.
-  # RATMAP_CONTOURS_PARALLEL overrides either way.
-  local per_worker
-  per_worker="$(contours_gb_per_worker "${ids[@]}")"
-  local parallel="${RATMAP_CONTOURS_PARALLEL:-$(workers_for_budget "$per_worker" 8)}"
-  log "contours: $per_worker GB per worker for the largest region in this run"
-  log "contours: building ${#ids[@]} region(s), $parallel at a time"
+  # Regions at once, and cells each: see contours_workers. build-contours.sh traces a
+  # region in cells, CONTOUR_WORKERS at a time, so the parallelism is inside a region now
+  # and a region's memory is its cells', whatever its size.
+  local parallel cell_workers
+  read -r parallel cell_workers < <(contours_workers)
+  export CONTOUR_WORKERS="$cell_workers" CONTOUR_CELL_GB="$CONTOURS_CELL_GB"
+  log "contours: building ${#ids[@]} region(s), $parallel at a time, $cell_workers cells each (~$CONTOURS_CELL_GB GB a cell)"
 
   # Fetch ahead. A region's build is a DEM fetch — network-bound, ~1.25 GB at most — and
   # then gdal_contour, which is cpu-bound and is what holds this stage to one region at a

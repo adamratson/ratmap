@@ -78,7 +78,39 @@ RUN set -eux; \
     /usr/local/bin/pmtiles version
 
 ########################################################################
-# Stage 3 — runtime
+# Stage 3 — Go toolchain, checksum-verified
+#
+# build-contours.sh compiles scripts/contour-cell from the working copy on every run
+# rather than this image carrying the binary: the scripts are bind-mounted over the
+# image's copy, and a baked binary would go on running old logic after the source moved.
+# So the image carries the compiler instead. Same fail-closed checksums as pmtiles above,
+# from https://go.dev/dl/?mode=json; bump them with GO_VERSION. 1.27.1 is the Go
+# contour-cell was written and tested with (2026-09-25).
+########################################################################
+FROM debian:${DEBIAN_TAG} AS go-fetch
+
+ARG GO_VERSION=1.27.1
+ARG GO_SHA256_AMD64=63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445
+ARG GO_SHA256_ARM64=3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec
+ARG TARGETARCH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) sha="${GO_SHA256_AMD64}" ;; \
+      arm64) sha="${GO_SHA256_ARM64}" ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz"; \
+    echo "${sha}  /tmp/go.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/go.tar.gz -C /usr/local; \
+    /usr/local/go/bin/go version
+
+########################################################################
+# Stage 4 — runtime
 ########################################################################
 FROM debian:${DEBIAN_TAG}
 
@@ -119,6 +151,10 @@ RUN python3 -m venv /opt/ratmap/infra/.venv \
 
 COPY --from=tippecanoe-build /opt/tippecanoe/bin/ /usr/local/bin/
 COPY --from=pmtiles-fetch    /usr/local/bin/pmtiles /usr/local/bin/pmtiles
+COPY --from=go-fetch         /usr/local/go /usr/local/go
+# GOTOOLCHAIN=local: never download another toolchain behind the pinned one's back.
+ENV PATH=/usr/local/go/bin:${PATH} \
+    GOTOOLCHAIN=local
 
 # Fail the image build, not a three-day pipeline run, if the interpreter that has to
 # create places.sqlite can't create an FTS5 table (C9 — the whole search index is FTS5).
@@ -191,6 +227,14 @@ COPY docker/build-global.sh /usr/local/bin/ratmap-global
 COPY docker/entrypoint.sh /usr/local/bin/ratmap
 RUN chmod +x /usr/local/bin/ratmap /usr/local/bin/ratmap-global \
     && chmod +x /opt/ratmap/infra/scripts/*.sh /opt/ratmap/infra/scripts/*.py
+
+# Fail the image build, not a contours run, if the baked copy of contour-cell does not
+# compile or no longer writes what its golden files say. Everything it writes stays in
+# /tmp and is thrown away: TMPDIR and HOME point at the /work volume, which only exists
+# at run time, where Go caches its builds under $HOME.
+RUN cd /opt/ratmap/infra/scripts/contour-cell \
+    && TMPDIR=/tmp HOME=/tmp GOCACHE=/tmp/go-build go test -count=1 ./... \
+    && rm -rf /tmp/go-build /tmp/go
 
 ENTRYPOINT ["/usr/local/bin/ratmap"]
 CMD ["help"]

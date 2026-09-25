@@ -16,6 +16,7 @@ source "$SCRIPT_DIR/lib.sh"
 require_cmd gdal_contour
 require_cmd tippecanoe
 require_cmd python3
+require_cmd go
 
 REGION_ID="${1:?Usage: build-contours.sh <region-id>}"
 REGIONS_JSON="$INFRA_DIR/regions.json"
@@ -49,6 +50,16 @@ INDEX_EVERY="${INDEX_EVERY:-50}"
 CONTOUR_MINZOOM="${CONTOUR_MINZOOM:-11}"
 CONTOUR_MAXZOOM="${CONTOUR_MAXZOOM:-14}"
 
+# Traced in cells of this many DEM pixels a side (3600 is 1 degree of GLO-30), and this
+# many at once. See "tracing contours" below for why cells. CONTOUR_CELL_GB is what one
+# cell is budgeted: measured at 281 MB for a full 3600-pixel cell of synthetic mountains
+# denser in contours than Corsica (2026-09-25), so 1 GB is 3-4x that. CONTOUR_WORKERS
+# defaults to as many as the box can hold; build-global.sh sets it when it runs several
+# regions at once.
+CONTOUR_CELL_PX="${CONTOUR_CELL_PX:-3600}"
+CONTOUR_CELL_GB="${CONTOUR_CELL_GB:-1}"
+CONTOUR_WORKERS="${CONTOUR_WORKERS:-$(workers_for_budget "$CONTOUR_CELL_GB")}"
+
 OUT_DIR="$DIST_DIR/regions/$REGION_ID"
 mkdir -p "$OUT_DIR"
 OUT="$OUT_DIR/$REGION_ID-contours.pmtiles"
@@ -67,47 +78,106 @@ echo
 echo "==> fetching DEM"
 "$SCRIPT_DIR/fetch-dem.sh" "$WEST" "$SOUTH" "$EAST" "$NORTH" "$WORK_DIR/clip.tif"
 
+echo "==> building contour-cell"
+# Compiled from this checkout on every build, never carried in the image: the pipeline is
+# whatever the working copy says it is (docker/compose.yml mounts it over the image's
+# copy), and a binary baked into the image would go on running old logic after the source
+# changed. Go's build cache makes this a moment after the first time; in the container it
+# lives under $HOME, on the /work volume. GOTOOLCHAIN=local: never fetch a toolchain.
+CONTOUR_CELL_BIN="$WORK_DIR/contour-cell"
+(cd "$SCRIPT_DIR/contour-cell" \
+  && GOTOOLCHAIN=local go build -trimpath -buildvcs=false -o "$CONTOUR_CELL_BIN" .)
+
 echo "==> tracing contours"
-# GeoJSONSeq (line-delimited), not plain GeoJSON: this is the full, unfiltered 10 m-interval
-# line set for the whole region — the largest intermediate in the pipeline — and it's read
-# straight back in by the next step. Classic GeoJSON is a single FeatureCollection document;
-# OGR's reader for it parses the whole thing into an in-memory json-c tree before yielding a
-# single feature, so a plain-GeoJSON file here forces that whole raw line set into RAM a
-# second time on top of gdal_contour's own working set. GeoJSONSeq has no such document-level
-# framing, so the tagging step below streams it feature by feature instead.
-gdal_contour -q -a ele -i "$CONTOUR_INTERVAL" -f GeoJSONSeq \
-  "$WORK_DIR/clip.tif" "$WORK_DIR/contours.geojsonl"
-
-# Index contours are tagged here rather than computed in a style expression: doing it once
-# at build time keeps the renderer trivial and avoids float modulo in the style.
+# In cells, not in one pass, and written as CSV, not GeoJSON: together they take
+# gdal_contour's memory from growing with the region to a few hundred MB, whatever the
+# region. Measured 2026-09-25 (synthetic mountains, local GDAL 3.13.3): a 52-Mpx DEM in
+# one pass writing GeoJSONSeq, 4975 MB; in one pass writing CSV, 564 MB; in 3600-pixel
+# cells writing CSV, 281 MB. Morocco is 3,488 Mpx.
 #
-# Plain streaming Python, not ogr2ogr -dialect SQLite: that was the actual memory ceiling
-# of the whole pipeline. Measured on a real 2.66 sq-degree region (Corsica, 2026-09-03),
-# materializing the input as a SQLite virtual table just to evaluate one modulo peaked at
-# 9.8 GB RSS against a 365 MB GeoJSONSeq input — worse than gdal_contour's own tracing
-# step. This does the identical computation (verified byte-for-byte against the SQLite
-# version's output) a line at a time with no SQL engine involved: 133 MB peak, and that
-# figure doesn't grow with region size the way the SQLite approach did, because it never
-# holds more than one feature at once.
-echo "==> tagging index contours"
-python3 - "$WORK_DIR/contours.geojsonl" "$WORK_DIR/contours-idx.geojsonl" "$INDEX_EVERY" <<'PY'
-import json, sys
+# The CSV is most of it. GDAL's GeoJSON writers hold ~17 bytes for every byte written, for
+# the life of the process (measured in contour-cell/main.go, which writes the GeoJSON
+# instead); Corsica's 6.4 GB on the image's GDAL 3.10.3 (2026-09-03) is that same ratio,
+# and was never the tracing. The cells are the
+# rest. gdal_contour sweeps the DEM a row at a time and holds every line it has not
+# finished: a line stays in memory until the sweep passes its last point
+# (SegmentMerger::endOfLine, alg/marching_squares/segment_merger.h, GDAL 3.10.3), so what
+# it holds grows with the region's height as well as its width (4x the height cost 80%
+# more, 2x the width 7%). A cell bounds that, and GDAL's block cache, to one cell. The
+# old estimate for morocco, Corsica's figure scaled by the square root of area, was 70 GB.
+#
+# The seams are pixel-centre lines, and each cell is traced from a window one pixel past
+# them. At a raster's edge gdal_contour extrapolates half a pixel from its own side alone
+# (the split squares in alg/marching_squares/square.h), so cells that merely abut would
+# kink at every seam. With the overlap, the squares either side of a seam are computed
+# whole, from the same pixels, in both cells; contour-cell then keeps each cell's own
+# side, and the pieces meet at the same points: on a 12-cell test, every one of 14,744
+# seam ends met its neighbour's exactly, and each level's total length matched a single
+# pass to 1e-7. A region of one cell is not cut at all, and differs from the old single
+# pass only where rounding 15 significant digits to 7 places lands a last digit
+# differently (40 coordinates of a 26-Mpx test, by 1e-7 degrees).
+#
+# Through a VRT window (-srcwin) on the one DEM: nothing is copied.
+python3 - "$WORK_DIR/clip.tif" "$CONTOUR_CELL_PX" > "$WORK_DIR/cells.txt" <<'PY_CELLS'
+import json, math, subprocess, sys
 
-src, dst, index_every = sys.argv[1], sys.argv[2], int(sys.argv[3])
-with open(src) as fin, open(dst, "w") as fout:
-    for line in fin:
-        line = line.strip()
-        if not line:
-            continue
-        feature = json.loads(line)
-        ele = feature["properties"]["ele"]
-        # Truncating int() matches SQLite's CAST(... AS INTEGER); sign convention only
-        # differs from a C-style modulo for non-zero remainders, which don't matter here
-        # since only equality to zero is ever tested.
-        idx = 1 if int(ele) % index_every == 0 else 0
-        feature["properties"] = {"ele": ele, "idx": idx}
-        fout.write(json.dumps(feature, separators=(",", ":")) + "\n")
-PY
+info = json.loads(subprocess.run(["gdalinfo", "-json", sys.argv[1]],
+                                 check=True, capture_output=True, text=True).stdout)
+width, height = info["size"]
+gt = info["geoTransform"]
+if gt[2] != 0 or gt[4] != 0:
+    sys.exit("build-contours.sh: rotated DEM geotransform, cells assume north-up")
+cell = int(sys.argv[2])
+
+def seams(size):
+    # Even cells, so none is a sliver: n cells, seams at pixel indices between them.
+    n = max(1, math.ceil(size / cell))
+    return [round(k * size / n) for k in range(1, n)]
+
+def spans(size, cuts):
+    # (first pixel, last pixel, low bound, high bound), bounds in pixel-centre coordinates
+    # (pixel i's centre is i + 0.5), None for the region's own edge.
+    edges = [None] + cuts + [None]
+    for lo, hi in zip(edges, edges[1:]):
+        first = 0 if lo is None else lo - 1
+        last = size - 1 if hi is None else hi + 1
+        yield first, last, (None if lo is None else lo + 0.5), (None if hi is None else hi + 0.5)
+
+n = 0
+for r0, r1, top, bottom in spans(height, seams(height)):
+    for c0, c1, left, right in spans(width, seams(width)):
+        n += 1
+        x = lambda px: "-inf" if px is None else repr(gt[0] + px * gt[1])
+        # Rows run south as y grows: gt[5] < 0, so the bottom seam is the smaller latitude.
+        ymin = "-inf" if bottom is None else repr(gt[3] + bottom * gt[5])
+        ymax = "inf" if top is None else repr(gt[3] + top * gt[5])
+        xmax = "inf" if right is None else x(right)
+        print(n, c0, r0, c1 - c0 + 1, r1 - r0 + 1, x(left), xmax, ymin, ymax)
+PY_CELLS
+CELLS="$(wc -l < "$WORK_DIR/cells.txt" | tr -d ' ')"
+echo "  $CELLS cell(s) of up to ${CONTOUR_CELL_PX} px, $CONTOUR_WORKERS at a time"
+
+trace_cell() {  # trace_cell <n> <xoff> <yoff> <xsize> <ysize> <xmin> <xmax> <ymin> <ymax>
+  local n="$1" base="$WORK_DIR/cell-$1"
+  gdal_translate -q -of VRT -srcwin "$2" "$3" "$4" "$5" "$WORK_DIR/clip.tif" "$base.vrt" \
+    && gdal_contour -q -a ele -i "$CONTOUR_INTERVAL" -f CSV -lco GEOMETRY=AS_WKT \
+         "$base.vrt" "$base.csv" \
+    && "$CONTOUR_CELL_BIN" "$base.csv" "$base.geojsonl" \
+         "$INDEX_EVERY" "$6" "$7" "$8" "$9" \
+    && rm -f "$base.vrt" "$base.csv" \
+    || { echo "  cell $n failed" >&2; return 1; }
+}
+export -f trace_cell
+export WORK_DIR CONTOUR_CELL_BIN CONTOUR_INTERVAL INDEX_EVERY
+xargs -P "$CONTOUR_WORKERS" -L 1 bash -c 'trace_cell "$@"' _ < "$WORK_DIR/cells.txt"
+
+# Joined in cell order, each deleted as it goes: the output is the same whatever order
+# the cells finished in, and the disk holds one extra cell at most, not a second copy.
+: > "$WORK_DIR/contours-idx.geojsonl"
+for n in $(seq 1 "$CELLS"); do
+  cat "$WORK_DIR/cell-$n.geojsonl" >> "$WORK_DIR/contours-idx.geojsonl"
+  rm -f "$WORK_DIR/cell-$n.geojsonl"
+done
 
 echo "==> tiling"
 # Written to a temp name and only renamed to $OUT after verification — same reason as

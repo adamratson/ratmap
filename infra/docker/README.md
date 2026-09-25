@@ -148,7 +148,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `terrain-features` | `build-terrain-features.sh` over all 8 continents → `terrain-features-global.pmtiles` (scree, shingle, rock, boulders — `natural=` values Protomaps' OSM ingestion drops) | like `sac`, a `tags-filter` over the shared subset; tiling is minutes (~826 k features planet-wide by taginfo's count, ~5 MB out for Scotland+Montenegro alone in local testing) |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue. 16 range requests per extract (`REGION_DOWNLOAD_THREADS`), terrain downloading alongside the basemap. `RATMAP_REGIONS_PARALLEL` builds several regions at once, up to 4, sized to the host |
-| `contours` | `build-contours.sh` for the ids opting in with `"contours": true` — peak RSS-bound, so the worker count is sized from the largest region in the run and comes out at 1 for a full catalogue (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far. Its 30 m DEMs are fetched ahead of the builds (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2) and cached, and `avalanche` reuses them for every region that has both |
+| `contours` | `build-contours.sh` for the ids opting in with `"contours": true` — each region traced in 1° cells at ~1 GB a cell, whatever its size; two regions at a time, the box's cells split between them (`RATMAP_CONTOURS_PARALLEL`, `RATMAP_CONTOURS_CELL_WORKERS`) | the slowest by far. Its 30 m DEMs are fetched ahead of the builds (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2) and cached, and `avalanche` reuses them for every region that has both |
 | `manifest` | `build-manifest.py` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | seconds when little changed: sha256s are cached by size, mtime and inode in `dist/.manifest-sha256-cache.json`, so only new or rebuilt archives are hashed. A first run hashes everything, 2 threads (`MANIFEST_HASH_WORKERS`, 1 for a spinning disk) |
 
 `sac`, `paths` and `terrain-features` sit before `regions` in `all` for a reason:
@@ -355,26 +355,38 @@ The opt-in became load-bearing when the catalogue went global: iterating every r
 `regions.json` used to mean four of them and now means several hundred, so the stage would
 have walked into the planet contour build without anyone deciding to.
 
-`gdal_contour` itself has no multithreading, and regions are independent of each other, so
-in principle the `contours` stage could run several at a time. In practice, a single
-region's own peak RSS is the binding constraint — and it's `gdal_contour`'s own tracing
-step, not something built on top of it. Measured (2026-09-03) on a real 2.66 sq-degree
-region (Corsica): `gdal_contour` tracing peaks at ~6.4 GB on its own; the index-tagging
-step used to add another ~9.8 GB (`ogr2ogr -dialect SQLite`, materializing the region as a
-SQLite virtual table to evaluate one modulo) until it was replaced with a plain streaming
-pass over the GeoJSONSeq output (~133 MB — see the comment in `build-contours.sh`). Both
-figures are well past the ~300 MB/sq-degree *disk* size of the intermediate GeoJSON, which
-was never a proxy for RAM cost. N concurrent workers still cost roughly N times the
-remaining ~6.4 GB, not a shared pool, and it grows with region size, so the stage defaults
-to 1 (sequential) rather than assume any box has room to spare. Each region's full output
-still goes to its own log under `/work/logs`; only a one-line OK/FAILED per region reaches
-the main `contours` stage log. The stage raises itself only when the regions in the run
-are small enough (above); `RATMAP_CONTOURS_PARALLEL` overrides it on a host confirmed to
-have the memory for it — figure on ~6-7 GB per worker as a floor, more for larger regions:
+Memory no longer depends on the region. `build-contours.sh` traces each region in cells of
+at most 3600 DEM pixels a side (1° of GLO-30), several at once, and joins them; each cell
+is budgeted 1 GB. Two findings made that possible, both measured 2026-09-25:
+
+- **The old ~6.4 GB for Corsica was GDAL's GeoJSON writer, not the tracing.** GDAL's
+  GeoJSON and GeoJSONSeq writers hold ~17 bytes for every byte they write, for the life
+  of the process: one 3602-pixel cell took 2967 MB writing GeoJSONSeq and 206 MB writing
+  CSV. Corsica's 6.4 GB for 365 MB of output is the same ratio. `gdal_contour` now writes
+  CSV with WKT geometry, and `scripts/contour-cell` (Go, compiled from the working copy
+  on each build) writes the GeoJSON.
+- **What the tracing does hold still grows with the region.** The sweep keeps every line it
+  has not finished, so its memory rises with height as well as width. A cell bounds it: a
+  52-Mpx DEM took 564 MB in one pass and 281 MB in cells. Morocco is 3,488 Mpx; the old
+  estimate for it, Corsica's figure scaled by the square root of area, was 70 GB.
+
+Cells overlap by a pixel and are cut on pixel-centre lines, where both neighbours compute
+the same squares, so lines carry on across a seam from the same point (see
+`build-contours.sh`). A region of one cell is not cut at all.
+
+The stage runs two regions at a time, so one region's serial tail (joining its cells,
+tippecanoe) overlaps the next one's tracing, and splits the cells the box can hold between
+them. Each region's full output still goes to its own log under `/work/logs`; only a
+one-line OK/FAILED per region reaches the main `contours` stage log. Both numbers can be
+set, and are held to what the box can hold:
 
 ```sh
-RATMAP_CONTOURS_PARALLEL=2 docker compose run --rm infra global contours manifest
+RATMAP_CONTOURS_PARALLEL=1 RATMAP_CONTOURS_CELL_WORKERS=16 docker compose run --rm infra global contours manifest
 ```
+
+Not measured on a large region yet: tippecanoe on the joined output. It sorts on disk, and
+the paths stage's tippecanoe stayed under 250 MB at a million features, but contours for
+the largest regions will be far more than that.
 
 What does *not* need to wait for tracing is the DEM. Each region's build is a fetch
 (network-bound) and then `gdal_contour` (cpu-bound), and in sequence every region paid for
@@ -382,7 +394,8 @@ both. The stage now fetches ahead: a background fetcher walks the same list,
 `RATMAP_CONTOURS_FETCH_AHEAD` regions at a time (default 2; 0 turns it off), filling the
 DEM cache while earlier regions trace. Each build waits for its own DEM rather than
 downloading it a second time, and fetches for itself only if the fetch-ahead failed. A
-fetch holds ~1.25 GB at most, beside `gdal_contour`'s 6.4 GB. It needs the DEM cache: with
+fetch holds ~1.25 GB at most, and the stage counts the fetches against the memory it
+gives the cells. It needs the DEM cache: with
 `DEM_CACHE_DIR` set empty the stage says so and builds as before.
 
 ### Parallelism and memory
@@ -396,7 +409,7 @@ allows, not the fastest on a large one. These are the measured per-worker costs
 | `paths`, `sac` — `osmium tags-filter` | id bitmap over OSM's *global* id space | **1.89 GB** on a 33 MB extract, **1.96 GB** on a 310 MB one | nothing — it is flat, which is why 33 GB europe passes on a box this size |
 | `paths` — reduce step | streams a line at a time | 17 MB | nothing |
 | `paths` — `tippecanoe` | disk-backed sort | 172 MB at 259 k features, 227 MB at 1.04 M | sublinearly |
-| `contours` — `gdal_contour` | contour rings open at once in the sweep | ~6.4 GB (Corsica, 2.66 sq deg) | raster width and terrain, **not** area — scotland at 99 sq deg is built and published |
+| `contours` — `gdal_contour`, one cell | lines open in the sweep, within one 3600-pixel cell | **281 MB** worst measured (synthetic mountains denser than Corsica); budgeted 1 GB | nothing: every region is cells. It was ~6.4 GB (Corsica) and grew with the region, when it wrote GeoJSON in one pass |
 | `places` — `build-places-db.py` | rows + dedupe set held whole | ~1.6 GB for the planet | feature count |
 | `peaks` — prominence scoring (`compute-prominence.py`) | one region's 90 m DEM, a mask and an int32 label array of the same shape | **9.5 bytes/px**: 1.35 GB on Scotland's 143 Mpx (1.94 GB before the buffers were reused) | the region's bbox — svalbard-janmayen's 712 Mpx is ~6.3 GB |
 | `peaks` — DEM fetch (`fetch-dem.sh`), `PROM_FETCH_WORKERS` of them | `gdal_translate`'s block cache (capped at 512 MB) + the VSI cache | **229 MB** for Bosnia at 90 m; ~1.25 GB at most | region size, up to the cap |
@@ -412,16 +425,15 @@ its own reason for. `workers_for_budget` in `scripts/lib.sh` does the arithmetic
 starts. Every number is still overridable, and an explicit one is capped the same way —
 a number you type is a statement about the work, not about the machine.
 
-What that comes out as, per box (the `contours` column is for a run whose regions are all
-small; see its bullet):
+What that comes out as, per box (`contours` is regions at once × cells each):
 
 | memory / cores | `paths` | prominence fetches | `regions` | `avalanche` | `contours` |
 |---|---|---|---|---|---|
-| 4 GB / 2 | 1 | 1 | 1 | 1 | 1 |
-| 8 GB / 4 | 2 | 2 | 2 | 2 | 1 |
-| 16 GB / 8 | 3 | 3 | 4 | 4 | 2 |
-| 32 GB / 16 | 3 | 3 | 4 | 4 | 4 |
-| 64 GB / 32 | 3 | 3 | 4 | 4 | 8 |
+| 4 GB / 2 | 1 | 1 | 1 | 1 | 1 × 1 |
+| 8 GB / 4 | 2 | 2 | 2 | 2 | 2 × 2 |
+| 16 GB / 8 | 3 | 3 | 4 | 4 | 2 × 4 |
+| 32 GB / 16 | 3 | 3 | 4 | 4 | 2 × 8 |
+| 64 GB / 32 | 3 | 3 | 4 | 4 | 2 × 16 |
 
 - **`paths`: 3.** A worker peaks around 2-3 GB — osmium's flat ~2 GB plus a tippecanoe
   that never got near 1 GB even at 4x the features — so three is ~9 GB and the limit is
@@ -433,17 +445,11 @@ small; see its bullet):
   on, so the default does not have to assume the host — and an explicit
   `RATMAP_PATHS_PARALLEL` is capped the same way, because a number you type is a statement
   about the work, not about the machine.
-- **`contours`: 1 for a full run, more for a filtered one.** Not because 32 GB has no
-  room for two Corsicas at 6.4 GB — it does — but because the 62 enabled regions run from
-  0.04 to 269 sq deg, so a blanket 2 will eventually pair morocco with turkey. So the
-  measured figure is carried to *the largest region in this run*: cost tracks the
-  raster's width rather than its area, and width goes as the square root of area for a
-  roughly square bbox, floored at the 7 GB measurement and capped at 8 workers (past
-  that the stage waits on DEM fetches and disk, not cores). A planet run still comes out
-  at 1; `RATMAP_REGION_FILTER=liechtenstein|andorra` on a 32 GB box comes out at 4. The
-  scaling is an approximation standing in for a measurement nobody has taken on the big
-  regions, and it errs pessimistic on purpose. Its DEMs are fetched ahead of the builds, two at a time
-  (`RATMAP_CONTOURS_FETCH_AHEAD`), so the one-at-a-time limit applies to tracing only.
+- **`contours`: two regions × half the cells.** A cell is budgeted 1 GB, after 2.5 GB for
+  the two DEM fetches running ahead, so the cells a box can trace at once come to its
+  cores on every box above but the smallest, whichever regions are in the run: morocco
+  costs what liechtenstein does, per cell. Its DEMs are fetched ahead of
+  the builds, two at a time (`RATMAP_CONTOURS_FETCH_AHEAD`).
 - **`avalanche`: 4.** A region's phases run in sequence, so its peak is the largest of
   them and not their sum: ~0.8-1.5 GB, so four is ~6 GB on a 32 GB host. The warp phase is
   network-bound off `/vsicurl` with the cpu idle, which is what makes overlapping regions

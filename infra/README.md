@@ -7,7 +7,7 @@ itself (`SETUP.md`, needs your Krystal account).
 ## Prerequisites
 
 ```sh
-brew install tippecanoe pmtiles osmium-tool gdal   # gdal only needed for contours
+brew install tippecanoe pmtiles osmium-tool gdal go   # gdal and go only needed for contours
 ```
 
 `aws`/`curl` are assumed present.

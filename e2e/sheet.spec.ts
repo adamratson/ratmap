@@ -164,36 +164,47 @@ test.describe('the docked panel', () => {
 });
 
 test.describe('theme', () => {
+  // The app follows the device now, so these need a known device. Dark, because that is
+  // the theme the rest of the suite's screenshots and flavour assertions assume.
+  test.use({ colorScheme: 'dark' });
+
   test.beforeEach(async ({ page }) => {
     await gotoApp(page);
     await clearConditions(page);
   });
 
-  test('starts dark, and turns light from settings — and remembers it', async ({ page }) => {
+  test('follows the device until someone chooses, then remembers the choice', async ({
+    page,
+  }) => {
     const root = page.locator('html');
+    const toggle = page.locator('#light-theme-toggle');
 
-    // Dark is the app's own look, whatever the device is set to. The peek row has no
-    // theme control at all any more.
+    // The project runs with the device in dark mode (see the emulation below), and with
+    // nothing stored the app takes it. The peek row has no theme control at all.
     await expect(root).toHaveAttribute('data-theme', 'dark');
     await expect(page.locator('#theme-btn')).toHaveCount(0);
 
+    // Still following: the device flipping to light takes the app with it, switch
+    // included, without anything being stored.
     await page.locator('#settings-btn').click();
-    const toggle = page.locator('#light-theme-toggle');
     await expect(toggle).not.toBeChecked();
-
-    await toggle.check();
+    await page.emulateMedia({ colorScheme: 'light' });
     await expect(root).toHaveAttribute('data-theme', 'light');
+    await expect(toggle).toBeChecked();
 
-    // Stored, not re-derived on every launch: someone who wants the light map on a
-    // glaring day should not have to ask for it again at the next screen lock.
+    // Choosing commits: back to dark explicitly, while the device still says light.
+    await toggle.uncheck();
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+
+    // Stored, not re-derived on every launch — and the device no longer overrides it.
     await page.reload();
     await page.locator('#map').waitFor();
-    await expect(root).toHaveAttribute('data-theme', 'light');
+    await expect(root).toHaveAttribute('data-theme', 'dark');
 
     await page.locator('#settings-btn').click();
-    await expect(page.locator('#light-theme-toggle')).toBeChecked();
-    await page.locator('#light-theme-toggle').uncheck();
-    await expect(root).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('#light-theme-toggle')).not.toBeChecked();
+    await page.locator('#light-theme-toggle').check();
+    await expect(root).toHaveAttribute('data-theme', 'light');
   });
 
   test('keeps the app’s own layers across a theme change', async ({ page }) => {

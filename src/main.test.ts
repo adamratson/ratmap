@@ -415,13 +415,22 @@ describe('app bootstrap', () => {
     expect(body.getAttribute('aria-label')).toBe('Routes');
   });
 
+const stubPrefersDark = (dark: boolean): void => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(prefers-color-scheme: dark)' ? dark : false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+};
+
   it('paints the theme before the map, so first paint is not a white flash', async () => {
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    stubPrefersDark(true);
 
     await loadMainQuietly();
 
-    // Dark with nothing stored and whatever the device prefers: ratmap is dark because
-    // that is the app's own look.
+    // Nothing stored, so it follows the device — which here is in dark mode.
     expect(document.documentElement.dataset.theme).toBe('dark');
     // The basemap flavour has to follow, or a dark UI frames a white map.
     expect(basemapLayersSpy).toHaveBeenCalledWith(
@@ -436,10 +445,27 @@ describe('app bootstrap', () => {
     );
   });
 
-  it('turns the map light from settings, and remembers it', async () => {
-    // The one theme control there is now: a toggle in Settings, not a cycling chip in
-    // the peek row. Dark is the default, so the toggle starts off.
+  it('follows a device set to light, rather than imposing its own look', async () => {
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    stubPrefersDark(false);
+
+    await loadMainQuietly();
+
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(basemapLayersSpy).toHaveBeenCalledWith(
+      'basemap',
+      expect.objectContaining({ base: 'light' }),
+      expect.anything(),
+    );
+    // Following is not a choice: nothing is stored until someone uses the switch.
+    expect(store.get('ratmap.theme')).toBeUndefined();
+  });
+
+  it('turns the map light from settings, and remembers it', async () => {
+    // The one theme control there is: a toggle in Settings, not a cycling chip in the
+    // peek row. The device is dark here, so the toggle starts off.
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    stubPrefersDark(true);
     await loadMainQuietly();
 
     document.querySelector<HTMLButtonElement>('#settings-btn')!.click();

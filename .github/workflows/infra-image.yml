@@ -72,16 +72,17 @@ jobs:
       # The image build already fails closed on a bad pmtiles checksum and on sqlite
       # lacking FTS5. These check the things that only surface at runtime — and are the
       # exact failures found by hand: a doctor probe that reported a present GDAL driver
-      # as missing, and a missing numpy/scipy venv that broke build-peaks.sh outright.
+      # as missing, and a missing numpy/scipy venv that broke build-peaks.sh outright
+      # (prominence and slope are Go now, scripts/dem-tools, built by the stages from the
+      # image's own Go — so it is Go that has to be there).
       - name: Smoke test — toolchain
         run: |
           set -euo pipefail
           out="$(docker run --rm ${{ steps.ref.outputs.image }}:${{ github.sha }} doctor 2>&1)"
           echo "$out"
           grep -q 'GeoJSONSeq driver: OK' <<<"$out" || { echo "::error::GeoJSONSeq driver not reported OK"; exit 1; }
-          grep -q 'numpy .* scipy ' <<<"$out"     || { echo "::error::prominence venv (numpy/scipy) missing"; exit 1; }
           if grep -q 'MISSING' <<<"$out"; then echo "::error::doctor reported a MISSING component"; exit 1; fi
-          for tool in pmtiles tippecanoe osmium gdal python3 sqlite3; do
+          for tool in pmtiles tippecanoe osmium gdal python3 go sqlite3; do
             grep -qE "^  ${tool} +[^ ]" <<<"$out" || { echo "::error::${tool} reported no version"; exit 1; }
           done
 

@@ -5,6 +5,9 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_cmd osmium
 require_cmd tippecanoe
+# Up front, not where compute-prominence is built: that is after the OSM filtering, which
+# is hours into a planet run.
+require_cmd go
 
 # Space-separated .osm.pbf URLs to build from; multiple URLs are merged before filtering.
 #
@@ -78,13 +81,10 @@ python3 "$(dirname "${BASH_SOURCE[0]}")/normalize-peaks.py" \
 #
 # Peaks outside every region bbox keep no `prom` and fall back to elevation in the app.
 SCRIPT_DIR_PK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROM_PY="$INFRA_DIR/.venv/bin/python"
-
-if [ ! -x "$PROM_PY" ]; then
-  echo "Missing $PROM_PY — create it with:" >&2
-  echo "  python3 -m venv infra/.venv && infra/.venv/bin/pip install numpy scipy" >&2
-  exit 1
-fi
+# Go (dem-tools/cmd/compute-prominence), the port of compute-prominence.py: the same
+# output, byte for byte, without numpy or scipy. Built from this checkout (lib.sh).
+echo "==> building compute-prominence"
+PROM_BIN="$(dem_tool compute-prominence "$WORK_DIR")"
 
 # 90 m rather than the DEM's native 30 m: GDAL serves it straight from the COG overviews,
 # and Scotland at 30 m would be a 2.7 GB raster for no gain — prominence of a *notable*
@@ -103,9 +103,9 @@ PROM_FETCH_WORKERS="${PROM_FETCH_WORKERS:-$(workers_for_budget 1.25 3)}"
 # (fetch-dem.sh, cached in DEM_CACHE_DIR) PROM_FETCH_WORKERS at a time, and the regions are
 # scored smallest bbox first so a larger region overwrites a smaller overlapping one. This
 # used to be a loop here that re-ran the script — and re-parsed every peak — once per
-# region; the ordering rule and its reasons now live in compute-prominence.py's
-# run_regions(). A region with no DEM keeps no prominence and is listed at the end.
-"$PROM_PY" "$SCRIPT_DIR_PK/compute-prominence.py" \
+# region; the ordering rule and its reasons now live in compute-prominence's
+# runRegions(). A region with no DEM keeps no prominence and is listed at the end.
+"$PROM_BIN" \
   --regions "$INFRA_DIR/regions.json" \
   --fetch-dem "$SCRIPT_DIR_PK/fetch-dem.sh" \
   --res "$PROM_RES" \

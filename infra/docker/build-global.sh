@@ -230,9 +230,11 @@ print(int(total * 1.1 / 1e9))
 
 # Memory the peaks stage's prominence pass needs, as "<GB> <largest region> <its Mpx>".
 #
-# compute-prominence.py scores one region's 90 m DEM at a time, holding the raster, a mask
-# and a label array of the same shape: ~9.5 bytes a pixel, measured at 1.35 GB on
-# Scotland's 143 Mpx (2026-09-23). Beside it run up to PROM_FETCH_WORKERS DEM fetches for
+# compute-prominence (scripts/dem-tools) scores one region's 90 m DEM at a time, holding
+# the raster and a union-find of the same shape: ~9.1 bytes a pixel, measured at 1.30 GB
+# on Scotland's 143 Mpx (2026-09-25), and it hands each region's memory back before
+# reading the next. Budgeted at the 9.5 the Python it replaced measured (1.35 GB,
+# 2026-09-23). Beside it run up to PROM_FETCH_WORKERS DEM fetches for
 # the regions next in line, each a gdal_translate whose block cache fetch-dem.sh caps at
 # 512 MB, plus the image's 512 MB VSI cache and the process itself: FETCH_DEM_GB at most.
 # Regions are scored smallest first, so the fetches running ahead are always for bigger
@@ -1028,7 +1030,9 @@ stage_avalanche() {
   # Four. A region's phases run in sequence, so its peak is the largest of them rather
   # than their sum, and that is ~0.8-1.5 GB — measured 2026-09-08 on a 108 and a 216 Mpx
   # raster: gdalwarp ~694 MB, encode-avalanche.py 792 MB and 1459 MB (most of it evictable
-  # page cache for the memmaps), the tiler a few MB. Four regions is ~6 GB on a 32 GB host,
+  # page cache for the memmaps), the tiler a few MB. The encoder is Go now and streams
+  # three rows (15 MB on 113 Mpx, 2026-09-25), so the warp is the peak and this is
+  # conservative. Four regions is ~6 GB on a 32 GB host,
   # and the warp phase is network-bound with the cpu idle, so overlapping several is close
   # to free.
   #

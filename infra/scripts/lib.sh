@@ -19,6 +19,26 @@ require_cmd() {
   }
 }
 
+# Build one of dem-tools' commands (compute-prominence, encode-avalanche) into a
+# directory, and print the binary's path.
+#
+#   BIN="$(dem_tool compute-prominence "$WORK_DIR")"
+#
+# Compiled from this checkout on every run, never carried in the image — the same rule as
+# build-contours.sh's contour-cell, for the same reason: the pipeline is whatever the
+# working copy says it is (docker/compose.yml mounts it over the image's copy), and a
+# baked binary would go on running old logic after the source changed. Go's build cache
+# makes this a moment after the first time. GOTOOLCHAIN=local: never fetch a toolchain.
+# Into the caller's own directory, so regions built side by side never share a binary.
+dem_tool() {
+  local name="$1" dir="$2"
+  require_cmd go
+  (cd "$INFRA_DIR/scripts/dem-tools" \
+    && GOTOOLCHAIN=local go build -trimpath -buildvcs=false -o "$dir/$name" "./cmd/$name") >&2 \
+    || { echo "Could not build dem-tools/cmd/$name" >&2; return 1; }
+  echo "$dir/$name"
+}
+
 # Download to a path, resuming and retrying.
 #
 # OSM extracts are hundreds of MB (europe-latest is ~35 GB) and Geofabrik drops

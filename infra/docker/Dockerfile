@@ -80,12 +80,13 @@ RUN set -eux; \
 ########################################################################
 # Stage 3 — Go toolchain, checksum-verified
 #
-# build-contours.sh compiles scripts/contour-cell from the working copy on every run
-# rather than this image carrying the binary: the scripts are bind-mounted over the
+# build-contours.sh compiles scripts/contour-cell, and build-peaks.sh and
+# build-avalanche.sh compile scripts/dem-tools, from the working copy on every run
+# rather than this image carrying the binaries: the scripts are bind-mounted over the
 # image's copy, and a baked binary would go on running old logic after the source moved.
 # So the image carries the compiler instead. Same fail-closed checksums as pmtiles above,
 # from https://go.dev/dl/?mode=json; bump them with GO_VERSION. 1.27.1 is the Go
-# contour-cell was written and tested with (2026-09-25).
+# contour-cell and dem-tools were written and tested with (2026-09-25).
 ########################################################################
 FROM debian:${DEBIAN_TAG} AS go-fetch
 
@@ -130,24 +131,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libstdc++6 \
         osmium-tool \
         python3 \
-        python3-venv \
         sqlite3 \
         awscli \
         zlib1g \
     && rm -rf /var/lib/apt/lists/*
-
-# build-peaks.sh computes topographic prominence from the DEM and insists on an interpreter
-# at $INFRA_DIR/.venv/bin/python with numpy and scipy. Baked in here so the image runs the
-# peaks build as-is; .dockerignore keeps any host .venv (wrong OS, wrong interpreter) out
-# of the build context. Bounded to the current majors rather than pinned exactly, so the
-# build doesn't break on a version that doesn't exist for this Python — `ratmap doctor`
-# reports what actually got installed.
-ARG NUMPY_SPEC="numpy>=2,<3"
-ARG SCIPY_SPEC="scipy>=1.14,<2"
-RUN python3 -m venv /opt/ratmap/infra/.venv \
-    && /opt/ratmap/infra/.venv/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/ratmap/infra/.venv/bin/pip install --no-cache-dir "${NUMPY_SPEC}" "${SCIPY_SPEC}" \
-    && /opt/ratmap/infra/.venv/bin/python -c "import numpy, scipy; print('numpy', numpy.__version__, 'scipy', scipy.__version__)"
 
 COPY --from=tippecanoe-build /opt/tippecanoe/bin/ /usr/local/bin/
 COPY --from=pmtiles-fetch    /usr/local/bin/pmtiles /usr/local/bin/pmtiles
@@ -232,7 +219,14 @@ RUN chmod +x /usr/local/bin/ratmap /usr/local/bin/ratmap-global \
 # compile or no longer writes what its golden files say. Everything it writes stays in
 # /tmp and is thrown away: TMPDIR and HOME point at the /work volume, which only exists
 # at run time, where Go caches its builds under $HOME.
+#
+# Same for dem-tools (compute-prominence, encode-avalanche — the Go ports that replaced
+# the numpy/scipy virtualenv this image used to carry): their tests include the slope
+# maths' self-test, the union-find checked against per-threshold relabelling, and
+# Python's float formatting checked against CPython's own output.
 RUN cd /opt/ratmap/infra/scripts/contour-cell \
+    && TMPDIR=/tmp HOME=/tmp GOCACHE=/tmp/go-build go test -count=1 ./... \
+    && cd /opt/ratmap/infra/scripts/dem-tools \
     && TMPDIR=/tmp HOME=/tmp GOCACHE=/tmp/go-build go test -count=1 ./... \
     && rm -rf /tmp/go-build /tmp/go
 

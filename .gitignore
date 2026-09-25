@@ -36,6 +36,7 @@ blob-report
 # Cached OSM source extracts (hundreds of MB)
 infra/.cache
 
-# Python venv for the prominence step (numpy/scipy)
+# Python venv the prominence and slope scripts needed (numpy/scipy), before they were
+# ported to Go (infra/scripts/dem-tools). Nothing uses it now.
 infra/.venv
 __pycache__/

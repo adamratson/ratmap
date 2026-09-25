@@ -31,12 +31,7 @@ require_cmd python3
 REGION_ID="${1:?Usage: build-avalanche.sh <region-id>}"
 REGIONS_JSON="$INFRA_DIR/regions.json"
 
-PY="${AVALANCHE_PYTHON:-$INFRA_DIR/.venv/bin/python3}"
-[ -x "$PY" ] || PY=python3
-"$PY" -c "import numpy" 2>/dev/null || {
-  echo "numpy is required (infra/.venv). See infra/README.md." >&2
-  exit 1
-}
+require_cmd go
 
 # Zoom floor. Cheap (z8 was 16 kB of the 562 kB Ben Nevis pyramid) and it gives the
 # region-wide "where is the steep ground" view before any detail is legible.
@@ -47,7 +42,7 @@ ZMIN="${AVALANCHE_MINZOOM:-8}"
 # measurement. Web Mercator ground resolution at 512 px tiles is
 # 40075017*cos(lat)/(2^z*512), so the cap is latitude-dependent — z11 in Scotland, z12 in
 # the Alps and nearer the equator.
-if ! REGION_VARS="$("$PY" - "$REGIONS_JSON" "$REGION_ID" "$ZMIN" <<'PY_INNER'
+if ! REGION_VARS="$(python3 - "$REGIONS_JSON" "$REGION_ID" "$ZMIN" <<'PY_INNER'
 import json, math, shlex, sys
 
 with open(sys.argv[1]) as f:
@@ -131,12 +126,18 @@ echo "  bbox: $BBOX"
 echo "  zoom $ZMIN-$ZMAX (capped at the DEM's own ~30 m resolution)"
 echo
 
+# Slope, aspect and the pyramid are Go (dem-tools/cmd/encode-avalanche), the port of
+# encode-avalanche.py: the same files out, without numpy. Built from this checkout
+# (lib.sh), into this region's own WORK_DIR.
+echo "==> building encode-avalanche"
+ENCODE_BIN="$(dem_tool encode-avalanche "$WORK_DIR")"
+
 # The maths that decides which slopes get drawn earns a test of its own, run on every
 # build — same standard as normalize-sac.py. Its last case fails loudly if the Mercator
 # cos(lat) correction is ever dropped, which is the regression that would otherwise ship a
 # map reading 21 degrees for a 36-degree slope.
 echo "==> checking the slope maths"
-"$PY" "$SCRIPT_DIR/encode-avalanche.py" --self-test
+"$ENCODE_BIN" --self-test
 
 echo "==> fetching DEM"
 "$SCRIPT_DIR/fetch-dem.sh" "$WEST" "$SOUTH" "$EAST" "$NORTH" "$WORK_DIR/clip.tif"
@@ -148,13 +149,13 @@ echo "==> warping to the tile grid"
 gdalwarp -q -t_srs EPSG:3857 -te $TE -tr "$RES" "$RES" -r bilinear \
   "$WORK_DIR/clip.tif" "$WORK_DIR/dem.tif"
 
-# Slope, aspect, and the whole pyramid in one pass. The reduction lives in the Python,
+# Slope, aspect, and the whole pyramid in one pass. The reduction lives in the encoder,
 # not in `gdal_translate -r max`: GDAL does not implement max reduction and falls back to
 # nearest with only a warning ("GDAL_RASTERIO_RESAMPLING = max not supported"), which
 # would build a pyramid that loses exactly the steep pockets A4 exists to keep — silently,
 # and looking entirely normal.
 echo "==> slope, aspect and pyramid"
-"$PY" "$SCRIPT_DIR/encode-avalanche.py" \
+"$ENCODE_BIN" \
   --zmax "$ZMAX" --zmin "$ZMIN" --stats-json "$WORK_DIR/stats.json" \
   "$WORK_DIR/dem.tif" "$WORK_DIR"
 
@@ -209,7 +210,7 @@ echo "==> tiling"
 # both sit east of it. Aragón (-2.1791) was the first to run, and Scotland, Iceland and
 # most of Iberia would all have followed.
 # shellcheck disable=SC2086
-"$PY" "$SCRIPT_DIR/assemble-avalanche.py" \
+python3 "$SCRIPT_DIR/assemble-avalanche.py" \
   --out "$WORK_DIR/out.mbtiles" \
   --name "ratmap avalanche terrain $REGION_ID" \
   --bounds="$BBOX" \

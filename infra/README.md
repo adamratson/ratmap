@@ -7,7 +7,7 @@ itself (`SETUP.md`, needs your Krystal account).
 ## Prerequisites
 
 ```sh
-brew install tippecanoe pmtiles osmium-tool gdal go   # gdal and go only needed for contours
+brew install tippecanoe pmtiles osmium-tool gdal go   # gdal and go: contours, prominence, avalanche
 ```
 
 `aws`/`curl` are assumed present.
@@ -525,11 +525,19 @@ own maximum.
 ## Peak prominence
 
 `build-peaks.sh` computes topographic prominence per region bbox and writes it as `prom`;
-the app's zoom filter ranks on that. Needs the venv:
+the app's zoom filter ranks on that. The scoring is Go, `scripts/dem-tools/cmd/compute-prominence`,
+compiled from the working copy on every run (so it needs `go` on PATH, nothing else).
 
-```sh
-python3 -m venv infra/.venv && infra/.venv/bin/pip install numpy scipy
-```
+It is a port of `compute-prominence.py`, which needed numpy and scipy in a venv, and it
+was checked against it rather than assumed equal (2026-09-25): `--regions` over Scotland,
+Montenegro, Switzerland and Liechtenstein (inside Switzerland's box, so the overwrite
+order is exercised) plus an all-ocean region with no DEM, and single-DEM runs at
+downsample 1, 3 and 4 and steps 7.5, 10 and 20 — output files, stdout and stderr
+byte-identical in every case. The one algorithmic change is that the level-set
+components live in a union-find rather than being relabelled at every threshold: the
+same components at every threshold, so the same merges, but each cell is added once
+rather than once per threshold: that four-region run took 8.8 s against the Python's 31 s
+with every DEM already cached.
 
 Why not elevation: at `ele >= 1000 m` Montenegro carries 268x Scotland's peaks per square
 degree, so a threshold readable in one is an unreadable wall in the other. On prominence
@@ -538,11 +546,12 @@ against Savin kuk's 81 m though they stand 2523 m and 2313 m.
 
 Accuracy was checked against published figures rather than assumed: median error 19 m
 across ten well-known Scottish summits, inside the 20 m quantisation step. Read
-`compute-prominence.py`'s docstring before treating any value as authoritative — notably,
+the notes at the top of `scripts/dem-tools/cmd/compute-prominence/main.go` (carried over
+from `compute-prominence.py`'s docstring) before treating any value as authoritative — notably,
 the highest peak in a bbox is over-ranked when the true high ground belongs to a peak
 outside the OSM extract (Montenegro's box clips higher Albanian terrain).
 
-The whole catalogue is one pass. `compute-prominence.py --regions` reads the peaks once,
+The whole catalogue is one pass. `compute-prominence --regions` reads the peaks once,
 fetches each region's DEM (`PROM_FETCH_WORKERS` at a time, up to 3 and sized to the
 host's memory) and scores the
 regions smallest bbox first, so a larger region's value overwrites a smaller overlapping
@@ -550,8 +559,9 @@ one's. It used to be re-run per region, re-parsing and rewriting every peak each
 3.3 s and 1.1 GB per region at Europe scale (658 k features), 184 times over. The output is
 byte-identical to that loop's: checked 2026-09-23 on overlapping Balkan and northern
 England regions, a nested box and an equal-area tie, against the same DEMs. Memory is one
-region's 90 m raster at ~9.5 bytes a pixel (1.35 GB for Scotland's 143 Mpx, down from
-1.94 GB), so the largest bbox sets the floor: svalbard-janmayen's 712 Mpx is ~6.3 GB on
+region's 90 m raster and its union-find, ~9.1 bytes a pixel (1.30 GB for Scotland's 143
+Mpx; the Python was 1.35 GB, and 1.94 GB before that), budgeted at 9.5, so the largest
+bbox sets the floor: svalbard-janmayen's 712 Mpx is ~6.3 GB on
 its own, before the fetches running ahead (the container's preflight adds those up).
 
 ### The DEM fetch is deterministic, and cached

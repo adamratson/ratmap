@@ -421,20 +421,29 @@ Checked:
 Not seen: a rendered `▲ Munro` label. The global peaks archive carries no `lists` property, so
 it needs a downloaded region; the fix is verified only as the glyph being present in the stack.
 
-## Theme default — 2026-09-19
+## Theme default — 2026-09-25
 
-Dark is now the default and the only default: `theme.ts` is a two-state stored preference
-(`light` | `dark`, default dark) instead of the three-state `system | light | dark` cycled
-from a chip in the peek row. The device's `prefers-color-scheme` is no longer an input —
-ratmap is dark because that is the app's look, not because the phone happens to be — and
-the chip is gone. Light lives in Settings, as the first row.
+**Follows the device.** `ui/theme.ts` is a three-state stored preference again —
+`system` (the default) | `light` | `dark` — after a spell of defaulting to dark. An app
+that opens bright white on a phone that has been in night mode since dusk is wrong in
+exactly the situation ratmap is for; the phone already knows, so it decides until the
+person does.
 
-A stored `system` from the old preference resolves to dark; a stored `light` is kept, so
-someone who had explicitly chosen light still gets it.
+The peek-row chip stays gone (removed 2026-09-19). The one control is the Light theme
+switch in Settings, and it now does two jobs: it reports the theme on screen — including
+when that came from the device — and flipping it commits to that theme, so the app stops
+following. A stored `system`, or anything unrecognised, means follow.
 
-Checked in a real browser: with the device asking for light, the app starts dark
-(`data-theme=dark`, theme-color `#0e1114`, basemap earth `#161a1f`), `#theme-btn` is gone,
-and the toggle switches the map to the day flavour (`#ebe9e3`), stores `light`, and keeps
-the app's own layers. The checkbox takes `accent-color` so it is the signal orange rather
-than the browser's blue. 518 unit tests and the 14 sheet e2e tests pass.
+Not migrated: someone who took dark during the dark-default spell without opening Settings
+has nothing stored, so they follow the device now. A deliberate `dark` chosen from the
+switch in that window is indistinguishable from it, and is kept — honouring a stored
+choice is worth more than migrating people off one.
 
+The switch also tracks the device while the view is open (`theme.onChange`), and drops
+that listener when the view is re-rendered, so listeners don't accumulate one per open.
+
+Tests: `ui/theme.test.ts` covers the stored-value reading and the resolve; the settings
+view has the follow-the-device and listener-cleanup cases; `main.test.ts` asserts first
+paint in both directions with a stubbed `prefers-color-scheme` and that nothing is stored
+while following. The e2e theme spec pins `colorScheme: 'dark'` and walks device →
+follow → choose → reload. 785 unit tests pass.

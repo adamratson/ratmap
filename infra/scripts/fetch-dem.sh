@@ -34,6 +34,14 @@ RES="${6:-}"
 
 export CPL_VSIL_CURL_ALLOWED_EXTENSIONS=.tif
 
+# Seconds to wait before each retry of a step that failed on the network, and so how many
+# retries there are: tiles the availability check could not get an answer for are asked
+# again, and a failed raster read is run again from the start. Spread over minutes because
+# what failed the 2026-09-24 global run were blips that outlasted curl's own retries
+# (seconds apart), on nine regions of 184, and a read that came back short on three more.
+# Overridable so the retry paths can be exercised without waiting for them.
+DEM_RETRY_WAITS="${DEM_RETRY_WAITS:-15 60 180}"
+
 # Bump the version whenever anything below changes what a given bbox fetches — tile
 # selection, ordering, resampling — so no cache written by older logic is ever reused.
 # v1: sorted tile list, single-threaded VRT (see VRT_NUM_THREADS below).
@@ -102,12 +110,28 @@ check_one() {
   case "$code" in
     200) printf 'OK %s\n' "$url" ;;
     404) printf 'MISSING %s\n' "$label" ;;
-    *)   printf 'ERROR %s %s\n' "$label" "${code:-000}" ;;
+    *)   printf 'ERROR %s %s %s\n' "$label" "${code:-000}" "$url" ;;
   esac
 }
 export -f check_one
 
-xargs -P 16 -I{} bash -c 'check_one "$@"' _ {} < "$WORK/candidates.txt" > "$WORK/checked.txt"
+check_all() {
+  xargs -P 16 -I{} bash -c 'check_one "$@"' _ {}
+}
+
+check_all < "$WORK/candidates.txt" > "$WORK/checked.txt"
+
+# Unanswered tiles are asked again, a round at a time and further apart each time; the
+# answered ones stand. Order does not matter here, the tile list is sorted below.
+for wait in $DEM_RETRY_WAITS; do
+  grep -q '^ERROR ' "$WORK/checked.txt" || break
+  echo "  no answer for $(grep -c '^ERROR ' "$WORK/checked.txt") tile(s); asking again in ${wait}s" >&2
+  sleep "$wait"
+  awk '/^ERROR /{print $4}' "$WORK/checked.txt" > "$WORK/retry.txt"
+  grep -v '^ERROR ' "$WORK/checked.txt" > "$WORK/answered.txt" || true
+  check_all < "$WORK/retry.txt" >> "$WORK/answered.txt"
+  mv "$WORK/answered.txt" "$WORK/checked.txt"
+done
 
 errors="$(awk '/^ERROR /{printf "%s (HTTP %s) ", $2, $3}' "$WORK/checked.txt")"
 if [ -n "$errors" ]; then
@@ -185,13 +209,37 @@ fi
 
 # `-r max` when downsampling: averaging would erode summits, which are exactly what both
 # consumers care about.
-if [ -n "$RES" ]; then
-  gdal_translate -q "${CACHE_OPTS[@]}" -projwin "$WEST" "$NORTH" "$EAST" "$SOUTH" \
-    -tr "$RES" "$RES" -r max -of GTiff "${CREATE_OPTS[@]}" "$WORK/dem.vrt" "$DEST"
-else
-  gdal_translate -q "${CACHE_OPTS[@]}" -projwin "$WEST" "$NORTH" "$EAST" "$SOUTH" \
-    -of GTiff "${CREATE_OPTS[@]}" "$WORK/dem.vrt" "$DEST"
-fi
+translate() {
+  if [ -n "$RES" ]; then
+    gdal_translate -q "${CACHE_OPTS[@]}" -projwin "$WEST" "$NORTH" "$EAST" "$SOUTH" \
+      -tr "$RES" "$RES" -r max -of GTiff "${CREATE_OPTS[@]}" "$WORK/dem.vrt" "$DEST"
+  else
+    gdal_translate -q "${CACHE_OPTS[@]}" -projwin "$WEST" "$NORTH" "$EAST" "$SOUTH" \
+      -of GTiff "${CREATE_OPTS[@]}" "$WORK/dem.vrt" "$DEST"
+  fi
+}
+
+# A failed read is retried here, as a whole new gdal_translate, because GDAL will not
+# retry it. The failure seen is a range request answered 206 with a body cut short
+# ("TIFFFillTile: Read error ... got 181347 bytes, expected 430907", 2026-09-24): /vsicurl
+# judges a request by its status code, and 206 is success, so GDAL_HTTP_MAX_RETRY and
+# GDAL_HTTP_RETRY_CODES=ALL never see it (DownloadRegion, port/cpl_vsil_curl.cpp, read at
+# v3.10.3). libtiff then fails the tile and gdal_translate exits non-zero, which is at
+# least loud. A new process starts with an empty /vsicurl cache, so the short read is
+# fetched again rather than served from memory. Same tile list, so the same DEM.
+attempt=1
+for wait in $DEM_RETRY_WAITS -; do
+  translate && break
+  if [ "$wait" = - ]; then
+    echo "  DEM read failed $attempt times — giving up" >&2
+    rm -f "$DEST"  # not left looking like a DEM to whoever asked for it
+    exit 1
+  fi
+  echo "  DEM read failed (attempt $attempt); trying again in ${wait}s" >&2
+  rm -f "$DEST"
+  sleep "$wait"
+  attempt=$((attempt + 1))
+done
 
 if [ -n "$CACHED" ]; then
   mkdir -p "$DEM_CACHE_DIR"

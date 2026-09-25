@@ -153,13 +153,16 @@ ENV TMPDIR=/work/tmp \
 # GDAL reads Copernicus COGs over /vsicurl for hours at a time; the defaults give up too
 # easily on a flaky link and lose a whole region's contour trace.
 #
-# GDAL_HTTP_RETRY_CODES=ALL because the default retry list is 429/500/502/503/504 — it
-# does not cover a connection reset or a short read mid-transfer, which is exactly how
-# this failed in practice: one Copernicus range read died with "TIFFReadEncodedTile()
-# failed" and Scotland silently came out with no prominence, while the identical fetch
-# succeeded on the next attempt. build-peaks.sh treats a failed DEM as non-fatal and
-# continues, so an unretried blip costs a region its `prom` values with nothing but one
-# stderr line in a multi-day log.
+# GDAL_HTTP_RETRY_CODES=ALL because the default retry list is 429/500/502/503/504, and
+# an S3 hiccup can come back as any error status. build-peaks.sh treats a failed DEM as
+# non-fatal and continues, so an unretried blip costs a region its `prom` values with
+# nothing but one stderr line in a multi-day log.
+#
+# None of this covers a short read — a range request answered 206 with its body cut off,
+# which is how Scotland once lost its prominence and three regions did again on
+# 2026-09-24 ("TIFFReadEncodedTile() failed"). GDAL judges a request by its status code,
+# and 206 is success, so it never retries it. fetch-dem.sh does, by running the whole
+# read again.
 ENV GDAL_HTTP_TIMEOUT=120 \
     GDAL_HTTP_MAX_RETRY=5 \
     GDAL_HTTP_RETRY_DELAY=5 \

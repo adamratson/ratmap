@@ -544,6 +544,18 @@ in sorted tile order, and two fetches are byte-identical. **The first rebuild af
 moves some seam values once** against what is published — the fix taking effect, not a
 regression.
 
+It also retries network failures itself, minutes apart (`DEM_RETRY_WAITS`, default
+`15 60 180` seconds). This covers two cases:
+
+- **The availability check:** tiles that got no HTTP answer are asked again.
+- **The raster read:** a read that fails is run again as a new `gdal_translate`. The
+  failure seen is a range request answered 206 with its body cut short, which GDAL treats
+  as success and never retries, whatever `GDAL_HTTP_*` says.
+
+The 2026-09-24 global run lost prominence for 12 of 184 regions to exactly these two
+failures (nine unanswered probes, three short reads), each a one-off. Only when every
+retry fails does a region go without, and nothing partial is ever cached.
+
 One thread is slower on a first fetch (Switzerland at 90 m: 66–70 s before, 156–220 s
 now), and two things pay for it:
 

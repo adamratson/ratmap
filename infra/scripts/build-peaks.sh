@@ -91,6 +91,14 @@ fi
 # peak is not a 30 m-scale quantity.
 PROM_RES="${PROM_DEM_RES:-0.000833333}"
 
+# How many DEM fetches run ahead of the scorer. Each is a gdal_translate whose block
+# cache fetch-dem.sh caps at 512 MB, plus the image's VSI cache: ~1.25 GB at most
+# (docker/README.md's table). They sit alongside the region being scored, which is itself
+# the larger allocation on a big region, so this is the knob the preflight tells anyone
+# short of memory to turn down — and now the one it no longer has to, because three is
+# what a roomy box gets and a small one sizes itself down.
+PROM_FETCH_WORKERS="${PROM_FETCH_WORKERS:-$(workers_for_budget 1.25 3)}"
+
 # The whole catalogue in one run: the peaks are read once, each region's DEM is fetched
 # (fetch-dem.sh, cached in DEM_CACHE_DIR) PROM_FETCH_WORKERS at a time, and the regions are
 # scored smallest bbox first so a larger region overwrites a smaller overlapping one. This
@@ -102,7 +110,7 @@ PROM_RES="${PROM_DEM_RES:-0.000833333}"
   --fetch-dem "$SCRIPT_DIR_PK/fetch-dem.sh" \
   --res "$PROM_RES" \
   --work-dir "$WORK_DIR" \
-  --fetch-workers "${PROM_FETCH_WORKERS:-3}" \
+  --fetch-workers "$PROM_FETCH_WORKERS" \
   --step "${PROM_STEP:-20}" --downsample 1 \
   "$WORK_DIR/peaks-normalized.geojsonl" "$WORK_DIR/peaks-final.geojsonl"
 

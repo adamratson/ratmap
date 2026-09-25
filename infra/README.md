@@ -158,7 +158,8 @@ because the tile size limit was already applied per continent by
 which is the worst possible place to do it.
 
 `PATHS_PARALLEL` (or `RATMAP_PATHS_PARALLEL` through the container) tiles several
-continents at once, **3 by default**. tippecanoe already uses every core for its own
+continents at once, **up to 3**, sized to the memory the box can actually see — 3 GB a
+worker, so a 16 GB host gets 3 and a 4 GB one gets 1. tippecanoe already uses every core for its own
 tiling; what parallelism buys is the serial stretches — the osmium export and the
 single-threaded reduce — during which one continent leaves the rest of the box idle.
 
@@ -392,7 +393,9 @@ default 4 (`REGION_DOWNLOAD_THREADS`). A Praha basemap cutout took 14.0–14.7 s
 18.4–26.0 s, byte-identical (2026-09-23). It also downloads the terrain (Mapterhorn)
 alongside the basemap (Source Cooperative) and the smaller cutouts, so a region costs about
 the longer of the two. `RATMAP_REGIONS_PARALLEL` builds several regions at once in the
-container's regions stage; it defaults to 1, since what it buys depends on the link.
+container's regions stage. It is sized to the host — up to 4, and half the cores below
+that — rather than fixed, but stays capped low because what it buys depends on the link
+rather than on the box.
 
 ```sh
 ./scripts/build-region.sh lochaber --dry-run   # size it first
@@ -521,7 +524,8 @@ the highest peak in a bbox is over-ranked when the true high ground belongs to a
 outside the OSM extract (Montenegro's box clips higher Albanian terrain).
 
 The whole catalogue is one pass. `compute-prominence.py --regions` reads the peaks once,
-fetches each region's DEM (`PROM_FETCH_WORKERS` at a time, default 3) and scores the
+fetches each region's DEM (`PROM_FETCH_WORKERS` at a time, up to 3 and sized to the
+host's memory) and scores the
 regions smallest bbox first, so a larger region's value overwrites a smaller overlapping
 one's. It used to be re-run per region, re-parsing and rewriting every peak each time —
 3.3 s and 1.1 GB per region at Europe scale (658 k features), 184 times over. The output is

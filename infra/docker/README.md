@@ -142,13 +142,13 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `prefetch` | One resumable, md5-verified copy of each continent into `/work/cache/osm`, pinned to a dated snapshot | ~85 GB download, once |
 | `world` | `build-world-catalog.sh` — z0–5 planet basemap extract | minutes, ~15 MB out |
 | `terrain` | `build-terrain.sh` — coarse global hillshade | minutes, ~62 MB out at z4 |
-| `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles`, then one prominence pass over the catalogue | hours, mostly DEM fetches on a first run (`PROM_FETCH_WORKERS` at a time, default 3). They are cached under `/work/cache/dem`, so a rebuild fetches none. As the first OSM stage in `all`, it also builds the shared subset — see [below](#one-tags-filter-pass-shared-by-the-osm-stages) |
+| `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles`, then one prominence pass over the catalogue | hours, mostly DEM fetches on a first run (`PROM_FETCH_WORKERS` at a time, up to 3, sized to the host). They are cached under `/work/cache/dem`, so a rebuild fetches none. As the first OSM stage in `all`, it also builds the shared subset — see [below](#one-tags-filter-pass-shared-by-the-osm-stages) |
 | `sac` | `build-sac.sh` over all 8 continents → `sac-global.pmtiles` (SAC hiking grades) | minutes: its `tags-filter` reads the shared subset, about a tenth of the 85 GB source. The tiling itself is minutes too (~921 k ways planet-wide, ~400 MB out) |
-| `paths` | `build-paths.sh` — tiles each continent separately, caches the tilesets under `/work/cache/paths-tiles`, `tile-join`s them → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | hours. 82 M ways planet-wide; the filter pass alone was 29 min on 12 cpus against the full source, which it now reads from the shared subset instead. **Resumable**: a re-run skips continents already tiled, so an interrupted stage costs one continent, not the planet. `RATMAP_PATHS_PARALLEL` tiles several at once (default 3) |
+| `paths` | `build-paths.sh` — tiles each continent separately, caches the tilesets under `/work/cache/paths-tiles`, `tile-join`s them → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | hours. 82 M ways planet-wide; the filter pass alone was 29 min on 12 cpus against the full source, which it now reads from the shared subset instead. **Resumable**: a re-run skips continents already tiled, so an interrupted stage costs one continent, not the planet. `RATMAP_PATHS_PARALLEL` tiles several at once, up to 3, sized to the host |
 | `terrain-features` | `build-terrain-features.sh` over all 8 continents → `terrain-features-global.pmtiles` (scree, shingle, rock, boulders — `natural=` values Protomaps' OSM ingestion drops) | like `sac`, a `tags-filter` over the shared subset; tiling is minutes (~826 k features planet-wide by taginfo's count, ~5 MB out for Scotland+Montenegro alone in local testing) |
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
-| `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue. 16 range requests per extract (`REGION_DOWNLOAD_THREADS`), terrain downloading alongside the basemap. `RATMAP_REGIONS_PARALLEL` builds several regions at once (default 1) |
-| `contours` | `build-contours.sh` for the ids opting in with `"contours": true`, sequentially by default — peak RSS-bound, see below (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far. Its 30 m DEMs are fetched ahead of the builds (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2) and cached, and `avalanche` reuses them for every region that has both |
+| `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue. 16 range requests per extract (`REGION_DOWNLOAD_THREADS`), terrain downloading alongside the basemap. `RATMAP_REGIONS_PARALLEL` builds several regions at once, up to 4, sized to the host |
+| `contours` | `build-contours.sh` for the ids opting in with `"contours": true` — peak RSS-bound, so the worker count is sized from the largest region in the run and comes out at 1 for a full catalogue (`RATMAP_CONTOURS_PARALLEL`) | the slowest by far. Its 30 m DEMs are fetched ahead of the builds (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2) and cached, and `avalanche` reuses them for every region that has both |
 | `manifest` | `build-manifest.py` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | seconds when little changed: sha256s are cached by size, mtime and inode in `dist/.manifest-sha256-cache.json`, so only new or rebuilt archives are hashed. A first run hashes everything, 2 threads (`MANIFEST_HASH_WORKERS`, 1 for a spinning disk) |
 
 `sac`, `paths` and `terrain-features` sit before `regions` in `all` for a reason:
@@ -368,7 +368,8 @@ was never a proxy for RAM cost. N concurrent workers still cost roughly N times 
 remaining ~6.4 GB, not a shared pool, and it grows with region size, so the stage defaults
 to 1 (sequential) rather than assume any box has room to spare. Each region's full output
 still goes to its own log under `/work/logs`; only a one-line OK/FAILED per region reaches
-the main `contours` stage log. Raise `RATMAP_CONTOURS_PARALLEL` only on a host confirmed to
+the main `contours` stage log. The stage raises itself only when the regions in the run
+are small enough (above); `RATMAP_CONTOURS_PARALLEL` overrides it on a host confirmed to
 have the memory for it — figure on ~6-7 GB per worker as a floor, more for larger regions:
 
 ```sh
@@ -401,12 +402,26 @@ allows, not the fastest on a large one. These are the measured per-worker costs
 | `peaks` — DEM fetch (`fetch-dem.sh`), `PROM_FETCH_WORKERS` of them | `gdal_translate`'s block cache (capped at 512 MB) + the VSI cache | **229 MB** for Bosnia at 90 m; ~1.25 GB at most | region size, up to the cap |
 | `avalanche` — `gdalwarp`, then `encode-avalanche.py` | the warp's block cache; then one strip of DEM plus its gradient buffers | **694 MB** warping; **792 MB** encoding a 108 Mpx raster and **1459 MB** at 216 Mpx, most of it evictable page cache | the encode fits `10.5 x STRIP_BYTES + 6 bytes/pixel` at both sizes |
 
-**Defaults, and what they assume.** `paths` is 3, `avalanche` is 4, `contours` is 1
-(prominence fetches 3 and `regions` 1, below). The
-first is sized for a host with ~12 GB or more and lowers itself on anything smaller. The
-second is bounded by cores rather than by memory. `contours` stays at 1 because its
-per-worker cost is a function of *region size* and its enabled list spans two orders of
-magnitude of it.
+**Defaults, and what they assume.** There are no fixed defaults any more: each stage
+takes the per-worker cost measured above, divides it into the memory this box can
+actually see (the preflight's figure, less 1 GB left for the page cache and the kernel —
+`RATMAP_MEM_RESERVE_GB`), and clamps the result to the cores and to whatever cap it has
+its own reason for. `workers_for_budget` in `scripts/lib.sh` does the arithmetic, and
+`docker/build-global.sh` carries its own copy for the same reason it carries its own
+`mem_limit_gb`. The preflight prints what each stage of *this* run will use, before it
+starts. Every number is still overridable, and an explicit one is capped the same way —
+a number you type is a statement about the work, not about the machine.
+
+What that comes out as, per box (the `contours` column is for a run whose regions are all
+small; see its bullet):
+
+| memory / cores | `paths` | prominence fetches | `regions` | `avalanche` | `contours` |
+|---|---|---|---|---|---|
+| 4 GB / 2 | 1 | 1 | 1 | 1 | 1 |
+| 8 GB / 4 | 2 | 2 | 2 | 2 | 1 |
+| 16 GB / 8 | 3 | 3 | 4 | 4 | 2 |
+| 32 GB / 16 | 3 | 3 | 4 | 4 | 4 |
+| 64 GB / 32 | 3 | 3 | 4 | 4 | 8 |
 
 - **`paths`: 3.** A worker peaks around 2-3 GB — osmium's flat ~2 GB plus a tippecanoe
   that never got near 1 GB even at 4x the features — so three is ~9 GB and the limit is
@@ -418,10 +433,16 @@ magnitude of it.
   on, so the default does not have to assume the host — and an explicit
   `RATMAP_PATHS_PARALLEL` is capped the same way, because a number you type is a statement
   about the work, not about the machine.
-- **`contours`: 1.** Not because 32 GB has no room for two Corsicas at 6.4 GB — it does —
-  but because the 62 enabled regions run from 0.04 to 269 sq deg, so a blanket 2 will
-  eventually pair morocco with turkey. Raise it only alongside a `RATMAP_REGION_FILTER`
-  that keeps the slice small. Its DEMs are fetched ahead of the builds, two at a time
+- **`contours`: 1 for a full run, more for a filtered one.** Not because 32 GB has no
+  room for two Corsicas at 6.4 GB — it does — but because the 62 enabled regions run from
+  0.04 to 269 sq deg, so a blanket 2 will eventually pair morocco with turkey. So the
+  measured figure is carried to *the largest region in this run*: cost tracks the
+  raster's width rather than its area, and width goes as the square root of area for a
+  roughly square bbox, floored at the 7 GB measurement and capped at 8 workers (past
+  that the stage waits on DEM fetches and disk, not cores). A planet run still comes out
+  at 1; `RATMAP_REGION_FILTER=liechtenstein|andorra` on a 32 GB box comes out at 4. The
+  scaling is an approximation standing in for a measurement nobody has taken on the big
+  regions, and it errs pessimistic on purpose. Its DEMs are fetched ahead of the builds, two at a time
   (`RATMAP_CONTOURS_FETCH_AHEAD`), so the one-at-a-time limit applies to tracing only.
 - **`avalanche`: 4.** A region's phases run in sequence, so its peak is the largest of
   them and not their sum: ~0.8-1.5 GB, so four is ~6 GB on a 32 GB host. The warp phase is
@@ -441,7 +462,11 @@ magnitude of it.
   `RATMAP_AVALANCHE_PARALLEL` and passes the share as `--jobs`: on 12 cores, four regions
   get three each. Run standalone with the variable unset it still takes every core, which
   is right for one region on an idle box.
-- **Prominence fetches (`PROM_FETCH_WORKERS`): 3.** The peaks stage's DEM fetches are
+- **Prominence fetches (`PROM_FETCH_WORKERS`): up to 3.** Sized by the same model the
+  preflight checks the stage against — the worst pairing of "region being scored" plus
+  "fetches running ahead" — so a box that cannot hold three gets two or one instead of
+  being told to set the variable by hand. The rest of this bullet is why 3 is the ceiling.
+  The peaks stage's DEM fetches are
   network-bound, and since `fetch-dem.sh` reads its VRT on one thread (below) a single
   fetch is slower than it was. Three at once took 70 s against 146 s one after another,
   for three similar regions (2026-09-23), with identical DEMs. Scoring stays one region at
@@ -451,10 +476,14 @@ magnitude of it.
   The fetches run ahead of the scoring and the regions are scored smallest first, so the
   largest region is scored with nothing left to fetch. The preflight walks that same
   order to find the worst pairing.
-- **`regions` (`RATMAP_REGIONS_PARALLEL`): 1.** A region is already two downloads at
-  once: `build-region.sh` runs terrain alongside the basemap, 16 range requests each
+- **`regions` (`RATMAP_REGIONS_PARALLEL`): up to 4.** A region is already two downloads
+  at once: `build-region.sh` runs terrain alongside the basemap, 16 range requests each
   (`REGION_DOWNLOAD_THREADS`). More regions at once only helps a host whose link that
-  leaves idle, which is not something the image can know.
+  leaves idle, which is not something the image can know — so this is capped at 4 however
+  large the host is, and at half its cores below that (`overlapping_io_parallel`), rather
+  than scaling with them. Memory is not the binding constraint: a region's tippecanoe
+  sorts on disk and stayed under 300 MB at 4x the features. On the 4 GB floor host it is
+  1, which is what it always was.
 - **`fetch-dem.sh`'s `xargs -P 16`** is availability probing over HTTP, not compute. It
   holds no raster and needs no adjustment. The read that follows is deliberately *not*
   parallel: GDAL's default of reading a VRT's sources on every core made the pixels along

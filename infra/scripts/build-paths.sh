@@ -44,21 +44,19 @@ mkdir -p "$PATHS_TILE_CACHE"
 # because its sort is disk-backed. So the default of 3 is ~9 GB and the limit becomes cpu;
 # more than 3 buys little, since only europe, asia and north-america are big enough to be
 # worth overlapping.
-PATHS_PARALLEL="${PATHS_PARALLEL:-3}"
+PATHS_PARALLEL="${PATHS_PARALLEL:-$(workers_for_budget 3 3)}"
 
 # ...but not on a box that cannot hold them. The preflight admits hosts down to 4 GB, and
-# a fixed default of 3 would turn this stage from slow into killed there. Budget 3 GB a
-# worker, floor of 1. An explicit PATHS_PARALLEL is still capped by this: it is a
-# statement about what the host has, and the host is what it is.
-PATHS_MEMORY_GB="$(available_memory_gb)"
-if [ "$PATHS_MEMORY_GB" -gt 0 ]; then
-  PATHS_AFFORDABLE=$(( PATHS_MEMORY_GB / 3 ))
-  [ "$PATHS_AFFORDABLE" -lt 1 ] && PATHS_AFFORDABLE=1
-  if [ "$PATHS_PARALLEL" -gt "$PATHS_AFFORDABLE" ]; then
-    echo "Limiting to $PATHS_AFFORDABLE worker(s): ${PATHS_MEMORY_GB} GB available," \
-         "and a continent costs about 3 GB to tile."
-    PATHS_PARALLEL="$PATHS_AFFORDABLE"
-  fi
+# a fixed default of 3 would turn this stage from slow into killed there. workers_for_budget
+# (lib.sh) budgets 3 GB a worker against the memory this process can actually see — the
+# shared version of the arithmetic this stage used to do for itself, now that every
+# parallel stage sizes itself the same way. An explicit PATHS_PARALLEL is still capped by
+# it: a number you type is a statement about the work, not about the machine.
+PATHS_AFFORDABLE="$(workers_for_budget 3 3)"
+if [ "$PATHS_PARALLEL" -gt "$PATHS_AFFORDABLE" ]; then
+  echo "Limiting to $PATHS_AFFORDABLE worker(s): $(usable_memory_gb) GB usable," \
+       "and a continent costs about 3 GB to tile."
+  PATHS_PARALLEL="$PATHS_AFFORDABLE"
 fi
 echo "Tiling ${PATHS_PARALLEL} continent(s) at a time"
 

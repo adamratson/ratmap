@@ -116,6 +116,92 @@ mem_limit_gb() {
   awk -v b="$bytes" 'BEGIN {printf "%.0f", b/1073741824}'
 }
 
+# --- sizing the worker pools ---------------------------------------------------------
+#
+# Every parallel stage takes the per-worker cost it was measured at (docker/README.md
+# keeps the table) and asks what this box can hold, rather than carrying a number that
+# assumed one. The same helpers live in scripts/lib.sh for stages run directly; this
+# driver deliberately does not source lib.sh (see available_memory_gb's note there), so
+# they are duplicated here — keep the two in step.
+
+# Exported: the stages source scripts/lib.sh, which reads the same variable, so a run
+# that reserves more (or less) reserves it everywhere rather than only in this driver.
+export RATMAP_MEM_RESERVE_GB="${RATMAP_MEM_RESERVE_GB:-1}"
+
+usable_mem_gb() {
+  local total; total="$(mem_limit_gb)"
+  local usable=$(( total - RATMAP_MEM_RESERVE_GB ))
+  [ "$usable" -lt 1 ] && usable=1
+  echo "$usable"
+}
+
+# workers_for_budget <gb_per_worker> [cap] — see scripts/lib.sh.
+workers_for_budget() {
+  local per_worker="$1" cap="${2:-0}" cpus affordable
+  cpus="$(nproc)"
+  affordable="$(awk -v m="$(usable_mem_gb)" -v p="$per_worker" 'BEGIN { print int(m / p) }')"
+  [ "$affordable" -gt "$cpus" ] && affordable="$cpus"
+  [ "$cap" -gt 0 ] && [ "$affordable" -gt "$cap" ] && affordable="$cap"
+  [ "$affordable" -lt 1 ] && affordable=1
+  echo "$affordable"
+}
+
+# What one gdal_contour worker costs for the largest region in <ids>, in GB.
+#
+# Measured: ~6.4 GB tracing a 2.66 sq-degree region (Corsica, 2026-09-03). The cost tracks
+# the raster's *width* and the terrain rather than its area, and width goes as the square
+# root of area for a roughly square bbox — so that is how the measured figure is carried
+# to a bigger region, floored at the figure itself and never below it.
+#
+# It is an approximation standing in for a measurement nobody has taken on the big
+# regions, and it is deliberately the pessimistic direction: the enabled list runs from
+# 0.04 to 269 sq degrees, and the failure it exists to prevent is a blanket "2" pairing
+# morocco with turkey. A run filtered down to small regions gets real parallelism; a run
+# that includes a continent-sized one stays at one worker, which is what it did before.
+CONTOURS_REF_GB=7
+CONTOURS_REF_SQ_DEG=2.66
+contours_gb_per_worker() {
+  python3 -c '
+import json, sys
+ids = set(sys.argv[2:])
+with open(sys.argv[1]) as f:
+    regions = [r for r in json.load(f)["regions"] if r["id"] in ids]
+def area(r): w, s, e, n = r["bbox"]; return (e - w) * (n - s)
+largest = max((area(r) for r in regions), default=0.0)
+ref_gb, ref_area = '"$CONTOURS_REF_GB"', '"$CONTOURS_REF_SQ_DEG"'
+print(round(max(ref_gb, ref_gb * (largest / ref_area) ** 0.5), 1))
+' "$INFRA_DIR/regions.json" "$@"
+}
+
+# overlapping_io_parallel <gb_per_worker> <max> — for the stages whose workers spend most
+# of their time on the network.
+#
+# regions and avalanche both overlap downloads with a little compute, so past a handful
+# of workers they stop buying throughput long before they stop costing memory. Both are
+# therefore capped at <max> however large the host is, and at half its cores below that:
+# each worker still has compute of its own (a tippecanoe, a WebP pass that takes a thread
+# per core divided by this very number), and on a 2-core floor host the old sequential
+# behaviour is the right one.
+overlapping_io_parallel() {
+  local per_worker="$1" max="$2"
+  local cap=$(( $(nproc) / 2 ))
+  [ "$cap" -lt 1 ] && cap=1
+  [ "$cap" -gt "$max" ] && cap="$max"
+  workers_for_budget "$per_worker" "$cap"
+}
+
+# PROM_FETCH_WORKERS this box can afford, using the same model the preflight checks with:
+# the largest pairing of "region being scored" plus "DEM fetches running ahead".
+peaks_fetch_workers() {
+  local usable w need
+  usable="$(usable_mem_gb)"
+  for w in 3 2 1; do
+    need="$(PROM_FETCH_WORKERS="$w" peaks_mem_gb | awk '{print $1}')"
+    [ "$need" -le "$usable" ] && { echo "$w"; return; }
+  done
+  echo 1
+}
+
 # GB the regions stage still has to write, from the catalogue's own estimates.
 #
 # MIN_DIST_GB's default of 20 was written when the catalogue was four regions. It is now
@@ -180,6 +266,10 @@ preflight() {
   # Likewise only when this run builds peaks.
   local peaks_need="" peaks_region="" peaks_mpx=""
   if printf '%s\n' "${stages[@]}" | grep -qx peaks; then
+    # Resolved here, not left to build-peaks.sh, so the figure the preflight checks and
+    # the figure the stage runs with are the same one. An explicit setting is honoured
+    # and then checked, exactly as before.
+    export PROM_FETCH_WORKERS="${PROM_FETCH_WORKERS:-$(peaks_fetch_workers)}"
     read -r peaks_need peaks_region peaks_mpx < <(peaks_mem_gb)
   fi
   work_gb="$(gb_free "$WORK_DIR")"
@@ -197,6 +287,42 @@ preflight() {
   fi
   printf '  %-28s %s\n' "cpus" "$cpus"
   printf '  %-28s %s\n' "source cache" "$OSM_CACHE"
+
+  # What those numbers buy, per stage. Sized here rather than carried as fixed defaults:
+  # the same run is made on an 8 GB laptop and a 64 GB workstation, and a number that
+  # suits one kills or idles the other. Each figure is the measured per-worker cost from
+  # docker/README.md's table divided into the memory above, capped by cores and by
+  # whatever the stage has its own reason for. Every one is still overridable.
+  printf '  %-28s %s GB reserved for the page cache and the kernel\n' \
+    "memory not budgeted" "$RATMAP_MEM_RESERVE_GB"
+  local stage
+  for stage in "${stages[@]}"; do
+    case "$stage" in
+      paths)
+        printf '  %-28s %s worker(s)   (~3 GB each)\n' "paths parallel" \
+          "${RATMAP_PATHS_PARALLEL:-$(workers_for_budget 3 3)}" ;;
+      peaks)
+        printf '  %-28s %s fetch(es)   (~%s GB each, alongside the region being scored)\n' \
+          "peaks DEM fetch-ahead" "${PROM_FETCH_WORKERS:-$(peaks_fetch_workers)}" "$FETCH_DEM_GB" ;;
+      regions)
+        printf '  %-28s %s region(s)   (link-bound; capped at 4)\n' "regions parallel" \
+          "${RATMAP_REGIONS_PARALLEL:-$(overlapping_io_parallel 1.5 4)}" ;;
+      avalanche)
+        printf '  %-28s %s region(s)   (~1.5 GB each)\n' "avalanche parallel" \
+          "${RATMAP_AVALANCHE_PARALLEL:-$(overlapping_io_parallel 1.5 4)}" ;;
+      contours)
+        # Sized per run from the largest region in it, so this is the whole enabled list
+        # unless RATMAP_REGION_FILTER narrows it — the stage prints the same figure again
+        # against the list it actually builds.
+        local c_ids c_gb
+        c_ids="$(region_ids contours | awk '{print $1}')"
+        # shellcheck disable=SC2086
+        c_gb="$(contours_gb_per_worker $c_ids)"
+        printf '  %-28s %s region(s)   (~%s GB each for the largest in the list)\n' \
+          "contours parallel" \
+          "${RATMAP_CONTOURS_PARALLEL:-$(workers_for_budget "$c_gb" 8)}" "$c_gb" ;;
+    esac
+  done
 
   # The free-space figure above is the VM's, and on Docker Desktop the VM's disk is a
   # sparse file on the host: it reports its *virtual* size (routinely 400 GB+) while only
@@ -565,11 +691,13 @@ stage_paths() {
   # the pinned source name, and tile-joins them — so an interrupted run resumes at the
   # continent it died on instead of at the first byte.
   #
-  # Three at a time, because each continent has serial stretches (the osmium export, the
-  # single-threaded reduce) during which one continent leaves the rest of the cores idle,
-  # and a worker only costs 2-3 GB — see the measurements in build-paths.sh, which also
-  # lowers this on its own if the host cannot afford it.
-  PATHS_PARALLEL="${RATMAP_PATHS_PARALLEL:-3}" \
+  # Up to three at a time, because each continent has serial stretches (the osmium
+  # export, the single-threaded reduce) during which one continent leaves the rest of the
+  # cores idle, and a worker only costs 2-3 GB — see the measurements in build-paths.sh.
+  # Sized here rather than passed as a fixed 3, so the number the preflight printed is
+  # the number the stage runs with; build-paths.sh works it out the same way when it is
+  # run directly, and caps an explicit one either way.
+  PATHS_PARALLEL="${RATMAP_PATHS_PARALLEL:-$(workers_for_budget 3 3)}" \
     PATHS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-paths.sh"
 }
 
@@ -703,12 +831,15 @@ stage_regions() {
     return 0
   fi
 
-  # Regions at once. One by default: a region is already two downloads overlapping
-  # (build-region.sh runs terrain beside everything else) at REGION_DOWNLOAD_THREADS range
-  # requests each, and what more buys depends on the link, not the box — raise it on a
-  # host whose bandwidth the default leaves idle. Each worker's output goes to its own log
-  # with one OK/FAILED line per region crossing back, the contours stage's idiom.
-  local parallel="${RATMAP_REGIONS_PARALLEL:-1}"
+  # Regions at once. A region is already two downloads overlapping (build-region.sh runs
+  # terrain beside everything else) at REGION_DOWNLOAD_THREADS range requests each, so
+  # what more buys depends on the link rather than the box — which is why this is capped
+  # at 4 however large the host is, instead of scaling with cores. Memory is not the
+  # binding constraint (a region's tippecanoe sorts on disk and stayed under 300 MB even
+  # at 4x the features, docker/README.md's table), so 1.5 GB a worker is generous and the
+  # cap is what actually decides. Each worker's output goes to its own log with one
+  # OK/FAILED line per region crossing back, the contours stage's idiom.
+  local parallel="${RATMAP_REGIONS_PARALLEL:-$(overlapping_io_parallel 1.5 4)}"
   if [ "$parallel" -le 1 ]; then
     local job
     for job in "${jobs[@]}"; do
@@ -787,10 +918,17 @@ stage_contours() {
   # streaming pass over the GeoJSONSeq output (~133 MB, see build-contours.sh) — so
   # gdal_contour's tracing is now the actual ceiling, at roughly a third of the old one.
   # N concurrent workers still cost roughly N times that, not a shared pool, and it grows
-  # with region size, so this defaults to 1 (sequential) rather than assume any box has
-  # room to spare. Override with RATMAP_CONTOURS_PARALLEL if a host is confirmed to have
-  # the memory for more.
-  local parallel="${RATMAP_CONTOURS_PARALLEL:-1}"
+  # with region size — so rather than a blanket number, the per-worker figure is carried
+  # from the measured one to the largest region *in this run* (contours_gb_per_worker)
+  # and divided into the memory this box actually has. A planet run, whose list includes
+  # morocco at 269 sq degrees, still comes out at 1; a run filtered to small regions gets
+  # the parallelism the box can hold, to a cap of 8 — past that the stage is waiting on
+  # DEM fetches (RATMAP_CONTOURS_FETCH_AHEAD is 2) and on disk, not on cores.
+  # RATMAP_CONTOURS_PARALLEL overrides either way.
+  local per_worker
+  per_worker="$(contours_gb_per_worker "${ids[@]}")"
+  local parallel="${RATMAP_CONTOURS_PARALLEL:-$(workers_for_budget "$per_worker" 8)}"
+  log "contours: $per_worker GB per worker for the largest region in this run"
   log "contours: building ${#ids[@]} region(s), $parallel at a time"
 
   # Fetch ahead. A region's build is a DEM fetch — network-bound, ~1.25 GB at most — and
@@ -916,7 +1054,11 @@ stage_avalanche() {
   # runs a thread per core, so several regions reaching it together oversubscribe rather
   # than go faster. Capping that inner pool by this number is what would make 4 pay off in
   # wall-clock as well as in memory; until then it is bounded by cores, not by RAM.
-  local parallel="${RATMAP_AVALANCHE_PARALLEL:-4}"
+  #
+  # So: four where there is room for four, and fewer where there is not — 1.5 GB a worker
+  # is the top of the measured range, and overlapping_io_parallel keeps the cap at 4 and
+  # at half the cores, which is the cpu reason above made explicit.
+  local parallel="${RATMAP_AVALANCHE_PARALLEL:-$(overlapping_io_parallel 1.5 4)}"
   # Exported, and with the default resolved rather than left unset: build-avalanche.sh
   # divides the machine's cores by this to size the WebP pass, and a child that cannot
   # see the number would take every core while three siblings did the same.

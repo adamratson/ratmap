@@ -190,3 +190,60 @@ available_memory_gb() {
   fi
   echo $(( bytes / 1073741824 ))
 }
+
+# Cores this process may actually use.
+#
+# `getconf` rather than `nproc`: nproc is GNU coreutils and absent on a Mac, where these
+# scripts are run by hand often enough to matter. A cgroup cpu quota is deliberately not
+# read: it throttles, it does not kill, so a worker pool sized past it finishes late
+# rather than dying — unlike memory, where the kernel's answer is the OOM killer.
+cpu_count() {
+  local n
+  n="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+  [ "${n:-0}" -ge 1 ] 2>/dev/null || n=1
+  echo "$n"
+}
+
+# Memory to leave for everything that is not a worker: the page cache these stages lean
+# on, the kernel, and the driver itself. A whole GB because the smallest supported host
+# is 4 GB and the stages that matter here are the ones that OOM at the top end.
+RATMAP_MEM_RESERVE_GB="${RATMAP_MEM_RESERVE_GB:-1}"
+
+usable_memory_gb() {
+  local total
+  total="$(available_memory_gb)"
+  # 0 means "could not tell" (no /proc/meminfo, no sysctl), not "no memory".
+  [ "$total" -eq 0 ] && { echo 0; return; }
+  local usable=$(( total - RATMAP_MEM_RESERVE_GB ))
+  [ "$usable" -lt 1 ] && usable=1
+  echo "$usable"
+}
+
+# workers_for_budget <gb_per_worker> [cap] — how many workers this box can actually hold.
+#
+# The pattern build-paths.sh established and every parallel stage now shares: take the
+# per-worker cost that stage measured (docker/README.md keeps the table), divide the
+# memory this process can really see, and clamp to the cores and to whatever cap the
+# stage has its own reasons for. Floor of 1 — a stage that cannot afford one worker still
+# has to run, and the preflight is what refuses a host that truly cannot.
+#
+# With memory unknown, this falls back to cores and the cap rather than to 1: a box that
+# cannot report its own memory is usually a Mac, not a small one.
+workers_for_budget() {
+  local per_worker="$1" cap="${2:-0}"
+  local cpus mem affordable
+  cpus="$(cpu_count)"
+  mem="$(usable_memory_gb)"
+
+  if [ "$mem" -eq 0 ]; then
+    affordable="$cpus"
+  else
+    # awk, not bash: per-worker costs are fractional (1.25 GB for a DEM fetch).
+    affordable="$(awk -v m="$mem" -v p="$per_worker" 'BEGIN { print int(m / p) }')"
+  fi
+
+  [ "$affordable" -gt "$cpus" ] && affordable="$cpus"
+  [ "$cap" -gt 0 ] && [ "$affordable" -gt "$cap" ] && affordable="$cap"
+  [ "$affordable" -lt 1 ] && affordable=1
+  echo "$affordable"
+}

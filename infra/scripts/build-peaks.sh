@@ -187,6 +187,14 @@ else:
 PYCHECK_MUNRO
 
 OUT="$DIST_DIR/peaks-global.pmtiles"
+# Built beside OUT and renamed into place only once every check below has passed: a failed
+# check used to leave the archive at OUT, and build-global.sh's peaks stage skips when OUT
+# exists — so the next run called it "already built" and cut regions from it unchecked.
+# Still ending in .pmtiles, since tippecanoe and pmtiles both pick the format by extension
+# (anything else is written as MBTiles); the leading dot keeps a leftover from a killed run
+# out of upload.sh's *.pmtiles glob.
+PARTIAL="$DIST_DIR/.peaks-global.partial.pmtiles"
+trap 'rm -rf "$WORK_DIR" "$PARTIAL"' EXIT
 # `prom` is the computed prominence the app's zoom filter ranks on; `prominence` is OSM's
 # own sparse tag, kept for reference. `lists` is the summit-list membership derived in
 # normalize-peaks.py (Phase 3.5, C19).
@@ -197,7 +205,7 @@ OUT="$DIST_DIR/peaks-global.pmtiles"
 # until nothing needs dropping; the app and build-region.sh both read the top zoom from
 # the header, so a deeper archive needs no change anywhere else. The tile check below
 # fails the build if anything is still missing.
-tippecanoe -o "$OUT" -zg --drop-densest-as-needed --extend-zooms-if-still-dropping \
+tippecanoe -o "$PARTIAL" -zg --drop-densest-as-needed --extend-zooms-if-still-dropping \
   --include=name --include=ele --include=prom --include=prominence --include=wikidata \
   --include=lists \
   -l peaks -n "ratmap peaks" --force \
@@ -208,9 +216,11 @@ tippecanoe -o "$OUT" -zg --drop-densest-as-needed --extend-zooms-if-still-droppi
 # `lists` property at all — every Munro marker and badge silently absent (found
 # 2026-09-24). At the top zoom tippecanoe must not have thinned anything: every peak and
 # every Munro has to be there, since that is the zoom the app overzooms from.
-MAXZOOM="$(pmtiles show --header-json "$OUT" | python3 -c 'import json, sys; print(json.load(sys.stdin)["maxzoom"])')"
-tippecanoe-decode -z"$MAXZOOM" -Z"$MAXZOOM" "$OUT" \
-  | python3 - "$WORK_DIR/peaks-final.geojsonl" "$MAXZOOM" <<'PYCHECK_TILES'
+MAXZOOM="$(pmtiles show --header-json "$PARTIAL" | python3 -c 'import json, sys; print(json.load(sys.stdin)["maxzoom"])')"
+# The script goes in with -c, not as `python3 - <<EOF`: that reads the program from stdin,
+# and the heredoc then *is* stdin, replacing the pipe — the script saw no tiles at all and
+# failed the first global build with "0 peaks in the z7 tiles" (2026-09-24).
+CHECK_TILES="$(cat <<'PYCHECK_TILES'
 import json, math, re, sys
 
 source, maxzoom = sys.argv[1], sys.argv[2]
@@ -262,6 +272,10 @@ if munros != expected_munros:
     sys.exit(f"FAIL: {munros} munros in the z{maxzoom} tiles, {expected_munros} in the input")
 print(f"  OK z{maxzoom} tiles hold all {count} peaks and {munros} munros")
 PYCHECK_TILES
+)"
+tippecanoe-decode -z"$MAXZOOM" -Z"$MAXZOOM" "$PARTIAL" \
+  | python3 -c "$CHECK_TILES" "$WORK_DIR/peaks-final.geojsonl" "$MAXZOOM"
 
+mv "$PARTIAL" "$OUT"
 pmtiles show "$OUT"
 echo "Built $OUT"

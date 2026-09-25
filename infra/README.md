@@ -101,6 +101,15 @@ python3 ./scripts/build-manifest.py --base-live   # merge, don't rebuild
 
 Phones that already hold a region see **Update** for it, and fetch only the new file.
 
+**The tile check.** `build-peaks.sh` builds the archive under a dotted name and moves it
+into place only once `check-peak-tiles.py` agrees that the top zoom holds every peak and
+every Munro. A failed check exits non-zero and names the peaks that went missing. It also
+keeps the archive and its input in `dist/.peaks-failed/`, which `upload.sh` never sees, so
+a failure after hours of prominence scoring can be looked at without running it all again.
+Peaks beyond ±85.0511° are left out before tiling, with a count in the log: Web Mercator
+tiles stop there, and tippecanoe drops anything beyond without a word. On the planet that
+is 181 Antarctic summits, and no map in the app can show them anyway.
+
 ### SAC grades
 
 `build-sac.sh` is the same shape: filter `sac_scale` ways out of the OSM extracts,

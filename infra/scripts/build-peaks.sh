@@ -203,6 +203,31 @@ OUT="$DIST_DIR/peaks-global.pmtiles"
 # out of upload.sh's *.pmtiles glob.
 PARTIAL="$DIST_DIR/.peaks-global.partial.pmtiles"
 trap 'rm -rf "$WORK_DIR" "$PARTIAL"' EXIT
+
+# Only what Web Mercator can hold. Tiles end at +-85.0511 degrees, and tippecanoe drops
+# anything beyond without a word; the app could never show it on any map. On 2026-09-25
+# that was 181 summits of the Transantarctic Mountains, and the tile check below failed the
+# build over them. Left out here, said out loud, and the check compares like with like.
+# The places database still has them, from its own copy of the peaks.
+python3 - "$WORK_DIR/peaks-final.geojsonl" "$WORK_DIR/peaks-tiled.geojsonl" <<'PYMERCATOR'
+import json, math, sys
+
+LIMIT = math.degrees(math.atan(math.sinh(math.pi)))  # 85.0511287798...
+kept = 0
+beyond = []
+with open(sys.argv[1]) as src, open(sys.argv[2], "w") as out:
+    for line in src:
+        if not line.strip():
+            continue
+        lat = json.loads(line)["geometry"]["coordinates"][1]
+        if abs(lat) > LIMIT:
+            beyond.append(json.loads(line)["properties"].get("name", "(unnamed)"))
+            continue
+        out.write(line)
+        kept += 1
+print(f"  {kept} peaks to tile, {len(beyond)} beyond Web Mercator's +-{LIMIT:.4f} left out"
+      + (f" (e.g. {', '.join(beyond[:5])})" if beyond else ""))
+PYMERCATOR
 # `prom` is the computed prominence the app's zoom filter ranks on; `prominence` is OSM's
 # own sparse tag, kept for reference. `lists` is the summit-list membership derived in
 # normalize-peaks.py (Phase 3.5, C19).
@@ -217,72 +242,28 @@ tippecanoe -o "$PARTIAL" -zg --drop-densest-as-needed --extend-zooms-if-still-dr
   --include=name --include=ele --include=prom --include=prominence --include=wikidata \
   --include=lists \
   -l peaks -n "ratmap peaks" --force \
-  "$WORK_DIR/peaks-final.geojsonl"
+  "$WORK_DIR/peaks-tiled.geojsonl"
 
-# Check the tiles, not only the input. The checks above run on the GeoJSONL; nothing
-# checked what tippecanoe made of it, and the published archive went two weeks with no
-# `lists` property at all — every Munro marker and badge silently absent (found
-# 2026-09-24). At the top zoom tippecanoe must not have thinned anything: every peak and
-# every Munro has to be there, since that is the zoom the app overzooms from.
-MAXZOOM="$(pmtiles show --header-json "$PARTIAL" | python3 -c 'import json, sys; print(json.load(sys.stdin)["maxzoom"])')"
-# The script goes in with -c, not as `python3 - <<EOF`: that reads the program from stdin,
-# and the heredoc then *is* stdin, replacing the pipe — the script saw no tiles at all and
-# failed the first global build with "0 peaks in the z7 tiles" (2026-09-24).
-CHECK_TILES="$(cat <<'PYCHECK_TILES'
-import json, math, re, sys
-
-source, maxzoom = sys.argv[1], sys.argv[2]
-expected = expected_munros = 0
-with open(source) as f:
-    for line in f:
-        line = line.lstrip("\x1e").strip()
-        if not line:
-            continue
-        expected += 1
-        if "munro" in json.loads(line).get("properties", {}).get("lists", "").split(";"):
-            expected_munros += 1
-
-# Streamed, a line at a time: decoded in one piece the global archive is hundreds of MB of
-# JSON. tippecanoe-decode writes each tile's header on a line of its own ("zoom", "x",
-# "y") and each feature on a line of its own — checked against a real extract.
+# Check the tiles, not only the input: every peak and every Munro at the top zoom. See
+# check-peak-tiles.py, which on failure also names the peaks that went missing.
 #
-# Counted, not matched by position: tippecanoe snaps coordinates to its tile grid, ~150 m
-# at z6, so positions do not match the input's. A peak near an edge is also copied into
-# the neighbouring tile's buffer, so only features inside their own tile's bounds count.
-TILE = re.compile(r'"zoom": (\d+), "x": (\d+), "y": (\d+)')
-
-def bounds(z, x, y):
-    n = 2 ** z
-    lat = lambda row: math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * row / n))))
-    return x / n * 360 - 180, lat(y + 1), (x + 1) / n * 360 - 180, lat(y)
-
-tile = None
-count = munros = 0
-for line in sys.stdin:
-    match = TILE.search(line)
-    if match and '"FeatureCollection"' in line:
-        tile = bounds(*map(int, match.groups()))
-        continue
-    text = line.strip().rstrip(",")
-    if tile is None or not text.startswith('{ "type": "Feature"'):
-        continue
-    feature = json.loads(text)
-    lon, lat = feature["geometry"]["coordinates"][:2]
-    west, south, east, north = tile
-    if west <= lon < east and south < lat <= north:
-        count += 1
-        if "munro" in str(feature.get("properties", {}).get("lists", "")).split(";"):
-            munros += 1
-
-if count != expected:
-    sys.exit(f"FAIL: {count} peaks in the z{maxzoom} tiles, {expected} in the input")
-if munros != expected_munros:
-    sys.exit(f"FAIL: {munros} munros in the z{maxzoom} tiles, {expected_munros} in the input")
-print(f"  OK z{maxzoom} tiles hold all {count} peaks and {munros} munros")
-PYCHECK_TILES
-)"
-tippecanoe-decode -z"$MAXZOOM" -Z"$MAXZOOM" "$PARTIAL" \
-  | python3 -c "$CHECK_TILES" "$WORK_DIR/peaks-final.geojsonl" "$MAXZOOM"
+# A failure keeps the archive and what it was built from, in dist/.peaks-failed/ (dotted,
+# so upload.sh never sees it). This step runs after hours of prominence scoring; a failure
+# here should be something to look at, not something to reproduce by running it all again.
+# To re-check them by hand:
+#   tippecanoe-decode -zZ -ZZ peaks.pmtiles | check-peak-tiles.py peaks.geojsonl peaks.pmtiles Z
+MAXZOOM="$(pmtiles show --header-json "$PARTIAL" | python3 -c 'import json, sys; print(json.load(sys.stdin)["maxzoom"])')"
+if ! tippecanoe-decode -z"$MAXZOOM" -Z"$MAXZOOM" "$PARTIAL" \
+    | python3 "$(dirname "${BASH_SOURCE[0]}")/check-peak-tiles.py" \
+        "$WORK_DIR/peaks-tiled.geojsonl" "$PARTIAL" "$MAXZOOM"; then
+  FAILED="$DIST_DIR/.peaks-failed"
+  rm -rf "$FAILED"
+  mkdir -p "$FAILED"
+  mv "$PARTIAL" "$FAILED/peaks.pmtiles"
+  mv "$WORK_DIR/peaks-tiled.geojsonl" "$FAILED/peaks.geojsonl"
+  echo "  kept for inspection: $FAILED (z$MAXZOOM)" >&2
+  exit 1
+fi
 
 mv "$PARTIAL" "$OUT"
 pmtiles show "$OUT"

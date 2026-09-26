@@ -129,8 +129,9 @@ echo
 # Slope, aspect and the pyramid are Go (tools/cmd/encode-avalanche), the port of
 # encode-avalanche.py: the same files out, without numpy. Built from this checkout
 # (lib.sh), into this region's own WORK_DIR.
-echo "==> building encode-avalanche"
+echo "==> building encode-avalanche and assemble-avalanche"
 ENCODE_BIN="$(go_tool encode-avalanche "$WORK_DIR")"
+ASSEMBLE_BIN="$(go_tool assemble-avalanche "$WORK_DIR")"
 
 # The maths that decides which slopes get drawn earns a test of its own, run on every
 # build — same standard as normalize-sac. Its last case fails loudly if the Mercator
@@ -174,7 +175,7 @@ for z in $(seq "$ZMIN" "$ZMAX"); do
     "$WORK_DIR/slope-$z.tif" "$WORK_DIR/aspect-$z.tif" "$WORK_DIR/zero-$z.tif"
 done
 
-# Lossless WebP by default: measured 61% of PNG on this region, and assemble-avalanche.py
+# Lossless WebP by default: measured 61% of PNG on this region, and assemble-avalanche
 # decodes every re-encoded tile back and compares it byte for byte before accepting the
 # pass, so the size win costs no trust. AVALANCHE_NO_WEBP=1 falls back to PNG.
 WEBP_FLAG="--webp"
@@ -183,11 +184,11 @@ WEBP_FLAG="--webp"
 # Cores this region may use for the WebP pass.
 #
 # Only set when the *stage* is building several regions at once
-# (RATMAP_AVALANCHE_PARALLEL): assemble-avalanche.py would otherwise take its own share in
+# (RATMAP_AVALANCHE_PARALLEL): assemble-avalanche would otherwise take its own share in
 # each of them, which is several times the machine's cores in `cwebp` processes and queues
 # rather than goes faster. Dividing gives each region a slice of one budget.
 #
-# Left unset for a plain single-region run, so assemble-avalanche.py applies its own
+# Left unset for a plain single-region run, so assemble-avalanche applies its own
 # default of half the cores. Passing an explicit job count here used to override that with
 # *every* core — which is what made the first Aragón run take the laptop down with it.
 #
@@ -210,7 +211,7 @@ echo "==> tiling"
 # both sit east of it. Aragón (-2.1791) was the first to run, and Scotland, Iceland and
 # most of Iberia would all have followed.
 # shellcheck disable=SC2086
-python3 "$SCRIPT_DIR/assemble-avalanche.py" \
+"$ASSEMBLE_BIN" \
   --out "$WORK_DIR/out.mbtiles" \
   --name "ratmap avalanche terrain $REGION_ID" \
   --bounds="$BBOX" \
@@ -236,5 +237,5 @@ mv "$TMP_OUT" "$OUT"
 echo
 echo "Built $OUT ($(du -h "$OUT" | cut -f1))"
 echo "Next:"
-echo "  python3 ./scripts/build-manifest.py --base-live"
+echo "  ./scripts/build-manifest.sh --base-live"
 echo "  ./scripts/upload.sh"

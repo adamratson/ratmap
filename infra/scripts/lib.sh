@@ -39,6 +39,24 @@ go_tool() {
   echo "$dir/$name"
 }
 
+# Run one of scripts/tools' Go commands with the given arguments: built into a scratch
+# directory, run, and the directory removed. For the commands a person runs by hand —
+# through build-manifest.sh and build-catalog.sh — and the one the build scripts call
+# inline (region-osm-sources). RATMAP_INFRA_DIR tells them where infra/ is, which the
+# Python scripts they replaced worked out from their own path.
+go_run() {
+  local name="$1" dir status=0
+  shift
+  dir="$(mktemp -d)"
+  if go_tool "$name" "$dir" >/dev/null; then
+    RATMAP_INFRA_DIR="$INFRA_DIR" "$dir/$name" "$@" || status=$?
+  else
+    status=1
+  fi
+  rm -rf "$dir"
+  return "$status"
+}
+
 # Download to a path, resuming and retrying.
 #
 # OSM extracts are hundreds of MB (europe-latest is ~35 GB) and Geofabrik drops

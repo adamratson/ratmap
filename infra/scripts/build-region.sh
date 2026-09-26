@@ -435,7 +435,7 @@ elif [ -n "$PEAKS_SOURCE" ]; then
     | python3 -c 'import json, sys; print(json.load(sys.stdin)["maxzoom"])')"
   # Versioned like the avalanche artifact: a region already downloaded only fetches a
   # file whose name it does not hold, so a rebuilt summit set needs a new name to reach it.
-  # Bump the number here and in build-manifest.py's ARTIFACT_KINDS together.
+  # Bump the number here and in tools/cmd/build-manifest's artifactKinds together.
   extract_verified "$PEAKS_SOURCE" "$OUT_DIR/$REGION_ID-peaks-1.pmtiles" "$PEAKS_MAXZOOM" --allow-empty
 else
   echo "==> summits: skipped (no peaks-global.pmtiles — run ./scripts/build-peaks.sh)"
@@ -492,9 +492,9 @@ if [ -z "$DRY_RUN" ]; then
   echo
   echo "Built $OUT_DIR"
   # --base-live, not a bare rebuild: see build-contours.sh's own version of this note —
-  # dist/ is essentially never the whole catalogue, so a bare build-manifest.py run would
+  # dist/ is essentially never the whole catalogue, so a bare build-manifest.sh run would
   # publish an unpublish of every region it can't see on this disk.
   echo "Next:"
-  echo "  python3 ./scripts/build-manifest.py --base-live"
+  echo "  ./scripts/build-manifest.sh --base-live"
   echo "  ./scripts/upload.sh"
 fi

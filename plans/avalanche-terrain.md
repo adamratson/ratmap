@@ -300,7 +300,7 @@ alpine entry in the catalogue — 124 kB, z11, lossless WebP):
 | | |
 |---|---|
 | `infra/scripts/tools/cmd/encode-avalanche` | slope, aspect, quantisation and the max-reduced pyramid, with a `--self-test` the build runs every time (originally `encode-avalanche.py`; ported to Go 2026-09-25, same files out byte for byte) |
-| `infra/scripts/assemble-avalanche.py` | per-level tiling, merge, and the lossless-WebP pass that proves itself |
+| `infra/scripts/tools/cmd/assemble-avalanche` | per-level tiling, merge, and the lossless-WebP pass that proves itself (originally `assemble-avalanche.py`; ported to Go 2026-09-26) |
 | `infra/scripts/build-avalanche.sh` | the region build, gated on `"avalanche": true` |
 | `build-manifest.py`, `build-global.sh`, `regions.json` | the new kind registered, an `avalanche` stage, the flag on one region |
 | `src/overlays/avalanche.ts` | classes, palette, `color-relief` ramp, encoding, the Settings toggle's state |

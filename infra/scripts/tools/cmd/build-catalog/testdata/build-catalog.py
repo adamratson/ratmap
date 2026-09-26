@@ -1,3 +1,5 @@
+# build-catalog.py as it was run, before cmd/build-catalog replaced it (copied verbatim).
+# Kept only to regenerate the golden files — see gen-vectors.py.
 #!/usr/bin/env python3
 """Generate regions.json — a globe-covering download catalogue — from Geofabrik's index.
 

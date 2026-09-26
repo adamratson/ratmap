@@ -27,7 +27,7 @@ REDUCE_BIN="$(go_tool reduce-paths "$TOOLS_DIR")"
 
 # Space-separated .osm.pbf URLs, same convention (and same cache) as build-peaks.sh and
 # build-sac.sh. Defaults to the union of every region's `osmExtract`.
-PATHS_SOURCE_URLS="${PATHS_SOURCE_URLS:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/region-osm-sources.py")}"
+PATHS_SOURCE_URLS="${PATHS_SOURCE_URLS:-$(go_run region-osm-sources)}"
 
 # Per-continent tilesets, cached between runs. This is the unit of work, and it is what
 # makes a stage that runs for hours survivable: the first planet attempt spent 29 minutes
@@ -240,5 +240,5 @@ echo "Built $OUT"
 echo
 echo "Next:"
 echo "  ./scripts/build-region.sh <region-id>   # cuts <id>-paths.pmtiles out of this"
-echo "  python3 ./scripts/build-manifest.py --base-live"
+echo "  ./scripts/build-manifest.sh --base-live"
 echo "  ./scripts/upload.sh"

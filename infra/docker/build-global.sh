@@ -1037,7 +1037,7 @@ stage_avalanche() {
   # and the warp phase is network-bound with the cpu idle, so overlapping several is close
   # to free.
   #
-  # What four does *not* fit is the cpu: assemble-avalanche.py's WebP proof pass already
+  # What four does *not* fit is the cpu: assemble-avalanche's WebP proof pass already
   # runs a thread per core, so several regions reaching it together oversubscribe rather
   # than go faster. Capping that inner pool by this number is what would make 4 pay off in
   # wall-clock as well as in memory; until then it is bounded by cores, not by RAM.
@@ -1113,7 +1113,7 @@ stage_manifest() {
     log "manifest: scoped to region ids matching $RATMAP_MANIFEST_ONLY"
   fi
 
-  python3 "$SCRIPTS_DIR/build-manifest.py" "${args[@]}"
+  "$SCRIPTS_DIR/build-manifest.sh" "${args[@]}"
 }
 
 ########################################################################

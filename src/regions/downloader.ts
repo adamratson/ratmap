@@ -196,7 +196,7 @@ export class DownloadStalled extends Error {
 /**
  * The object behind an artifact's URL is no longer the one this download started on.
  *
- * Only the avalanche artifact carries a version in its filename (build-manifest.py), so
+ * Only the avalanche artifact carries a version in its filename (tools/cmd/build-manifest), so
  * a rebuilt basemap or terrain is republished under the *same* name. Resume appends at
  * the `.part` file's length, so a rebuild landing between two sessions of one download
  * would otherwise be spliced onto the old build's bytes and promoted as a complete

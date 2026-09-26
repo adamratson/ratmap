@@ -16,7 +16,7 @@ require_cmd osmium
 require_cmd tippecanoe
 
 # Same convention as build-sac.sh: defaults to the union of every region's `osmExtract`.
-TERRAIN_FEATURES_SOURCE_URLS="${TERRAIN_FEATURES_SOURCE_URLS:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/region-osm-sources.py")}"
+TERRAIN_FEATURES_SOURCE_URLS="${TERRAIN_FEATURES_SOURCE_URLS:-$(go_run region-osm-sources)}"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -120,5 +120,5 @@ echo "Built $OUT"
 echo
 echo "Next:"
 echo "  ./scripts/build-region.sh <region-id>   # cuts <id>-terrain-features.pmtiles out of this"
-echo "  python3 ./scripts/build-manifest.py --base-live"
+echo "  ./scripts/build-manifest.sh --base-live"
 echo "  ./scripts/upload.sh"

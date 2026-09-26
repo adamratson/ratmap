@@ -1,3 +1,6 @@
+# region-osm-sources.py as the build scripts ran it, before cmd/region-osm-sources
+# replaced it (copied verbatim, but for reading regions.json from argv[1] so it can be run
+# on fixtures). Kept only to regenerate the golden files — see gen-fixtures.sh.
 #!/usr/bin/env python3
 """Print the deduplicated OSM extracts covering every defined region, one per line.
 
@@ -11,7 +14,7 @@ import json
 import pathlib
 import sys
 
-regions_json = pathlib.Path(__file__).resolve().parent.parent / "regions.json"
+regions_json = pathlib.Path(sys.argv[1])
 
 with open(regions_json) as f:
     regions = json.load(f)["regions"]

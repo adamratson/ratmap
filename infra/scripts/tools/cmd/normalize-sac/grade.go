@@ -70,7 +70,7 @@ func parseGrade(raw json.RawMessage) (int, bool, error) {
 }
 
 func parseGradeText(raw string) (int, bool, error) {
-	text := strings.ReplaceAll(pyLower(strings.TrimFunc(raw, pytext.IsSpace)), " ", "_")
+	text := strings.ReplaceAll(pytext.Lower(strings.TrimFunc(raw, pytext.IsSpace)), " ", "_")
 	if g, ok := namedGrades[text]; ok {
 		return g, true, nil
 	}
@@ -103,13 +103,6 @@ func parseGradeText(raw string) (int, bool, error) {
 		}
 	}
 	return best, found, nil
-}
-
-// pyLower is str.lower(). Go's ToLower uses the simple case mappings; Python applies the
-// full ones, and the one unconditional difference is U+0130 (İ), which Python lowers to
-// "i" plus a combining dot rather than to a bare "i" — so "hİking" is not "hiking".
-func pyLower(s string) string {
-	return strings.ToLower(strings.ReplaceAll(s, "\u0130", "i\u0307"))
 }
 
 // splitSeparators is Python's re.split on

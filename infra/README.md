@@ -41,7 +41,7 @@ actually correct, not just plausible — see the comments at the top of each scr
 was verified and the exact numbers.
 
 **`build-peaks.sh`, `build-sac.sh`, `build-paths.sh` and `build-places.sh` derive their inputs from `regions.json`** — the
-deduplicated union of every region's `osmExtract` (see `region-osm-sources.py`). Both
+deduplicated union of every region's `osmExtract` (see `scripts/tools/cmd/region-osm-sources`). Both
 produce single *global* artifacts that have to cover whatever the catalogue publishes, so
 deriving the list means adding a region can't silently ship a map with no summits and no
 search. Re-run both whenever you add a region.
@@ -85,7 +85,7 @@ grades below, so summits and their heights work offline inside a downloaded regi
 before this, the app read them only from the bucket. The app serves a region's copy in
 place of the global archive's tiles inside that region (see `TileSourceRegistry` in the
 app). The name is versioned: a region already on a phone only fetches a file whose name it
-does not hold, so bump the `-1` in both `build-region.sh` and `build-manifest.py` when the
+does not hold, so bump the `-1` in both `build-region.sh` and `scripts/tools/cmd/build-manifest` when the
 summit set changes.
 
 To publish it (2026-09-24 — also fixes Munros and the thinned top zoom, see the spec's
@@ -95,7 +95,7 @@ Phase 3 status):
 ./scripts/build-peaks.sh                          # checks the built tiles now, not just the input
 ./scripts/upload.sh                               # the new peaks-global first
 for id in $(<regions to update>); do ./scripts/build-region.sh "$id" --only=peaks; done
-python3 ./scripts/build-manifest.py --base-live   # merge, don't rebuild
+./scripts/build-manifest.sh --base-live   # merge, don't rebuild
 ./scripts/upload.sh                               # the region files, then the manifest
 ```
 
@@ -225,7 +225,7 @@ bucket cannot compress on the fly and the app fetches it on every start. The scr
 fetches it back over `PUBLIC_BASE_URL` and checks the header and contents; if the gateway
 has dropped the header — gzip bytes a browser would try to read as JSON — it re-uploads the
 plain file and exits non-zero. Anything that reads the stored copy directly (`aws s3 cp`,
-`build-manifest.py --base-live`) gets gzip bytes, and both handle that.
+`build-manifest.sh --base-live`) gets gzip bytes, and both handle that.
 
 What is already there is decided from a single bucket listing, so the first thing it prints
 is `Checking N archive(s)` followed by how many need sending. It used to `head-object` each
@@ -315,12 +315,12 @@ part of every artifact filename, which is also the OPFS key and the TileSourceRe
 
 `regions.json` *is* the catalogue: nothing in the pipeline discovers regions, and
 `ratmap global regions` builds exactly the ids that file defines. Covering the globe
-therefore means several hundred definitions, which is `scripts/build-catalog.py`'s job.
+therefore means several hundred definitions, which is `scripts/build-catalog.sh`'s job.
 
 ```sh
-./scripts/build-catalog.py --no-estimate --print   # rough shape of the catalogue, seconds
-./scripts/build-catalog.py --print                 # measured; first run takes an hour or two
-./scripts/build-catalog.py                         # same, and writes regions.json
+./scripts/build-catalog.sh --no-estimate --print   # rough shape of the catalogue, seconds
+./scripts/build-catalog.sh --print                 # measured; first run takes an hour or two
+./scripts/build-catalog.sh                         # same, and writes regions.json
 ```
 
 It reads Geofabrik's `index-v1.json` — the same hierarchy the OSM extracts come from — and
@@ -420,18 +420,18 @@ rather than on the box.
 ./scripts/build-region.sh lochaber --dry-run   # size it first
 ./scripts/build-region.sh lochaber             # extract basemap + terrain
 ./scripts/build-contours.sh lochaber           # contours (needs gdal)
-python3 ./scripts/build-manifest.py --base-live  # merge, don't rebuild
+./scripts/build-manifest.sh --base-live  # merge, don't rebuild
 ./scripts/upload.sh                            # archives, then the manifest
 ```
 
-`build-manifest.py` picks up whatever artifacts exist in a region's directory, so a new
+`build-manifest.sh` picks up whatever artifacts exist in a region's directory, so a new
 artifact kind needs no code change anywhere — that is what C16's open-ended schema buys.
 
 **Always pass `--base-live` (or `--base`) for anything short of a from-scratch catalogue
 build.** No single machine has ever held every region's archives at once — the catalogue
 is 180+ regions built incrementally, often across different sessions and hosts — so
 `dist/` here is a *partial* build, not the whole thing. Run bare (no `--base-live`),
-`build-manifest.py` only knows what's on this disk right now, and publishing that would
+`build-manifest.sh` only knows what's on this disk right now, and publishing that would
 unpublish every region it can't see. `--base-live` fetches the currently-published
 manifest itself (reads `PUBLIC_BASE_URL` from the environment or `infra/.env` — no need
 to `curl` it separately first) and merges into it: only the regions actually present in
@@ -451,7 +451,7 @@ for real: a stray corrupt `austria-contours.pmtiles` left over from an earlier r
 blocked an unrelated Scotland/Wales/England publish (2026-09) until `--only` existed.
 
 ```sh
-python3 ./scripts/build-manifest.py --base-live --only '^lochaber$'
+./scripts/build-manifest.sh --base-live --only '^lochaber$'
 ```
 
 `upload.sh` deliberately uploads the manifest **last**: a manifest listing artifacts that
@@ -476,7 +476,7 @@ the England/Scotland/Wales split (2026-09-04):
   passes every `verify` check. The published file keeps its header, because the app reads
   each source's zoom range from it, and a narrowed one would overzoom coarse neighbouring
   features at high zoom. A failure now also prints `verify`'s own reason.
-- **The manifest fails closed.** `build-manifest.py` aborts if it can't read an archive's
+- **The manifest fails closed.** `build-manifest.sh` aborts if it can't read an archive's
   PMTiles header, rather than recording `zNone-None` and carrying on. That is precisely
   what it did for the corrupt terrain file, one command away from publishing it.
 - **`upload.sh` refuses to unpublish.** `dist/` is disposable scratch; one `rm -rf` and

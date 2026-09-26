@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Same derivation as build-peaks.sh — the union of every region's `osmExtract` in
 # regions.json, so a published region always has search results for it.
-PLACES_SOURCE_URLS="${PLACES_SOURCE_URLS:-${PEAKS_SOURCE_URLS:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/region-osm-sources.py")}}"
+PLACES_SOURCE_URLS="${PLACES_SOURCE_URLS:-${PEAKS_SOURCE_URLS:-$(go_run region-osm-sources)}}"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT

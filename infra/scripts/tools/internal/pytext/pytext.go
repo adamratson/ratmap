@@ -173,3 +173,31 @@ func ReprString(s string) string {
 	b.WriteRune(quote)
 	return b.String()
 }
+
+// Lower is str.lower(). Go's ToLower uses the simple case mappings; Python applies the
+// full ones, and the one unconditional difference is U+0130 (İ), which Python lowers to
+// "i" plus a combining dot rather than to a bare "i" — so "hİking" is not "hiking".
+func Lower(s string) string {
+	return strings.ToLower(strings.ReplaceAll(s, "\u0130", "i\u0307"))
+}
+
+// Title is str.title(): each cased letter that follows a character which is not cased
+// (a letter with case) is title-cased, every other cased letter lower-cased. So digits and
+// punctuation start a new word — "o'neil" is "O'Neil", "3d" is "3D".
+func Title(s string) string {
+	var b strings.Builder
+	prevCased := false
+	for _, r := range s {
+		cased := unicode.IsUpper(r) || unicode.IsLower(r) || unicode.IsTitle(r)
+		switch {
+		case cased && prevCased:
+			b.WriteString(Lower(string(r)))
+		case cased:
+			b.WriteRune(unicode.ToTitle(r))
+		default:
+			b.WriteRune(r)
+		}
+		prevCased = cased
+	}
+	return b.String()
+}

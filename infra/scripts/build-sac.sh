@@ -21,7 +21,7 @@ require_cmd go
 # Space-separated .osm.pbf URLs, same convention (and same cache) as build-peaks.sh.
 # Defaults to the union of every region's `osmExtract`, so a newly published region gets
 # grades without anyone remembering to widen this.
-SAC_SOURCE_URLS="${SAC_SOURCE_URLS:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/region-osm-sources.py")}"
+SAC_SOURCE_URLS="${SAC_SOURCE_URLS:-$(go_run region-osm-sources)}"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -164,5 +164,5 @@ echo "Built $OUT"
 echo
 echo "Next:"
 echo "  ./scripts/build-region.sh <region-id>   # cuts <id>-sac.pmtiles out of this"
-echo "  python3 ./scripts/build-manifest.py --base-live"
+echo "  ./scripts/build-manifest.sh --base-live"
 echo "  ./scripts/upload.sh"

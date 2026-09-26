@@ -1,0 +1,3 @@
+! 3 source extracts — this is a continental or planet-scale build.
+  Expect tens of GB of downloads and hours to days of processing.
+  Override with PEAKS_SOURCE_URLS / PLACES_SOURCE_URLS for a smaller run.

@@ -26,7 +26,7 @@ require_cmd go
 #   "
 # Defaults to the union of every region's `osmExtract` in regions.json, so publishing a
 # region automatically gives it summits rather than silently shipping a map with none.
-PEAKS_SOURCE_URLS="${PEAKS_SOURCE_URLS:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/region-osm-sources.py")}"
+PEAKS_SOURCE_URLS="${PEAKS_SOURCE_URLS:-$(go_run region-osm-sources)}"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT

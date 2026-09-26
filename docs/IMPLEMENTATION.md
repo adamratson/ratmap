@@ -270,7 +270,7 @@ checked in a real browser (headless Chromium against the production build). Note
   accounting, delete (C12). Re-register archives with `TileSourceRegistry` on completion.
 - Show `estimate()` vs region size before starting; refuse if it won't fit.
 - **The catalogue is generated, and covers the globe** (2026-08-25). `regions.json` is the
-  catalogue — nothing discovers regions — so it is built by `infra/scripts/build-catalog.py`
+  catalogue — nothing discovers regions — so it is built by `infra/scripts/build-catalog.sh`
   from Geofabrik's `index-v1.json` rather than written by hand. Every candidate is sized
   with `pmtiles extract --dry-run` and subdivided into its children while it exceeds the
   per-artifact cap. A region with nothing left to split into — Greenland, the Siberian

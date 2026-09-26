@@ -27,7 +27,7 @@ ratmap infra toolchain
                                                build-region.sh scotland --dry-run
                                                build-world-catalog.sh
                                                upload.sh
-  build-catalog.py [args...]                 regenerate regions.json from Geofabrik's
+  build-catalog.sh [args...]                 regenerate regions.json from Geofabrik's
                                              index — writes to the mounted host file, and
                                              caches its measurements under /work
   doctor                                     print tool versions and resource limits

@@ -150,7 +150,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue. 16 range requests per extract (`REGION_DOWNLOAD_THREADS`), terrain downloading alongside the basemap. `RATMAP_REGIONS_PARALLEL` builds several regions at once, up to 4, sized to the host |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true` — each region traced in 1° cells at ~1 GB a cell, whatever its size; two regions at a time, the box's cells split between them (`RATMAP_CONTOURS_PARALLEL`, `RATMAP_CONTOURS_CELL_WORKERS`) | the slowest by far. Its 30 m DEMs are fetched ahead of the builds (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2) and cached, and `avalanche` reuses them for every region that has both |
-| `manifest` | `build-manifest.py` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | seconds when little changed: sha256s are cached by size, mtime and inode in `dist/.manifest-sha256-cache.json`, so only new or rebuilt archives are hashed. A first run hashes everything, 2 threads (`MANIFEST_HASH_WORKERS`, 1 for a spinning disk) |
+| `manifest` | `build-manifest.sh` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | seconds when little changed: sha256s are cached by size, mtime and inode in `dist/.manifest-sha256-cache.json`, so only new or rebuilt archives are hashed. A first run hashes everything, 2 threads (`MANIFEST_HASH_WORKERS`, 1 for a spinning disk) |
 
 `sac`, `paths` and `terrain-features` sit before `regions` in `all` for a reason:
 `build-region.sh` cuts each region's `<id>-sac.pmtiles`, `<id>-paths.pmtiles` and
@@ -239,7 +239,7 @@ Budget about a tenth of the extracts' size for the subsets, ~9 GB for the planet
 
 ### When the manifest stage fails on someone else's artifact
 
-`build-manifest.py` fails closed on an archive whose PMTiles header will not read:
+`build-manifest.sh` fails closed on an archive whose PMTiles header will not read:
 
 ```
 FAIL: austria-contours.pmtiles is not a readable PMTiles archive (...).
@@ -462,7 +462,7 @@ What that comes out as, per box (`contours` is regions at once × cells each):
   been replaced by a Go port that streams three rows at a time (the table above). If you are reading a memory number in this repo,
   check it is not older than the code.
 
-  The cpu side needed a second knob to make that true. `assemble-avalanche.py`'s WebP
+  The cpu side needed a second knob to make that true. `assemble-avalanche`'s WebP
   proof pass — ~2.5 s a tile, and Switzerland has ~600 of them — used to run a thread per
   core whatever else was running, so four regions meant four times the machine's cores in
   `cwebp` processes. `build-avalanche.sh` now divides the cores by
@@ -522,15 +522,16 @@ past runs, and one corrupt file anywhere in `dist/regions/` would otherwise bloc
 publishing this slice too, not just its own region:
 
 ```sh
-docker compose run --rm infra build-manifest.py \
+docker compose run --rm infra build-manifest.sh \
   --base-live --prune --only '^(france|germany|switzerland|austria|italy)$'
 ```
 
 No manual `curl` or file staging needed — `--base-live` fetches the currently-published
 manifest itself, and `PUBLIC_BASE_URL` is already in the container's environment via
 `env_file: ../.env` (see the `compose.yml` volumes/environment above). `entrypoint.sh`
-dispatches any `*.py`/`*.sh` name straight to `infra/scripts/`, so this runs
-`build-manifest.py` with the image's pinned `pmtiles` — no local install needed either.
+dispatches any `*.sh` name straight to `infra/scripts/`, so this runs
+`build-manifest.sh`, which builds the Go manifest tool with the image's own Go — no local
+install needed either.
 
 `upload.sh` skips archives already in the bucket at the same size, so uploading after each
 slice is cheap.

@@ -17,7 +17,7 @@ import (
 
 // testdata/untie.tsv is the Python's world_xy and untie on 28,706 coordinates, 5,247 of
 // them moved: coordinates aimed at a rounding tie on each axis at every zoom 0-14, and
-// random ones (testdata/gen-vectors.py). Both answers have to match: the world position
+// random ones. Both answers have to match: the world position
 // is what decides a tie, and the move is what gets written.
 func TestUntieMatchesPython(t *testing.T) {
 	f, err := os.Open("testdata/untie.tsv")

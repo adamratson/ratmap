@@ -15,15 +15,14 @@ import (
 
 func TestMain(m *testing.M) { golden.Main(m, main) }
 
-// testdata/cases.tsv runs url-quote and dem-tiles against the Python they replaced
-// (testdata/*.py, from vendor-assets.sh and fetch-dem.sh): non-ASCII and reserved
+// testdata/cases.tsv runs url-quote and dem-tiles against the Python they replaced (from
+// vendor-assets.sh and fetch-dem.sh): non-ASCII and reserved
 // characters; bboxes on whole degrees, across the equator and antimeridian, at the pole,
-// empty, and written the way regions.json writes them. Regenerate with
-// ../../internal/golden/gen-fixtures.sh.
+// empty, and written the way regions.json writes them.
 func TestMatchesPython(t *testing.T) { golden.Run(t) }
 
 // testdata/subset-keys.tsv is lib.sh's Python cache key for files of a given size and
-// mtime (testdata/gen-subset-keys.py), with times a few nanoseconds short of a second.
+// mtime, with times a few nanoseconds short of a second.
 func TestSubsetKeyMatchesPython(t *testing.T) {
 	f, err := os.Open("testdata/subset-keys.tsv")
 	if err != nil {

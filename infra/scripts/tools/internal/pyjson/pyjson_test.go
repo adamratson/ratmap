@@ -9,7 +9,7 @@ import (
 )
 
 // testdata/python-dumps.tsv is CPython's json.dumps(json.loads(text)) on 2,500-odd texts
-// under the four option sets the pipeline's writers use (testdata/gen-vectors.py): key
+// under the four option sets the pipeline's writers use: key
 // order and repeated keys, ints (including ones past int64) against floats, -0 and -0.0,
 // float repr, non-ASCII and control characters escaped or not, empty containers, and
 // indent 2 against indent 0.

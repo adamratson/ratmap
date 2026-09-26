@@ -1,18 +1,18 @@
-# NAME	ORACLE	ARG... (see internal/golden)
-changed-some	python3 testdata/changed.py testdata/listing-some.json testdata/dist regions/a/a-basemap.pmtiles sac-global.pmtiles	changed	testdata/listing-some.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-changed-empty	python3 testdata/changed.py testdata/listing-empty.json testdata/dist regions/a/a-basemap.pmtiles sac-global.pmtiles	changed	testdata/listing-empty.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-changed-all	python3 testdata/changed.py testdata/listing-all.json testdata/dist regions/a/a-basemap.pmtiles sac-global.pmtiles	changed	testdata/listing-all.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-~changed-bad	python3 testdata/changed.py testdata/listing-bad.json testdata/dist regions/a/a-basemap.pmtiles sac-global.pmtiles	changed	testdata/listing-bad.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-changed-null	python3 testdata/changed.py testdata/listing-null.json testdata/dist regions/a/a-basemap.pmtiles sac-global.pmtiles	changed	testdata/listing-null.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-~changed-junk	python3 testdata/changed.py testdata/listing-junk.json testdata/dist regions/a/a-basemap.pmtiles sac-global.pmtiles	changed	testdata/listing-junk.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-unpublished-live.json-fewer.json	python3 testdata/unpublished.py testdata/live.json testdata/fewer.json	unpublished	testdata/live.json	testdata/fewer.json
-unpublished-live.json.gz-fewer.json	python3 testdata/unpublished.py testdata/live.json.gz testdata/fewer.json	unpublished	testdata/live.json.gz	testdata/fewer.json
-unpublished-live.json-live.json	python3 testdata/unpublished.py testdata/live.json testdata/live.json	unpublished	testdata/live.json	testdata/live.json
-unpublished-fewer.json-live.json	python3 testdata/unpublished.py testdata/fewer.json testdata/live.json	unpublished	testdata/fewer.json	testdata/live.json
-served-h-gzip-live.json	python3 testdata/served.py testdata/h-gzip testdata/live.json.gz testdata/live.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/live.json
-served-h-gzip-same-reordered.json	python3 testdata/served.py testdata/h-gzip testdata/live.json.gz testdata/same-reordered.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/same-reordered.json
-served-h-gzip-changed.json	python3 testdata/served.py testdata/h-gzip testdata/live.json.gz testdata/changed.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/changed.json
-served-h-gzip-float.json	python3 testdata/served.py testdata/h-gzip testdata/live.json.gz testdata/float.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/float.json
-served-h-none-live.json	python3 testdata/served.py testdata/h-none testdata/live.json.gz testdata/live.json	served	testdata/h-none	testdata/live.json.gz	testdata/live.json
-served-h-br-live.json	python3 testdata/served.py testdata/h-br testdata/live.json.gz testdata/live.json	served	testdata/h-br	testdata/live.json.gz	testdata/live.json
-served-h-twice-live.json	python3 testdata/served.py testdata/h-twice testdata/live.json.gz testdata/live.json	served	testdata/h-twice	testdata/live.json.gz	testdata/live.json
+# NAME	ARG... (see internal/golden)
+changed-some	changed	testdata/listing-some.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+changed-empty	changed	testdata/listing-empty.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+changed-all	changed	testdata/listing-all.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+~changed-bad	changed	testdata/listing-bad.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+changed-null	changed	testdata/listing-null.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+~changed-junk	changed	testdata/listing-junk.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+unpublished-live.json-fewer.json	unpublished	testdata/live.json	testdata/fewer.json
+unpublished-live.json.gz-fewer.json	unpublished	testdata/live.json.gz	testdata/fewer.json
+unpublished-live.json-live.json	unpublished	testdata/live.json	testdata/live.json
+unpublished-fewer.json-live.json	unpublished	testdata/fewer.json	testdata/live.json
+served-h-gzip-live.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/live.json
+served-h-gzip-same-reordered.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/same-reordered.json
+served-h-gzip-changed.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/changed.json
+served-h-gzip-float.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/float.json
+served-h-none-live.json	served	testdata/h-none	testdata/live.json.gz	testdata/live.json
+served-h-br-live.json	served	testdata/h-br	testdata/live.json.gz	testdata/live.json
+served-h-twice-live.json	served	testdata/h-twice	testdata/live.json.gz	testdata/live.json

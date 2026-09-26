@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// testdata/*.want.* are the Python's stdout and stderr (testdata/gen-fixtures.sh) on the
-// real catalogue, on regions with a missing, empty or null osmExtract and repeated
-// extracts, on three extracts (the planet-scale warning), and on none.
+// testdata/*.want.* are the Python's stdout and stderr on the real catalogue, on regions
+// with a missing, empty or null osmExtract and repeated extracts, on three extracts (the
+// planet-scale warning), and on none.
 func TestMatchesPython(t *testing.T) {
 	for _, name := range []string{"real", "mixed", "three", "empty"} {
 		var out, errOut bytes.Buffer

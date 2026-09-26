@@ -3,12 +3,11 @@
 //
 // A command's testdata/cases.tsv holds one case a line, tab-separated:
 //
-//	NAME	ORACLE	ARG...
+//	NAME	ARG...
 //
-// ORACLE is the bash command line that runs the Python (gen-fixtures.sh here runs it
-// to write the goldens); the test only reads NAME and the ARGs it passes to main. An ARG
-// of {{out}} is a scratch file whose contents the command writes; they are compared too.
-// An ARG of <FILE is not passed: FILE is the case's stdin (the ORACLE redirects it itself).
+// The goldens were written by the Python before it was removed (git history has it); the
+// ARGs are what main is given, as the Python was. An ARG of {{out}} is a scratch file whose contents the command writes; they are compared too.
+// An ARG of <FILE is not passed: FILE is the case's stdin.
 // The goldens are NAME.want.stdout — stdout, then "exit N" — NAME.want.stderr, absent
 // when stderr was empty, and NAME.want.out for {{out}}. A NAME written ~NAME has its
 // stderr left uncompared: the Python's message there quoted its own exception text, which
@@ -58,10 +57,7 @@ func Run(t *testing.T) {
 			continue
 		}
 		cols := strings.Split(line, "\t")
-		if len(cols) < 2 {
-			t.Fatalf("cases.tsv: bad line %q", line)
-		}
-		name, args := cols[0], cols[2:]
+		name, args := cols[0], cols[1:]
 		stderr := !strings.HasPrefix(name, "~")
 		name = strings.TrimPrefix(name, "~")
 		n++

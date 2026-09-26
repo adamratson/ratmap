@@ -21,7 +21,7 @@ func TestSelfTest(t *testing.T) {
 }
 
 // testdata/grades.tsv is the Python's parse_grade, and repr(str(value)) as its report
-// printed it, on 6,000-odd values (testdata/gen-vectors.py): the documented ones, the
+// printed it, on 6,000-odd values: the documented ones, the
 // oddities taginfo lists, and random mixtures of every separator, shorthand form, bracket,
 // Unicode space, dash, digit and case trap the parser meets.
 func TestParseGradeMatchesPython(t *testing.T) {

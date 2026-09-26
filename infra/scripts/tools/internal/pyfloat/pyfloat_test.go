@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// testdata/python-vectors.tsv was written by CPython (testdata/gen-vectors.py), so these
+// testdata/python-vectors.tsv was written by CPython, so these
 // compare against Python itself rather than against a reading of its source.
 func TestAgainstCPython(t *testing.T) {
 	f, err := os.Open("testdata/python-vectors.tsv")

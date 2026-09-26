@@ -1,17 +1,17 @@
-# NAME	ORACLE	ARG... (see internal/golden)
-peaks-ok	python3 testdata/peaks.py testdata/peaks-ok.geojsonl	peaks	testdata/peaks-ok.geojsonl
-peaks-wrong-ele	python3 testdata/peaks.py testdata/peaks-wrong-ele.geojsonl	peaks	testdata/peaks-wrong-ele.geojsonl
-peaks-bool-ele	python3 testdata/peaks.py testdata/peaks-bool-ele.geojsonl	peaks	testdata/peaks-bool-ele.geojsonl
-peaks-none	python3 testdata/peaks.py testdata/peaks-none.geojsonl	peaks	testdata/peaks-none.geojsonl
-peaks-no-props	python3 testdata/peaks.py testdata/peaks-no-props.geojsonl	peaks	testdata/peaks-no-props.geojsonl
-munros-ok	python3 testdata/munros.py testdata/peaks-ok.geojsonl	munros	testdata/peaks-ok.geojsonl
-munros-one-munro-less	python3 testdata/munros.py testdata/peaks-one-munro-less.geojsonl	munros	testdata/peaks-one-munro-less.geojsonl
-munros-none	python3 testdata/munros.py testdata/peaks-none.geojsonl	munros	testdata/peaks-none.geojsonl
-munros-no-props	python3 testdata/munros.py testdata/peaks-no-props.geojsonl	munros	testdata/peaks-no-props.geojsonl
-sac-ok	python3 testdata/sac.py testdata/sac-ok.geojsonl	sac	testdata/sac-ok.geojsonl
-sac-wrong	python3 testdata/sac.py testdata/sac-wrong.geojsonl	sac	testdata/sac-wrong.geojsonl
-sac-single	python3 testdata/sac.py testdata/sac-single.geojsonl	sac	testdata/sac-single.geojsonl
-sac-unnamed	python3 testdata/sac.py testdata/sac-unnamed.geojsonl	sac	testdata/sac-unnamed.geojsonl
-terrain-features-ok	python3 testdata/terrain-features.py testdata/terrain-features-ok.geojsonl	terrain-features	testdata/terrain-features-ok.geojsonl
-terrain-features-few	python3 testdata/terrain-features.py testdata/terrain-features-few.geojsonl	terrain-features	testdata/terrain-features-few.geojsonl
-terrain-features-one	python3 testdata/terrain-features.py testdata/terrain-features-one.geojsonl	terrain-features	testdata/terrain-features-one.geojsonl
+# NAME	ARG... (see internal/golden)
+peaks-ok	peaks	testdata/peaks-ok.geojsonl
+peaks-wrong-ele	peaks	testdata/peaks-wrong-ele.geojsonl
+peaks-bool-ele	peaks	testdata/peaks-bool-ele.geojsonl
+peaks-none	peaks	testdata/peaks-none.geojsonl
+peaks-no-props	peaks	testdata/peaks-no-props.geojsonl
+munros-ok	munros	testdata/peaks-ok.geojsonl
+munros-one-munro-less	munros	testdata/peaks-one-munro-less.geojsonl
+munros-none	munros	testdata/peaks-none.geojsonl
+munros-no-props	munros	testdata/peaks-no-props.geojsonl
+sac-ok	sac	testdata/sac-ok.geojsonl
+sac-wrong	sac	testdata/sac-wrong.geojsonl
+sac-single	sac	testdata/sac-single.geojsonl
+sac-unnamed	sac	testdata/sac-unnamed.geojsonl
+terrain-features-ok	terrain-features	testdata/terrain-features-ok.geojsonl
+terrain-features-few	terrain-features	testdata/terrain-features-few.geojsonl
+terrain-features-one	terrain-features	testdata/terrain-features-one.geojsonl

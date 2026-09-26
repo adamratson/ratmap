@@ -13,8 +13,7 @@ import (
 	"ratmap/infra/tools/internal/pyfloat"
 )
 
-// testdata/ele.tsv is the Python's parse_elevation on 6,500-odd values
-// (testdata/gen-vectors.py): the tail the package comment names, rounding ties, the
+// testdata/ele.tsv is the Python's parse_elevation on 6,500-odd values: the tail the package comment names, rounding ties, the
 // range edges, non-ASCII digits, and random mixtures.
 func TestParseElevationMatchesPython(t *testing.T) {
 	f, err := os.Open("testdata/ele.tsv")

@@ -443,10 +443,11 @@ rule would ever pick, and that is the whole point of the list.
 
 #### Pipeline (`infra/`)
 
-- **`build-summit-lists.py`** → `summit-lists.json`, a new **global artifact** alongside
-  `peaks-global.pmtiles`. Structure: `{ version, lists: [{ id, name, region, source,
-  licence, revision, criteria?, members: [...] }] }`. A member is `{ osmId, wikidata?,
-  name, lat, lng, ele }` — enough to render and to re-match without the tiles (C18).
+- **`build-summit-lists`** (Go, in `infra/scripts/tools/cmd/`) → `summit-lists.json`, a
+  new **global artifact** alongside `peaks-global.pmtiles`. Structure: `{ version, lists:
+  [{ id, name, region, source, licence, revision, criteria?, members: [...] }] }`. A
+  member is `{ osmId, wikidata?, name, lat, lng, ele }` — enough to render and to
+  re-match without the tiles (C18).
 - **Rule-derived lists are generated**, from the same normalized GeoJSONL that
   `build-peaks.sh` already produces, plus a boundary polygon per list (Scotland, England
   and Wales, the Lake District national park). Criteria live in the artifact so the app

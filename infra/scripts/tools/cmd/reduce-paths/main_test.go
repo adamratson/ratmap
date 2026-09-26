@@ -10,8 +10,8 @@ import (
 	"testing"
 )
 
-// testdata/edge.want.* were written by the Python this replaces (testdata/reduce-paths.py)
-// from testdata/edge.geojsonl: lines, multilines, points, polygons, missing geometry or
+// testdata/edge.want.* were written by the Python this replaced, from
+// testdata/edge.geojsonl: lines, multilines, points, polygons, missing geometry or
 // properties, non-string and empty highways, tracks, extra and reordered keys, a
 // duplicated key, non-ASCII names, an RS prefix and blank lines.
 //

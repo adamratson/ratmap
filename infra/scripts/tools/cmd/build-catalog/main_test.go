@@ -9,7 +9,7 @@ import (
 )
 
 // testdata/vectors.json is the Python's own functions on real Geofabrik features and on
-// made-up inputs (testdata/gen-vectors.py): the building blocks, checked one by one. The
+// made-up inputs: the building blocks, checked one by one. The
 // whole generator was compared end to end against the Python on the full index when it
 // was ported (2026-09-26): regions.json byte-identical, stdout and stderr identical.
 type vectors struct {

@@ -10,8 +10,7 @@ import (
 	"testing"
 )
 
-// testdata/normalize-terrain-features.py is the Python this replaced, kept as the oracle.
-// testdata/selftest.want.stdout is what its --self-test printed.
+// testdata/selftest.want.stdout is what the Python this replaced printed for --self-test.
 func TestSelfTestMatchesPython(t *testing.T) {
 	var out bytes.Buffer
 	if err := selfTest(&out); err != nil {

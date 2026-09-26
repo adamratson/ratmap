@@ -14,8 +14,8 @@ import (
 	"testing"
 )
 
-// testdata/edge.want.* were written by the Python this replaces (testdata/dump-rows.py
-// says how) from testdata/edge.geojsonl, read twice. The fixture walks every rule: each
+// testdata/edge.want.* were written by the Python this replaced, from
+// testdata/edge.geojsonl read twice, and dumped as dumpRows does. The fixture walks every rule: each
 // population spelling int() accepts or refuses, negative and zero populations, bool
 // values standing in for ints, the kind precedence, skipped names and geometries,
 // duplicates to the 4th decimal including -0.0, a record separator and a blank line.
@@ -42,7 +42,9 @@ func TestMatchesPython(t *testing.T) {
 	}
 }
 
-// dumpRows renders each row the way testdata/dump-rows.py does.
+// dumpRows renders each row of places, in id order, as the golden dump did: one JSON
+// array per row, each value with its SQLite storage type, and every REAL as the hex of
+// its IEEE 754 bits, so the comparison is exact.
 func dumpRows(t *testing.T, path string) []string {
 	t.Helper()
 	db, err := sql.Open("sqlite", path)

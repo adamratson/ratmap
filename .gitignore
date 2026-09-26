@@ -35,6 +35,3 @@ blob-report
 
 # Cached OSM source extracts (hundreds of MB)
 infra/.cache
-
-# The Python generators of scripts/tools' test oracles, run by hand (see their testdata).
-__pycache__/

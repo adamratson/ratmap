@@ -13,7 +13,7 @@ import (
 )
 
 // Each testdata/case-* is the Python's verdict (exit code and stdout) on the same source,
-// decoded tiles and archive (testdata/gen-fixtures.py): every peak present; extra input
+// decoded tiles and archive: every peak present; extra input
 // peaks the archive lacks (named, unnamed, a Munro, one at the antimeridian, a null name);
 // more than the 50 it lists; and a decoded coordinate moved onto a half pixel.
 func TestMatchesPython(t *testing.T) {

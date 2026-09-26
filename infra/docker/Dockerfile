@@ -81,8 +81,8 @@ RUN set -eux; \
 # Stage 3 — Go toolchain, checksum-verified
 #
 # build-contours.sh compiles scripts/contour-cell, and build-peaks.sh, build-avalanche.sh,
-# build-paths.sh and build-places.sh compile scripts/tools, from the working copy on every
-# run
+# build-paths.sh, build-places.sh and build-sac.sh compile scripts/tools, from the working
+# copy on every run
 # rather than this image carrying the binaries: the scripts are bind-mounted over the
 # image's copy, and a baked binary would go on running old logic after the source moved.
 # So the image carries the compiler instead. Same fail-closed checksums as pmtiles above,
@@ -211,11 +211,12 @@ RUN chmod +x /usr/local/bin/ratmap /usr/local/bin/ratmap-global \
 # at run time, where Go caches its builds under $HOME.
 #
 # Same for scripts/tools (compute-prominence, encode-avalanche — the Go ports that
-# replaced the numpy/scipy virtualenv this image used to carry — reduce-paths and
-# build-places-db): their tests include the slope maths' self-test, the union-find
-# checked against per-threshold relabelling, Python's float formatting checked against
-# CPython's own output, the paths reduce checked against what the Python it replaced
-# kept, and places.sqlite checked row for row against the Python's — FTS5 with unicode61
+# replaced the numpy/scipy virtualenv this image used to carry — reduce-paths,
+# build-places-db and normalize-sac): their tests include the slope maths' self-test, the
+# union-find checked against per-threshold relabelling, Python's float formatting checked
+# against CPython's own output, the paths reduce checked against what the Python it
+# replaced kept, the sac_scale parser against the Python's on 6,000 values, and
+# places.sqlite checked row for row against the Python's — FTS5 with unicode61
 # remove_diacritics 2 included, which this image used to check in Debian's libsqlite3
 # instead (C9: the whole search index is FTS5). Their first build fetches
 # modernc.org/sqlite and its dependencies from the Go module proxy.

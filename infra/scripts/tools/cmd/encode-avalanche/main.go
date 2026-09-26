@@ -178,7 +178,7 @@ func slopeAspect(dem [][]float64, gt [6]float64) ([][]float64, [][]float64) {
 // selfTest asserts the maths against planes whose slope is known analytically, and
 // returns what failed. Run on every build by build-avalanche.sh, and by `go test`.
 //
-// Earns its place for the same reason normalize-sac.py's does: the failure this guards
+// Earns its place for the same reason normalize-sac's does: the failure this guards
 // against produces a map that looks right and reads low, and nothing downstream can
 // detect it. In particular the regression guard fails loudly if the cos(lat) correction
 // is ever dropped — which is the exact regression that would otherwise ship.

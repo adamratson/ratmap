@@ -133,7 +133,7 @@ echo "==> building encode-avalanche"
 ENCODE_BIN="$(go_tool encode-avalanche "$WORK_DIR")"
 
 # The maths that decides which slopes get drawn earns a test of its own, run on every
-# build — same standard as normalize-sac.py. Its last case fails loudly if the Mercator
+# build — same standard as normalize-sac. Its last case fails loudly if the Mercator
 # cos(lat) correction is ever dropped, which is the regression that would otherwise ship a
 # map reading 21 degrees for a 36-degree slope.
 echo "==> checking the slope maths"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Normalize OSM `natural=scree|shingle|rock|stone` before tippecanoe.
 
-Unlike `sac_scale` (normalize-sac.py) these are clean enum values in practice — no free
+Unlike `sac_scale` (normalize-sac) these are clean enum values in practice — no free
 text to parse. This script exists for three things that still need doing before
 tippecanoe, not for parsing:
 
@@ -20,7 +20,7 @@ tippecanoe, not for parsing:
     assembles an area for *every* recognized tag it finds, independently per object. The
     filter step narrows the input; this script is what actually enforces the four kinds.
   * Deduplicate by `(kind, @id)` across concatenated continent extracts — same seam
-    problem `normalize-sac.py` documents, though far less likely to bite here: these are
+    problem `normalize-sac` documents, though far less likely to bite here: these are
     small, local features (a scree slope, a single boulder), not the long paths that
     actually cross a continent-extract boundary. Kept anyway because it is cheap and this
     script would otherwise be the one artifact in the pipeline that assumes away a
@@ -37,7 +37,7 @@ the source rather than asking this script to notice two differently-shaped featu
 describing the same way.
 
 Reads line-delimited GeoJSON on argv[1], writes line-delimited GeoJSON to argv[2],
-streaming, same convention as normalize-sac.py and normalize-peaks.py.
+streaming, same convention as normalize-sac and normalize-peaks.py.
 """
 import json
 import sys

@@ -22,7 +22,7 @@ multi-day unattended run needs and a laptop run doesn't.
 | GDAL | Debian trixie (3.10.3) | `gdal_contour`, `ogr2ogr` with the GeoJSONSeq driver |
 | python3 + sqlite3 | Debian trixie | Stdlib scripts and inline snippets; `sqlite3` for inspecting `places.sqlite` by hand. The index itself is built by `scripts/tools/cmd/build-places-db` with its own SQLite (modernc.org/sqlite), and the image build **fails** if its tests — FTS5 with `unicode61 remove_diacritics 2` among them, C9's whole search index — do not pass |
 | awscli | Debian trixie (v2) | uploads (`upload.sh` uses `aws s3 cp`, not `pmtiles upload` — see its header comment); request checksums forced to `when_required` so an aws-cli-v2 checksum disagreement with a non-AWS S3 gateway (hit against both R2 and Krystal) can't fail the last step of a multi-day run |
-| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/tools` (prominence, avalanche slope, the paths reduce step, the places index) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25) |
+| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/tools` (prominence, avalanche slope, the paths reduce step, the places index, `sac_scale` grades) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25) |
 
 Build args move any version without editing the Dockerfile:
 `--build-arg TIPPECANOE_VERSION=2.80.0`. Bumping `PMTILES_VERSION` also requires bumping
@@ -212,7 +212,7 @@ silence that warning, and silencing it does not help: the next command cannot re
 result either.
 
 The cost of concatenating is that a seam way is exported twice. `build-sac.sh` undoes that
-(`osmium export -a id`, and normalize-sac.py drops ids it has already written — the
+(`osmium export -a id`, and normalize-sac drops ids it has already written — the
 property is `@id`, not `id`); `build-paths.sh` deliberately does not, because holding
 ~85 M way ids in memory to remove a few thousand duplicates is not a trade worth making
 for lines drawn at z12-13. `build-terrain-features.sh` follows `build-sac.sh`'s choice —

@@ -1,0 +1,40 @@
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 1, "sac_scale": "mountain_hiking", "name": "Ben Nevis Mountain Path", "highway": "path"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 2, "sac_scale": "T2-T3", "name": "Scramble <&> path"}}
+{"type": "Feature", "geometry": {"type": "MultiLineString", "coordinates": [[[-5.0, 56.6], [-4.9, 56.65]]]}, "properties": {"@id": 3, "sac_scale": "demanding_alpine_hiking", "name": "Aonach Eagach"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 4, "sac_scale": "hiking", "name": 12}}
+
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 5, "sac_scale": "alpine_hiking", "name": ""}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 6, "sac_scale": 4}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 7, "sac_scale": 2.9}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 30, "sac_scale": "T4", "name": "Record separator"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 8, "sac_scale": 7}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 9, "sac_scale": true}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 10, "sac_scale": ["T3"]}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 11, "sac_scale": {"k": "v"}}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 12, "sac_scale": null}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 13}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"@id": 14, "sac_scale": "hiking"}}
+{"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}, "properties": {"@id": 15, "sac_scale": "hiking"}}
+{"type": "Feature", "geometry": {}, "properties": {"sac_scale": "hiking"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 1, "sac_scale": "difficult_alpine_hiking", "name": "Seam duplicate"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 1.0, "sac_scale": "hiking", "name": "Same id as a float"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": "1", "sac_scale": "hiking", "name": "Id as a string is different"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 16, "sac_scale": "hiking", "name": "True is 1"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": true, "sac_scale": "hiking", "name": "Dup of id 1 via True"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"sac_scale": "hiking", "name": "No id at all"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"sac_scale": "hiking", "name": "No id at all"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": null, "sac_scale": "hiking", "name": "Null id"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 17, "sac_scale": "yes"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 18, "sac_scale": "yes"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 19, "sac_scale": "?"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 20, "sac_scale": "strolling"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 21, "sac_scale": "strolling"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 22, "sac_scale": "strolling"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 23, "sac_scale": "it's"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 24, "sac_scale": "a\"b"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 25, "sac_scale": "tab\there ​"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 26, "sac_scale": "T9"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 27, "sac_scale": "zz"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 28, "sac_scale": "T2 to T3"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"@id": 29, "sac_scale": "hiking", "name": "Kept though untagged elsewhere"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}}

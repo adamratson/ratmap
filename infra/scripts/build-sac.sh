@@ -16,6 +16,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_cmd osmium
 require_cmd tippecanoe
+require_cmd go
 
 # Space-separated .osm.pbf URLs, same convention (and same cache) as build-peaks.sh.
 # Defaults to the union of every region's `osmExtract`, so a newly published region gets
@@ -25,12 +26,16 @@ SAC_SOURCE_URLS="${SAC_SOURCE_URLS:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/re
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-SCRIPT_DIR_SAC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The normalizer is Go (tools/cmd/normalize-sac), the port of normalize-sac.py: the same
+# grades, the same features kept and dropped, the same report. Built from this checkout
+# (lib.sh).
+echo "==> building normalize-sac"
+NORMALIZE_SAC_BIN="$(go_tool normalize-sac "$WORK_DIR")"
 
 # The parser earns a test of its own: `sac_scale` is a documented enum that in practice
 # carries 184 distinct values, and the difference between reading "T2-T3" as 3 and
 # discarding it is a graded path silently vanishing from the map.
-python3 "$SCRIPT_DIR_SAC/normalize-sac.py" --self-test
+"$NORMALIZE_SAC_BIN" --self-test
 
 # Ways only. `sac_scale` on a node or a relation is a tagging error — the scale describes a
 # stretch of path — and either would export as geometry the app cannot draw as a band or
@@ -65,7 +70,7 @@ done
 # worldwide, none happened to sit on a seam.
 #
 # Concatenating the exports sidesteps it, and drops a full extra copy of the merged PBF
-# from the working set. `-a id` carries the OSM way id through so normalize-sac.py can
+# from the working set. `-a id` carries the OSM way id through so normalize-sac can
 # drop a way it has already seen — a set of ids at this scale is affordable. The paths
 # build cannot afford that and does not do it; see build-paths.sh.
 #
@@ -79,9 +84,9 @@ for pbf in "${filtered_pbfs[@]}"; do
   rm -f "$WORK_DIR/part.geojsonl"
 done
 
-# Free text in, integer 1-6 out — see normalize-sac.py. Anything it cannot read is dropped
-# and counted, never guessed at.
-python3 "$SCRIPT_DIR_SAC/normalize-sac.py" "$WORK_DIR/sac.geojsonl" "$WORK_DIR/sac-final.geojsonl"
+# Free text in, integer 1-6 out — see tools/cmd/normalize-sac. Anything it cannot read is
+# dropped and counted, never guessed at.
+"$NORMALIZE_SAC_BIN" "$WORK_DIR/sac.geojsonl" "$WORK_DIR/sac-final.geojsonl"
 
 # Grade regression check, in the same spirit as build-peaks.sh's elevation assertions: a
 # parser or schema change that silently mis-reads `sac_scale` should fail here, not be

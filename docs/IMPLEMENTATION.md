@@ -659,7 +659,7 @@ archives (`src/routes/sac-real-data.test.ts`, skipped when they are not on the m
 a route built from the *basemap's* Ben Nevis Mountain Path geometry comes back >90%
 graded, >500 m of it T2, from the *sac* archive.
 
-Free-text handling stays in the pipeline, as with `ele` (`infra/scripts/normalize-sac.py`):
+Free-text handling stays in the pipeline, as with `ele` (`infra/scripts/tools/cmd/normalize-sac`):
 `sac_scale` is a documented enum with 184 values in the wild. A range (`T2-T3`) takes the
 harder end; a modifier (`T2+`) takes its base grade; `strolling` is dropped rather than
 mapped to T1, because the scale starts at T1 and a path tagged as a stroll is better shown

@@ -1,3 +1,5 @@
+# normalize-sac.py as build-sac.sh ran it, before cmd/normalize-sac replaced it (copied
+# verbatim). Kept only to regenerate the golden files — see gen-vectors.py.
 #!/usr/bin/env python3
 """Normalize OSM `sac_scale` into an integer grade 1-6 before tippecanoe.
 

@@ -123,7 +123,7 @@ both before tiling, with counts in the log:
 ### SAC grades
 
 `build-sac.sh` is the same shape: filter `sac_scale` ways out of the OSM extracts,
-normalize the free-text tag into an integer 1-6 (`normalize-sac.py`), and tile to z12-15.
+normalize the free-text tag into an integer 1-6 (`scripts/tools/cmd/normalize-sac`), and tile to z12-15.
 It exists because the basemap has no room for it — a z15 tile of
 `scotland-basemap.pmtiles` over the Ben Nevis Mountain Path carries exactly `kind`,
 `kind_detail`, `min_zoom`, `name`, `sort_rank` (decoded 2026-09-06).
@@ -135,7 +135,7 @@ alongside the basemap and terrain, so grades work with the phone in Airplane Mod
 (C16) and says so in the build output.
 
 Two checks run inside the build, both cheap and both there because a mis-parsed enum would
-quietly thin the map rather than fail: `normalize-sac.py --self-test` covers the parser
+quietly thin the map rather than fail: `normalize-sac --self-test` covers the parser
 against the values OSM actually carries (`T2-T3`, `alpine_hiking (T4)`, `strolling`,
 `yes`), and the build then asserts known paths — Ben Nevis Mountain Path T2, West Highland
 Way T1, Aonach Eagach T5 — plus that more than one grade came out at all.

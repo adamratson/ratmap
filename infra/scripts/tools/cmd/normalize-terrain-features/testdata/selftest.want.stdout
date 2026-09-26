@@ -1,0 +1,3 @@
+  kept 3 features; skipped 2 with an unrecognized natural= value, 0 already seen (continent seams)
+  by kind: rock x1, scree x1, shingle x1
+  normalize-terrain-features self-test OK (5 cases)

@@ -1,0 +1,8 @@
+{"type": "Feature", "geometry": null, "properties": {"name": "Ben Nevis Mountain Path", "t": 1}}
+{"type": "Feature", "geometry": null, "properties": {"name": "Ben Nevis Mountain Path", "t": 2}}
+{"type": "Feature", "geometry": null, "properties": {"name": "West Highland Way", "t": 1}}
+{"type": "Feature", "geometry": null, "properties": {"t": 3}}
+{"type": "Feature", "geometry": null, "properties": {"name": "Aonach Eagach", "t": 5}}
+{"type": "Feature", "geometry": null, "properties": {"name": "Aonach Eagach", "t": 4}}
+{"type": "Feature", "geometry": null, "properties": {"name": "Other", "t": 6}}
+{"type": "Feature", "geometry": null, "properties": {"name": "West Highland Way", "t": 2}}

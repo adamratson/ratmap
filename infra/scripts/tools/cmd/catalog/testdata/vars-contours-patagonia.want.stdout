@@ -1,0 +1,6 @@
+REGION_NAME='Patagonia (south)'
+WEST=-73.5
+SOUTH=-51.25
+EAST=-68.0
+NORTH=-45.5
+exit 0

@@ -214,19 +214,7 @@ peaks_fetch_workers() {
 # way to tell how far it got. Counts only regions whose basemap is not already built, so
 # a resumed run asks for what it still needs rather than for the whole catalogue again.
 catalogue_dist_gb() {
-  python3 -c '
-import json, pathlib, sys
-dist = pathlib.Path(sys.argv[2]) / "regions"
-total = 0
-with open(sys.argv[1]) as f:
-    for r in json.load(f)["regions"]:
-        rid = r["id"]
-        if (dist / rid / (rid + "-basemap.pmtiles")).exists():
-            continue
-        total += r.get("estimatedBytes", 0)
-# 10% headroom: the estimates are two significant figures, and contours are not in them.
-print(int(total * 1.1 / 1e9))
-' "$INFRA_DIR/regions.json" "$DIST_DIR"
+  catalog dist-gb "$INFRA_DIR/regions.json" "$DIST_DIR"
 }
 
 # Memory the peaks stage's prominence pass needs, as "<GB> <largest region> <its Mpx>".
@@ -244,18 +232,7 @@ print(int(total * 1.1 / 1e9))
 PEAKS_BYTES_PER_PX=9.5
 FETCH_DEM_GB=1.25
 peaks_mem_gb() {
-  python3 -c '
-import json, math, sys
-res, workers, per_fetch, per_px = (float(sys.argv[2]), int(sys.argv[3]),
-                                   float(sys.argv[4]), float(sys.argv[5]))
-def area(r): w, s, e, n = r["bbox"]; return (e - w) * (n - s)
-with open(sys.argv[1]) as f:
-    order = sorted(json.load(f)["regions"], key=area)
-px = [area(r) / (res * res) for r in order]
-n = len(order)
-need = max(px[k] * per_px / 2**30 + per_fetch * min(workers, n - 1 - k) for k in range(n))
-print(math.ceil(need), order[-1]["id"], round(px[-1] / 1e6))
-' "$INFRA_DIR/regions.json" "${PROM_DEM_RES:-0.000833333}" "${PROM_FETCH_WORKERS:-3}" \
+  catalog peaks-mem "$INFRA_DIR/regions.json" "${PROM_DEM_RES:-0.000833333}" "${PROM_FETCH_WORKERS:-3}" \
     "$FETCH_DEM_GB" "$PEAKS_BYTES_PER_PX"
 }
 
@@ -729,33 +706,15 @@ stage_places() {
 # continent at a time (`RATMAP_REGION_FILTER='^(fr|de|ch|at|it)' ratmap global regions`)
 # rather than as one multi-day block that has to succeed all at once.
 region_ids() {
-  python3 -c '
-import json, re, sys
-flag = sys.argv[2] if len(sys.argv) > 2 else None
-pattern = re.compile(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else None
-with open(sys.argv[1]) as f:
-    for r in json.load(f)["regions"]:
-        if flag and not r.get(flag):
-            continue
-        if pattern and not pattern.search(r["id"]):
-            continue
-        # `id<space>wants-terrain`, so the skip check knows which artifacts to expect.
-        print(r["id"], 0 if r.get("terrain") is False else 1)
-' "$INFRA_DIR/regions.json" "${1:-}" "${RATMAP_REGION_FILTER:-}"
+  catalog ids "$INFRA_DIR/regions.json" "${1:-}" "${RATMAP_REGION_FILTER:-}"
 }
 
-# "<id> <w> <s> <e> <n>" for each id given, in that order. The numbers are printed with
-# Python's str(), exactly as build-contours.sh and build-avalanche.sh hand them to
+# "<id> <w> <s> <e> <n>" for each id given, in that order. The numbers are printed as
+# Python's str() printed them, exactly as build-contours.sh and build-avalanche.sh hand them to
 # fetch-dem.sh — which is what makes a DEM fetched from here the cache entry those
 # scripts look for.
 region_bboxes() {
-  python3 -c '
-import json, sys
-with open(sys.argv[1]) as f:
-    bbox = {r["id"]: r["bbox"] for r in json.load(f)["regions"]}
-for rid in sys.argv[2:]:
-    print(rid, *bbox[rid])
-' "$INFRA_DIR/regions.json" "$@"
+  catalog bboxes "$INFRA_DIR/regions.json" "$@"
 }
 
 # One bad region must not end a run of several hundred. A malformed bbox failed on
@@ -1119,6 +1078,18 @@ stage_manifest() {
 ########################################################################
 # run
 ########################################################################
+
+# The catalogue queries above (catalogue_dist_gb, peaks_mem_gb, region_ids, region_bboxes)
+# are Go, scripts/tools/cmd/catalog, built here once from the working copy like every Go
+# tool in the pipeline. This driver does not source lib.sh (see the note on the sizing
+# helpers), so it does the build itself.
+CATALOG_DIR="$(mktemp -d)"
+trap 'rm -rf "$CATALOG_DIR"' EXIT
+(cd "$INFRA_DIR/scripts/tools" \
+  && GOTOOLCHAIN=local go build -trimpath -buildvcs=false -o "$CATALOG_DIR/catalog" ./cmd/catalog) \
+  || { echo "could not build scripts/tools/cmd/catalog" >&2; exit 1; }
+catalog() { "$CATALOG_DIR/catalog" "$@"; }
+
 if [ -n "$PREFLIGHT_ONLY" ]; then
   preflight
   exit $?

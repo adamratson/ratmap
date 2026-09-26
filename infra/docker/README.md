@@ -20,9 +20,9 @@ multi-day unattended run needs and a laptop run doesn't.
 | pmtiles (go-pmtiles) | 1.31.2, release binary, SHA256-verified | Same posture as C13 — pinned, never `latest` |
 | osmium-tool | Debian trixie (1.18.0) | `tags-filter` / `merge` / `export` |
 | GDAL | Debian trixie (3.10.3) | `gdal_contour`, `ogr2ogr` with the GeoJSONSeq driver |
-| python3 + sqlite3 | Debian trixie | Stdlib scripts and inline snippets; `sqlite3` for inspecting `places.sqlite` by hand. The index itself is built by `scripts/tools/cmd/build-places-db` with its own SQLite (modernc.org/sqlite), and the image build **fails** if its tests — FTS5 with `unicode61 remove_diacritics 2` among them, C9's whole search index — do not pass |
+| sqlite3 | Debian trixie | For inspecting `places.sqlite` by hand. The index itself is built by `scripts/tools/cmd/build-places-db` with its own SQLite (modernc.org/sqlite), and the image build **fails** if its tests — FTS5 with `unicode61 remove_diacritics 2` among them, C9's whole search index — do not pass |
 | awscli | Debian trixie (v2) | uploads (`upload.sh` uses `aws s3 cp`, not `pmtiles upload` — see its header comment); request checksums forced to `when_required` so an aws-cli-v2 checksum disagreement with a non-AWS S3 gateway (hit against both R2 and Krystal) can't fail the last step of a multi-day run |
-| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/tools` (prominence, avalanche slope, the paths reduce step, the places index, `sac_scale` grades, the peaks helpers) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25) |
+| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/tools` (prominence, avalanche slope, the paths reduce step, the places index, `sac_scale` grades, the peaks helpers, terrain features, and the catalogue queries, header reads and output checks the scripts used to run as inline Python) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25), then Python altogether (2026-09-26) |
 
 Build args move any version without editing the Dockerfile:
 `--build-arg TIPPECANOE_VERSION=2.80.0`. Bumping `PMTILES_VERSION` also requires bumping
@@ -219,7 +219,7 @@ for lines drawn at z12-13. `build-terrain-features.sh` follows `build-sac.sh`'s 
 scree/rock/boulder features are a small fraction of `paths`' way count, so the same
 dedup is affordable — but keys on `(kind, @id)` rather than `@id` alone, since a node and
 a way can share a numeric id and `rock`/`stone` are the two kinds that carry both
-geometries (see normalize-terrain-features.py).
+geometries (see `scripts/tools/cmd/normalize-terrain-features`).
 
 ### One tags-filter pass shared by the OSM stages
 

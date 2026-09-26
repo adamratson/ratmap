@@ -1,0 +1,16 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "scree", "@id": 1, "name": "A <&> \"q\""}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "scree", "@id": 1.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "scree", "@id": true}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "scree", "@id": "1"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "rock", "@id": 1}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "stone"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "stone"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "shingle", "@id": null}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": 5}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": null}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "Scree"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"natural": "rock", "name": 7}}
+
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [3, 4]}, "properties": {"natural": "rock", "@id": 9}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [5, 6]}}

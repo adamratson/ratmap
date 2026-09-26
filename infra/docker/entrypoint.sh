@@ -59,7 +59,6 @@ doctor() {
   printf '  %-12s %s\n' osmium      "$(osmium --version 2>&1 | head -1)"
   printf '  %-12s %s\n' gdal        "$(gdal_contour --version 2>&1 | head -1)"
   printf '  %-12s %s\n' ogr2ogr     "$(ogr2ogr --version 2>&1 | head -1)"
-  printf '  %-12s %s\n' python3     "$(python3 --version 2>&1)"
   printf '  %-12s %s\n' go          "$(go version 2>&1 | head -1)"
   printf '  %-12s %s\n' sqlite3     "$(sqlite3 --version 2>&1 | awk '{print $1}')"
   printf '  %-12s %s\n' aws         "$(aws --version 2>&1 | head -1)"
@@ -91,7 +90,7 @@ case "$cmd" in
   doctor)         doctor ;;
   shell|bash)     exec bash "$@" ;;
   global)         exec ratmap-global "$@" ;;
-  *.sh|*.py)
+  *.sh)
     if [ -x "$SCRIPTS_DIR/$cmd" ]; then
       exec "$SCRIPTS_DIR/$cmd" "$@"
     fi

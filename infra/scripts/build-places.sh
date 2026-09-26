@@ -6,7 +6,6 @@
 # search box covers both ("Fort William" and "Ben Nevis").
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_cmd osmium
-require_cmd python3
 require_cmd go
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -7,6 +7,7 @@ package pytext
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -200,4 +201,58 @@ func Title(s string) string {
 		prevCased = cased
 	}
 	return b.String()
+}
+
+// HashKey identifies a JSON value the way a Python set or dict key does: by equality and hash, under which
+// 5, 5.0 and True == 1 are the same key and "5" is not. Lists and dicts are unhashable,
+// and raised.
+func HashKey(raw json.RawMessage) (string, error) {
+	raw = bytes.TrimSpace(raw)
+	switch {
+	case len(raw) == 0:
+		return "", errors.New("empty value")
+	case raw[0] == '"':
+		s, _ := Str(raw)
+		return "s" + s, nil
+	case raw[0] == '[' || raw[0] == '{':
+		return "", fmt.Errorf("%s is unhashable in Python", raw)
+	case string(raw) == "true":
+		return "n1", nil
+	case string(raw) == "false":
+		return "n0", nil
+	}
+	if !bytes.ContainsAny(raw, ".eE") {
+		if i, err := strconv.ParseInt(string(raw), 10, 64); err == nil {
+			return "n" + strconv.FormatInt(i, 10), nil
+		}
+		return "n" + strings.TrimPrefix(string(raw), "+"), nil // past int64: exact digits
+	}
+	f, err := strconv.ParseFloat(string(raw), 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
+		return "", fmt.Errorf("%s: %w", raw, err)
+	}
+	if f == math.Trunc(f) && math.Abs(f) < 1<<63 {
+		return "n" + strconv.FormatInt(int64(f), 10), nil // 5.0 is 5
+	}
+	return "f" + strconv.FormatFloat(f, 'g', -1, 64), nil
+}
+
+// ShellQuote is shlex.quote: s unchanged if it is non-empty and made only of ASCII word
+// characters and @%+=:,./- , otherwise in single quotes with each ' written as '"'"'.
+func ShellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	safe := true
+	for _, r := range s {
+		if !(r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			strings.ContainsRune("@%+=:,./-", r)) {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }

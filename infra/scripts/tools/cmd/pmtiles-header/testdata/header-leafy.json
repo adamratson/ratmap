@@ -1,0 +1,17 @@
+{
+    "tile_compression": "none",
+    "tile_type": "mvt",
+    "minzoom": 2,
+    "maxzoom": 9,
+    "bounds": [
+        -1,
+        -1,
+        1,
+        1
+    ],
+    "center": [
+        0,
+        0,
+        2
+    ]
+}

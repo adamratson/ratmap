@@ -132,7 +132,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libsqlite3-0 \
         libstdc++6 \
         osmium-tool \
-        python3 \
         sqlite3 \
         awscli \
         zlib1g \
@@ -159,7 +158,6 @@ ENV TMPDIR=/work/tmp \
     RATMAP_WORK=/work \
     RATMAP_CACHE=/work/cache \
     OSM_CACHE_DIR=/work/cache/osm \
-    PYTHONUNBUFFERED=1 \
     LC_ALL=C.UTF-8 \
     LANG=C.UTF-8
 
@@ -203,7 +201,7 @@ COPY regions.json /opt/ratmap/infra/regions.json
 COPY docker/build-global.sh /usr/local/bin/ratmap-global
 COPY docker/entrypoint.sh /usr/local/bin/ratmap
 RUN chmod +x /usr/local/bin/ratmap /usr/local/bin/ratmap-global \
-    && chmod +x /opt/ratmap/infra/scripts/*.sh /opt/ratmap/infra/scripts/*.py
+    && chmod +x /opt/ratmap/infra/scripts/*.sh
 
 # Fail the image build, not a contours run, if the baked copy of contour-cell does not
 # compile or no longer writes what its golden files say. Everything it writes stays in
@@ -212,7 +210,9 @@ RUN chmod +x /usr/local/bin/ratmap /usr/local/bin/ratmap-global \
 #
 # Same for scripts/tools, every Go port of the pipeline's Python — compute-prominence and
 # encode-avalanche (which replaced the numpy/scipy virtualenv this image used to carry),
-# reduce-paths, build-places-db, normalize-sac and the peaks helpers. Their tests include
+# reduce-paths, build-places-db, normalize-sac, normalize-terrain-features, the peaks
+# helpers, and the commands that replaced the scripts' inline Python snippets (catalog,
+# pmtiles-header, check-output, ...); there is no Python left in the image. Their tests include
 # the slope maths' self-test, the union-find checked against per-threshold relabelling,
 # Python's float formatting against CPython's own output, the paths reduce against what
 # the Python kept, the sac_scale parser against the Python's on 6,000 values, the peaks

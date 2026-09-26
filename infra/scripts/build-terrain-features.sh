@@ -14,6 +14,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_cmd osmium
 require_cmd tippecanoe
+require_cmd go
 
 # Same convention as build-sac.sh: defaults to the union of every region's `osmExtract`.
 TERRAIN_FEATURES_SOURCE_URLS="${TERRAIN_FEATURES_SOURCE_URLS:-$(go_run region-osm-sources)}"
@@ -21,9 +22,14 @@ TERRAIN_FEATURES_SOURCE_URLS="${TERRAIN_FEATURES_SOURCE_URLS:-$(go_run region-os
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-SCRIPT_DIR_TF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The normalizer and the check below are Go (tools/cmd/normalize-terrain-features, a port
+# of normalize-terrain-features.py, and tools/cmd/check-output), built from this checkout
+# (lib.sh).
+echo "==> building normalize-terrain-features"
+NORMALIZE_TF_BIN="$(go_tool normalize-terrain-features "$WORK_DIR")"
+CHECK_OUTPUT_BIN="$(go_tool check-output "$WORK_DIR")"
 
-python3 "$SCRIPT_DIR_TF/normalize-terrain-features.py" --self-test
+"$NORMALIZE_TF_BIN" --self-test
 
 TERRAIN_FEATURES_FILTER="nwr/natural=scree,shingle,rock,stone"
 
@@ -53,7 +59,7 @@ done
 # scotland-latest.osm.pbf (2026-09-18): 6,059 LineStrings alongside 6,156 MultiPolygons for
 # `scree` alone, an almost-exact duplicate pair. Restricting the export to point+polygon
 # drops the redundant boundary line at the source, rather than asking normalize-
-# terrain-features.py to deduplicate two differently-shaped features describing one way.
+# terrain-features to deduplicate two differently-shaped features describing one way.
 : > "$WORK_DIR/terrain-features.geojsonl"
 for pbf in "${filtered_pbfs[@]}"; do
   osmium export "$pbf" -o "$WORK_DIR/part.geojsonl" \
@@ -63,7 +69,7 @@ for pbf in "${filtered_pbfs[@]}"; do
   rm -f "$WORK_DIR/part.geojsonl"
 done
 
-python3 "$SCRIPT_DIR_TF/normalize-terrain-features.py" \
+"$NORMALIZE_TF_BIN" \
   "$WORK_DIR/terrain-features.geojsonl" "$WORK_DIR/terrain-features-final.geojsonl"
 
 # Regression check, same standard as every other pipeline here — but a different shape
@@ -78,29 +84,7 @@ python3 "$SCRIPT_DIR_TF/normalize-terrain-features.py" \
 # scotland-latest.osm.pbf alone) — loose enough to survive ordinary OSM edits and a
 # narrower test extract, tight enough that a broken filter (which produces zero) still
 # fails it.
-python3 - "$WORK_DIR/terrain-features-final.geojsonl" <<'PYCHECK'
-import json, sys
-
-MIN_EXPECTED = {"scree": 20, "shingle": 5, "rock": 5, "stone": 5}
-
-histogram = {}
-with open(sys.argv[1]) as f:
-    for line in f:
-        kind = json.loads(line)["properties"]["kind"]
-        histogram[kind] = histogram.get(kind, 0) + 1
-
-print("  by kind: " + ", ".join(f"{k} x{histogram.get(k, 0)}" for k in sorted(MIN_EXPECTED)))
-
-missing = [k for k, minimum in MIN_EXPECTED.items() if histogram.get(k, 0) < minimum]
-if missing:
-    sys.exit(
-        "FAIL: implausibly few features for "
-        + ", ".join(f"{k} ({histogram.get(k, 0)} < {MIN_EXPECTED[k]})" for k in missing)
-        + " — filter or normalize step likely broken"
-    )
-if len(histogram) < 2:
-    sys.exit("FAIL: fewer than two distinct kinds in the whole build")
-PYCHECK
+"$CHECK_OUTPUT_BIN" terrain-features "$WORK_DIR/terrain-features-final.geojsonl"
 
 OUT="$DIST_DIR/terrain-features-global.pmtiles"
 

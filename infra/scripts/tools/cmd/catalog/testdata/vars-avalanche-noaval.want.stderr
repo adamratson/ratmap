@@ -1,0 +1,1 @@
+Region 'noaval' does not set "avalanche": true in regions.json. This artifact is opt-in per region (A8) — add the flag if it is wanted here.

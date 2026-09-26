@@ -76,21 +76,7 @@ else
   LISTING="$(mktemp)"
   if aws s3api list-objects-v2 --bucket "$S3_BUCKET" --endpoint-url "$S3_ENDPOINT" \
        --output json >"$LISTING" 2>"$LISTING.err" \
-     && CHANGED="$(python3 - "$LISTING" "$DIST_DIR" "${files[@]}" 2>"$LISTING.err" <<'PY'
-import json, os, sys
-listing, dist, keys = sys.argv[1], sys.argv[2], sys.argv[3:]
-text = open(listing).read().strip()
-# An empty bucket lists as no output at all, not as an empty Contents array.
-try:
-    remote = {o["Key"]: o["Size"] for o in (json.loads(text).get("Contents") or [])} if text else {}
-except (ValueError, AttributeError, KeyError, TypeError) as err:
-    # One line, not a traceback: the caller prints it as the reason and falls back.
-    sys.exit(f"listing was not readable JSON: {err}")
-for key in keys:
-    if remote.get(key) != os.path.getsize(os.path.join(dist, key)):
-        print(key)
-PY
-)"; then
+     && CHANGED="$(go_run upload-check changed "$LISTING" "$DIST_DIR" "${files[@]}" 2>"$LISTING.err")"; then
     [ -n "$CHANGED" ] && mapfile -t to_upload <<<"$CHANGED"
   else
     reason="$(head -1 "$LISTING.err" 2>/dev/null)"
@@ -137,18 +123,7 @@ if [ -f "$MANIFEST" ]; then
   trap 'rm -f "$PUBLISHED_MANIFEST" "$MANIFEST_GZ"' EXIT
   if aws s3 cp "${BUCKET_URL}/regions/manifest.json" "$PUBLISHED_MANIFEST" \
        --endpoint-url "$S3_ENDPOINT" --no-progress >/dev/null 2>&1; then
-    MISSING="$(python3 - "$PUBLISHED_MANIFEST" "$MANIFEST" <<'PY'
-import gzip, json, sys
-def ids(path):
-    # The published copy is stored gzipped (see below); `aws s3 cp` returns it as stored.
-    with open(path, "rb") as f:
-        data = f.read()
-    if data[:2] == b"\x1f\x8b":
-        data = gzip.decompress(data)
-    return {r["id"] for r in json.loads(data).get("regions", [])}
-print(" ".join(sorted(ids(sys.argv[1]) - ids(sys.argv[2]))))
-PY
-)"
+    MISSING="$(go_run upload-check unpublished "$PUBLISHED_MANIFEST" "$MANIFEST")"
     if [ -n "$MISSING" ]; then
       echo >&2
       echo "REFUSING TO UPLOAD: this manifest would unpublish region(s): $MISSING" >&2
@@ -173,30 +148,17 @@ PY
   # to a browser, and every install would lose its catalogue at once — so if the gateway
   # dropped the header, put the plain file back and stop loudly rather than leave that up.
   if [ -n "${PUBLIC_BASE_URL:-}" ]; then
-    # curl, not Python's urllib: a python.org Python on macOS ships without a CA bundle
-    # until its "Install Certificates" step is run, and a verification that fails for
-    # that reason would roll back every upload. Without --compressed, curl saves the body
-    # as served, so a missing header shows up as gzip bytes where JSON should be.
+    # curl for the fetch: it is what the rest of this script already trusts to talk to the
+    # bucket, and a verification that failed for a reason of its own — a Python without
+    # its CA bundle did exactly that on macOS — would roll back every upload. Without
+    # --compressed, curl saves the body as served, so a missing header shows up as gzip
+    # bytes where JSON should be.
     SERVED_HEADERS="$(mktemp)"
     SERVED_BODY="$(mktemp)"
     trap 'rm -f "$PUBLISHED_MANIFEST" "$MANIFEST_GZ" "$SERVED_HEADERS" "$SERVED_BODY"' EXIT
     if ! curl -sS --fail --max-time 30 -H 'Accept-Encoding: gzip' -H 'Cache-Control: no-cache' \
            -D "$SERVED_HEADERS" -o "$SERVED_BODY" "${PUBLIC_BASE_URL%/}/regions/manifest.json" \
-       || ! python3 - "$SERVED_HEADERS" "$SERVED_BODY" "$MANIFEST" <<'PY'
-import gzip, json, sys
-headers, body, local = sys.argv[1:4]
-with open(headers) as f:
-    encodings = [line.split(":", 1)[1].strip().lower() for line in f if line.lower().startswith("content-encoding:")]
-if encodings[-1:] != ["gzip"]:
-    sys.exit(f"served without Content-Encoding: gzip (got {encodings or 'none'})")
-with open(body, "rb") as f:
-    served = json.loads(gzip.decompress(f.read()))
-with open(local) as f:
-    expected = json.load(f)
-if served != expected:
-    sys.exit("served manifest does not match the one just uploaded")
-print(f"Verified: served gzipped, {len(served['regions'])} regions")
-PY
+       || ! go_run upload-check served "$SERVED_HEADERS" "$SERVED_BODY" "$MANIFEST"
     then
       echo >&2
       echo "The gzipped manifest is not being served correctly — restoring the plain one." >&2

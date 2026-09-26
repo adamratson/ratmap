@@ -1,0 +1,37 @@
+# NAME	ORACLE	ARG... (see internal/golden)
+zooms-leafy	python3 testdata/zooms.py testdata/leafy.pmtiles	zooms	testdata/leafy.pmtiles
+tile-count-leafy	python3 testdata/tile-count.py testdata/leafy.pmtiles	tile-count	testdata/leafy.pmtiles
+zooms-leafy-gzip	python3 testdata/zooms.py testdata/leafy-gzip.pmtiles	zooms	testdata/leafy-gzip.pmtiles
+tile-count-leafy-gzip	python3 testdata/tile-count.py testdata/leafy-gzip.pmtiles	tile-count	testdata/leafy-gzip.pmtiles
+zooms-root-only	python3 testdata/zooms.py testdata/root-only.pmtiles	zooms	testdata/root-only.pmtiles
+tile-count-root-only	python3 testdata/tile-count.py testdata/root-only.pmtiles	tile-count	testdata/root-only.pmtiles
+zooms-peaks	python3 testdata/zooms.py ../check-peak-tiles/testdata/peaks.pmtiles	zooms	../check-peak-tiles/testdata/peaks.pmtiles
+tile-count-peaks	python3 testdata/tile-count.py ../check-peak-tiles/testdata/peaks.pmtiles	tile-count	../check-peak-tiles/testdata/peaks.pmtiles
+zooms-avalanche	python3 testdata/zooms.py ../build-manifest/testdata/valid.pmtiles	zooms	../build-manifest/testdata/valid.pmtiles
+tile-count-avalanche	python3 testdata/tile-count.py ../build-manifest/testdata/valid.pmtiles	tile-count	../build-manifest/testdata/valid.pmtiles
+tile-count-empty	python3 testdata/tile-count.py testdata/empty.pmtiles	tile-count	testdata/empty.pmtiles
+tile-count-not-pmtiles	python3 testdata/tile-count.py testdata/not-pmtiles.pmtiles	tile-count	testdata/not-pmtiles.pmtiles
+maxzoom-peaks	python3 testdata/maxzoom.py < testdata/header-peaks.json	maxzoom	<testdata/header-peaks.json
+narrow-peaks-3-6	python3 testdata/narrow.py 3 6 "$OUT" < testdata/header-peaks.json	narrow	3	6	{{out}}	<testdata/header-peaks.json
+narrow-peaks-0-0	python3 testdata/narrow.py 0 0 "$OUT" < testdata/header-peaks.json	narrow	0	0	{{out}}	<testdata/header-peaks.json
+narrow-peaks-9-14	python3 testdata/narrow.py 9 14 "$OUT" < testdata/header-peaks.json	narrow	9	14	{{out}}	<testdata/header-peaks.json
+narrow-peaks-5-4	python3 testdata/narrow.py 5 4 "$OUT" < testdata/header-peaks.json	narrow	5	4	{{out}}	<testdata/header-peaks.json
+narrow-peaks-0-2	python3 testdata/narrow.py 0 2 "$OUT" < testdata/header-peaks.json	narrow	0	2	{{out}}	<testdata/header-peaks.json
+maxzoom-avalanche	python3 testdata/maxzoom.py < testdata/header-avalanche.json	maxzoom	<testdata/header-avalanche.json
+narrow-avalanche-3-6	python3 testdata/narrow.py 3 6 "$OUT" < testdata/header-avalanche.json	narrow	3	6	{{out}}	<testdata/header-avalanche.json
+narrow-avalanche-0-0	python3 testdata/narrow.py 0 0 "$OUT" < testdata/header-avalanche.json	narrow	0	0	{{out}}	<testdata/header-avalanche.json
+narrow-avalanche-9-14	python3 testdata/narrow.py 9 14 "$OUT" < testdata/header-avalanche.json	narrow	9	14	{{out}}	<testdata/header-avalanche.json
+narrow-avalanche-5-4	python3 testdata/narrow.py 5 4 "$OUT" < testdata/header-avalanche.json	narrow	5	4	{{out}}	<testdata/header-avalanche.json
+narrow-avalanche-0-2	python3 testdata/narrow.py 0 2 "$OUT" < testdata/header-avalanche.json	narrow	0	2	{{out}}	<testdata/header-avalanche.json
+maxzoom-leafy	python3 testdata/maxzoom.py < testdata/header-leafy.json	maxzoom	<testdata/header-leafy.json
+narrow-leafy-3-6	python3 testdata/narrow.py 3 6 "$OUT" < testdata/header-leafy.json	narrow	3	6	{{out}}	<testdata/header-leafy.json
+narrow-leafy-0-0	python3 testdata/narrow.py 0 0 "$OUT" < testdata/header-leafy.json	narrow	0	0	{{out}}	<testdata/header-leafy.json
+narrow-leafy-9-14	python3 testdata/narrow.py 9 14 "$OUT" < testdata/header-leafy.json	narrow	9	14	{{out}}	<testdata/header-leafy.json
+narrow-leafy-5-4	python3 testdata/narrow.py 5 4 "$OUT" < testdata/header-leafy.json	narrow	5	4	{{out}}	<testdata/header-leafy.json
+narrow-leafy-0-2	python3 testdata/narrow.py 0 2 "$OUT" < testdata/header-leafy.json	narrow	0	2	{{out}}	<testdata/header-leafy.json
+maxzoom-crafted	python3 testdata/maxzoom.py < testdata/header-crafted.json	maxzoom	<testdata/header-crafted.json
+narrow-crafted-3-6	python3 testdata/narrow.py 3 6 "$OUT" < testdata/header-crafted.json	narrow	3	6	{{out}}	<testdata/header-crafted.json
+narrow-crafted-0-0	python3 testdata/narrow.py 0 0 "$OUT" < testdata/header-crafted.json	narrow	0	0	{{out}}	<testdata/header-crafted.json
+narrow-crafted-9-14	python3 testdata/narrow.py 9 14 "$OUT" < testdata/header-crafted.json	narrow	9	14	{{out}}	<testdata/header-crafted.json
+narrow-crafted-5-4	python3 testdata/narrow.py 5 4 "$OUT" < testdata/header-crafted.json	narrow	5	4	{{out}}	<testdata/header-crafted.json
+narrow-crafted-0-2	python3 testdata/narrow.py 0 2 "$OUT" < testdata/header-crafted.json	narrow	0	2	{{out}}	<testdata/header-crafted.json

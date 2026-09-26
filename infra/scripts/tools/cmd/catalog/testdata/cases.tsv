@@ -1,0 +1,55 @@
+# NAME	ORACLE	ARG... (see internal/golden)
+vars-region-algeria	python3 testdata/region-vars-region.py testdata/regions.json algeria 	region-vars	region	testdata/regions.json	algeria
+vars-contours-algeria	python3 testdata/region-vars-contours.py testdata/regions.json algeria 	region-vars	contours	testdata/regions.json	algeria
+vars-avalanche-algeria	python3 testdata/region-vars-avalanche.py testdata/regions.json algeria 8	region-vars	avalanche	testdata/regions.json	algeria	8
+vars-region-aragon	python3 testdata/region-vars-region.py testdata/regions.json aragon 	region-vars	region	testdata/regions.json	aragon
+vars-contours-aragon	python3 testdata/region-vars-contours.py testdata/regions.json aragon 	region-vars	contours	testdata/regions.json	aragon
+vars-avalanche-aragon	python3 testdata/region-vars-avalanche.py testdata/regions.json aragon 8	region-vars	avalanche	testdata/regions.json	aragon	8
+vars-region-switzerland	python3 testdata/region-vars-region.py testdata/regions.json switzerland 	region-vars	region	testdata/regions.json	switzerland
+vars-contours-switzerland	python3 testdata/region-vars-contours.py testdata/regions.json switzerland 	region-vars	contours	testdata/regions.json	switzerland
+vars-avalanche-switzerland	python3 testdata/region-vars-avalanche.py testdata/regions.json switzerland 8	region-vars	avalanche	testdata/regions.json	switzerland	8
+vars-region-scotland	python3 testdata/region-vars-region.py testdata/regions.json scotland 	region-vars	region	testdata/regions.json	scotland
+vars-contours-scotland	python3 testdata/region-vars-contours.py testdata/regions.json scotland 	region-vars	contours	testdata/regions.json	scotland
+vars-avalanche-scotland	python3 testdata/region-vars-avalanche.py testdata/regions.json scotland 8	region-vars	avalanche	testdata/regions.json	scotland	8
+vars-region-iceland	python3 testdata/region-vars-region.py testdata/regions.json iceland 	region-vars	region	testdata/regions.json	iceland
+vars-contours-iceland	python3 testdata/region-vars-contours.py testdata/regions.json iceland 	region-vars	contours	testdata/regions.json	iceland
+vars-avalanche-iceland	python3 testdata/region-vars-avalanche.py testdata/regions.json iceland 8	region-vars	avalanche	testdata/regions.json	iceland	8
+vars-region-liechtenstein	python3 testdata/region-vars-region.py testdata/regions.json liechtenstein 	region-vars	region	testdata/regions.json	liechtenstein
+vars-contours-liechtenstein	python3 testdata/region-vars-contours.py testdata/regions.json liechtenstein 	region-vars	contours	testdata/regions.json	liechtenstein
+vars-avalanche-liechtenstein	python3 testdata/region-vars-avalanche.py testdata/regions.json liechtenstein 8	region-vars	avalanche	testdata/regions.json	liechtenstein	8
+vars-region-ok	python3 testdata/region-vars-region.py testdata/regions.json ok 	region-vars	region	testdata/regions.json	ok
+vars-contours-ok	python3 testdata/region-vars-contours.py testdata/regions.json ok 	region-vars	contours	testdata/regions.json	ok
+vars-avalanche-ok	python3 testdata/region-vars-avalanche.py testdata/regions.json ok 8	region-vars	avalanche	testdata/regions.json	ok	8
+vars-region-ints	python3 testdata/region-vars-region.py testdata/regions.json ints 	region-vars	region	testdata/regions.json	ints
+vars-contours-ints	python3 testdata/region-vars-contours.py testdata/regions.json ints 	region-vars	contours	testdata/regions.json	ints
+vars-avalanche-ints	python3 testdata/region-vars-avalanche.py testdata/regions.json ints 8	region-vars	avalanche	testdata/regions.json	ints	8
+vars-region-inverted	python3 testdata/region-vars-region.py testdata/regions.json inverted 	region-vars	region	testdata/regions.json	inverted
+vars-contours-inverted	python3 testdata/region-vars-contours.py testdata/regions.json inverted 	region-vars	contours	testdata/regions.json	inverted
+vars-avalanche-inverted	python3 testdata/region-vars-avalanche.py testdata/regions.json inverted 8	region-vars	avalanche	testdata/regions.json	inverted	8
+vars-region-noaval	python3 testdata/region-vars-region.py testdata/regions.json noaval 	region-vars	region	testdata/regions.json	noaval
+vars-contours-noaval	python3 testdata/region-vars-contours.py testdata/regions.json noaval 	region-vars	contours	testdata/regions.json	noaval
+vars-avalanche-noaval	python3 testdata/region-vars-avalanche.py testdata/regions.json noaval 8	region-vars	avalanche	testdata/regions.json	noaval	8
+vars-region-neg0	python3 testdata/region-vars-region.py testdata/regions.json neg0 	region-vars	region	testdata/regions.json	neg0
+vars-contours-neg0	python3 testdata/region-vars-contours.py testdata/regions.json neg0 	region-vars	contours	testdata/regions.json	neg0
+vars-avalanche-neg0	python3 testdata/region-vars-avalanche.py testdata/regions.json neg0 8	region-vars	avalanche	testdata/regions.json	neg0	8
+vars-region-polar	python3 testdata/region-vars-region.py testdata/regions.json polar 	region-vars	region	testdata/regions.json	polar
+vars-contours-polar	python3 testdata/region-vars-contours.py testdata/regions.json polar 	region-vars	contours	testdata/regions.json	polar
+vars-region-nosuch	python3 testdata/region-vars-region.py testdata/regions.json nosuch 	region-vars	region	testdata/regions.json	nosuch
+vars-contours-nosuch	python3 testdata/region-vars-contours.py testdata/regions.json nosuch 	region-vars	contours	testdata/regions.json	nosuch
+vars-avalanche-nosuch	python3 testdata/region-vars-avalanche.py testdata/regions.json nosuch 8	region-vars	avalanche	testdata/regions.json	nosuch	8
+vars-avalanche-zmin11	python3 testdata/region-vars-avalanche.py testdata/regions.json aragon 11	region-vars	avalanche	testdata/regions.json	aragon	11
+ids-all	python3 testdata/ids.py testdata/regions.json	ids	testdata/regions.json
+ids-avalanche	python3 testdata/ids.py testdata/regions.json avalanche	ids	testdata/regions.json	avalanche
+ids-filter	python3 testdata/ids.py testdata/regions.json '' '^(a|n)'	ids	testdata/regions.json		^(a|n)
+ids-flag-filter	python3 testdata/ids.py testdata/regions.json avalanche 'land'	ids	testdata/regions.json	avalanche	land
+bboxes	python3 testdata/bboxes.py testdata/regions.json neg0 aragon ok ints	bboxes	testdata/regions.json	neg0	aragon	ok	ints
+dist-gb	python3 testdata/dist-gb.py testdata/regions.json testdata/dist	dist-gb	testdata/regions.json	testdata/dist
+dist-gb-none	python3 testdata/dist-gb.py testdata/regions.json testdata/nodist	dist-gb	testdata/regions.json	testdata/nodist
+peaks-mem-3-9.5	python3 testdata/peaks-mem.py testdata/regions.json 0.000833333 3 2.5 9.5	peaks-mem	testdata/regions.json	0.000833333	3	2.5	9.5
+peaks-mem-1-9.5	python3 testdata/peaks-mem.py testdata/regions.json 0.000833333 1 2.5 9.5	peaks-mem	testdata/regions.json	0.000833333	1	2.5	9.5
+peaks-mem-8-9.1	python3 testdata/peaks-mem.py testdata/regions.json 0.0002777 8 1 9.1	peaks-mem	testdata/regions.json	0.0002777	8	1	9.1
+vars-region-patagonia	python3 testdata/region-vars-region.py testdata/regions.json patagonia 	region-vars	region	testdata/regions.json	patagonia
+vars-contours-patagonia	python3 testdata/region-vars-contours.py testdata/regions.json patagonia 	region-vars	contours	testdata/regions.json	patagonia
+vars-avalanche-patagonia	python3 testdata/region-vars-avalanche.py testdata/regions.json patagonia 8	region-vars	avalanche	testdata/regions.json	patagonia	8
+~vars-avalanche-antarctic	python3 testdata/region-vars-avalanche.py testdata/regions.json antarctic 8	region-vars	avalanche	testdata/regions.json	antarctic	8
+vars-avalanche-zmin14	python3 testdata/region-vars-avalanche.py testdata/regions.json neg0 14	region-vars	avalanche	testdata/regions.json	neg0	14

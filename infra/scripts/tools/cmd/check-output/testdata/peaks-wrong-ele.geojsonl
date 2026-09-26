@@ -1,0 +1,9 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5, 56.8]}, "properties": {"name": "Bobotov Kuk", "ele": 2520.5}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5, 56.8]}, "properties": {"name": "Ben Nevis", "ele": 1345.0, "lists": "munro"}}
+
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5, 56.8]}, "properties": {"name": "Zla Kolata / Kollate e Keqe", "ele": 2535}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5, 56.8]}, "properties": {"name": "Zla Kolata", "ele": 2400}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5, 56.8]}, "properties": {"name": "Mont Blanc de Courmayeur", "ele": "4748"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5, 56.8]}, "properties": {"name": null, "ele": 100}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5, 56.8]}, "properties": {"ele": 5}}
+  

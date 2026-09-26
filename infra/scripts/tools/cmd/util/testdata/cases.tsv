@@ -1,0 +1,16 @@
+# NAME	ORACLE	ARG... (see internal/golden)
+url-quote-0	python3 testdata/url-quote.py 'Noto Sans Regular'	url-quote	Noto Sans Regular
+url-quote-1	python3 testdata/url-quote.py 'Barlow Noto Italic'	url-quote	Barlow Noto Italic
+url-quote-2	python3 testdata/url-quote.py 'a/b c~d_e.f-g'	url-quote	a/b c~d_e.f-g
+url-quote-3	python3 testdata/url-quote.py 'é ü ß 中'	url-quote	é ü ß 中
+url-quote-4	python3 testdata/url-quote.py '%&?=#+'	url-quote	%&?=#+
+url-quote-5	python3 testdata/url-quote.py ''	url-quote	
+dem-tiles-0	python3 testdata/dem-tiles.py -5.3 56.6 -4.6 57.0	dem-tiles	-5.3	56.6	-4.6	57.0
+dem-tiles-1	python3 testdata/dem-tiles.py -0.5 -0.5 0.5 0.5	dem-tiles	-0.5	-0.5	0.5	0.5
+dem-tiles-2	python3 testdata/dem-tiles.py 179.5 -90 180 -89	dem-tiles	179.5	-90	180	-89
+dem-tiles-3	python3 testdata/dem-tiles.py 3 4 3 4	dem-tiles	3	4	3	4
+dem-tiles-4	python3 testdata/dem-tiles.py -180 -56 -179 -55.5	dem-tiles	-180	-56	-179	-55.5
+dem-tiles-5	python3 testdata/dem-tiles.py 9.47 47.04 9.64 47.27	dem-tiles	9.47	47.04	9.64	47.27
+dem-tiles-6	python3 testdata/dem-tiles.py -73.5 -51.25 -68.0 -45.5	dem-tiles	-73.5	-51.25	-68.0	-45.5
+dem-tiles-7	python3 testdata/dem-tiles.py -8.7049 18.9287 12.036 37.7728	dem-tiles	-8.7049	18.9287	12.036	37.7728
+dem-tiles-8	python3 testdata/dem-tiles.py 1e-9 -0 2.0000001 1	dem-tiles	1e-9	-0	2.0000001	1

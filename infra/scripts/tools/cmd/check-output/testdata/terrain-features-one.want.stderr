@@ -1,0 +1,1 @@
+FAIL: implausibly few features for shingle (0 < 5), rock (0 < 5), stone (0 < 5) — filter or normalize step likely broken

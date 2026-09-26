@@ -82,7 +82,7 @@ jobs:
           echo "$out"
           grep -q 'GeoJSONSeq driver: OK' <<<"$out" || { echo "::error::GeoJSONSeq driver not reported OK"; exit 1; }
           if grep -q 'MISSING' <<<"$out"; then echo "::error::doctor reported a MISSING component"; exit 1; fi
-          for tool in pmtiles tippecanoe osmium gdal python3 go sqlite3; do
+          for tool in pmtiles tippecanoe osmium gdal go sqlite3; do
             grep -qE "^  ${tool} +[^ ]" <<<"$out" || { echo "::error::${tool} reported no version"; exit 1; }
           done
 

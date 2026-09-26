@@ -1,0 +1,20 @@
+# NAME	ORACLE	ARG... (see internal/golden)
+scotland-3600	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/scotland.json 3600	testdata/scotland.json	3600
+scotland-1000	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/scotland.json 1000	testdata/scotland.json	1000
+scotland-777	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/scotland.json 777	testdata/scotland.json	777
+scotland-100000	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/scotland.json 100000	testdata/scotland.json	100000
+odd-3600	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/odd.json 3600	testdata/odd.json	3600
+odd-1000	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/odd.json 1000	testdata/odd.json	1000
+odd-777	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/odd.json 777	testdata/odd.json	777
+odd-100000	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/odd.json 100000	testdata/odd.json	100000
+odd-1	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/odd.json 1	testdata/odd.json	1
+antimeridian-3600	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/antimeridian.json 3600	testdata/antimeridian.json	3600
+antimeridian-1000	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/antimeridian.json 1000	testdata/antimeridian.json	1000
+antimeridian-777	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/antimeridian.json 777	testdata/antimeridian.json	777
+antimeridian-100000	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/antimeridian.json 100000	testdata/antimeridian.json	100000
+one-3600	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/one.json 3600	testdata/one.json	3600
+one-1000	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/one.json 1000	testdata/one.json	1000
+one-777	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/one.json 777	testdata/one.json	777
+one-100000	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/one.json 100000	testdata/one.json	100000
+one-1	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/one.json 1	testdata/one.json	1
+rotated-3600	PATH="$PWD/testdata/bin:$PATH" python3 testdata/contour-cells.py testdata/rotated.json 3600	testdata/rotated.json	3600

@@ -1,0 +1,6 @@
+REGION_NAME=Zero
+WEST=-0.0
+SOUTH=0
+EAST=0.5
+NORTH=1e-05
+exit 0

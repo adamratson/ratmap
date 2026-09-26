@@ -1,0 +1,8 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"kind": "scree", "name": "A <&> \"q\""}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"kind": "scree"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"kind": "rock"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"kind": "stone"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"kind": "stone"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"kind": "shingle"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"kind": "rock"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [3, 4]}, "properties": {"kind": "rock"}}

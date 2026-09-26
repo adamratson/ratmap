@@ -25,10 +25,11 @@ fetch_fontstack() {
   mkdir -p "$out_dir"
   echo "Fetching fontstack: $stack (256 range files)"
   # Range files are named "<start>-<end>.pbf" for every 256-codepoint block, 0..65535.
-  local start end
+  local start end quoted
+  quoted="$(go_run util url-quote "$stack")"
   for start in $(seq 0 256 65280); do
     end=$((start + 255))
-    local url="$ASSETS_BASE/fonts/$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$stack")/${start}-${end}.pbf"
+    local url="$ASSETS_BASE/fonts/$quoted/${start}-${end}.pbf"
     curl -sf "$url" -o "$out_dir/${start}-${end}.pbf" || echo "  (skip, no glyphs in range ${start}-${end})"
   done
 }

@@ -1,0 +1,4 @@
+https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N00_00_E000_00_DEM/Copernicus_DSM_COG_10_N00_00_E000_00_DEM.tif
+https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N00_00_E001_00_DEM/Copernicus_DSM_COG_10_N00_00_E001_00_DEM.tif
+https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N00_00_E002_00_DEM/Copernicus_DSM_COG_10_N00_00_E002_00_DEM.tif
+exit 0

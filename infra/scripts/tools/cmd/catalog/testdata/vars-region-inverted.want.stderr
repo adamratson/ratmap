@@ -1,0 +1,1 @@
+Region 'inverted' has an invalid bbox [8.0, 46, 7, 47.5] (need west<east, south<north). Fix regions.json before building.

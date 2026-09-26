@@ -20,7 +20,7 @@ require_cmd() {
 }
 
 # Build one of scripts/tools' Go commands (compute-prominence, encode-avalanche,
-# reduce-paths) into a directory, and print the binary's path.
+# reduce-paths, ...) into a directory, and print the binary's path.
 #
 #   BIN="$(go_tool compute-prominence "$WORK_DIR")"
 #
@@ -41,9 +41,10 @@ go_tool() {
 
 # Run one of scripts/tools' Go commands with the given arguments: built into a scratch
 # directory, run, and the directory removed. For the commands a person runs by hand —
-# through build-manifest.sh and build-catalog.sh — and the one the build scripts call
-# inline (region-osm-sources). RATMAP_INFRA_DIR tells them where infra/ is, which the
-# Python scripts they replaced worked out from their own path.
+# through build-manifest.sh and build-catalog.sh — and the ones the build scripts call
+# once or twice inline (region-osm-sources, catalog, pmtiles-header, util, ...); a command
+# run in a loop is built once with go_tool instead. RATMAP_INFRA_DIR tells them where
+# infra/ is, which the Python scripts they replaced worked out from their own path.
 go_run() {
   local name="$1" dir status=0
   shift
@@ -157,13 +158,7 @@ osm_subset() {
   fi
 
   local key base dir out tmp
-  key="$(python3 - "$src" "$union" <<'PY_KEY'
-import hashlib, os, sys
-st = os.stat(sys.argv[1])
-union = hashlib.sha1(" ".join(sys.argv[2].split()).encode()).hexdigest()[:12]
-print(f"{union}-{st.st_size}-{int(st.st_mtime)}")
-PY_KEY
-)"
+  key="$(go_run util subset-key "$src" "$union")"
   base="$(basename "${src%.osm.pbf}")"
   dir="$OSM_CACHE_DIR/subsets"
   out="$dir/$base.$key.osm.pbf"

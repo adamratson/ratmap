@@ -1,0 +1,2 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5, 56.8]}, "properties": {"name": "Ben Nevis", "ele": true}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5, 56.8]}, "properties": {"name": "Ben Nevis", "ele": 1344}}

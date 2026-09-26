@@ -1,0 +1,5 @@
+#!/bin/sh
+# Stands in for `gdalinfo -json FILE`: FILE is already that JSON (see ../../main_test.go).
+[ "$1" = "-json" ] && exec cat "$2"
+echo "fake gdalinfo: want -json FILE" >&2
+exit 2

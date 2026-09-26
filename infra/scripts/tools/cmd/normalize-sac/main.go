@@ -42,10 +42,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -197,7 +195,7 @@ func feature(line []byte, w *bufio.Writer, seen map[string]struct{}, c *counts) 
 	// Absent when the caller did not pass the flag, in which case deduplication is
 	// skipped rather than half-applied.
 	if id, ok := props["@id"]; ok && !isNull(id) {
-		k, err := hashKey(id)
+		k, err := pytext.HashKey(id)
 		if err != nil {
 			return err
 		}
@@ -261,38 +259,4 @@ func jsonString(s string) []byte {
 	enc.SetEscapeHTML(false)
 	enc.Encode(s)
 	return bytes.TrimRight(b.Bytes(), "\n")
-}
-
-// hashKey identifies an @id the way a Python set does: by equality and hash, under which
-// 5, 5.0 and True == 1 are the same key and "5" is not. Lists and dicts are unhashable,
-// and raised.
-func hashKey(raw json.RawMessage) (string, error) {
-	raw = bytes.TrimSpace(raw)
-	switch {
-	case len(raw) == 0:
-		return "", errors.New("empty @id")
-	case raw[0] == '"':
-		s, _ := pytext.Str(raw)
-		return "s" + s, nil
-	case raw[0] == '[' || raw[0] == '{':
-		return "", fmt.Errorf("@id is %s: unhashable in Python", raw)
-	case string(raw) == "true":
-		return "n1", nil
-	case string(raw) == "false":
-		return "n0", nil
-	}
-	if !bytes.ContainsAny(raw, ".eE") {
-		if i, err := strconv.ParseInt(string(raw), 10, 64); err == nil {
-			return "n" + strconv.FormatInt(i, 10), nil
-		}
-		return "n" + strings.TrimPrefix(string(raw), "+"), nil // past int64: exact digits
-	}
-	f, err := strconv.ParseFloat(string(raw), 64)
-	if err != nil && !errors.Is(err, strconv.ErrRange) {
-		return "", fmt.Errorf("@id %s: %w", raw, err)
-	}
-	if f == math.Trunc(f) && math.Abs(f) < 1<<63 {
-		return "n" + strconv.FormatInt(int64(f), 10), nil // 5.0 is 5
-	}
-	return "f" + strconv.FormatFloat(f, 'g', -1, 64), nil
 }

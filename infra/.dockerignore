@@ -8,6 +8,3 @@ docker/README.md
 # natively this is tens of GB of continent extracts — uploading it as build context would
 # make every `docker compose build` crawl. The image points OSM_CACHE_DIR at /work anyway.
 .cache/
-
-# A host virtualenv is built for the host's OS and interpreter; the image builds its own.
-.venv/

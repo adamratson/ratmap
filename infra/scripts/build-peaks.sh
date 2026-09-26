@@ -33,7 +33,8 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 
 # Every step below that is not osmium, GDAL or tippecanoe is Go, in tools/cmd: the ports
 # of normalize-peaks.py, compute-prominence.py, prepare-peak-tiles.py and
-# check-peak-tiles.py, each giving the features, report and verdict its Python did.
+# check-peak-tiles.py, each giving the features, report and verdict its Python did, and
+# of the checks and header read this script used to run as inline Python.
 # Built here, before any of the work, from this checkout (lib.sh): a checkout that does
 # not compile fails in the first second rather than after hours of prominence scoring.
 echo "==> building the peaks tools"
@@ -41,6 +42,8 @@ NORMALIZE_PEAKS_BIN="$(go_tool normalize-peaks "$WORK_DIR")"
 PROM_BIN="$(go_tool compute-prominence "$WORK_DIR")"
 PREPARE_PEAK_TILES_BIN="$(go_tool prepare-peak-tiles "$WORK_DIR")"
 CHECK_PEAK_TILES_BIN="$(go_tool check-peak-tiles "$WORK_DIR")"
+CHECK_OUTPUT_BIN="$(go_tool check-output "$WORK_DIR")"
+PMTILES_HEADER_BIN="$(go_tool pmtiles-header "$WORK_DIR")"
 
 PEAKS_FILTER="n/natural=peak,volcano,saddle n/mountain_pass=yes"
 
@@ -126,82 +129,18 @@ PROM_FETCH_WORKERS="${PROM_FETCH_WORKERS:-$(workers_for_budget 1.25 3)}"
 # Elevation regression check (plan §4 Phase 1 acceptance): a schema or parsing change that
 # silently breaks `ele` should fail the build here, not be discovered on a mountain.
 # Only asserts summits actually present in the sources being built.
-python3 - "$WORK_DIR/peaks-final.geojsonl" <<'PYCHECK'
-import json, sys
-
-# Each value read out of a real build's output before being asserted here, not taken from
-# a guidebook — OSM's `ele` is what the pipeline must preserve, and it does not always
-# match the published height. Zla Kolata is tagged 2535 (commonly cited as 2534), and its
-# OSM name carries the Albanian form too, so it is matched on prefix.
-EXPECTED = {
-    "Ben Nevis": 1345,       # Scotland — highest in the UK
-    "Mont Blanc": 4808,      # only present in an Alpine build
-    "Bobotov Kuk": 2523,     # Montenegro — Durmitor
-    "Zla Kolata": 2535,      # Montenegro — highest point
-}
-TOLERANCE_M = 2
-
-# Streamed for the same reason normalize-peaks is: this only ever needs the handful of
-# named summits in EXPECTED, so there is no reason to materialise a planet's worth of
-# features to find them.
-by_name = {}
-with open(sys.argv[1]) as f:
-    for line in f:
-        line = line.lstrip("\x1e").strip()
-        if not line:
-            continue
-        props = json.loads(line).get("properties", {})
-        name, ele = props.get("name"), props.get("ele")
-        if not isinstance(name, str) or not isinstance(ele, (int, float)):
-            continue
-        # Prefix, not equality: OSM often carries a multilingual name for a summit —
-        # Zla Kolata is tagged "Zla Kolata / Kollate e Keqe". Exact matching would skip it
-        # silently and the assertion would quietly stop testing anything.
-        for expected_name in EXPECTED:
-            if name.startswith(expected_name):
-                by_name.setdefault(expected_name, ele)
-
-checked = 0
-for name, expected in EXPECTED.items():
-    actual = by_name.get(name)
-    if actual is None:
-        print(f"  (skip {name}: not in this extract)")
-        continue
-    if abs(actual - expected) > TOLERANCE_M:
-        sys.exit(f"FAIL: {name} ele={actual}, expected ~{expected}")
-    print(f"  OK {name}: {actual} m")
-    checked += 1
-
-if checked == 0:
-    print("  (no known summits in this extract — elevation assertions skipped)")
-PYCHECK
+# The expected elevations are read out of a real build's output before being asserted,
+# not taken from a guidebook — OSM's `ele` is what the pipeline must preserve, and it does
+# not always match the published height (Zla Kolata is tagged 2535, commonly cited as
+# 2534). Matched on name prefix: OSM often carries a multilingual name for a summit. See
+# tools/cmd/check-output.
+"$CHECK_OUTPUT_BIN" peaks "$WORK_DIR/peaks-final.geojsonl"
 
 # Munro count assertion (C19, same standard as the elevation check above): 282, the SMC's
 # current published count, verified directly against taginfo's munro=yes usage count
 # (2026-09-11) rather than taken from a guidebook. A rebuild that silently drops munros —
 # a changed osmium filter, a broken tag passthrough — fails here, not on someone's phone.
-python3 - "$WORK_DIR/peaks-final.geojsonl" <<'PYCHECK_MUNRO'
-import json, sys
-
-EXPECTED_MUNROS = 282
-
-count = 0
-with open(sys.argv[1]) as f:
-    for line in f:
-        line = line.lstrip("\x1e").strip()
-        if not line:
-            continue
-        lists = json.loads(line).get("properties", {}).get("lists", "")
-        if "munro" in lists.split(";"):
-            count += 1
-
-if count == 0:
-    print("  (no munro=yes nodes in this extract — count assertion skipped)")
-elif count != EXPECTED_MUNROS:
-    sys.exit(f"FAIL: {count} munros, expected {EXPECTED_MUNROS}")
-else:
-    print(f"  OK {count} munros")
-PYCHECK_MUNRO
+"$CHECK_OUTPUT_BIN" munros "$WORK_DIR/peaks-final.geojsonl"
 
 OUT="$DIST_DIR/peaks-global.pmtiles"
 # Built beside OUT and renamed into place only once every check below has passed: a failed
@@ -245,7 +184,7 @@ tippecanoe -o "$PARTIAL" -zg --drop-densest-as-needed --extend-zooms-if-still-dr
 # To re-check them by hand, from infra/:
 #   go build -C scripts/tools -o "$PWD/check-peak-tiles" ./cmd/check-peak-tiles
 #   tippecanoe-decode -zZ -ZZ peaks.pmtiles | ./check-peak-tiles peaks.geojsonl peaks.pmtiles Z
-MAXZOOM="$(pmtiles show --header-json "$PARTIAL" | python3 -c 'import json, sys; print(json.load(sys.stdin)["maxzoom"])')"
+MAXZOOM="$(pmtiles show --header-json "$PARTIAL" | "$PMTILES_HEADER_BIN" maxzoom)"
 if ! tippecanoe-decode -z"$MAXZOOM" -Z"$MAXZOOM" "$PARTIAL" \
     | "$CHECK_PEAK_TILES_BIN" \
         "$WORK_DIR/peaks-tiled.geojsonl" "$PARTIAL" "$MAXZOOM"; then

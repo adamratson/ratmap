@@ -1,0 +1,192 @@
+{
+  "regions": [
+    {
+      "id": "algeria",
+      "name": "Algeria",
+      "bbox": [
+        -8.7049,
+        18.9287,
+        12.036,
+        37.7728
+      ],
+      "osmExtract": "https://download.geofabrik.de/africa-latest.osm.pbf",
+      "group": "Africa",
+      "geofabrikId": "algeria",
+      "estimatedBytes": 1039000000,
+      "basemapMaxzoom": 14,
+      "terrainMaxzoom": 9
+    },
+    {
+      "id": "aragon",
+      "avalanche": true,
+      "name": "Arag\u00f3n",
+      "bbox": [
+        -2.1791,
+        39.8383,
+        0.7726,
+        42.9268
+      ],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "geofabrikId": "aragon",
+      "estimatedBytes": 564000000,
+      "contours": true
+    },
+    {
+      "id": "switzerland",
+      "avalanche": true,
+      "name": "Switzerland",
+      "bbox": [
+        5.9544,
+        45.8164,
+        10.4958,
+        47.8113
+      ],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "geofabrikId": "switzerland",
+      "estimatedBytes": 1249000000,
+      "maxBytes": 1200000000,
+      "contours": true
+    },
+    {
+      "id": "scotland",
+      "avalanche": true,
+      "name": "Scotland",
+      "bbox": [
+        -14.8615,
+        54.54,
+        0.2161,
+        61.1356
+      ],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "estimatedBytes": 1036000000,
+      "contours": true
+    },
+    {
+      "id": "iceland",
+      "avalanche": true,
+      "name": "Iceland",
+      "bbox": [
+        -25.7,
+        62.8455,
+        -12.4171,
+        67.5008
+      ],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "geofabrikId": "iceland",
+      "estimatedBytes": 610000000
+    },
+    {
+      "id": "liechtenstein",
+      "name": "Liechtenstein",
+      "bbox": [
+        9.4711,
+        47.0477,
+        9.6362,
+        47.2713
+      ],
+      "osmExtract": "https://download.geofabrik.de/europe-latest.osm.pbf",
+      "group": "Europe",
+      "geofabrikId": "liechtenstein",
+      "estimatedBytes": 16100000,
+      "contours": true,
+      "avalanche": true
+    },
+    {
+      "id": "ok",
+      "name": "Lochaber & Ben Nevis",
+      "bbox": [
+        -5.3,
+        56.6,
+        -4.6,
+        57.0
+      ],
+      "avalanche": true,
+      "terrain": false,
+      "basemapMaxzoom": 14
+    },
+    {
+      "id": "ints",
+      "name": "it's",
+      "bbox": [
+        7,
+        46,
+        8,
+        47
+      ],
+      "avalanche": 1,
+      "terrainMaxzoom": null
+    },
+    {
+      "id": "inverted",
+      "name": "x",
+      "bbox": [
+        8.0,
+        46,
+        7,
+        47.5
+      ],
+      "avalanche": true
+    },
+    {
+      "id": "noaval",
+      "name": "plain",
+      "bbox": [
+        1.5,
+        2.5,
+        3.5,
+        4.5
+      ]
+    },
+    {
+      "id": "neg0",
+      "name": "Zero",
+      "bbox": [
+        -0.0,
+        0,
+        0.5,
+        1e-05
+      ],
+      "avalanche": true,
+      "contours": true
+    },
+    {
+      "id": "polar",
+      "name": "Pole",
+      "bbox": [
+        -180.0,
+        84.9,
+        180.0,
+        85.0511
+      ],
+      "avalanche": true,
+      "terrain": 0
+    },
+    {
+      "id": "patagonia",
+      "name": "Patagonia (south)",
+      "bbox": [
+        -73.5,
+        -51.25,
+        -68.0,
+        -45.5
+      ],
+      "avalanche": true,
+      "estimatedBytes": 123456789
+    },
+    {
+      "id": "antarctic",
+      "name": "Pole (south)",
+      "bbox": [
+        -180,
+        -90,
+        180,
+        -60
+      ],
+      "avalanche": true
+    }
+  ]
+}

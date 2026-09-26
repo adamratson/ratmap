@@ -1,0 +1,6 @@
+HTTP/1.1 301
+Content-Encoding: gzip
+
+HTTP/2 200
+content-encoding: br
+

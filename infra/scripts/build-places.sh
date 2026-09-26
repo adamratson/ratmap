@@ -7,6 +7,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_cmd osmium
 require_cmd python3
+require_cmd go
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -32,7 +33,7 @@ for url in $PLACES_SOURCE_URLS; do
 
   osmium tags-filter "$src" $PLACES_FILTER -o "$WORK_DIR/filtered-$i.osm.pbf" --overwrite
 
-  # Line-delimited so normalize-peaks.py and build-places-db.py can stream it — a
+  # Line-delimited so normalize-peaks.py and build-places-db can stream it — a
   # continent's settlements+summits run to millions of features. See build-peaks.sh.
   osmium export "$WORK_DIR/filtered-$i.osm.pbf" \
     -o "$WORK_DIR/places-$i.geojsonl" \
@@ -48,9 +49,15 @@ for f in "${geojsons[@]}"; do
   normalized+=("$f.norm")
 done
 
+# Go (tools/cmd/build-places-db), the port of build-places-db.py: the same database, and
+# it streams rows into SQLite rather than holding them all first. Built from this checkout
+# (lib.sh).
+echo "==> building build-places-db"
+PLACES_DB_BIN="$(go_tool build-places-db "$WORK_DIR")"
+
 OUT="$DIST_DIR/places.sqlite"
 rm -f "$OUT"
-python3 "$SCRIPT_DIR/build-places-db.py" "${normalized[@]}" "$OUT"
+"$PLACES_DB_BIN" "${normalized[@]}" "$OUT"
 
 ls -lh "$OUT"
 echo "Built $OUT"

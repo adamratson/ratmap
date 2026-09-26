@@ -20,9 +20,9 @@ multi-day unattended run needs and a laptop run doesn't.
 | pmtiles (go-pmtiles) | 1.31.2, release binary, SHA256-verified | Same posture as C13 — pinned, never `latest` |
 | osmium-tool | Debian trixie (1.18.0) | `tags-filter` / `merge` / `export` |
 | GDAL | Debian trixie (3.10.3) | `gdal_contour`, `ogr2ogr` with the GeoJSONSeq driver |
-| python3 + sqlite3 | Debian trixie | The image build **fails** if FTS5 with `unicode61 remove_diacritics 2` doesn't work — C9's whole search index depends on it, and it's a distro build flag, not a guarantee |
+| python3 + sqlite3 | Debian trixie | Stdlib scripts and inline snippets; `sqlite3` for inspecting `places.sqlite` by hand. The index itself is built by `scripts/tools/cmd/build-places-db` with its own SQLite (modernc.org/sqlite), and the image build **fails** if its tests — FTS5 with `unicode61 remove_diacritics 2` among them, C9's whole search index — do not pass |
 | awscli | Debian trixie (v2) | uploads (`upload.sh` uses `aws s3 cp`, not `pmtiles upload` — see its header comment); request checksums forced to `when_required` so an aws-cli-v2 checksum disagreement with a non-AWS S3 gateway (hit against both R2 and Krystal) can't fail the last step of a multi-day run |
-| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/tools` (prominence, avalanche slope, the paths reduce step) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25) |
+| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/tools` (prominence, avalanche slope, the paths reduce step, the places index) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25) |
 
 Build args move any version without editing the Dockerfile:
 `--build-arg TIPPECANOE_VERSION=2.80.0`. Bumping `PMTILES_VERSION` also requires bumping
@@ -61,9 +61,10 @@ the 30 m clips.
 **Disk is the binding constraint here, not memory.** That is a deliberate result: the
 GeoJSON intermediates are line-delimited (`osmium export -f geojsonseq`) and every
 consumer streams them a feature at a time, so nothing in the pipeline scales its memory
-with the size of the planet except one thing — `build-places-db.py` holds one row tuple
-plus one dedupe key per surviving feature. Measured at ~319 B per row, that is ~1.6 GB
-for the planet's ~5.1 M places+peaks.
+with the size of the planet except one thing — `build-places-db` (scripts/tools) holds
+one dedupe key per surviving feature. Measured at ~210 B per row on 1.5 M (2026-09-25),
+that is ~1.1 GB for the planet's ~5.1 M places+peaks. (The Python it replaced also held
+every row until the end: ~319 B a row, ~1.6 GB.)
 
 What scales with the largest *region* is the peaks stage's prominence pass, which holds
 one region's 90 m DEM at a time: ~9.5 bytes a pixel, so svalbard-janmayen's 712 Mpx is
@@ -87,7 +88,7 @@ faster path, since nothing builds a second copy of the document to serialise.
 
 If you are tight on memory, run peaks/places a few continents at a time by setting
 `PLACES_SOURCE_URLS` yourself — the scripts take an explicit list, and
-`build-places-db.py` accepts multiple sources. `build-global.sh` checks the cgroup limit
+`build-places-db` accepts multiple sources. `build-global.sh` checks the cgroup limit
 up front, so a too-small VM fails at minute one rather than hour thirty. On Docker
 Desktop the limit that matters is the VM's (Settings → Resources), not the host's.
 
@@ -410,7 +411,7 @@ allows, not the fastest on a large one. These are the measured per-worker costs
 | `paths` — reduce step (`tools/cmd/reduce-paths`) | streams a line at a time | 10 MB (the Python it replaced, 17 MB) | nothing |
 | `paths` — `tippecanoe` | disk-backed sort | 172 MB at 259 k features, 227 MB at 1.04 M | sublinearly |
 | `contours` — `gdal_contour`, one cell | lines open in the sweep, within one 3600-pixel cell | **281 MB** worst measured (synthetic mountains denser than Corsica); budgeted 1 GB | nothing: every region is cells. It was ~6.4 GB (Corsica) and grew with the region, when it wrote GeoJSON in one pass |
-| `places` — `build-places-db.py` | rows + dedupe set held whole | ~1.6 GB for the planet | feature count |
+| `places` — `build-places-db` (scripts/tools) | the dedupe set; rows stream into SQLite | ~210 B a row: 349 MB on 1.5 M, ~1.1 GB for the planet (the Python held rows too: ~1.6 GB) | feature count |
 | `peaks` — prominence scoring (`tools/cmd/compute-prominence`) | one region's 90 m DEM and an int32 union-find of the same shape | **9.1 bytes/px**: 1.30 GB on Scotland's 143 Mpx, budgeted at 9.5 (the Python it replaced was 1.35 GB, 1.94 GB before its buffers were reused) | the region's bbox — svalbard-janmayen's 712 Mpx is ~6.3 GB |
 | `peaks` — DEM fetch (`fetch-dem.sh`), `PROM_FETCH_WORKERS` of them | `gdal_translate`'s block cache (capped at 512 MB) + the VSI cache | **229 MB** for Bosnia at 90 m; ~1.25 GB at most | region size, up to the cap |
 | `avalanche` — `gdalwarp`, then `tools/cmd/encode-avalanche` | the warp's block cache; then three DEM rows | **694 MB** warping; the encode **15 MB** on Aragón's 113 Mpx (2026-09-25) — the Python it replaced was 792 MB at 108 Mpx and 1459 MB at 216, most of it evictable page cache | the warp; the encode only with raster width |

@@ -45,7 +45,7 @@ export OSM_CACHE_DIR="$OSM_CACHE"
 LOG_DIR="$WORK_DIR/logs"
 
 # Geofabrik's continent set covers the planet exactly once, with no overlap between
-# continents (their sub-extracts overlap; the continent files do not). build-places-db.py
+# continents (their sub-extracts overlap; the continent files do not). build-places-db
 # still dedupes, which covers the seams.
 CONTINENTS=(
   africa
@@ -62,8 +62,9 @@ GEOFABRIK_BASE="${GEOFABRIK_BASE:-https://download.geofabrik.de}"
 # Hard minimums, checked in preflight. Rationale in docker/README.md; briefly:
 #   work: 85 GB of continent extracts + a ~35 GB working copy of the largest + exports
 #   mem:  the GeoJSON intermediates are streamed a feature at a time, so the only large
-#         allocation left is build-places-db.py's rows list + dedupe set — ~319 B per
-#         surviving row (measured), so ~1.6 GB for the planet's ~5.1 M places+peaks.
+#         allocation left is build-places-db's dedupe set — ~210 B per surviving row
+#         (measured on 1.5 M, 2026-09-25), so ~1.1 GB for the planet's ~5.1 M
+#         places+peaks. The Python it replaced held every row as well: ~319 B, ~1.6 GB.
 MIN_WORK_GB="${RATMAP_MIN_WORK_GB:-150}"
 MIN_DIST_GB="${RATMAP_MIN_DIST_GB:-20}"
 MIN_MEM_GB="${RATMAP_MIN_MEM_GB:-4}"
@@ -350,8 +351,8 @@ preflight() {
   [ "$dist_gb" -lt "$MIN_DIST_GB" ] && { echo "  ! not enough space on $DIST_DIR"; fail=1; }
   if [ "$mem_gb" -lt "$MIN_MEM_GB" ]; then
     echo "  ! ${mem_gb} GB of memory will not survive the places stage."
-    echo "    build-places-db.py holds one row plus one dedupe key per surviving feature"
-    echo "    (~1.6 GB for the planet). Raise the Docker VM's memory, or run peaks/places"
+    echo "    build-places-db holds one dedupe key per surviving feature (~1.1 GB for the"
+    echo "    planet). Raise the Docker VM's memory, or run peaks/places"
     echo "    a few continents at a time via PLACES_SOURCE_URLS."
     fail=1
   elif [ "$mem_gb" -lt "$REC_MEM_GB" ]; then

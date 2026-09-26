@@ -80,8 +80,9 @@ RUN set -eux; \
 ########################################################################
 # Stage 3 — Go toolchain, checksum-verified
 #
-# build-contours.sh compiles scripts/contour-cell, and build-peaks.sh, build-avalanche.sh
-# and build-paths.sh compile scripts/tools, from the working copy on every run
+# build-contours.sh compiles scripts/contour-cell, and build-peaks.sh, build-avalanche.sh,
+# build-paths.sh and build-places.sh compile scripts/tools, from the working copy on every
+# run
 # rather than this image carrying the binaries: the scripts are bind-mounted over the
 # image's copy, and a baked binary would go on running old logic after the source moved.
 # So the image carries the compiler instead. Same fail-closed checksums as pmtiles above,
@@ -118,7 +119,8 @@ FROM debian:${DEBIAN_TAG}
 # gdal-bin      -> gdalbuildvrt / gdal_translate / gdal_contour / ogr2ogr (build-contours.sh)
 # osmium-tool   -> tags-filter / merge / export      (build-peaks.sh, build-places.sh)
 # awscli        -> manifest.json upload              (upload.sh)
-# sqlite3       -> inspecting places.sqlite by hand; the build itself uses python3's module
+# sqlite3       -> inspecting places.sqlite by hand; the build itself is Go, with its own
+#                  SQLite (modernc.org/sqlite), so its FTS5 does not hang on Debian's flags
 # libsqlite3-0/zlib1g/libstdc++6 -> explicit, because tippecanoe is copied in rather than
 #                  apt-installed and so pulls no dependencies of its own
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -142,18 +144,6 @@ COPY --from=go-fetch         /usr/local/go /usr/local/go
 # GOTOOLCHAIN=local: never download another toolchain behind the pinned one's back.
 ENV PATH=/usr/local/go/bin:${PATH} \
     GOTOOLCHAIN=local
-
-# Fail the image build, not a three-day pipeline run, if the interpreter that has to
-# create places.sqlite can't create an FTS5 table (C9 — the whole search index is FTS5).
-# Debian's libsqlite3 enables FTS5, but that is a distro build flag, not a guarantee.
-RUN python3 - <<'PY'
-import sqlite3
-db = sqlite3.connect(":memory:")
-db.execute("CREATE VIRTUAL TABLE t USING fts5(name, tokenize=\"unicode61 remove_diacritics 2\")")
-db.execute("INSERT INTO t (name) VALUES ('Ben Nevis')")
-assert db.execute("SELECT count(*) FROM t WHERE t MATCH 'nevis'").fetchone()[0] == 1
-print("sqlite3 FTS5 + unicode61 remove_diacritics 2: OK", sqlite3.sqlite_version)
-PY
 
 # /work holds everything big and resumable: the Geofabrik cache, scratch space for
 # mktemp, and stage logs. It must be a real volume on a disk with room — see
@@ -221,10 +211,14 @@ RUN chmod +x /usr/local/bin/ratmap /usr/local/bin/ratmap-global \
 # at run time, where Go caches its builds under $HOME.
 #
 # Same for scripts/tools (compute-prominence, encode-avalanche — the Go ports that
-# replaced the numpy/scipy virtualenv this image used to carry — and reduce-paths): their
-# tests include the slope maths' self-test, the union-find checked against per-threshold
-# relabelling, Python's float formatting checked against CPython's own output, and the
-# paths reduce checked against what the Python it replaced kept.
+# replaced the numpy/scipy virtualenv this image used to carry — reduce-paths and
+# build-places-db): their tests include the slope maths' self-test, the union-find
+# checked against per-threshold relabelling, Python's float formatting checked against
+# CPython's own output, the paths reduce checked against what the Python it replaced
+# kept, and places.sqlite checked row for row against the Python's — FTS5 with unicode61
+# remove_diacritics 2 included, which this image used to check in Debian's libsqlite3
+# instead (C9: the whole search index is FTS5). Their first build fetches
+# modernc.org/sqlite and its dependencies from the Go module proxy.
 RUN cd /opt/ratmap/infra/scripts/contour-cell \
     && TMPDIR=/tmp HOME=/tmp GOCACHE=/tmp/go-build go test -count=1 ./... \
     && cd /opt/ratmap/infra/scripts/tools \

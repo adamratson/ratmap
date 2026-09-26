@@ -1,0 +1,42 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.2247, 57.4778]}, "properties": {"place": "city", "name": "Inverness", "population": "12,345"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.1047, 56.8198]}, "properties": {"place": "town", "name": "Fort William", "population": 10459}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.2186, 56.7117]}, "properties": {"place": "village", "name": "Onich", "population": "1_200"}}
+
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.1, 56.81]}, "properties": {"place": "hamlet", "name": "Achintee", "population": "abc"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.12, 56.83]}, "properties": {"place": "suburb", "name": "Caol", "population": "١٢٣٤"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [15, 16]}, "properties": {"natural": "peak", "name": "Record Separator"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"place": "village", "name": "Negative", "population": -5}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1.5, 2.5]}, "properties": {"place": "hamlet", "name": "Zero", "population": 0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [2, 3]}, "properties": {"place": "city", "name": "Float Pop", "population": 1500000.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [3, 4]}, "properties": {"place": "town", "name": "Spaced", "population": "  42 "}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [3.1, 4.1]}, "properties": {"place": "town", "name": "Fullwidth", "population": "１２３４５"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [3.2, 4.2]}, "properties": {"place": "town", "name": "Math digits", "population": "𝟙𝟚𝟛𝟜𝟝𝟞"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [3.3, 4.3]}, "properties": {"place": "town", "name": "Bool Pop", "population": true}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.003526, 56.7968582]}, "properties": {"natural": "peak", "name": "Ben Nevis", "ele": 1345.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [4, 5]}, "properties": {"natural": "volcano", "name": "Int Ele", "ele": 12}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [5, 6]}, "properties": {"natural": "saddle", "name": "String Ele", "ele": "high"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [6, 7]}, "properties": {"natural": "peak", "name": "Bool Ele", "ele": true}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.7, 57.42]}, "properties": {"mountain_pass": "yes", "name": "Bealach na Bà"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [7, 8]}, "properties": {"place": "locality", "natural": "peak", "name": "Locality Peak"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [8, 9]}, "properties": {"place": "city", "natural": "peak", "name": "City Wins"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9, 10]}, "properties": {"place": "isolated_dwelling", "name": "Skipped Dwelling"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [10, 11]}, "properties": {"natural": "peak"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [11, 12]}, "properties": {"natural": "peak", "name": ""}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [12, 13]}, "properties": {"natural": "peak", "name": 123}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.9267, 46.3781]}, "properties": {"natural": "peak", "name": "Piz Palü", "ele": 3900.5}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [13.8214, 46.4336]}, "properties": {"natural": "peak", "name": "Škrlatica", "ele": 2740.0}}
+{"type": "Feature", "geometry": null, "properties": {"natural": "peak", "name": "Null Geometry"}}
+{"type": "Feature", "geometry": {}, "properties": {"natural": "peak", "name": "Empty Geometry"}}
+{"type": "Feature", "geometry": 0, "properties": {"natural": "peak", "name": "Zero Geometry"}}
+{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}, "properties": {"natural": "peak", "name": "Line"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [7, 46]}, "properties": {"natural": "peak", "name": "Int Coords"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [7.5, 46.5, 3000]}, "properties": {"natural": "peak", "name": "Three Coords"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [true, 46.5]}, "properties": {"natural": "peak", "name": "Bool Coord"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [10.00001, 20.00001]}, "properties": {"natural": "peak", "name": "Dup"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [10.00002, 20.00002]}, "properties": {"natural": "peak", "name": "Dup"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [10.00001, 20.00001]}, "properties": {"natural": "saddle", "name": "Dup"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0.0, 0.0]}, "properties": {"natural": "peak", "name": "Zero Dup"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-0.0, -0.0]}, "properties": {"natural": "peak", "name": "Zero Dup"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [5e-05, 0.00015]}, "properties": {"natural": "peak", "name": "Half"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 1]}, "extra": 1}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [14, 15]}, "properties": {"natural": "peak", "name": "Extra keys", "wikidata": "Q1"}, "id": "node/1"}

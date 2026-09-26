@@ -1,0 +1,3037 @@
+"1200"	1200
+" 1200 "	1200
+"1,200"	1200
+"1_200"	1200
+"1__200"	ERR
+"_1200"	ERR
+"1200_"	ERR
+"+5"	5
+"-5"	-5
+"007"	7
+""	ERR
+" "	ERR
+"12.0"	ERR
+"1e3"	ERR
+"\u0661\u0662\u0663"	123
+"\uff11\uff12\uff13"	123
+"\ud835\udfd9\ud835\udfda\ud835\udfdb"	123
+"\u0967\u0968"	12
+"abc"	ERR
+"12a"	ERR
+"\u22125"	ERR
+"9223372036854775807"	9223372036854775807
+"-9223372036854775808"	-9223372036854775808
+"1 200"	ERR
+"\u00a01200\u00a0"	1200
+"12\u200b"	ERR
+"\u0663_\u0664"	34
+"1,2,3"	123
+","	ERR
+"+"	ERR
+"-"	ERR
+"\u001c12\u001f"	12
+"+_1"	ERR
+"1_"	ERR
+"0_0"	0
+"\u0660"	0
+"\u07c0\u07c1"	1
+"\u0967\uff10"	10
+"8"	8
+"."	ERR
+".\ud835\udfd9+\uff1063."	ERR
+""	ERR
+"-\u0968\u00a0\u00a00\ud835\udff5"	ERR
+"8a\uff107\u09673_"	ERR
+""	ERR
+""	ERR
+""	ERR
+""	ERR
+"\ud835\udfe06-a0\u0663"	ERR
+"\u00a0,."	ERR
+" 7\ud835\udfe0"	78
+"\u00a0,9"	9
+""	ERR
+"\uff19\u0664\ud835\udfd935\ud835\udfd9"	941351
+"3a_a"	ERR
+"\u0663\uff19\ud835\udfe0699"	398699
+"\u0663+\u09671.7a"	ERR
+"-\ud835\udfe05 \u0664\ud835\udff5"	ERR
+"2,\ud835\udfe0\u06633"	2833
+"\u0663\uff19"	39
+" .a0.1"	ERR
+"\ud835\udff5\u0968\u0967\u0967"	9211
+"\ud835\udfd955\u066370"	155370
+"\u0664\u06647"	447
+"\u0663 \u0967 ,8"	ERR
+""	ERR
+"\uff10\uff19a\u0663\uff104"	ERR
+"-1."	ERR
+"\u0967\u06646\u0663-"	ERR
+"\uff19 - 0\u0664\u0664"	ERR
+",\u09680\uff107"	2007
+"\u0664\u0967"	41
+"2\uff10"	20
+"1\uff19\ud835\udfe02"	1982
+"0"	0
+"0\u00a0\u00a08783"	ERR
+" 9"	9
+"5"	5
+"8\u0663"	83
+"\ud835\udfe08"	88
+",\ud835\udff5_."	ERR
+"309+_-\uff10"	ERR
+"838"	838
+"\u0968-\uff19"	ERR
+""	ERR
+"0+4"	ERR
+""	ERR
+",\ud835\udff5"	9
+"\u0664\uff197\ud835\udfd9\uff10\ud835\udff5"	497109
+"7\u0663\ud835\udfd90+\ud835\udfe0\u0967"	ERR
+"\ud835\udfe0\ud835\udfd9-1a"	ERR
+"4619"	4619
+"2"	2
+"9a5-"	ERR
+"40\u06641"	4041
+"\u0967,5"	15
+""	ERR
+"6 36\u0967\ud835\udfe0"	ERR
+"\u09676.3\ud835\udfe0+"	ERR
+"\u0663.0_"	ERR
+"9056_\uff10"	90560
+"_-"	ERR
+"8\ud835\udfe03"	883
+"\u0664 \uff19\ud835\udfe0\u0664."	ERR
+"2a1"	ERR
+"4"	4
+"5\u0664"	54
+"8\u00a0_"	ERR
+" __3"	ERR
+"7\u0968\u00a0\ud835\udff5"	ERR
+"4\u0967\u0664\u00a03_1"	ERR
+"2+\uff104\uff194"	ERR
+"3\u0968\u0967\uff10+"	ERR
+"\u0967"	1
+"\u096728"	128
+"9\u0967\u06643,"	9143
+"3\uff101\uff19"	3019
+"0\u0968\ud835\udfe00"	280
+"-"	ERR
+"\uff19"	9
+""	ERR
+"7\uff10\u0967"	701
+"53,5\ud835\udfe07"	53587
+"a3"	ERR
+"+\uff10\u0664\uff199\u0664"	4994
+"\ud835\udff5._3"	ERR
+"\ud835\udfd9_1"	11
+""	ERR
+""	ERR
+"a\u0968_,"	ERR
+"_+22_\u0968"	ERR
+"386\uff10\u0968\u00a0\u0664"	ERR
+"\ud835\udfe0 85\u066469"	ERR
+"7 2"	ERR
+"2\u00a0,2"	ERR
+"7+91_"	ERR
+"_\uff10"	ERR
+"7_3\u0664"	734
+"7"	7
+"0\uff107"	7
+"28\u06642a2"	ERR
+""	ERR
+""	ERR
+"\u00a0\uff10 ."	ERR
+"43\u0663\u00a0\uff10_2"	ERR
+"5\u00a0"	5
+"4\uff19"	49
+"93\ud835\udff5\u0663\uff19"	93939
+"464\u0664"	4644
+""	ERR
+"\uff19\u0968\uff10\ud835\udfe0\u0664"	92084
+"59-"	ERR
+"1\ud835\udff5"	19
+"8\u00a02"	ERR
+"\uff10-\u06648\u0664,\u0664"	ERR
+"0+\uff19_58."	ERR
+""	ERR
+"\u096701\ud835\udff5 \u0967"	ERR
+"\u09674"	14
+"8\uff19"	89
+"+\u0967+5"	ERR
+"7"	7
+"05\u0663_\u0663\ud835\udfd9,"	5331
+"7_."	ERR
+"7\ud835\udff5-_\u0664\u0968a"	ERR
+"\ud835\udfd9712"	1712
+"5\u0663\u00a0\uff106"	ERR
+"9\ud835\udff59\u0664"	9994
+"5\ud835\udff5\ud835\udff5a,"	ERR
+"3"	3
+"548-6\u0967"	ERR
+""	ERR
+"\ud835\udfe0+\ud835\udff5\ud835\udfd9 +\u0663"	ERR
+"\u0664a"	ERR
+""	ERR
+"\uff10"	0
+"\ud835\udfd938a"	ERR
+"4"	4
+","	ERR
+"+\uff10-"	ERR
+"5_,4\u0968."	ERR
+"3-\u0968"	ERR
+"3\ud835\udfe0987+"	ERR
+""	ERR
+"\u0663,\u0967"	31
+""	ERR
+""	ERR
+"\uff1986"	986
+"94"	94
+"89\u0967"	891
+"\uff19\ud835\udfe0,\uff10"	980
+"\u0664 "	4
+"-3\u00a06\u0967+6"	ERR
+"\uff103\uff100"	300
+"\u0967"	1
+""	ERR
+"\ud835\udfe0\u00a0a\ud835\udfd9"	ERR
+"2\u0663"	23
+"\u0967\uff109-\u0663"	ERR
+"\u00a0\u0663_03"	303
+"\ud835\udff5, 9\u0664+_"	ERR
+"3\ud835\udfd9++6\u06640"	ERR
+"\ud835\udfd9\u0968aa"	ERR
+",\u0968\uff19"	29
+"a\ud835\udff59\ud835\udff55,"	ERR
+" \u06630"	30
+"\u0967-+_\u0968\u0967"	ERR
+"."	ERR
+"\ud835\udfd9\ud835\udfd99"	119
+""	ERR
+"a\ud835\udfd94\ud835\udfd9\u00a0+"	ERR
+"5\u00a02\uff19"	ERR
+""	ERR
+"8\uff10\ud835\udff5-\ud835\udfe0"	ERR
+"4,\uff198"	498
+"5,\u066318\u06633"	531833
+"2 2\ud835\udfe0,0"	ERR
+"\u0663\ud835\udff5"	39
+"\ud835\udff52"	92
+"\ud835\udfd9\ud835\udff58\u096896"	198296
+"7_8"	78
+"2"	2
+",\u0663\u0664a1"	ERR
+"9\ud835\udfd9"	91
+" \u0968a7"	ERR
+"\u0664+5.\uff108"	ERR
+"\ud835\udff578\u0968\ud835\udff5"	97829
+"\ud835\udfe00\u0968"	802
+"_-\u00a07\uff108"	ERR
+"2\ud835\udfd9a"	ERR
+"\u0967,"	1
+"\u09688"	28
+"\u066354\u00a04\ud835\udff5,"	ERR
+"9\u00a0+73"	ERR
+"\ud835\udff5\ud835\udfe09"	989
+"3"	3
+"+_."	ERR
+"5"	5
+""	ERR
+""	ERR
+""	ERR
+"\ud835\udfe01."	ERR
+"_\ud835\udfe0\uff1983\u0968\ud835\udff5"	ERR
+"37"	37
+"7.,+\u00a05"	ERR
+"7\uff199"	799
+"\u0664\u0967+6,\ud835\udff58"	ERR
+".\u0967362"	ERR
+""	ERR
+""	ERR
+""	ERR
+"_+\u096796+5"	ERR
+"\uff100"	0
+""	ERR
+"4\ud835\udfe0\u06641\u0967+"	ERR
+"42,\ud835\udfd9"	421
+"01\u06641"	141
+"18"	18
+"-"	ERR
+"6"	6
+""	ERR
+"\ud835\udfd94a8\ud835\udfe0\uff196"	ERR
+"+_\ud835\udfd988\ud835\udfd9\ud835\udfd9"	ERR
+"71\u0967"	711
+" -"	ERR
+""	ERR
+"\u0664-\u06646\ud835\udff5"	ERR
+"\ud835\udfe02\ud835\udff58a\u0968"	ERR
+"8"	8
+"34"	34
+""	ERR
+"-11"	-11
+"\uff19"	9
+"\u0663 3_14\u0664"	ERR
+""	ERR
+"\ud835\udfe04+\u00a0\ud835\udff5,0"	ERR
+"28\uff10_"	ERR
+"9"	9
+""	ERR
+"1a8_a4"	ERR
+"\uff10+\uff103"	ERR
+"3-\uff197"	ERR
+"__\u0663"	ERR
+"\u0967.34\ud835\udfd9\uff19"	ERR
+"\u0663\u0664a\uff19\u0967\ud835\udff5\u0663"	ERR
+""	ERR
+"a56 "	ERR
+"\u0663_3- 4"	ERR
+"1"	1
+"\uff19\uff10\ud835\udfd9\u0664"	9014
+"-9_ 8"	ERR
+"aa\u0663\u06630"	ERR
+"4"	4
+"a_\uff10_\u0967"	ERR
+","	ERR
+"., a"	ERR
+"\uff192\u0967\uff1014"	921014
+""	ERR
+"\u09678\uff107\ud835\udff5\u0967a"	ERR
+" \uff10\ud835\udfd9 +"	ERR
+",\u0968_\u0664"	24
+"04"	4
+"\ud835\udfe07\u09674"	8714
+"5"	5
+"a\u09681\uff103\u0664"	ERR
+"\ud835\udff5368"	9368
+"\ud835\udfd9"	1
+"2"	2
+"\ud835\udfd9\uff195"	195
+"0\u0967 .\ud835\udff5\uff10"	ERR
+"76\u0968."	ERR
+"-,\ud835\udfe0"	-8
+"\u06646\uff10.a"	ERR
+"\uff19"	9
+"-60a"	ERR
+"\u0663.2+\u0968\u0663"	ERR
+"1 ,069"	ERR
+""	ERR
+"\uff19"	9
+"\u0663a_\u00a0"	ERR
+"\u0663-\u0664\uff19"	ERR
+"\u0968\ud835\udfd9\u09679,9"	21199
+"\u0663,"	3
+"\u0664\u00a0"	4
+"8\ud835\udfd9"	81
+""	ERR
+"a\ud835\udfe0\u09671 -"	ERR
+"9\ud835\udfe0\u00a0\ud835\udfe002"	ERR
+"0"	0
+"8,8\uff10\uff10 "	8800
+"\u00a0_+,\uff103."	ERR
+"4-405"	ERR
+" 4\u0967\uff10"	410
+"-8\u06639"	-839
+"\ud835\udff58-_\u00a0."	ERR
+"\ud835\udff5\uff19."	ERR
+"\ud835\udff5-2246"	ERR
+"7a"	ERR
+""	ERR
+"8"	8
+".\u00a0"	ERR
+"+"	ERR
+"\uff190"	90
+"-"	ERR
+""	ERR
+"\u0664- "	ERR
+""	ERR
+"a"	ERR
+"\uff19\ud835\udfe0a38\ud835\udfe0"	ERR
+"5.\uff10\uff10"	ERR
+""	ERR
+"\ud835\udfe0\ud835\udfd92"	812
+"3\ud835\udfe0,9\ud835\udfe0\u0663"	38983
+"+3\u0968.34+"	ERR
+"5\u06638"	538
+"a\u06649.\ud835\udfd9\uff10"	ERR
+"\uff10\u00a0\u0968"	ERR
+".30\u00a0a"	ERR
+"\ud835\udff581\u0664\ud835\udfd9"	98141
+"9\u00a0\uff1937\u06638"	ERR
+"\ud835\udff57-4"	ERR
+"86"	86
+"\u0664\ud835\udfd9\u09681\u0664\uff19"	412149
+"-8"	-8
+".\ud835\udff598"	ERR
+"6. \u0968.7_"	ERR
+"\u0968\u00a0"	2
+"a\u0967"	ERR
+"\u066441\u0663_\u0663\ud835\udff5"	441339
+"\ud835\udfd9\u00a0"	1
+"_\u0968."	ERR
+"_344\ud835\udff587"	ERR
+"\ud835\udfd9"	1
+""	ERR
+"\ud835\udfe03"	83
+"\u09676\u0663"	163
+"-_0\u00a0"	ERR
+""	ERR
+"\uff19\u096872"	9272
+"8\ud835\udfe0\ud835\udfd9"	881
+"8\u0968a\u0663+"	ERR
+""	ERR
+"_"	ERR
+"438\u00a04"	ERR
+""	ERR
+"22a39"	ERR
+"78\u06631 "	7831
+""	ERR
+"4"	4
+" a\ud835\udfd9\ud835\udff573"	ERR
+"80\u0663_3"	8033
+"\uff10\uff10\ud835\udfd9a\uff19"	ERR
+"\u09688"	28
+"2\ud835\udfe0\u0967\u0968a\u0663"	ERR
+"\u0967-\u0664+97\ud835\udfd9"	ERR
+"\u066441\u0968"	4412
+"5"	5
+"6-8"	ERR
+""	ERR
+"\u06648\u06638"	4838
+"4+\ud835\udff53a 2"	ERR
+"\u0664\u0664\uff10a\u0663"	ERR
+""	ERR
+",\ud835\udfe044"	844
+"\u0967"	1
+"\ud835\udfe0\uff19"	89
+".\uff19\uff10"	ERR
+" 954\uff10"	9540
+"\uff19,+3\u09684"	ERR
+"9\ud835\udfe0\ud835\udfe0\uff10"	9880
+""	ERR
+""	ERR
+"+a"	ERR
+","	ERR
+""	ERR
+"\u0968\ud835\udfe0-8 -"	ERR
+"\u0968,13.\u00a0"	ERR
+""	ERR
+""	ERR
+""	ERR
+"\u0967"	1
+"\u0663\u0663"	33
+"\u06648\uff10\u0967\ud835\udfd9"	48011
+"\uff10.\uff19\ud835\udff57"	ERR
+"3\u0664 "	34
+"3\u00a0"	3
+""	ERR
+"-a 8\ud835\udfe0"	ERR
+""	ERR
+"-+ 9\u00a0\uff19"	ERR
+",\uff10\ud835\udff57\ud835\udfd9"	971
+"1_"	ERR
+"\u0663"	3
+"\u0664\ud835\udfd9"	41
+"_\u00a0\ud835\udff53\u09670."	ERR
+"+\ud835\udfd9\uff19"	19
+"+\ud835\udff5"	9
+"37_"	ERR
+"\ud835\udfe07\uff10\ud835\udfe0,"	8708
+" .\ud835\udfd9\u00a0\ud835\udfe0a6"	ERR
+",+\u06643\u0967."	ERR
+"\uff19440"	9440
+"-3\uff100\ud835\udfd92"	-30012
+",\u00a0"	ERR
+"\ud835\udfe0\u0663\uff10\uff1994"	830994
+"\u0663\uff19"	39
+"8"	8
+""	ERR
+"+\uff10\ud835\udfd9\ud835\udff5a\uff107"	ERR
+"0\u0664\uff107-5"	ERR
+"_\ud835\udfe0"	ERR
+"2\u00a0\u0664"	ERR
+"5+"	ERR
+""	ERR
+"-7\uff10"	-70
+""	ERR
+"\ud835\udff5\u0663\ud835\udff5"	939
+"7"	7
+"\u00a0,3\u0967\ud835\udfd91"	3111
+"2\u06643\ud835\udfd9\uff19."	ERR
+""	ERR
+"\u00a000"	0
+",8a-"	ERR
+"\u09684"	24
+"\u00a0\u0664\ud835\udfd9,\u0663"	413
+"\u06645\ud835\udff5+\ud835\udff5+"	ERR
+".\uff198"	ERR
+"48\u096785"	48185
+"a"	ERR
+"_4888"	ERR
+"+8\u0967,0"	810
+"48"	48
+"62\uff10"	620
+"\u0664-\ud835\udff5"	ERR
+"\u09674\u0664"	144
+"+\ud835\udff562\ud835\udfd924"	962124
+""	ERR
+""	ERR
+"+-\ud835\udfe04\u0967\u0968"	ERR
+"\ud835\udfe0\u0664"	84
+"7"	7
+"496\ud835\udfe0a+"	ERR
+"a\uff19579"	ERR
+" ."	ERR
+"2\u0663\uff199"	2399
+"\ud835\udff5,0"	90
+"\uff10\uff10\u0968\u0967"	21
+"\u0968"	2
+"\u00a0,8\u09681"	821
+""	ERR
+"5\uff104\ud835\udfd9\uff19"	50419
+"3"	3
+"\ud835\udfd9\u09677a6\u0663"	ERR
+"3\ud835\udff56\uff19+\ud835\udfe0"	ERR
+"\uff19\ud835\udff5"	99
+"a0\ud835\udff53"	ERR
+"\u00a0\u0967+"	ERR
+"\u0664\u0968781\ud835\udfd95"	4278115
+"-8\u00a0"	-8
+"+8.3\ud835\udfe0\uff19"	ERR
+"5\u0664"	54
+""	ERR
+"\u00a01.6+\uff19a"	ERR
+"732\ud835\udfe0a"	ERR
+""	ERR
+"\uff19,65\u0968\u0663"	96523
+"\u0663+\u0663"	ERR
+"67 \ud835\udfe0\u0967"	ERR
+"_"	ERR
+""	ERR
+"1\uff19\u0968549."	ERR
+""	ERR
+"\uff19"	9
+"2+\uff10\u0663\uff19\u0967"	ERR
+"+8 ."	ERR
+""	ERR
+"0-9\u0967a_\uff10"	ERR
+"\u0968\u0967"	21
+"2\u0968\uff10\uff10"	2200
+"-+\u0663\uff100"	ERR
+"1"	1
+""	ERR
+"_"	ERR
+" \u00a0\u06641\ud835\udfd9"	411
+"\u09672.\ud835\udfd92"	ERR
+"_\u0663\uff10\u066405_"	ERR
+"64\u09674\u0967"	64141
+"+"	ERR
+"\u0663-\uff19 _"	ERR
+"\u0968 1\ud835\udff5"	ERR
+"\u00a0"	ERR
+"\uff19\uff108"	908
+"\u06649\u0967\uff10\u09682"	491022
+"\ud835\udff5"	9
+"8-"	ERR
+"4"	4
+"\u0664a\ud835\udfd98"	ERR
+"638"	638
+"1a\u06639\uff10\uff106"	ERR
+"\u0664"	4
+"_9\u066341"	ERR
+"\uff19 \uff10a10_"	ERR
+"a5\u06641\ud835\udff5\u0967"	ERR
+"5673\u09674"	567314
+"a"	ERR
+",6\uff101"	601
+",_\u0968a "	ERR
+"\ud835\udfd900"	100
+"158\u0664107"	1584107
+"\u0663"	3
+"1\u0663"	13
+"6,9"	69
+".\u0663 "	ERR
+"+\ud835\udfd926\u0968"	1262
+"6\ud835\udfe0"	68
+"\u0967-\u0968."	ERR
+"0.03\ud835\udfe0"	ERR
+"\uff19\ud835\udff5\u0967__2"	ERR
+"6\ud835\udff5\u0663\uff10.\uff19"	ERR
+"\u0968\ud835\udfe0a\u0967\u00a0,\u0968"	ERR
+"5\uff198\ud835\udfe0\uff19\u06639"	5988939
+"\u0968\u06648890"	248890
+""	ERR
+", 7\u0663,6\ud835\udff5"	7369
+"_\ud835\udff5\ud835\udfd94+-1"	ERR
+" "	ERR
+""	ERR
+"\u00a0\u0664a1"	ERR
+"+0__"	ERR
+"\u0967\uff10\uff191"	1091
+"\ud835\udff52_"	ERR
+"\ud835\udfe0"	8
+"4"	4
+"-\u0968_7"	-27
+""	ERR
+"\u00a0\u00a0"	ERR
+"99+-\u0663"	ERR
+"\uff1026-7\u09681"	ERR
+"\ud835\udfd977"	177
+"+6\u09684a9"	ERR
+"0\ud835\udff5\ud835\udff5\ud835\udfe09"	9989
+".5\ud835\udfe040 -"	ERR
+"\uff10\u0663._\u0968"	ERR
+"\u0967"	1
+"\uff10\u0664\ud835\udfe08"	488
+"0\uff199\u00a02\ud835\udfd9"	ERR
+"3\u06637\u0968a\ud835\udfd9a"	ERR
+"- \uff107"	ERR
+""	ERR
+"\u0968"	2
+"49"	49
+""	ERR
+"6"	6
+""	ERR
+""	ERR
+"a\ud835\udff50210"	ERR
+""	ERR
+"_\uff100\u09680"	ERR
+".68"	ERR
+"\u0967\u0664\u06638"	1438
+"56+"	ERR
+""	ERR
+"\u0664\ud835\udff5,"	49
+""	ERR
+"_-30\u0967"	ERR
+"\u0663\ud835\udfd9"	31
+"\u00a0"	ERR
+"67"	67
+"9\uff10"	90
+"1"	1
+"a42\uff19,"	ERR
+"71"	71
+" 1\u09672"	112
+"6\uff107\ud835\udfe0531"	6078531
+"1aa"	ERR
+"2"	2
+"9\ud835\udff58"	998
+"7a1a8\u00a0"	ERR
+"_  "	ERR
+"\u00a0\ud835\udfe0\u0968+\ud835\udfe0+2"	ERR
+"7\uff19\uff19._5"	ERR
+"7"	7
+"\u00a0"	ERR
+"8\u06649_\u00a0\uff19"	ERR
+"-,  _"	ERR
+".\u06630 49"	ERR
+"9\u0967"	91
+"\u0664\ud835\udff5"	49
+"5,"	5
+"45"	45
+"\uff19"	9
+"7 \ud835\udfd9_"	ERR
+"8."	ERR
+"2-4\u0664"	ERR
+",34\ud835\udfe0_"	ERR
+"\ud835\udfe0"	8
+".\u0664"	ERR
+""	ERR
+""	ERR
+"\ud835\udfd9 a"	ERR
+"\u0663 \uff10\u0663\ud835\udfd9"	ERR
+"_\ud835\udfd935+"	ERR
+""	ERR
+"\u0968\ud835\udff5\uff106"	2906
+""	ERR
+"\uff199_"	ERR
+"7 \u00a0179"	ERR
+""	ERR
+"347"	347
+"\u06638457"	38457
+"9"	9
+",\u0967\u0663.5\u0663"	ERR
+"6-\uff1028"	ERR
+"7\u00a04"	ERR
+"\u00a06"	6
+""	ERR
+". "	ERR
+"1\uff10"	10
+"2\u09687\ud835\udfe0\ud835\udff5"	22789
+"2,\ud835\udfd9"	21
+"\u0968_5"	25
+""	ERR
+"_.\u0664"	ERR
+""	ERR
+""	ERR
+".\u0664 4."	ERR
+"\u0663"	3
+"\ud835\udfe0a\u0967\ud835\udfe09"	ERR
+"\uff10\u09672._"	ERR
+"282\ud835\udfe0\ud835\udfd9_"	ERR
+""	ERR
+"_7"	ERR
+"8\uff19\uff1989"	89989
+"-095\ud835\udfd991"	-95191
+"-"	ERR
+"\u096868 \u00a0\ud835\udfd9"	ERR
+"\u09679\u09688\ud835\udfe05_"	ERR
+" 3"	3
+" \u0663a\u0967\ud835\udff56"	ERR
+",4\uff19.\ud835\udff57"	ERR
+""	ERR
+"2a2"	ERR
+""	ERR
+"\u0967.\ud835\udff5_\u0663\uff105"	ERR
+"+0+\u0664a\u0664\uff19"	ERR
+"5\u0967\u0967 1\uff19a"	ERR
+"\uff19 ,7\ud835\udff5"	ERR
+"2,\u00a0 "	2
+"54,"	54
+""	ERR
+"\u0967_\uff105\u0967"	1051
+".0\u09677\u09681,"	ERR
+"\u06636"	36
+",3_845"	3845
+"45\uff10a\u0968"	ERR
+"7\u0664\ud835\udff5-"	ERR
+",\u0663\u066495\u0663\u0968"	349532
+"\u0967\uff19\uff106"	1906
+"\ud835\udfe04\ud835\udfe00"	8480
+"3-+\ud835\udff5\ud835\udfd9"	ERR
+"\u0968,"	2
+"\uff19\u0664, \uff1961"	ERR
+"a"	ERR
+"3"	3
+"4,+5.,"	ERR
+""	ERR
+"\u0967,."	ERR
+"9 \u00a0\u00a05\uff19"	ERR
+"5\u00a00\u0664"	ERR
+""	ERR
+"\u0664"	4
+",_,"	ERR
+"a3+1a"	ERR
+"8-,_\u066335"	ERR
+"\u0664-\u0968a.\u0663"	ERR
+"_4"	ERR
+"4\u096867\uff10"	42670
+",\ud835\udfd94"	14
+"\ud835\udff5"	9
+"-"	ERR
+""	ERR
+"4 \u0664_8+0"	ERR
+".\ud835\udff5,9a\ud835\udff5"	ERR
+"\ud835\udfd9\u0967+_"	ERR
+"53.5"	ERR
+"4,3\u06643\u0664_"	ERR
+"\uff19.\ud835\udfe0\u0664\ud835\udfd9"	ERR
+"a\u0967_\u0664\u0967"	ERR
+"_.\ud835\udff5+\uff19\u06646"	ERR
+"7\u0664"	74
+"\u096871"	271
+"\u0968\u00a01_-"	ERR
+""	ERR
+"  \u0968\u0968\ud835\udfe0"	228
+"6\uff1097_+"	ERR
+"\ud835\udfe0\u00a050+\ud835\udfd9"	ERR
+"\u0968\uff10\u00a0\u0968\uff19"	ERR
+"72\uff19"	729
+"+6\ud835\udff593"	6993
+"0\uff10 2\uff10-"	ERR
+"3\u0664"	34
+"\u00a0_"	ERR
+"+-"	ERR
+"\u0664\ud835\udfd9\ud835\udff5\u06638"	41938
+"655"	655
+"43"	43
+"\u0967\u06634-4_\u0968"	ERR
+"\u096840 \u00a0"	240
+"77"	77
+"\u0967.1\ud835\udfd924\u0664"	ERR
+"\u096746 \ud835\udff548"	ERR
+"2+.0\u0663"	ERR
+"6a76\ud835\udff5\uff100"	ERR
+"18\uff19\u0663"	1893
+"2\uff103"	203
+"+"	ERR
+"3,\ud835\udff5\u0967\u0663"	3913
+"\ud835\udfe084- \ud835\udfd9 "	ERR
+"-- \u066466"	ERR
+"4"	4
+"707"	707
+",\uff10\u0968,\u09673"	213
+""	ERR
+"\uff19\uff19"	99
+""	ERR
+""	ERR
+"\uff108-47\ud835\udff5"	ERR
+"-\u00a0_\u0967a"	ERR
+""	ERR
+"4\ud835\udff5\u0663 \u09671 "	ERR
+"\uff19"	9
+"\ud835\udfd9\ud835\udfd93"	113
+"4\uff100 44"	ERR
+"0.\ud835\udfd90"	ERR
+"2\u00a0\uff10\u0967-2."	ERR
+"4"	4
+"\ud835\udfd9\u0968\u0664-7\u0663"	ERR
+".\uff19a_,3"	ERR
+"6"	6
+"33 36"	ERR
+"\ud835\udff5"	9
+"0"	0
+"729.\u09681"	ERR
+"\u06649+\ud835\udfd91\ud835\udfe0"	ERR
+""	ERR
+"\u0968.,7"	ERR
+"_\u00a0.,"	ERR
+""	ERR
+"\u06635a\ud835\udff5"	ERR
+",9\u0967\u09675_\u0663"	91153
+"\u00a0\ud835\udfe0\ud835\udff5-\ud835\udfe0\u0664"	ERR
+".\u00a0\ud835\udfd9790"	ERR
+"4"	4
+"\uff193\uff19 8\uff199"	ERR
+"43\u06634"	4334
+"1,.a\u0967_\u0664"	ERR
+"4\ud835\udff50\u06646"	49046
+"\u0968\uff102\uff10"	2020
+"90\ud835\udfd98a\u0663\ud835\udff5"	ERR
+""	ERR
+"33\ud835\udfe0_\u0968\u0968"	33822
+"2\u0968.\u0663_\u0967\ud835\udfe0"	ERR
+""	ERR
+"51\u0968"	512
+"\uff10"	0
+""	ERR
+"\u0664"	4
+"\u00a0\uff1065"	65
+"76"	76
+"\u0663"	3
+"\ud835\udff5\uff19\u0967-8"	ERR
+"9\u0967"	91
+"2\u09688"	228
+""	ERR
+""	ERR
+"\u09689\uff19.--"	ERR
+"5"	5
+"\u00a0\ud835\udfe01"	81
+"-  \u066345"	ERR
+"7\uff101"	701
+"2,_\uff196"	296
+"84\ud835\udff5"	849
+"3.\ud835\udfe0a\uff10\u0968"	ERR
+""	ERR
+"98\u00a0\uff10\ud835\udff596"	ERR
+"\ud835\udff5\ud835\udfd9"	91
+"\ud835\udfe01\uff10\u00a0+,"	ERR
+""	ERR
+"7."	ERR
+"9"	9
+"6\u0663_377"	63377
+"\u096735. \ud835\udff5\ud835\udfd9"	ERR
+"+\u0664-\uff19\u00a00"	ERR
+"4-419+"	ERR
+"\ud835\udfd936\u09688."	ERR
+"8\u0663\uff19\u00a03_"	ERR
+"\u0664\ud835\udff5"	49
+"\ud835\udfe0\ud835\udfe00\u0664"	8804
+"\u00a0"	ERR
+",8\u00a039"	ERR
+"\uff102"	2
+"\ud835\udff5+0.\u0967a"	ERR
+"\u00a0\u00a0"	ERR
+".\uff10\uff19\u00a07\u0663"	ERR
+""	ERR
+"\uff101-\u096827"	ERR
+""	ERR
+"29\u09681 \u00a01"	ERR
+"2"	2
+""	ERR
+" 92\u0664"	924
+"\u0968 _\u00a05\ud835\udfd9 "	ERR
+"_\u09687"	ERR
+"\ud835\udfd9\u00a0\ud835\udff5"	ERR
+"99\uff19"	999
+"\ud835\udff59\u09670\ud835\udfe0"	99108
+"8\ud835\udfe0\uff107475"	8807475
+"8"	8
+"645\uff19\u0664\uff10"	645940
+"_"	ERR
+"\ud835\udff5651,6"	96516
+"\uff103\ud835\udff59\u00a07"	ERR
+"\u0663\uff10\ud835\udfd9,"	301
+"222\uff197"	22297
+"\u0663"	3
+"\ud835\udff5\uff19\u0664,0\u09685"	994025
+"-\u066436079"	-436079
+"\u0663\u09689"	329
+"8 89"	ERR
+""	ERR
+""	ERR
+""	ERR
+"162_,\ud835\udfe09"	16289
+"7"	7
+"6"	6
+""	ERR
+"\ud835\udfd94\u0968"	142
+""	ERR
+"a0\u06647\uff19.5"	ERR
+""	ERR
+"420"	420
+"_\u0967"	ERR
+"\u0663"	3
+"6+0\u0664"	ERR
+" 8\u0664+"	ERR
+"\u0663\u0663\u0664,82"	33482
+"\u00a0."	ERR
+"4\u09686\u06630\u0663"	426303
+""	ERR
+"47_+1"	ERR
+"a\uff19\u0967.\uff19\u0663"	ERR
+"\uff10"	0
+""	ERR
+"\u0664-"	ERR
+"\u06648\u0967166"	481166
+"\ud835\udff5+9\u0663"	ERR
+""	ERR
+"6\u0664\u0663a"	ERR
+"72"	72
+".51"	ERR
+"904\uff103\uff19"	904039
+""	ERR
+".5\uff196\u0967,"	ERR
+"\ud835\udfe0"	8
+"724_\u0663."	ERR
+"\u0663\ud835\udfe0 -\uff19\u09677"	ERR
+"8+ +\uff10\u09677"	ERR
+"\u096835\ud835\udfe0\u0968\ud835\udfd9"	235821
+"20-\u0967."	ERR
+""	ERR
+"3\ud835\udfd9\ud835\udfd9\u00a07, "	ERR
+"_"	ERR
+""	ERR
+"\uff19\u0967\u0663\u00a0"	913
+"4\u09675-\ud835\udfe0"	ERR
+"\ud835\udff5,a7"	ERR
+"a+0\u0663839"	ERR
+"0\u09672_"	ERR
+"79"	79
+"5"	5
+" +\ud835\udfd9\uff19\u00a0,\uff10"	ERR
+"\ud835\udfe0\ud835\udfe0\uff193\u0967.\u0967"	ERR
+"\ud835\udfe0"	8
+""	ERR
+""	ERR
+""	ERR
+"1895"	1895
+"\u0968\ud835\udff5\ud835\udfe0_0,_"	ERR
+"7 a"	ERR
+""	ERR
+""	ERR
+"\u06636+4572"	ERR
+"15_0,\u0664"	1504
+"1\uff19"	19
+"7\uff198\ud835\udfe0\u0663,"	79883
+"\uff191\u0968"	912
+"-+\u0663-8,"	ERR
+"\u096702.\uff19"	ERR
+"5-5\uff19\u0664\u0663"	ERR
+"8-"	ERR
+"9 \ud835\udff5,+\u0664+"	ERR
+"7 \u0664\u0664"	ERR
+"80\ud835\udfe0"	808
+"8"	8
+"58\u00a0\uff10\u09678"	ERR
+"05\uff19.374"	ERR
+"+"	ERR
+""	ERR
+"23"	23
+"\u0664a\ud835\udfd9,\uff1001"	ERR
+"1\u0663.a"	ERR
+" \u0968,"	2
+"_"	ERR
+"+\ud835\udfd9+92"	ERR
+"\uff19a,"	ERR
+"--\ud835\udff5aa"	ERR
+"\u09678541_"	ERR
+"+2\ud835\udfd9\u0967\uff10"	2110
+"\u096754\u00a0a"	ERR
+"\u0664"	4
+".\ud835\udff57"	ERR
+"\u0968\u0663\ud835\udfd9\ud835\udff55"	23195
+"95a"	ERR
+"\ud835\udfd9+"	ERR
+". \ud835\udff5\u00a01\u0664"	ERR
+"0"	0
+"746+,"	ERR
+"-\u0968_."	ERR
+"2\u0967\u09681\u00a0"	2121
+"\u0664a"	ERR
+"5202058"	5202058
+"a,+"	ERR
+"\ud835\udff5\ud835\udfe08\u0664"	9884
+"3\ud835\udff5+,72"	ERR
+"4\ud835\udfe0\u09680\ud835\udfd9"	48201
+"\ud835\udfd919 \u00a0\ud835\udfe0"	ERR
+""	ERR
+"_\u09670\u00a0\u0664_a"	ERR
+"\ud835\udff5\u00a0a1\u0967\uff19"	ERR
+"\ud835\udfe0\ud835\udff5\ud835\udfd93-+a"	ERR
+"\u0967"	1
+""	ERR
+""	ERR
+"\u00a0 5+a1"	ERR
+"\uff109"	9
+"\uff19\ud835\udfd95\uff10\u0967."	ERR
+"\u0967\uff10\u09688"	1028
+""	ERR
+"\u0664\u0967-4_5"	ERR
+"+\u0967\u0664\ud835\udfe04\u0663\ud835\udfd9"	148431
+"\u0968"	2
+"8+.a1\uff10"	ERR
+"5\uff19\ud835\udfd98"	5918
+"83803\uff19"	838039
+","	ERR
+",7"	7
+"172"	172
+"\uff19"	9
+"a"	ERR
+""	ERR
+"1"	1
+"-4\uff19 "	-49
+"1"	1
+"\uff10\u0968\u0968\uff1975"	22975
+"5 \uff19\u0968+\uff19\u0663"	ERR
+"_\u0663"	ERR
+"\ud835\udfd9"	1
+""	ERR
+""	ERR
+"3,20"	320
+""	ERR
+"\u06649\u0967\u0968"	4912
+",+3\uff10"	30
+"9\ud835\udfd9\ud835\udfe0"	918
+"\u0663\u0663"	33
+""	ERR
+"\ud835\udff5,3-\uff10"	ERR
+"83"	83
+"8\u00a0\uff196_"	ERR
+"\u06647"	47
+""	ERR
+"\ud835\udff5\uff19."	ERR
+"\ud835\udfd94-\ud835\udfe0_"	ERR
+"\u0968,381\u0663"	23813
+"\ud835\udff5\u0663_6"	936
+"7\uff19a"	ERR
+"+ 8"	ERR
+""	ERR
+"\u00a0\u06634-\u00a0.2"	ERR
+"373-"	ERR
+"43\ud835\udfe0,\uff19\u0663"	43893
+"568"	568
+"\uff19\ud835\udff5_ a"	ERR
+"\u0967\u00a040"	ERR
+"8.\u00a0"	ERR
+""	ERR
+"0\uff19\uff105\ud835\udff5"	9059
+"8\ud835\udfd97"	817
+"-"	ERR
+"\ud835\udff5 \u00a0\uff19\u00a0"	ERR
+"30+"	ERR
+"\u0967_\ud835\udfe0\uff10-"	ERR
+"\u0967\uff10\ud835\udff58+"	ERR
+"\u00a0 \u09682"	22
+"7\u0968. \u00a09"	ERR
+""	ERR
+"\u0968"	2
+""	ERR
+"\u0968\u00a0"	2
+"\u00a0\u0664,"	4
+"-+\u09680"	ERR
+"+"	ERR
+"a\u0967"	ERR
+"\uff19.\ud835\udfe0"	ERR
+".3-\uff10\ud835\udfd95"	ERR
+"6\ud835\udfd99\u0664\u00a019"	ERR
+"\uff1048\uff19"	489
+".4-_"	ERR
+"6819\u0663"	68193
+".985"	ERR
+"8\uff10_4"	804
+"+\ud835\udfe0,\ud835\udfe0"	88
+"a5+12\u09676"	ERR
+"1\u0663a91"	ERR
+"\uff103\u0968\ud835\udfd9\ud835\udff5_"	ERR
+"0 "	0
+"\u0968 \u0663"	ERR
+"\ud835\udff57\u066321_"	ERR
+""	ERR
+"05\uff10a8\uff10\ud835\udfe0"	ERR
+"\uff10-9"	ERR
+"11"	11
+"+\u0664\ud835\udfe0\ud835\udfe03+9"	ERR
+"17_-\u0967\u0967"	ERR
+"\u09686\u0967\u0663\ud835\udfe02_"	ERR
+"\ud835\udfd95\u00a07\u0663\uff19"	ERR
+"2\uff10\ud835\udfd9-\ud835\udfe0+6"	ERR
+"\u00a0091"	91
+"\u00a025\u0968"	252
+"\u00a0,\ud835\udff5-"	ERR
+"39\uff101"	3901
+"5\uff198\u0664641"	5984641
+"\u06640\u0967\u066390"	401390
+"_385\u0968\ud835\udff5"	ERR
+"25\u00a0"	25
+"\u0663\u0967a07+"	ERR
+""	ERR
+""	ERR
+"\u00a0\u0968\uff10\u00a0\uff195"	ERR
+""	ERR
+"\ud835\udfd9-6572"	ERR
+"\u0664\u0664_\ud835\udfe0\ud835\udfe086"	448886
+"\uff19+7\ud835\udfe0"	ERR
+"\u09688\ud835\udff54"	2894
+" \u0967a8"	ERR
+"\u00a06\u0664"	64
+""	ERR
+"6"	6
+"5a_7"	ERR
+"\ud835\udfd9\ud835\udfd9"	11
+""	ERR
+"+88"	88
+"\ud835\udfd98+"	ERR
+""	ERR
+""	ERR
+"a."	ERR
+"9 +\u00a0 \u0968"	ERR
+"98\uff10"	980
+".\u09684\uff10"	ERR
+"4+128"	ERR
+"\u00a0"	ERR
+"6,918_\uff19"	69189
+""	ERR
+"\uff10-\uff19--\u00a0 "	ERR
+"\u00a06a-+93"	ERR
+"a"	ERR
+"\ud835\udff5_"	ERR
+"\u0967-\ud835\udff5+3"	ERR
+"1-\u0968637"	ERR
+"+5\ud835\udfe047\u09683"	584723
+"_\u0663,\uff10\u00a0"	ERR
+"+\ud835\udfd9"	1
+"\u096751\u06636\ud835\udfe07"	1513687
+"38"	38
+""	ERR
+""	ERR
+"9\uff19\uff1961"	99961
+"\ud835\udfe0\ud835\udfe044"	8844
+"\ud835\udff5"	9
+"\u0967-"	ERR
+"\u00a0\uff1042"	42
+"\u00a05\u0968"	52
+"6\uff10+\u0664.5"	ERR
+"\uff10"	0
+"762\ud835\udfe0476"	7628476
+"\u06648"	48
+"\u00a0"	ERR
+"2 \u066385"	ERR
+"-\uff10\u0664\u0967\ud835\udff5\u06647"	-41947
+"\u0664\u0967"	41
+"\uff10"	0
+"a- 7,\ud835\udfe0"	ERR
+"_\ud835\udfe0\u096751\u00a0"	ERR
+""	ERR
+"\u0968,5\ud835\udfe0a"	ERR
+"\u0967  4,6\u0664"	ERR
+"\u06649\u096864\u09687"	4926427
+"3\uff19\ud835\udfe02"	3982
+"-\u06636"	-36
+".\ud835\udff51+"	ERR
+"\ud835\udfd9\ud835\udff51"	191
+"a9\u09686"	ERR
+"0\u00a0,_-7"	ERR
+"5"	5
+""	ERR
+"5\uff190\u0663.."	ERR
+"\u0664-0\ud835\udfd9\u0968"	ERR
+"+7\u06630\u0664\ud835\udfd9"	73041
+""	ERR
+"\ud835\udfd9\uff19_"	ERR
+""	ERR
+",\uff19"	9
+",4"	4
+"8\u0663"	83
+"\ud835\udff52\u066332\ud835\udff5"	923329
+"\uff19. 61\u0663"	ERR
+"7.6576"	ERR
+"\ud835\udfd9\ud835\udff59.\uff19"	ERR
+"\u00a069"	69
+"\u00a0"	ERR
+""	ERR
+""	ERR
+"2\uff10\u0663\ud835\udfd95"	20315
+"\u06642-a4\uff19\u0664"	ERR
+""	ERR
+"_\ud835\udfe0"	ERR
+",a6+,"	ERR
+"+"	ERR
+"096\u0967 "	961
+"\uff19\ud835\udfd903,"	9103
+"9\ud835\udff559a\ud835\udfd9"	ERR
+"a__"	ERR
+"110"	110
+"\u0968,"	2
+"\ud835\udff518\uff10\u0967"	91801
+"2\ud835\udff5\ud835\udfd97"	2917
+""	ERR
+"\u00a0-"	ERR
+"8\uff10.1+"	ERR
+"9"	9
+"\u00a077\u0663\u0967-"	ERR
+"00\uff104"	4
+"\ud835\udff5\u00a04 2\u09687"	ERR
+"4+"	ERR
+"\u0968\ud835\udff5"	29
+"644\u0968\ud835\udff5"	64429
+"4"	4
+""	ERR
+"8 04"	ERR
+""	ERR
+"\uff10"	0
+"\ud835\udff5-\ud835\udff5+9\ud835\udfe04"	ERR
+"-\u00a0 \uff10, "	ERR
+".580"	ERR
+"7\ud835\udff51."	ERR
+""	ERR
+""	ERR
+"\u0968"	2
+"0\uff10\ud835\udfd974\ud835\udff5+"	ERR
+"7\u0967\u096885a"	ERR
+"52_"	ERR
+"23\uff10\u06647"	23047
+"_\uff10\u0664"	ERR
+"\uff10\u00a0\ud835\udff52-\u0967 "	ERR
+"5\u0968"	52
+" "	ERR
+"\ud835\udfe0."	ERR
+","	ERR
+"622\ud835\udfe0\ud835\udfd98"	622818
+"+\uff19 \u0967_"	ERR
+"\u0663\u0968\u0968\ud835\udfd926"	322126
+" \u0663a. \ud835\udff5"	ERR
+","	ERR
+"079-\ud835\udfe0"	ERR
+"68"	68
+""	ERR
+"\uff19\u0967"	91
+"1\ud835\udfe038"	1838
+"5"	5
+"\u09677,-14."	ERR
+"\u06639a+2"	ERR
+"4\ud835\udfe0\ud835\udff5\u06637-"	ERR
+"2\u0967a \u0664\u06635"	ERR
+""	ERR
+"60 "	60
+"7\ud835\udff5\u0663"	793
+"\u0664-5\uff1070"	ERR
+"\u0663\u06641"	341
+"\u06642"	42
+""	ERR
+"\u06648"	48
+" _a"	ERR
+"38"	38
+" \u09681\u06641\ud835\udfe0"	21418
+"1a\ud835\udfd9_99\ud835\udfe0"	ERR
+"9\uff10+.9\ud835\udfe0"	ERR
+"\u0967"	1
+""	ERR
+"-"	ERR
+"6"	6
+"\ud835\udfd9"	1
+""	ERR
+".26"	ERR
+"699,,"	699
+"\ud835\udff5,+"	ERR
+"a"	ERR
+""	ERR
+"9"	9
+"6a9\uff19-5\ud835\udfd9"	ERR
+"+a,77."	ERR
+""	ERR
+"8.. "	ERR
+"\u0967"	1
+"6"	6
+"+6-1a\uff195"	ERR
+"- \u06634\uff102"	ERR
+"1\u0967"	11
+"\u00a0\u0663\u0664"	34
+"\ud835\udfd999.40\ud835\udff5"	ERR
+"-\ud835\udfe0\ud835\udfe0\u0967 -\ud835\udff5"	ERR
+"6\u00a086\ud835\udfe0"	ERR
+"\u0967.\uff198\ud835\udfe0\u0968-"	ERR
+"8,23"	823
+",\ud835\udfe0\ud835\udfe09\u0663"	8893
+"\u0663_7"	37
+"58"	58
+"-\uff190"	-90
+"+74225"	74225
+"\u0968a+\uff10\uff1079"	ERR
+"80943a"	ERR
+"9a\ud835\udfe09\ud835\udff5-"	ERR
+""	ERR
+"3\u00a0"	3
+"\u0663."	ERR
+"31 \ud835\udfd9_9"	ERR
+""	ERR
+"\uff10,1 "	1
+"\u0664\ud835\udfd968"	4168
+"59\u0663_"	ERR
+"\ud835\udff5"	9
+""	ERR
+"4+"	ERR
+"_\uff19\uff10.5"	ERR
+"0\u00a080"	ERR
+""	ERR
+"\u0664\uff19,\uff19\u00a00"	ERR
+"33\u0967\u09670\uff10"	331100
+"2.6 \u09671"	ERR
+".\u0664_604"	ERR
+".8-\ud835\udfd9\u06633-"	ERR
+"\u0664\u06639\uff1021-"	ERR
+" \uff10"	0
+"2, "	2
+"\u0967"	1
+"\uff10\ud835\udfe036\u0968"	8362
+"55_\u00a02"	ERR
+"a\uff109"	ERR
+"."	ERR
+"\uff19\u0663,+ \u0663\u00a0"	ERR
+"\uff105\uff19\ud835\udfe0\uff1940"	598940
+"95"	95
+"6\u00a0"	6
+"\ud835\udff57"	97
+"\uff1042.\u0663\u0664+"	ERR
+"\u0968\ud835\udfd9a-\u0664\ud835\udfd9"	ERR
+".8.4\ud835\udfe0\ud835\udfe0"	ERR
+"+18"	18
+",6"	6
+"+,"	ERR
+""	ERR
+"\ud835\udff57\ud835\udfe049"	97849
+"_4\uff10\u0968\ud835\udfd9a2"	ERR
+"\ud835\udfe0\uff192200"	892200
+"\uff19"	9
+"4"	4
+"16-_"	ERR
+"\ud835\udfe0 6\uff19"	ERR
+"-2"	-2
+"3-,\uff19_"	ERR
+"0"	0
+""	ERR
+"-\u00a0"	ERR
+"62\ud835\udfe0"	628
+",\u0663"	3
+""	ERR
+"\ud835\udff5\uff10\u09689\ud835\udfe0"	90298
+"\uff104,1"	41
+""	ERR
+"5\u00a00\u0968"	ERR
+"04837"	4837
+"\uff10\ud835\udfd9\u0967."	ERR
+"62490\ud835\udfd9\uff19"	6249019
+"5\u00a0\ud835\udfe0"	ERR
+"7\u0967"	71
+"30\uff196\u0967 \ud835\udfd9"	ERR
+"8\uff19"	89
+"2"	2
+"7+\uff19\uff10"	ERR
+"\u0664494"	4494
+"\uff19\u066439"	9439
+"\u00a0"	ERR
+",+\ud835\udfd9"	1
+"0"	0
+".\ud835\udfd909\ud835\udff5."	ERR
+" 56.\u06646\u0663"	ERR
+"4-\ud835\udff5"	ERR
+"\ud835\udff5 ."	ERR
+"17\uff19"	179
+" "	ERR
+"\ud835\udff5"	9
+""	ERR
+"-_a"	ERR
+",,\uff19,\ud835\udfe0\u0968"	982
+" 16\ud835\udfe084\uff19"	168849
+"\uff10"	0
+"\uff196_3\uff190"	96390
+"6\ud835\udff5\uff10"	690
+"69\uff199\ud835\udfe0\u00a0"	69998
+"70\ud835\udfe0\uff197"	70897
+"95\uff10\ud835\udfe0"	9508
+"0"	0
+"a4\ud835\udff5\u0967\u00a0"	ERR
+"\uff19.,\u00a0\uff19\ud835\udfe0"	ERR
+"7"	7
+"12756"	12756
+"4a++\u0967 "	ERR
+"1"	1
+"\uff10\uff19\u0967 9\ud835\udff5 "	ERR
+" 03+9"	ERR
+"1\ud835\udfe0\uff19\u00a0"	189
+"81._\uff19\ud835\udff5-"	ERR
+"\u0967\u0664\uff19\u066375\u0663"	1493753
+""	ERR
+"86_6a3"	ERR
+"--"	ERR
+"\u0968a42"	ERR
+"7\ud835\udff58\u0967"	7981
+",\uff19"	9
+"049\u066344"	49344
+"1,\u0663a.\u0663"	ERR
+""	ERR
+"3\ud835\udff5\uff10a9-"	ERR
+"3\ud835\udfd9\u0664-\uff10-0"	ERR
+"\u0968198"	2198
+"\u066304\u06641"	30441
+"_a3"	ERR
+"9a"	ERR
+"\u0663\u00a042\u0663."	ERR
+"-"	ERR
+"\ud835\udfd9\uff194\uff10,"	1940
+"\u0968_\ud835\udfe09.\u0664"	ERR
+"\u0663"	3
+"0\ud835\udfd9"	1
+"6"	6
+".\u06634\u00a05"	ERR
+"-\u00a0"	ERR
+""	ERR
+" "	ERR
+"\ud835\udfe08a "	ERR
+"9-+.,"	ERR
+"_\u0968\ud835\udff5-4"	ERR
+"\ud835\udff5."	ERR
+"\ud835\udfd9\ud835\udff58-"	ERR
+"\u096819\u0663\uff10. "	ERR
+"4,4\ud835\udfd9\ud835\udff5.4"	ERR
+"_\u00a02"	ERR
+"5\uff10-\ud835\udfd9-"	ERR
+"87\u09680"	8720
+" 2\uff198.a+"	ERR
+"\uff191-8.\u06634"	ERR
+"46a+3"	ERR
+"\uff10"	0
+"4.\ud835\udfd9\u0663\uff10"	ERR
+"\u06634.\uff19416"	ERR
+"_\ud835\udfd9a8.9"	ERR
+""	ERR
+"260\u0967_+"	ERR
+"79\uff19-"	ERR
+",_\uff19\ud835\udfe0a"	ERR
+"3\ud835\udfe0 1"	ERR
+"6a\u09673"	ERR
+"08_3"	83
+",9\u06648 4"	ERR
+"13+,_0\uff19"	ERR
+"\ud835\udfd974_46."	ERR
+"9 "	9
+"\ud835\udfd9\u00a0\ud835\udff5"	ERR
+"\u09681\u0968"	212
+"\uff108\ud835\udfe0\ud835\udfe0,,."	ERR
+"--27 "	ERR
+""	ERR
+"3\ud835\udfe0+\u0664\ud835\udff5"	ERR
+"_462\uff108."	ERR
+",_,\u06642.\u0968"	ERR
+"a\u0664\uff19\ud835\udfd9"	ERR
+"\ud835\udff5"	9
+"-2"	-2
+"\uff19+"	ERR
+"-"	ERR
+"40\u0664"	404
+"\uff19"	9
+"2"	2
+"3\ud835\udfe0\u0967\u0664\ud835\udfd9"	38141
+"-\ud835\udfe0+2-"	ERR
+"9a\u00a0-,+\u0968"	ERR
+",\u0968"	2
+"+3_8\ud835\udfd9\uff194"	38194
+"\ud835\udfe013\u00a0"	813
+"a\ud835\udfe0"	ERR
+""	ERR
+""	ERR
+"_15-,"	ERR
+""	ERR
+"\u0664\u0967+3\ud835\udfe0+"	ERR
+""	ERR
+""	ERR
+"7\u0663"	73
+"\ud835\udfd9+_49\u09684"	ERR
+"\u06644"	44
+"\u09677"	17
+"0\uff196"	96
+"\u0664,\uff10 .\ud835\udfd9-"	ERR
+""	ERR
+"7\ud835\udff5+\uff198\u0968"	ERR
+""	ERR
+"3\uff10\u0663\uff19\uff19"	30399
+"-84"	-84
+"\u0967\u00a0\u0664 83a"	ERR
+"\ud835\udff5"	9
+"+, -\ud835\udfe0"	ERR
+".+\u06640\uff191\uff19"	ERR
+"_\u00a0730 2"	ERR
+"\ud835\udff5."	ERR
+"7"	7
+",a"	ERR
+"5"	5
+"\u00a0.\ud835\udff5 "	ERR
+"71"	71
+"\ud835\udfd9,\u0664\u0664"	144
+"\u09689\uff19709."	ERR
+"66"	66
+"92"	92
+"5+\ud835\udfd9\uff10"	ERR
+"a\u00a05,"	ERR
+"\ud835\udfe02\uff19\uff10 \u0968"	ERR
+"70\uff10\uff19\u0664"	70094
+",\u0968"	2
+"9+"	ERR
+"__"	ERR
+"\uff19046"	9046
+"6\ud835\udfd901"	6101
+""	ERR
+"97\u0663\u00a0\ud835\udfd93a"	ERR
+"\u0968"	2
+"65"	65
+""	ERR
+"55,_1,"	551
+"\ud835\udff59\u09674\u0664"	99144
+""	ERR
+"3,."	ERR
+"\u0663_3"	33
+"\uff1948\ud835\udfd9"	9481
+"8300 \u0663"	ERR
+"1_"	ERR
+"11"	11
+""	ERR
+"70a9"	ERR
+"aa\u0968\ud835\udfd9._\u0967"	ERR
+"6"	6
+" \ud835\udff5"	9
+"\uff10"	0
+"4 6,+"	ERR
+" \u0968\u09672773"	212773
+"2a9"	ERR
+"23\u0967\uff19\u0968"	23192
+"7\u06649\u00a0\ud835\udfd9"	ERR
+"\uff1035\ud835\udff5"	359
+"6,4\u00a06\uff19"	ERR
+"-"	ERR
+"+"	ERR
+"\u09677"	17
+"8\u0968\u0663a"	ERR
+"+33\ud835\udfe0 ,."	ERR
+"6\u0967_4\ud835\udfd98"	61418
+"\ud835\udfd96\u09681\ud835\udfe0"	16218
+"8_\uff103\ud835\udfd94"	80314
+" .\ud835\udfd9"	ERR
+"\u096711\ud835\udff5,"	1119
+",."	ERR
+"\uff1088"	88
+"93"	93
+"7__6\u00a0"	ERR
+"-"	ERR
+"-\u00a04"	ERR
+"+"	ERR
+""	ERR
+"4+ \u0968\u00a0\u0663"	ERR
+"\u09684a\ud835\udfe02\u00a0"	ERR
+"\u00a06."	ERR
+"+\u00a0\ud835\udff5_8\u06640"	ERR
+"0+a\u0663"	ERR
+"45\u096883-"	ERR
+"\ud835\udff5"	9
+"+1.2\u096727"	ERR
+"+\u0968\ud835\udfe0\ud835\udfe0\uff19"	2889
+"\uff19 \ud835\udff5\ud835\udfe0\u00a0"	ERR
+"7-4\u00a0"	ERR
+"\ud835\udfe0+\u0968"	ERR
+""	ERR
+"6\u09674"	614
+"53\u00a06-"	ERR
+""	ERR
+"\u0664\u00a0\ud835\udff5  "	ERR
+"7 \u00a0+27"	ERR
+"4 \ud835\udfd9 2,\u0663"	ERR
+"+\u00a082,,"	ERR
+"8\ud835\udff5"	89
+""	ERR
+"-7 \ud835\udff5,"	ERR
+",\u0663\u00a004"	ERR
+"\uff10\ud835\udff53"	93
+"8 7"	ERR
+", "	ERR
+"\uff19\ud835\udff51\ud835\udff5\ud835\udfe0"	99198
+"+\u0664"	4
+" \ud835\udfe0\uff19\u0664\u0967"	8941
+"9\u06638,21"	93821
+"\u0664"	4
+"a9\uff106"	ERR
+"\u0664\u0967\uff10678"	410678
+"-"	ERR
+"\ud835\udfe0\u066399\u0968."	ERR
+"-"	ERR
+"\ud835\udff56."	ERR
+"\u0663"	3
+"\u0967\u00a0\u066421"	ERR
+"_"	ERR
+",26"	26
+""	ERR
+"42\ud835\udfe0.2\uff101"	ERR
+".4"	ERR
+"-.90\u09688\u0664"	ERR
+"\u0968"	2
+"\ud835\udfd9"	1
+"17\u0664\ud835\udfe0\u0664"	17484
+"0\u00a0"	0
+"14_\ud835\udfe0+\u0664"	ERR
+"\u0968"	2
+"9_6-.2+"	ERR
+"\uff19\uff100\ud835\udfd9"	9001
+"9"	9
+"\u0967\u0967+"	ERR
+""	ERR
+"2\ud835\udfd9\u09672\uff197"	211297
+"-"	ERR
+"\u06649\u0663\u00a014."	ERR
+"\u0968 4\u0664368"	ERR
+""	ERR
+"\ud835\udfd9\ud835\udfe0\u0967,44_"	ERR
+",8\uff19\u0968,\u0967"	8921
+"\ud835\udff5+\u00a0\ud835\udfe0\u0968"	ERR
+"0"	0
+"\u066477"	477
+"-\u0664\u00a032"	ERR
+""	ERR
+"\ud835\udfd9_7"	17
+"\u06635\u0664"	354
+"\u0663"	3
+"19"	19
+"\u0967\ud835\udff5\ud835\udfe0_"	ERR
+"- \u00a060"	ERR
+"45+0508"	ERR
+"\uff19\u00a06-\ud835\udfe0"	ERR
+"\uff107-"	ERR
+"-\u0967+"	ERR
+""	ERR
+"\u0967\uff19"	19
+""	ERR
+"319"	319
+"\u0664+"	ERR
+"5\u0967\u00a0\ud835\udfe05"	ERR
+"\u0663\uff19"	39
+".\ud835\udfd9"	ERR
+","	ERR
+"\uff10\u00a0"	0
+"8 ,7"	ERR
+""	ERR
+"\ud835\udfd96\uff10"	160
+"7\uff10a\ud835\udff5"	ERR
+"\uff19a\ud835\udff58\ud835\udff57"	ERR
+"\uff19\uff10.-\uff10"	ERR
+",\u0663\ud835\udfe0"	38
+"177\u06644"	17744
+"3\u06642\u00a0--"	ERR
+"\u0968,3\uff1061"	23061
+"6\u0664\ud835\udff56-\u0663"	ERR
+"\u00a0 \ud835\udfd93+\ud835\udfd9\ud835\udfe0"	ERR
+"\u0663\uff10 _"	ERR
+"-\ud835\udfe0"	-8
+"627"	627
+"8"	8
+"a7.\ud835\udfd981"	ERR
+" +,-61"	ERR
+"744_"	ERR
+"\u0968\u0967,-"	ERR
+" a_8"	ERR
+",+a"	ERR
+"1\u0967\u00a06\uff10"	ERR
+"\ud835\udfe0"	8
+"7 "	7
+"\ud835\udff5\u0663"	93
+"\u00a0+80-_4"	ERR
+"26+6+"	ERR
+"\ud835\udfe0"	8
+"634\uff10+3+"	ERR
+",\u00a0."	ERR
+"5"	5
+""	ERR
+"1\u0967,4\u00a0"	114
+"+6a6\u09681_"	ERR
+".8a"	ERR
+"\u0664."	ERR
+"1460\uff199"	146099
+"\ud835\udff525\ud835\udfd90+"	ERR
+"\u0663494"	3494
+"9\u0663"	93
+"\uff10\uff10\ud835\udfe0"	8
+"\uff10,\u09686"	26
+"\ud835\udff516"	916
+"_ \ud835\udfe0+\u00a01"	ERR
+"25.4 9"	ERR
+"1\ud835\udff5"	19
+",   \u0968\u0663a"	ERR
+"\u00a0\u06644"	44
+"-\uff10\ud835\udfe0"	-8
+"7"	7
+"9\u0664,_"	ERR
+"0.\ud835\udff5.40-"	ERR
+"59\u0664\ud835\udff5+6"	ERR
+"\uff10a\ud835\udff507\ud835\udfd9"	ERR
+"_ ,921\u0663"	ERR
+"541 ."	ERR
+"\u0968\ud835\udfd9\ud835\udff5"	219
+""	ERR
+""	ERR
+""	ERR
+",\uff19,\u00a0-7+"	ERR
+"37"	37
+"9703"	9703
+"-\ud835\udfe09"	-89
+"\u00a08\uff1093\ud835\udfd9,"	80931
+"8_"	ERR
+"\uff19\u0967\u0664_"	ERR
+""	ERR
+"68,\u0663"	683
+"\u00a00_"	ERR
+"32- 814"	ERR
+" \uff10_+"	ERR
+"\u00a01"	1
+"\uff19_5\u09687\uff19."	ERR
+"\u0968-"	ERR
+"39\u00a02\u0968,"	ERR
+"\u0967-"	ERR
+"\ud835\udfd94a20\u0664\ud835\udff5"	ERR
+"\u0967\u0968\u0664471\u0664"	1244714
+"-\uff10\ud835\udfe0\u0967"	-81
+"8\u0967 \u0664_\u0663 "	ERR
+""	ERR
+"-7"	-7
+"\uff19\ud835\udfd9 \ud835\udfe08aa"	ERR
+"2\u09688"	228
+"\u0663\u00a019"	ERR
+".\ud835\udff552\ud835\udfe0\u0967\u0663"	ERR
+"1\u0967\u0967"	111
+"92\u0664\u09687"	92427
+"4\ud835\udfe0"	48
+"\ud835\udfd9\u0968_\ud835\udfd9\ud835\udff56"	12196
+"\ud835\udfe050\u00a0610"	ERR
+"+"	ERR
+"-6\uff1950"	-6950
+"171+3 "	ERR
+"\u0664\uff19\uff19\u09684"	49924
+"\u0663\ud835\udfd93a_."	ERR
+""	ERR
+"7+\u06642-\u0968\u0967"	ERR
+"0 \u066397+"	ERR
+"+ 1\uff191-\u0968"	ERR
+"\u09675\ud835\udff54_6"	15946
+".-"	ERR
+"\u00a0\u00a00  "	0
+"a2\uff10\u00a0+"	ERR
+"\ud835\udff5\ud835\udfd9"	91
+""	ERR
+"1a"	ERR
+"8_12"	812
+"47"	47
+"6\u00a05,6"	ERR
+" 49\uff10\u09675"	49015
+"0\u09675a\ud835\udfd931"	ERR
+"-\ud835\udfe0"	-8
+"\u0663\u00a061"	ERR
+"\u0968"	2
+"a8\ud835\udff5.\u0664,"	ERR
+"\ud835\udfd9\u0967\u09682\u0967_3"	112213
+"7\u00a017"	ERR
+"6"	6
+"\ud835\udfd9\u00a0"	1
+"\u00a0\uff19+\ud835\udfd94\uff19"	ERR
+"\u0664\ud835\udfd96"	416
+"\ud835\udff5\u0967\ud835\udfd94\ud835\udfe0a\ud835\udfd9"	ERR
+"+"	ERR
+" \ud835\udfe00\u0968\uff10.\ud835\udfd9"	ERR
+"\u00a017\u096895\u0663"	172953
+"2a_2\uff198\ud835\udff5"	ERR
+"\ud835\udfe04\u0664\ud835\udfd9"	8441
+""	ERR
+"24\u0663\ud835\udff54"	24394
+"\ud835\udfe0\u00a0"	8
+""	ERR
+""	ERR
+""	ERR
+"\u00a0"	ERR
+".1\ud835\udfe0\u0663\ud835\udfd9"	ERR
+","	ERR
+"\u0967\ud835\udfe008 ,2"	ERR
+"255\u00a0\u0967"	ERR
+""	ERR
+"6\u0967\ud835\udfe074."	ERR
+" "	ERR
+"\u09683a\u0968\u0664\ud835\udfe05"	ERR
+"392\u0968"	3922
+"\u0967"	1
+"\u0664,\u0967a\u0967"	ERR
+",9\u00a0\u0663"	ERR
+"\uff10\uff10\u0664,\u096749"	4149
+"\uff192\uff19\ud835\udfe0"	9298
+"1\u0967+\ud835\udff5"	ERR
+".\u0967"	ERR
+"\ud835\udfe083\u09679"	88319
+"77+\u0664\u09672"	ERR
+"\ud835\udfe0481\ud835\udfe08"	848188
+"_28"	ERR
+"347._,"	ERR
+"\u00a02\u0663\u0967,1"	2311
+"6+\u0967\u0967\ud835\udfe0\u00a0"	ERR
+"\u0968\u0968\u00a04"	ERR
+"+1"	1
+""	ERR
+""	ERR
+"0 \u0663\uff19,_\uff10"	ERR
+"\ud835\udff5\ud835\udfe0"	98
+"a,\u0968"	ERR
+"\ud835\udfe06+"	ERR
+"\u00a0\ud835\udff5,88"	988
+"9\ud835\udfe0"	98
+"\u00a0"	ERR
+"\u0663"	3
+"\u0967\u0967\u066473.3"	ERR
+"\u0663\u066453\ud835\udff5\ud835\udfd9_"	ERR
+"\u09677\u06633\uff10,"	17330
+"3\uff19\u00a0"	39
+"."	ERR
+"\u0967\u06639\uff19"	1399
+""	ERR
+"\u0968\uff10\ud835\udfe0\uff10+"	ERR
+"-4\u0663"	-43
+"2.8-a\uff19\uff10"	ERR
+"\ud835\udff5"	9
+"+"	ERR
+"\uff19"	9
+"+12\u0664"	124
+"2+\ud835\udfe0.."	ERR
+"+1"	1
+"+\ud835\udfe0++"	ERR
+"0\ud835\udff5\ud835\udfe07\u066442"	987442
+"+63\uff19\u00a0\ud835\udff5\ud835\udff5"	ERR
+"6+\ud835\udfd9+-0\uff10"	ERR
+"0\u00a01."	ERR
+"4\u00a0\u09685a6"	ERR
+"\uff1992\u06641-"	ERR
+",5"	5
+"1\ud835\udfd99\u0967"	1191
+"1\u0968\u0663_"	ERR
+"1.25"	ERR
+"\ud835\udff5\ud835\udfd9.8\uff19,"	ERR
+""	ERR
+"19\u00a01 6"	ERR
+"5742\uff19"	57429
+""	ERR
+"\uff19"	9
+"9_"	ERR
+"\u0967\u0967\u0968.0+\u0967"	ERR
+"7a\u06634\u0664\u00a0"	ERR
+"-"	ERR
+"7\u06640\u0968\uff19\u0967"	740291
+"-\uff10+\u0664\ud835\udfd9"	ERR
+"4-\uff19"	ERR
+"3\u0967"	31
+"a"	ERR
+"5 .."	ERR
+"\u09678"	18
+"82\ud835\udff5"	829
+"7\ud835\udfd9\uff10\u0968\u0664"	71024
+"8\u00a05"	ERR
+"1,"	1
+"4\u096879a"	ERR
+""	ERR
+",.a15\u0664"	ERR
+"\uff10\ud835\udfe0\ud835\udfe0.\ud835\udfd9a"	ERR
+"985 \ud835\udfe0"	ERR
+"\uff192\u00a0-\uff19"	ERR
+"\ud835\udff5 3"	ERR
+"7\ud835\udff52 \ud835\udfe0"	ERR
+"1\u0967 \u0663"	ERR
+""	ERR
+"\ud835\udfe030\uff190\u0967"	830901
+",3"	3
+" 2\u0663"	23
+"+5"	5
+"\u09683\u06638\ud835\udff5.\uff10"	ERR
+" \ud835\udfe0"	8
+"3\ud835\udfd9"	31
+"2\ud835\udfd9"	21
+"557\uff109\uff19"	557099
+"1"	1
+"0\u0968\ud835\udff5"	29
+"0\uff10\ud835\udfd9"	1
+"\ud835\udff56\u0968+94_"	ERR
+"\u0968+3\uff10\u0968"	ERR
+"_0-"	ERR
+"a650\u06638,"	ERR
+"\uff1022"	22
+"\u0968a4"	ERR
+"\uff107\ud835\udff5"	79
+"\u0663\u06630\u0967\u0663"	33013
+",13"	13
+"-4"	-4
+"\u0663771 5\uff10"	ERR
+"-\uff19"	-9
+"8 \u00a0"	8
+"9\u09677"	917
+"\u0664"	4
+""	ERR
+"9\u06645a4"	ERR
+"_\u06649\u0968\uff190"	ERR
+"0_."	ERR
+""	ERR
+"+3\uff19"	39
+"\ud835\udff5\ud835\udfd9\uff10+.\u0664\u0664"	ERR
+"\u00a0\u00a0,"	ERR
+"\ud835\udfe0"	8
+"\u00a0\u00a0\uff19"	9
+"\ud835\udfd98"	18
+"02\uff10\ud835\udfe0"	208
+"0\uff106\u0663_8"	638
+"\u00a0.\u0664"	ERR
+",1"	1
+"\u0663++1\ud835\udfd91"	ERR
+" 7a6"	ERR
+"\u0664..1\u00a0\u06646"	ERR
+"_"	ERR
+"-a\uff107"	ERR
+"8\u0967"	81
+"\ud835\udfe0\u0664\u0967 "	841
+"\ud835\udfe0"	8
+"-\u0663-,\uff19"	ERR
+"735\u0663\u0968,\u0968"	735322
+"132++\u00a08"	ERR
+"\ud835\udfd9\ud835\udfe0."	ERR
+"\u0968+\u0664\u0663\uff10"	ERR
+"\u0967"	1
+""	ERR
+".+8"	ERR
+"25+3"	ERR
+""	ERR
+" 55"	55
+"\u096737\uff19"	1379
+""	ERR
+"954\uff19\u09674"	954914
+"\u066463_\ud835\udfe0"	4638
+"69\u0968\ud835\udff5\uff101\ud835\udff5"	6929019
+"5_\ud835\udfe0"	58
+"6\ud835\udfd9-"	ERR
+"_"	ERR
+"50\u00a0\ud835\udfd9"	ERR
+"+\u0664++"	ERR
+"_"	ERR
+"488\u0968,"	4882
+",6"	6
+".2\u00a0,\ud835\udff53"	ERR
+"89"	89
+"\uff199a\uff1096"	ERR
+"\ud835\udfd9\ud835\udff54\ud835\udfe0\uff19"	19489
+"\u0664\ud835\udfd93"	413
+"68\u00a0\u0664\u0664\ud835\udfe0"	ERR
+"4\ud835\udfe0\uff10"	480
+"\uff10"	0
+"1a\u00a0,8"	ERR
+""	ERR
+""	ERR
+"1a "	ERR
+"5"	5
+"66"	66
+""	ERR
+""	ERR
+".\u00a0\ud835\udfd91\u06647"	ERR
+"\ud835\udfe03\uff19"	839
+"-51\u0663\u0968"	-5132
+"9 0,_+"	ERR
+".. a\ud835\udfd95-"	ERR
+""	ERR
+"8\u096710+"	ERR
+".6"	ERR
+"\uff19\u0664\u0968a,5"	ERR
+"\u06631\uff19"	319
+"-,"	ERR
+""	ERR
+"1\u0967\u0968"	112
+"2\ud835\udff5\u0663+04"	ERR
+"\ud835\udff5\uff19+"	ERR
+"63\ud835\udfd9+_"	ERR
+""	ERR
+"6"	6
+" \ud835\udff51\ud835\udfd9-"	ERR
+"-9\ud835\udfd9\u0663"	-913
+"a5"	ERR
+"\ud835\udfe0\uff19"	89
+""	ERR
+""	ERR
+"6\uff107,30"	60730
+"5\u06649\u0663a,"	ERR
+"\uff10\u0968"	2
+"6\uff10\uff10\ud835\udff59_"	ERR
+"\ud835\udfd9"	1
+"\u0664"	4
+"."	ERR
+""	ERR
+" \u066413,8"	4138
+""	ERR
+"a,4\uff199"	ERR
+"149\u06643\uff10\u0967"	1494301
+"\ud835\udfd9"	1
+"\uff19"	9
+"-\u06632- \u0664"	ERR
+"\ud835\udff5\u0967"	91
+".\ud835\udff5\ud835\udfd9\ud835\udff5\uff19\u0968\u0663"	ERR
+"9\u00a0,,76"	ERR
+"418"	418
+""	ERR
+",\ud835\udfe0569\u06649"	856949
+"2\uff19"	29
+"\u06632"	32
+"5-"	ERR
+"6\u00a0"	6
+"\uff108_\u00a0\ud835\udfe04"	ERR
+"-_a"	ERR
+""	ERR
+"5\ud835\udfd99"	519
+""	ERR
+"7"	7
+""	ERR
+"\u09670\u066315\ud835\udfe0"	103158
+""	ERR
+"aa-\ud835\udfd94 +"	ERR
+"\u00a0\ud835\udfe0\u0967"	81
+"\uff19\ud835\udff5\u0664\ud835\udfd983\u0663"	9941833
+"09\ud835\udfd9\u0663"	913
+""	ERR
+"12  "	12
+"\ud835\udfe0"	8
+"8\ud835\udff511\u06648_"	ERR
+"7\u00a08\uff10."	ERR
+"\u00a0\u00a027"	27
+"+.5\uff19\u0968-"	ERR
+"-7,\u00a0\u0663\ud835\udfd92"	ERR
+"+66\u096841"	66241
+", "	ERR
+"\uff10\uff10\ud835\udfe0\uff10\uff19"	809
+"8"	8
+"_90"	ERR
+"-,8\ud835\udfd9"	-81
+"\uff10\ud835\udff5\ud835\udff52\ud835\udff5"	9929
+""	ERR
+"-\ud835\udff547"	-947
+"\uff19\u0968+\u00a00"	ERR
+"\u0664\ud835\udff5a"	ERR
+"7\ud835\udfe0"	78
+"6"	6
+"6"	6
+"1-a"	ERR
+"4a\ud835\udfe00,"	ERR
+"1\u0968\uff10"	120
+""	ERR
+"1"	1
+" 2+"	ERR
+"\ud835\udfe0_+"	ERR
+"5\u096899"	5299
+"\u0967 77"	ERR
+"a"	ERR
+"4 9 \u0968\u0663"	ERR
+"1\u066312-"	ERR
+"\uff19\u0663 \u06647"	ERR
+"\u06639+\u0663"	ERR
+"54\u06643\ud835\udfe0"	54438
+"\ud835\udfe07"	87
+"--8\u0663"	ERR
+"9,,1,"	91
+"0\u096739\u0968\u0663"	13923
+"\ud835\udfd92"	12
+"7"	7
+", \ud835\udfe094"	894
+"\uff19\u00a0\ud835\udfe03"	ERR
+"\uff10\ud835\udfe0"	8
+"_\u06647 113"	ERR
+".,"	ERR
+"+"	ERR
+""	ERR
+"29"	29
+""	ERR
+"7\u0968\uff10a76\ud835\udff5"	ERR
+"\u0664\u0967"	41
+"4\u0967\ud835\udff545 "	41945
+""	ERR
+"0a\ud835\udfe0\ud835\udfe0."	ERR
+"21\ud835\udff5\ud835\udff5,\uff104"	219904
+"\ud835\udfd98\u00a011\u0663"	ERR
+""	ERR
+"7\u0968"	72
+"\u06633\u00a0\u0967"	ERR
+"51\u09673"	5113
+"4\u00a083\u0664\uff10\uff19"	ERR
+"\ud835\udfe0"	8
+"4\uff1077_"	ERR
+"\uff10 \u0967\u00a0\ud835\udff5\ud835\udfe00"	ERR
+"a"	ERR
+"\u0967\u0664\uff195"	1495
+""	ERR
+"\u09689\u06645\ud835\udfd9"	29451
+""	ERR
+"\u06645 \u0967\uff10\u0663 "	ERR
+".. -3\ud835\udfe0"	ERR
+"3"	3
+"\uff10_6"	6
+""	ERR
+""	ERR
+"7\u00a0\u00a0\u0968\uff10"	ERR
+"+1\ud835\udfe01-\u00a0"	ERR
+"\ud835\udfe0\u0967 \ud835\udff5"	ERR
+"3"	3
+"5 +,5"	ERR
+"-\ud835\udff5"	-9
+"\uff1960\u0663a56"	ERR
+"\ud835\udfe02"	82
+""	ERR
+"6"	6
+"81\uff10+8\uff19-"	ERR
+",32"	32
+"660"	660
+"-\ud835\udfd9"	-1
+",_5\ud835\udfe06-2"	ERR
+"\ud835\udff5  2\u0663\ud835\udfe0"	ERR
+"\u0663\ud835\udfe0\u0664\ud835\udff5068"	3849068
+" 067-"	ERR
+" \ud835\udfe0\u0968\uff19,"	829
+"\ud835\udff5aa3a\u0664\u00a0"	ERR
+""	ERR
+"\u00a0_2"	ERR
+"8\ud835\udff5\ud835\udfe0\u00a071"	ERR
+"39\u09674"	3914
+" \u06632\uff1092"	32092
+".57\u09670\u06640"	ERR
+"\uff106_"	ERR
+"\u0967"	1
+"-\u0663\uff10\ud835\udfd9+\ud835\udfe0"	ERR
+"+,9\u0663 "	93
+"4\u0664\ud835\udfd9"	441
+"\u0664\uff193a"	ERR
+" +\ud835\udff5\uff195\ud835\udfe01"	99581
+"."	ERR
+""	ERR
+"4\u0967a45\u0663"	ERR
+"a"	ERR
+"\u06646\u0663+\u00a0 "	ERR
+"5-\u096787\u00a0"	ERR
+"\u0968\u06630\uff10\uff10"	23000
+"9\u0663\u00a0\uff19"	ERR
+"\uff1946\u00a0"	946
+"1\uff10\u00a083a\ud835\udfe0"	ERR
+"1"	1
+"."	ERR
+".,"	ERR
+"7\ud835\udfe01-51"	ERR
+",14\u0663"	143
+"6\ud835\udfd9\ud835\udff5"	619
+"64"	64
+""	ERR
+"\ud835\udfd90\u00a0+\u0968 "	ERR
+"_4__\u0664"	ERR
+"\ud835\udfd91_,\u00a0"	ERR
+"20"	20
+""	ERR
+"\ud835\udfe0\uff1936+\u0968\u0663"	ERR
+"\uff19\uff19\u096838\u0663"	992383
+"1\uff10\u00a0,61"	ERR
+""	ERR
+"-2_ "	ERR
+"1\u0968\ud835\udfe0846"	128846
+""	ERR
+",1"	1
+"\ud835\udff53\u06641\u06635"	934135
+"20\u06640\uff1947"	2040947
+""	ERR
+""	ERR
+"\u0968\ud835\udff5-"	ERR
+"."	ERR
+"_5a\ud835\udfe06"	ERR
+"2\ud835\udfd96"	216
+"\ud835\udff59"	99
+"2"	2
+"4a2"	ERR
+"\u00a0\u00a08 745"	ERR
+"-2 "	-2
+"\u00a01"	1
+""	ERR
+"0\u0664a\u0967"	ERR
+"-6\u0967\uff103 \ud835\udff5"	ERR
+"\u0663\u0663\u0967a\u0968"	ERR
+"5a\u09679"	ERR
+".\u0663_\u0663"	ERR
+"31229\u0968"	312292
+"\ud835\udfd9+ _\u09672"	ERR
+"\uff19\u0664"	94
+"\u0663-7\u0664\uff108a"	ERR
+"_\ud835\udfd99513"	ERR
+","	ERR
+"a"	ERR
+"\u00a0\ud835\udff5 83_+"	ERR
+"5"	5
+"a\uff10\u06632._\u0967"	ERR
+"_"	ERR
+"\u00a0"	ERR
+"\u0664"	4
+".7."	ERR
+"15\uff1910"	15910
+"\ud835\udfe0_9\u0664\u0968a"	ERR
+"\uff19 4"	ERR
+"\ud835\udfd9"	1
+"\u00a015"	15
+"-\ud835\udfe0865"	-8865
+"+\u00a0\u0663"	ERR
+"57"	57
+"4\u0968\u0968\u00a0\u0968\u00a09"	ERR
+"5\ud835\udfe0_\u0664\u0967"	5841
+"7\uff1065"	7065
+"1440"	1440
+"1 \ud835\udff5,4-"	ERR
+"5\u0664 "	54
+"a2"	ERR
+" _1\u0663"	ERR
+"\ud835\udfe04a\u0968"	ERR
+"\ud835\udfd91\uff10,\ud835\udfd9\u00a0-"	ERR
+"0"	0
+""	ERR
+""	ERR
+""	ERR
+""	ERR
+" 6,"	6
+""	ERR
+""	ERR
+"96\u0664"	964
+"6\uff19"	69
+" \u06646"	46
+"\u0967\ud835\udff5"	19
+"_"	ERR
+"\u0664\uff10"	40
+"\ud835\udfe0.0\u0664.20"	ERR
+"_\u0967  -4\ud835\udff5"	ERR
+"3"	3
+"\ud835\udfe0\uff10_\uff195\ud835\udfd92"	809512
+"0\u0663,0\ud835\udfe0\u00a0"	308
+"9\uff10"	90
+"91.."	ERR
+""	ERR
+"\uff100"	0
+"\u0968-173a+"	ERR
+""	ERR
+"0\uff1907"	907
+"8\ud835\udfd9 a06"	ERR
+"6a,\u0663\u00a01"	ERR
+"\uff10\u0664"	4
+"\ud835\udfd913+"	ERR
+"1"	1
+"\u0968.43\ud835\udff5.8"	ERR
+"13"	13
+"25_,\u00a0\u06645"	ERR
+"a 8\ud835\udff5\u00a09."	ERR
+"\ud835\udfe09"	89
+""	ERR
+"73"	73
+"239\uff10\uff10\ud835\udff5"	239009
+"8"	8
+"5\u00a0\ud835\udfe0"	ERR
+"3,3_\u0663"	333
+","	ERR
+"2\u0663\u09683,\u0968"	23232
+"8+,.++3"	ERR
+"_\uff10\ud835\udfd9\ud835\udff502"	ERR
+"\uff19."	ERR
+"02a+\ud835\udfe0\u0663"	ERR
+"1\u00a00\u0663\ud835\udfd9"	ERR
+""	ERR
+"a\uff19\u06635,9\ud835\udff5"	ERR
+"2\u0663a\u09686-"	ERR
+".\u00a0-\ud835\udfd9+"	ERR
+""	ERR
+"5"	5
+"\u0664\uff10486."	ERR
+"_a"	ERR
+"5"	5
+"091\ud835\udfe0\u066438"	918438
+"a5-8 9_"	ERR
+"5\u0663\u09676"	5316
+"\u0968"	2
+"83"	83
+"1\ud835\udfe0\ud835\udfe0"	188
+"\u0663\u00a0"	3
+"a\ud835\udfd9\u06643\u0664\u0664\u00a0"	ERR
+"5--"	ERR
+"1_"	ERR
+""	ERR
+"\u00a0\ud835\udff554 "	954
+"\ud835\udfe0\u09671"	811
+"\ud835\udfd95_\u09676\ud835\udfd9"	15161
+".98"	ERR
+"7\u00a0\u00a0\uff195\ud835\udff52"	ERR
+",4+"	ERR
+"0\ud835\udff5"	9
+"a"	ERR
+""	ERR
+""	ERR
+""	ERR
+"\u00a0,a0.89"	ERR
+"a+.3"	ERR
+"9"	9
+"-67\u066342"	-67342
+"6\uff103 "	603
+"47  "	47
+"a\u00a0"	ERR
+"3"	3
+"97\uff19"	979
+"1"	1
+"\u0968a+6 "	ERR
+"\u00a0"	ERR
+",_\ud835\udfe09_\ud835\udfe0\u00a0"	ERR
+""	ERR
+"4"	4
+"0\uff19"	9
+""	ERR
+"6\u00a0\ud835\udff5"	ERR
+"9\ud835\udfd953+\u0663"	ERR
+""	ERR
+"265"	265
+"6\u00a0\uff10a_"	ERR
+"8 +"	ERR
+"1\uff19,6\u00a0"	196
+","	ERR
+"++"	ERR
+"__7"	ERR
+",+a0, \ud835\udfd9"	ERR
+"_1,+\ud835\udfe0\u0968\ud835\udff5"	ERR
+".\ud835\udff5\ud835\udfe091\u0663,"	ERR
+"2\ud835\udfd99"	219
+",6"	6
+"5\u06649a"	ERR
+"06\u0967\u0968.0"	ERR
+"\ud835\udfd9a\u00a08"	ERR
+"2\u00a0+1"	ERR
+""	ERR
+"\ud835\udff5.\u00a0"	ERR
+"+_9"	ERR
+"\u0968\u06638\ud835\udff5\uff108\u0968"	2389082
+"++"	ERR
+"\uff10\u066477-\u0968,"	ERR
+"\ud835\udff5"	9
+"10\ud835\udff56 6"	ERR
+"\ud835\udff5"	9
+""	ERR
+"\uff1961\ud835\udfe05_1"	961851
+"66\uff10-"	ERR
+"\u0967"	1
+"81"	81
+"0\ud835\udff5"	9
+""	ERR
+"a5_"	ERR
+"5\ud835\udff5"	59
+"\u0967\u00a000\u0967\uff19"	ERR
+"\uff19\u0663\ud835\udfd9\u00a00"	ERR
+"\uff192\u00a0"	92
+",258\u0663\uff190"	258390
+"9\u0967\u0664\u096765"	914165
+"3a\u09679\uff19"	ERR
+"6\u0967\u06633"	6133
+""	ERR
+"\uff1966\u00a0"	966
+"\u06646."	ERR
+"+\uff10\u0968.a"	ERR
+" "	ERR
+","	ERR
+".a10"	ERR
+".\ud835\udff507\u0664"	ERR
+"1+"	ERR
+"7"	7
+""	ERR
+"\u0968 33"	ERR
+"8a47"	ERR
+".1"	ERR
+",\ud835\udff500_\ud835\udfd9"	9001
+"9.1a,_"	ERR
+"\ud835\udfd9058 7"	ERR
+"4"	4
+"+\u0664\u0664\u0967\ud835\udff5"	4419
+"\u00a0\u0663\u00a0_"	ERR
+"\uff10.4\u09686"	ERR
+"63\u00a0250"	ERR
+""	ERR
+","	ERR
+"5"	5
+"\u0663\uff10\u0664\ud835\udfd95"	30415
+"a-"	ERR
+","	ERR
+"0"	0
+"\u00a0\ud835\udfd9 +a4\u0967"	ERR
+"4\u09687+_"	ERR
+"\uff10\u0663\u00a0"	3
+"9"	9
+"6\u0967\ud835\udfe0,481"	618481
+"6\ud835\udff5"	69
+"\u066461+\ud835\udfd9 ."	ERR
+"76\u00a0\ud835\udfd920"	ERR
+"\uff10."	ERR
+".8+"	ERR
+"\u0663"	3
+"3"	3
+"56\ud835\udfe0-9"	ERR
+"8\u00a0\u0663\ud835\udfd97+"	ERR
+"11aa6 "	ERR
+"_\u00a0-8,\ud835\udff5"	ERR
+"54\ud835\udff5- \ud835\udff5"	ERR
+"\u0967\u00a0 \u0663-"	ERR
+""	ERR
+"\u00a03_16"	316
+"5\u0664\u00a0\u0967a"	ERR
+".\u06645-"	ERR
+"\uff19 05\uff19"	ERR
+"\u0968 "	2
+"\ud835\udfd9,\ud835\udfe0\u066463_"	ERR
+""	ERR
+"7,9-82"	ERR
+",3\ud835\udfd9"	31
+""	ERR
+""	ERR
+"71\u0968"	712
+"\ud835\udfe0_66\uff1930"	866930
+"\ud835\udfd98\ud835\udff53"	1893
+" ,"	ERR
+"_\uff19\uff10\u00a0\uff19\ud835\udff5"	ERR
+""	ERR
+"2,75"	275
+"\u06639\u00a0"	39
+"9\ud835\udfe083\u0664\ud835\udfd98"	9883418
+"5\u0663"	53
+"-\ud835\udff5"	-9
+"++75"	ERR
+"5\u0664\uff19\u0664_7"	54947
+"\u00a049"	49
+"\ud835\udfd9"	1
+"\ud835\udff5"	9
+"3\ud835\udfd99"	319
+""	ERR
+"++"	ERR
+""	ERR
+"\u0968"	2
+""	ERR
+",+"	ERR
+"75.7"	ERR
+"\u09688\u0663"	283
+"\uff10,\u0967\u0967\ud835\udff59"	1199
+"\ud835\udfd9\ud835\udfe0"	18
+"14"	14
+"\u09670"	10
+"\u0664\u06645\ud835\udff5"	4459
+""	ERR
+".\u0664\uff10\u09685"	ERR
+"_\ud835\udfd9\u00a0"	ERR
+"\ud835\udff56"	96
+"\uff10\u0967"	1
+"\ud835\udfe0a7461\u0663"	ERR
+"\uff107+,\ud835\udff5"	ERR
+"\ud835\udff5531"	9531
+"1"	1
+".13\ud835\udfd9"	ERR
+"\uff10\u0968 \uff10"	ERR
+"76865"	76865
+"8\ud835\udfe0a_ "	ERR
+""	ERR
+"6"	6
+"+\ud835\udfd9"	1
+"6\u09680,++ "	ERR
+".\uff19\u0968\u09680"	ERR
+"a2\uff10\ud835\udfe0"	ERR
+""	ERR
+"- \uff10\ud835\udff5+5"	ERR
+"\ud835\udfd96\u00a0\u0968"	ERR
+"9"	9
+""	ERR
+"1\uff19,0+6"	ERR
+"\uff108\uff190\u0968\ud835\udff5a"	ERR
+"7\ud835\udfe0\ud835\udfd9"	781
+"\u00a0\u0968"	2
+"\uff107\ud835\udfd98_"	ERR
+""	ERR
+"90\ud835\udfd9,0-"	ERR
+""	ERR
+"\uff19"	9
+"\ud835\udfe07"	87
+""	ERR
+"\uff19\u0968,4\u00a02"	ERR
+"6\u00a0\uff19"	ERR
+"\u0967\u0967\ud835\udff5  2"	ERR
+"634"	634
+" \ud835\udff5a_"	ERR
+"8- \ud835\udfe072"	ERR
+"\uff107\ud835\udfd98\ud835\udfd90\u0663"	718103
+"6 \u0967\ud835\udfe09"	ERR
+"\ud835\udff56\ud835\udfe0 _"	ERR
+"-2+6"	ERR
+"a\u0967\uff1966_."	ERR
+"0\uff19194\u0663+"	ERR
+"9"	9
+"__"	ERR
+".\ud835\udfd9\ud835\udfe0\u09674\uff19"	ERR
+"77+\ud835\udff5"	ERR
+"\u0968\u0968\u0664a1"	ERR
+",\u0663\ud835\udff5 "	39
+""	ERR
+".."	ERR
+""	ERR
+""	ERR
+"\ud835\udfd9\ud835\udff5-a\uff193"	ERR
+"\ud835\udfe0-a"	ERR
+"-,+-2"	ERR
+"5\u0663\ud835\udfe0653a"	ERR
+"\uff10 75+\ud835\udff5"	ERR
+"\ud835\udff5\u0968 4\u0664"	ERR
+"\uff10\uff10"	0
+"8\u06647"	847
+"\uff10"	0
+"6"	6
+".\u00a01_72"	ERR
+"2_5\uff10.7"	ERR
+"a\uff19\u0967\u09676"	ERR
+"5,\u00a0a"	ERR
+"\ud835\udfe0"	8
+""	ERR
+"8"	8
+"\uff103a9"	ERR
+",a7"	ERR
+""	ERR
+"\u00a02\uff19_,,"	ERR
+"\u0664\ud835\udfd97-8+\u0968"	ERR
+"\u0967"	1
+"\ud835\udfe0+33 \uff19"	ERR
+" +..6"	ERR
+"\uff19\uff104"	904
+"3a\uff19"	ERR
+""	ERR
+"._"	ERR
+"92\uff196"	9296
+"\uff10\ud835\udfe0"	8
+"\ud835\udff573\u0967"	9731
+"\u0663-_\u0967"	ERR
+"4\u0663,\u06637"	4337
+"6\u0664a_4"	ERR
+"+\ud835\udff5"	9
+"10\ud835\udff5\uff19"	1099
+""	ERR
+" 1\u0663,\u0967a"	ERR
+"\ud835\udfd9\u06639\u0664++\ud835\udfe0"	ERR
+"8.20\uff10"	ERR
+"_2"	ERR
+"11\ud835\udfd9+_"	ERR
+"4-7"	ERR
+"_076"	ERR
+"+9.+"	ERR
+"\u00a0\u0968,\u00a080,"	ERR
+",\u0663-a\uff10\u09686"	ERR
+"\ud835\udfd9-55\ud835\udfe0"	ERR
+"\u0664 \u0968\u066306a"	ERR
+" "	ERR
+""	ERR
+"2_\ud835\udfd932\u0663 "	21323
+"\ud835\udff52_"	ERR
+"7 "	7
+"87\u0663"	873
+"\u0967108\u00a0a"	ERR
+".3.\ud835\udfe0"	ERR
+"83\uff191 ."	ERR
+"\u0664\u096886-"	ERR
+"5\u0967\u00a0\ud835\udfd9 2"	ERR
+"9.a 6_+"	ERR
+"5, 8\u0664"	ERR
+"7a"	ERR
+"_\ud835\udfe0"	ERR
+""	ERR
+"4"	4
+"4\u0664\u0663"	443
+""	ERR
+"\u00a044_.,"	ERR
+"0"	0
+"4+2a\u09684"	ERR
+"\u0663"	3
+"94\u0967\uff19"	9419
+"\ud835\udfe0\ud835\udff53\u0967,"	8931
+"\u0663"	3
+""	ERR
+"\u0663\u00a0 "	3
+"360\u0967\uff100\uff10"	3601000
+"9"	9
+""	ERR
+"\ud835\udfd9\u06645\uff19\u0664\u0968"	145942
+"a5\uff191"	ERR
+""	ERR
+"65a"	ERR
+"\ud835\udfd9"	1
+"1\ud835\udfe0\ud835\udff5\ud835\udfe0\ud835\udfe0"	18988
+"3\u096856"	3256
+""	ERR
+""	ERR
+"5-\u0967"	ERR
+"40\u0663"	403
+".1\uff194.8,"	ERR
+"\u0967_\u0968\ud835\udfe0,"	128
+"7\uff19\uff19a ,"	ERR
+".06_63_"	ERR
+"1\u00a0\ud835\udff558\ud835\udfe0\u0664"	ERR
+",\ud835\udff5-"	ERR
+"\u00a05"	5
+""	ERR
+"\uff19.a\ud835\udfe0\ud835\udff5"	ERR
+"\u066488\u0663"	4883
+"7\u0663\uff197_9"	73979
+"\u0967_\u0967+"	ERR
+"7\u0968\u09682"	7222
+"5\uff19\uff10\u00a0\u00a0 \u0664"	ERR
+"\u0664\u0968"	42
+","	ERR
+"\ud835\udfe0 _2\uff19\u0664\u0663"	ERR
+"7\ud835\udfe0\ud835\udff5"	789
+" _"	ERR
+"5\ud835\udfd9"	51
+"\u096766"	166
+""	ERR
+"6,-_\ud835\udfe0\uff19"	ERR
+""	ERR
+"\uff19547-"	ERR
+"5\u066333\uff19\u09673"	5333913
+""	ERR
+"52\u066424\ud835\udff50"	5242490
+"\uff10\uff1986 \uff19"	ERR
+"\ud835\udfd9\u00a0.\uff10,\u0968."	ERR
+"\ud835\udfd9\uff19\u096783__"	ERR
+","	ERR
+"8+_294"	ERR
+"\ud835\udfd9\ud835\udfe004"	1804
+"5\u0968"	52
+"37+5\ud835\udff59"	ERR
+"\u0968\u06634+3"	ERR
+" 7036\ud835\udff5"	70369
+"20\u0967  +"	ERR
+"4"	4
+"66"	66
+"7\u06635,8.7"	ERR
+"003517"	3517
+"_3-.4"	ERR
+""	ERR
+"\u0967 \ud835\udff56"	ERR
+".49a9"	ERR
+""	ERR
+".0\u00a0\u0968\uff10"	ERR
+"71\u0664"	714
+"5\uff19.9"	ERR
+"6"	6
+"5"	5
+""	ERR
+"4\u0663a4a"	ERR
+""	ERR
+"5\uff197"	597
+"\ud835\udfe07"	87
+"7\ud835\udff5a"	ERR
+"\u0663\u0968-7"	ERR
+"+\u0967"	1
+"\ud835\udfe05"	85
+"+\u06634\ud835\udfe03\u0967"	34831
+"\u06646"	46
+".7"	ERR
+"2_1.4,4"	ERR
+"\uff19+3\uff1005"	ERR
+"\u0968\u09677"	217
+"\u0968+81"	ERR
+""	ERR
+",\ud835\udfd92\u00a0\u00a0-4"	ERR
+"6\u0968008a"	ERR
+""	ERR
+"4\ud835\udff56"	496
+"\u09678\ud835\udfd95\u0663a6"	ERR
+" +\u09680"	20
+"\u00a02\u0664a-9"	ERR
+""	ERR
+"36.3"	ERR
+"\ud835\udfd97\ud835\udfe0\u09685"	17825
+""	ERR
+"+\u096715\ud835\udfd9\u0664"	11514
+"\ud835\udfd98"	18
+"\u0968a+43 a"	ERR
+"\u096878\u096855,"	278255
+"6+\ud835\udfd926\ud835\udff5\uff10"	ERR
+"5,121\ud835\udfe0"	51218
+"\uff194"	94
+"6\u0968+\u06633_"	ERR
+"\uff10\ud835\udfe0\uff19\uff10\uff10\u00a0"	8900
+"9\ud835\udff56-11"	ERR
+"8+.92"	ERR
+"\uff19\u00a0\uff10\u09674"	ERR
+""	ERR
+"1"	1
+"\uff19."	ERR
+"-a1,3"	ERR
+"86+5-7a"	ERR
+"+\u00a0\ud835\udff53\ud835\udff5"	ERR
+"\u0968+_\uff10\ud835\udfd9aa"	ERR
+"128"	128
+""	ERR
+"-6\u0664"	-64
+"129"	129
+"\u0968"	2
+""	ERR
+""	ERR
+",5"	5
+""	ERR
+""	ERR
+"76\u0664"	764
+""	ERR
+"7-7\ud835\udfd94 1"	ERR
+"-1\uff10 a"	ERR
+""	ERR
+".\u0967+"	ERR
+"\ud835\udff5.8"	ERR
+" \ud835\udfd9"	1
+"30\uff10\u0967"	3001
+"\u0664+\u0968\u0967\u0967\ud835\udfd9"	ERR
+"4"	4
+"8\ud835\udfd9"	81
+"1\u00a0\uff1096"	ERR
+"\ud835\udfd9\ud835\udfd9\uff192,1"	11921
+"\ud835\udfe01"	81
+"4,"	4
+"45"	45
+"_\u0967"	ERR
+"\u09683 "	23
+"3153"	3153
+""	ERR
+"194"	194
+""	ERR
+",1"	1
+"03521\uff10"	35210
+""	ERR
+".\uff19\u0968,\uff10"	ERR
+"a.\u06643"	ERR
+"79\u00a0"	79
+".09\u00a0\u0967\ud835\udff5"	ERR
+",6a\ud835\udfe0+\uff194"	ERR
+"\uff105"	5
+"_"	ERR
+".\ud835\udff50"	ERR
+"_"	ERR
+""	ERR
+"\u0968\ud835\udfe07\uff104"	28704
+"\u0968\u0663 "	23
+"a_5"	ERR
+"\uff19,\ud835\udff55+ "	ERR
+"\u00a0986\uff10"	9860
+"3 \u0968\ud835\udfe0\ud835\udff5"	ERR
+"a\u0967"	ERR
+"8\uff19"	89
+"\u0663\u0663"	33
+"\u096777\ud835\udfd9"	1771
+"6\ud835\udfd9\ud835\udfe08\ud835\udfe08\ud835\udfd9"	6188881
+"_5 90\ud835\udfd90"	ERR
+"\u00a0-9\ud835\udff5 4"	ERR
+"\ud835\udfe0\u0967"	81
+"2"	2
+"\u00a0"	ERR
+"\uff19"	9
+"7 "	7
+""	ERR
+" --"	ERR
+",+\uff19\ud835\udfd9"	91
+""	ERR
+"\u00a0\u00a0,\ud835\udff5\u0967"	91
+"2 \u0967\ud835\udfd93 "	ERR
+"93-\u00a09\uff10\ud835\udfe0"	ERR
+"-,46\uff10\uff19 "	-4609
+"+4\u0663"	43
+"15\u066332"	15332
+"0\ud835\udfd9."	ERR
+".\uff19-5\u0968"	ERR
+"a7\uff191\u00a0"	ERR
+"\uff19201"	9201
+""	ERR
+"7\u0968__\u0968_3"	ERR
+"9\uff10"	90
+"\ud835\udfd9\u00a0\uff10\u0664"	ERR
+"\u0968"	2
+"_.\ud835\udfd9_5\u0967"	ERR
+"19\uff10-"	ERR
+""	ERR
+"4\u00a0\ud835\udfe0"	ERR
+"a"	ERR
+"\u00a08_33 -"	ERR
+"-+1\u0968\u0664_0"	ERR
+"6"	6
+"7\ud835\udff59.-\ud835\udfe0"	ERR
+"+,,-2"	ERR
+".9.2"	ERR
+"\ud835\udfe02"	82
+"\ud835\udfe0"	8
+"\u00a05\u00a0 \u00a05"	ERR
+"-"	ERR
+""	ERR
+"\uff10\u00a0-"	ERR
+"\u0663\uff19"	39
+"\uff19"	9
+"16 _347"	ERR
+""	ERR
+"5.96\u09678\uff10"	ERR
+",19_"	ERR
+"."	ERR
+".1 ,. 0"	ERR
+"6\ud835\udff5\uff19\uff104"	69904
+"2"	2
+"--_8"	ERR
+"3+7a"	ERR
+"."	ERR
+"5\u0664"	54
+"792\u00a0\u00a0"	792
+", "	ERR
+"6+1980_"	ERR
+"\u00a09"	9
+"969\ud835\udff5\u00a0 "	9699
+"9\ud835\udfe08a,\ud835\udfd96"	ERR
+"69+"	ERR
+""	ERR
+""	ERR
+" "	ERR
+" \u00a07\ud835\udfe02a"	ERR
+""	ERR
+"\ud835\udfd9\u0663\ud835\udfd9"	131
+"\uff10-\ud835\udff5__"	ERR
+"1\u00a088"	ERR
+"\ud835\udfd9+\u0968\u0967+\u00a01"	ERR
+"1\u0663\u00a0\ud835\udfe0"	ERR
+"81a"	ERR
+"\ud835\udfe06_\uff19,8"	8698
+"93\u0664\u0663\ud835\udfe0\u00a0"	93438
+"\uff105\u0663"	53
+"80\u00a0-\u06641_"	ERR
+"_1"	ERR
+"\uff10\u00a0-"	ERR
+"7.\u0664\ud835\udfe0\ud835\udfd92\u00a0"	ERR
+"\ud835\udff5-5\ud835\udff5\u0967"	ERR
+"3_261"	3261
+"4"	4
+"6"	6
+"\u0968\uff104,+"	ERR
+"0\u00a0\u00a0,"	0
+" ."	ERR
+"\ud835\udfd9.\ud835\udfe0a,\uff19+"	ERR
+"1"	1
+"\ud835\udfd94_.\uff19"	ERR
+"0 31 7"	ERR
+"\ud835\udfe01a"	ERR
+"9a\u0663a+\ud835\udfd9"	ERR
+""	ERR
+"1\uff19"	19
+"\ud835\udff57\u0967"	971
+"a\u0968_ ,\u0968"	ERR
+"1\uff10132"	10132
+"4"	4
+""	ERR
+""	ERR
+"0"	0
+"\u00a0_\u0967\ud835\udfe07\u0664"	ERR
+"6,,"	6
+"+01\u00a0\uff1096"	ERR
+"\ud835\udff578_"	ERR
+"\u0967\u0967\ud835\udfe0\uff10"	1180
+"28\u06646\uff19"	28469
+"5\u0967-4\u09677"	ERR
+"0_+2\ud835\udff5-"	ERR
+"\u0663"	3
+"7.2\u00a059\u0967"	ERR
+"\u0967_ \ud835\udff5"	ERR
+"\u0664\u00a0\u0968"	ERR
+"397\ud835\udff58+"	ERR
+"\uff10\uff198\u066466a"	ERR
+"\uff19\u0664"	94
+"79\ud835\udfd9"	791
+"2"	2
+"76\u0967 "	761
+"4\ud835\udfd94"	414
+",2\u0663\u096746"	23146
+".,4"	ERR
+"11\uff10\ud835\udfe06"	11086
+"6\uff10"	60
+"\u0968\uff10"	20
+"\uff19\uff191\u0967_,7"	99117
+"2+8"	ERR
+"0"	0
+"\u0663\ud835\udff55_9"	3959
+".83,9 \u0663"	ERR
+"-2a"	ERR
+"\u00a07\u00a0a"	ERR
+"\u00a0836\u09676"	83616
+"- 00"	ERR
+"_3 \ud835\udff57\u0664\ud835\udff5"	ERR
+"3"	3
+"1"	1
+"\uff1991\uff19\u0967\u0968"	991912
+""	ERR
+"5_,_0"	ERR
+"1\ud835\udff5\u0663\u0663\ud835\udfd9\ud835\udfd9\ud835\udfd9"	1933111
+""	ERR
+"3\uff10-\ud835\udfd9\ud835\udfe0\u0663"	ERR
+"\ud835\udfe0"	8
+"+-349"	ERR
+"7+,\u0968\ud835\udfd9\ud835\udfe0"	ERR
+"a\u0664.-53"	ERR
+""	ERR
+"31."	ERR
+"5a7\u0967\ud835\udfd9"	ERR
+"\u0967\ud835\udff51\u00a0-\uff10,"	ERR
+"\uff10\u0967a\u0967\uff19"	ERR
+"\ud835\udff556\u0968"	9562
+"7,_63\u00a05"	ERR
+"1\uff10"	10
+"\ud835\udff5"	9
+"\u06633\ud835\udfe06\u00a0\u0968"	ERR
+"7+2- ,"	ERR
+"\ud835\udfe0\u0664-\u09683\uff10\ud835\udff5"	ERR
+"0\ud835\udff5\u0664\ud835\udfe0-1\uff10"	ERR
+""	ERR
+"\ud835\udfe01\ud835\udfd9,-_"	ERR
+""	ERR
+".8\ud835\udfe0-\ud835\udfe0a."	ERR
+"\u0967\u0967"	11
+"4"	4
+"\ud835\udfe02+71"	ERR
+"_\u09689"	ERR
+" ,a"	ERR
+"\u066363"	363
+"8"	8
+"\ud835\udfd9-\ud835\udfd9\ud835\udfe097"	ERR
+"\uff108"	8
+"703\ud835\udfe0"	7038
+""	ERR
+"\u066343\u0968\ud835\udfe0"	34328
+"\u0968_\u096782\u09687"	218227
+"\ud835\udfe0-95"	ERR
+"\ud835\udfd99"	19
+"547"	547
+"\ud835\udfe0. \ud835\udfe0\uff190\u0967"	ERR
+"+1 a7"	ERR
+"\u00a0.0. "	ERR
+"2"	2
+"1,"	1
+" "	ERR
+"748\u0663"	7483
+"+.\ud835\udfd95."	ERR
+"\u0664\uff19a-6"	ERR
+"\u0967+,\u0664"	ERR
+"0"	0
+"\uff19 \u0968"	ERR
+"1"	1
+"\u0968."	ERR
+"+\ud835\udfd97-. a"	ERR
+"70\u0663\u00a05\ud835\udfd95"	ERR
+"5\u0967731+\ud835\udfd9"	ERR
+""	ERR
+"_4\u0967"	ERR
+"\ud835\udfe0a4"	ERR
+"2\u00a04,\ud835\udfe08"	ERR
+" \u0664\ud835\udff5\u06647\ud835\udff51"	494791
+"\uff10 "	0
+"\u0664\uff194\u0663"	4943
+"2\u0663.47"	ERR
+"6a "	ERR
+"\u0968\uff10\u0968"	202
+"3\ud835\udff5_a\u0968"	ERR
+"\u06638"	38
+", "	ERR
+"+1,a"	ERR
+"-\u0968_1"	-21
+"9\uff107a1"	ERR
+""	ERR
+"\ud835\udfd986"	186
+" "	ERR
+"\u0967\u00a03\u0664066"	ERR
+"+367\u0968"	3672
+"\uff103"	3
+"77\u09670 0 "	ERR
+""	ERR
+"2."	ERR
+"\u066491"	491
+"\ud835\udfe0,0\u0968"	802
+"\u00a05\u0663"	53
+"- "	ERR
+"\u00a0\uff10"	0
+",_\u09682\u00a03\u0968"	ERR
+"1 36,\uff19"	ERR
+"-\ud835\udfe06\ud835\udfe01\u0967"	-86811
+"47 \uff19\ud835\udfd91"	ERR
+"_961_"	ERR
+"690.1-1"	ERR
+"\u06649-9-"	ERR
+"1+\ud835\udfd96"	ERR
+""	ERR
+"\uff1933"	933
+""	ERR
+"a69a-"	ERR
+"1\ud835\udfe0\u00a0_\ud835\udfd932"	ERR
+""	ERR
+"\u0664 \ud835\udfe0\u00a01"	ERR
+"-5"	-5
+"8"	8
+"406\u0967--"	ERR
+"\u00a0\uff19_-"	ERR
+"\u00a0\u0664"	4
+"\ud835\udff5\u096834"	9234
+""	ERR
+""	ERR
+"2\ud835\udff5\u0663\uff19\u066489"	2939489
+".7"	ERR
+"0\ud835\udff5"	9
+"\u0664831"	4831
+"\u06630"	30
+"\uff10\ud835\udfd9\u06642\u0968"	1422
+""	ERR
+"\u06634\u06630\u0663"	34303
+"-+"	ERR
+"0-\u06632205"	ERR
+"\u0663+95\ud835\udff5"	ERR
+"0,0"	0
+"\u00a07\u0663"	73
+"\u09671"	11
+"\u0968"	2
+"6293"	6293
+".21\u09680"	ERR
+"05\ud835\udfd94\u0664\u0664"	51444
+"9"	9
+"459a+5"	ERR
+"9_"	ERR
+"\u00a0\u0968\u0968.8\u0663"	ERR
+"\ud835\udfd9,\u00a0\u00a0"	1
+"00\uff10\uff10"	0
+"8\uff19\uff105+"	ERR
+"-..\u06631\u0664"	ERR
+"7,7"	77
+""	ERR
+","	ERR
+"-\u0664\ud835\udfd9\ud835\udfe0 8"	ERR
+""	ERR
+"\u0664-_+\ud835\udfd9"	ERR
+"0\u0967.14\ud835\udfd9"	ERR
+"\uff1990\ud835\udff5+"	ERR
+"-"	ERR
+"\ud835\udfe0a2a6_"	ERR
+"2"	2

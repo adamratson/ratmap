@@ -1,0 +1,10 @@
+places.sqlite: 30 rows
+  peak: 13
+  town: 5
+  city: 3
+  hamlet: 2
+  saddle: 2
+  village: 2
+  mountain_pass: 1
+  suburb: 1
+  volcano: 1

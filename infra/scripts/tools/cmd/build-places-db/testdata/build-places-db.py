@@ -1,3 +1,5 @@
+# build-places-db.py as build-places.sh ran it, before cmd/build-places-db replaced it
+# (copied verbatim). Kept only to regenerate the golden files — see dump-rows.py.
 #!/usr/bin/env python3
 """Build places.sqlite — the offline search index (C9: no geocoding API, ever).
 

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"ratmap/infra/tools/internal/pytext"
 )
 
 func TestSelfTest(t *testing.T) {
@@ -46,7 +48,7 @@ func TestParseGradeMatchesPython(t *testing.T) {
 		if got != wantGrade {
 			t.Errorf("parse_grade(%s): got %s, Python %s", value, got, wantGrade)
 		}
-		if r := pyReprString(pyStrValue(value)); r != wantRepr {
+		if r := pytext.ReprString(pytext.StrValue(value)); r != wantRepr {
 			t.Errorf("repr(str(%s)): got %s, Python %s", value, r, wantRepr)
 		}
 		n++

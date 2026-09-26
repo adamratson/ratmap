@@ -1,0 +1,4 @@
+exit 1
+FAIL: cannot tell which pixel of tile 2/1/1 holds (unnamed) (-68.016357, 58.286395)
+FAIL: 299 peaks in the z2 tiles, 300 in the input
+  0 input peaks have no match in the tiles:

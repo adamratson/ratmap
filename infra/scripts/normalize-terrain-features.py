@@ -37,7 +37,7 @@ the source rather than asking this script to notice two differently-shaped featu
 describing the same way.
 
 Reads line-delimited GeoJSON on argv[1], writes line-delimited GeoJSON to argv[2],
-streaming, same convention as normalize-sac and normalize-peaks.py.
+streaming, same convention as normalize-sac and normalize-peaks.
 """
 import json
 import sys

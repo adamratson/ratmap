@@ -7,7 +7,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"unicode"
+
+	"ratmap/infra/tools/internal/pytext"
 )
 
 // The official scale.
@@ -69,14 +70,14 @@ func parseGrade(raw json.RawMessage) (int, bool, error) {
 }
 
 func parseGradeText(raw string) (int, bool, error) {
-	text := strings.ReplaceAll(pyLower(strings.TrimFunc(raw, pyIsSpace)), " ", "_")
+	text := strings.ReplaceAll(pyLower(strings.TrimFunc(raw, pytext.IsSpace)), " ", "_")
 	if g, ok := namedGrades[text]; ok {
 		return g, true, nil
 	}
 
 	best, found := 0, false
 	for _, part := range splitSeparators(text) {
-		part = strings.TrimFunc(part, pyIsSpace)
+		part = strings.TrimFunc(part, pytext.IsSpace)
 		part = strings.Trim(part, "()[]")
 		part = strings.Trim(part, "_")
 		if part == "" {
@@ -122,7 +123,7 @@ func pyLower(s string) string {
 func splitSeparators(text string) []string {
 	t := []rune(text)
 	n := len(t)
-	word := func(i int) bool { return i >= 0 && i < n && pyIsWord(t[i]) }
+	word := func(i int) bool { return i >= 0 && i < n && pytext.IsWord(t[i]) }
 	boundary := func(i int) bool { return word(i-1) != word(i) }
 	isWordAt := func(i int, w string) bool {
 		return i+2 <= n && string(t[i:i+2]) == w && boundary(i) && boundary(i+2)
@@ -132,14 +133,14 @@ func splitSeparators(text string) []string {
 		case ';', ',', '/', '|':
 			return 1
 		}
-		if pyIsSpace(t[i]) {
+		if pytext.IsSpace(t[i]) {
 			j := i
-			for j < n && pyIsSpace(t[j]) {
+			for j < n && pytext.IsSpace(t[j]) {
 				j++
 			}
-			if j < n && t[j] == '-' && j+1 < n && pyIsSpace(t[j+1]) {
+			if j < n && t[j] == '-' && j+1 < n && pytext.IsSpace(t[j+1]) {
 				k := j + 1
-				for k < n && pyIsSpace(t[k]) {
+				for k < n && pytext.IsSpace(t[k]) {
 					k++
 				}
 				return k - i
@@ -177,7 +178,7 @@ func shorthand(s string) (int, bool) {
 	if i < len(t) && t[i] == 't' {
 		i++
 	}
-	for i < len(t) && pyIsSpace(t[i]) {
+	for i < len(t) && pytext.IsSpace(t[i]) {
 		i++
 	}
 	if i >= len(t) || t[i] < '1' || t[i] > '6' {
@@ -185,7 +186,7 @@ func shorthand(s string) (int, bool) {
 	}
 	g := int(t[i] - '0')
 	i++
-	for i < len(t) && pyIsSpace(t[i]) {
+	for i < len(t) && pytext.IsSpace(t[i]) {
 		i++
 	}
 	if i < len(t) && (t[i] == '+' || t[i] == '-') {
@@ -195,15 +196,4 @@ func shorthand(s string) (int, bool) {
 		return g, true
 	}
 	return 0, false
-}
-
-// pyIsSpace is str.isspace(), which is also what Python's regex \s matches: Go's
-// unicode.IsSpace plus the four ASCII separators (\x1c-\x1f) Go does not count.
-func pyIsSpace(r rune) bool {
-	return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f)
-}
-
-// pyIsWord is Python's regex \w for str patterns: underscore, or str.isalnum().
-func pyIsWord(r rune) bool {
-	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r)
 }

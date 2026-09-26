@@ -11,7 +11,7 @@
 // sqlite-wasm 3.41.2, returning identical results from both).
 //
 // Input: one or more line-delimited GeoJSON files of point features (places and peaks), as
-// produced by normalize-peaks.py. Output: a SQLite DB with an FTS5 index over names.
+// produced by normalize-peaks. Output: a SQLite DB with an FTS5 index over names.
 //
 // SQLite is modernc.org/sqlite: SQLite's C translated to Go, so no C compiler and no
 // system library, and FTS5 with the unicode61 tokenizer's diacritic folding built in —
@@ -38,6 +38,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"ratmap/infra/tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/pytext"
 )
 
 // Settlement kinds worth searching. Deliberately excludes isolated_dwelling/farm/locality:
@@ -217,7 +218,7 @@ func eachLine(path string, fn func([]byte) error) error {
 	r := bufio.NewReaderSize(f, 1<<20)
 	for n := 1; ; n++ {
 		raw, rerr := r.ReadBytes('\n')
-		if line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pyIsSpace); len(line) > 0 {
+		if line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace); len(line) > 0 {
 			if err := fn(line); err != nil {
 				return fmt.Errorf("%s: line %d: %w", path, n, err)
 			}
@@ -261,7 +262,7 @@ func placeRow(line []byte) (place, bool, error) {
 			return place{}, false, fmt.Errorf("properties is %s, not an object", p)
 		}
 	}
-	name, ok := str(props["name"])
+	name, ok := pytext.Str(props["name"])
 	if !ok || name == "" {
 		return place{}, false, nil
 	}
@@ -278,7 +279,7 @@ func placeRow(line []byte) (place, bool, error) {
 			return place{}, false, fmt.Errorf("geometry is %s, not an object", g)
 		}
 	}
-	if t, ok := str(geometry["type"]); !ok || t != "Point" {
+	if t, ok := pytext.Str(geometry["type"]); !ok || t != "Point" {
 		return place{}, false, nil
 	}
 
@@ -316,7 +317,7 @@ func classify(props map[string]json.RawMessage) (string, int64, bool, error) {
 		if unhashable(p) {
 			return "", 0, false, fmt.Errorf("place is %s (unhashable in Python)", p)
 		}
-		if s, ok := str(p); ok && placeKinds[s] {
+		if s, ok := pytext.Str(p); ok && placeKinds[s] {
 			// Population drives ranking among settlements; a city with no population tag
 			// still outranks a hamlet via the kind ordering.
 			var population int64
@@ -336,11 +337,11 @@ func classify(props map[string]json.RawMessage) (string, int64, bool, error) {
 		if unhashable(n) {
 			return "", 0, false, fmt.Errorf("natural is %s (unhashable in Python)", n)
 		}
-		if s, ok := str(n); ok && peakKinds[s] {
+		if s, ok := pytext.Str(n); ok && peakKinds[s] {
 			return s, 0, true, nil
 		}
 	}
-	if s, ok := str(props["mountain_pass"]); ok && s == "yes" {
+	if s, ok := pytext.Str(props["mountain_pass"]); ok && s == "yes" {
 		return "mountain_pass", 0, true, nil
 	}
 	return "", 0, false, nil

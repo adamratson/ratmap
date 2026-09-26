@@ -4,15 +4,14 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math"
 	"os"
-	"unicode"
-	"unicode/utf8"
 
+	"ratmap/infra/tools/internal/jsonedit"
 	"ratmap/infra/tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/pytext"
 )
 
 // eachLine calls fn with every non-blank line of a line-delimited GeoJSON file, in order,
@@ -28,7 +27,7 @@ func eachLine(path string, fn func(line []byte) error) error {
 	for {
 		raw, err := r.ReadBytes('\n')
 		if len(raw) > 0 {
-			line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pyIsSpace)
+			line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace)
 			if len(line) > 0 {
 				if ferr := fn(line); ferr != nil {
 					return ferr
@@ -42,12 +41,6 @@ func eachLine(path string, fn func(line []byte) error) error {
 			return err
 		}
 	}
-}
-
-// pyIsSpace is str.isspace(): Go's unicode.IsSpace plus the four ASCII separators
-// (\x1c-\x1f) that Python counts as whitespace and Go does not.
-func pyIsSpace(r rune) bool {
-	return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f)
 }
 
 // loadCoords reads every feature's point as two float64 slices indexed like the file —
@@ -84,10 +77,10 @@ func loadCoords(path string) ([]float64, []float64, error) {
 //
 // The Python round-tripped every feature through json.loads/json.dumps. This splices
 // `"prom": <value>` into each scored line's text instead and copies every other byte
-// through. The input is normalize-peaks.py's output — itself json.dumps text — and
-// json.dumps of json.loads of json.dumps text is that same text, so for the file this is
-// ever given the result is byte-identical; the splice just does not depend on
-// reproducing Python's JSON encoder for every value type.
+// through. When the input was json.dumps text — normalize-peaks.py's output, before it
+// too was ported — the result was byte-identical to the Python's (checked 2026-09-25).
+// normalize-peaks now writes osmium's compact text with its edits, so the bytes follow
+// that; the features, and every value in them, are the same.
 func writeOutput(peaksIn, peaksOut string, prom map[int]float64) error {
 	out, err := os.Create(peaksOut)
 	if err != nil {
@@ -123,172 +116,24 @@ func writeOutput(peaksIn, peaksOut string, prom map[int]float64) error {
 // last property, and a feature with no "properties" gets one appended as its last
 // member. Separators are json.dumps' own (", " and ": ").
 func setProm(line []byte, value string) ([]byte, error) {
-	i := skipWS(line, 0)
-	if i >= len(line) || line[i] != '{' {
-		return nil, errors.New("feature is not a JSON object")
+	top, err := jsonedit.Parse(line, 0)
+	if err != nil {
+		return nil, fmt.Errorf("feature: %w", err)
 	}
-	members, closeAt, err := objectMembers(line, i)
+	i, err := top.Find("properties")
 	if err != nil {
 		return nil, err
 	}
-	props, err := findMember(line, members, "properties")
-	if err != nil {
-		return nil, err
+	if i < 0 {
+		return top.Set(line, "properties", []byte(`{"prom": `+value+`}`))
 	}
-	if props == nil {
-		return insertMember(line, members, i, closeAt, `"properties": {"prom": `+value+`}`), nil
-	}
-	if line[props.valStart] != '{' {
+	if v := top.Value(line, i); v[0] != '{' {
 		// Python would raise here too: None/list/number has no item assignment.
-		return nil, fmt.Errorf(`"properties" is %s, not an object`, line[props.valStart:props.valEnd])
+		return nil, fmt.Errorf(`"properties" is %s, not an object`, v)
 	}
-	pm, pClose, err := objectMembers(line, props.valStart)
+	props, err := jsonedit.Parse(line, top.Members[i].ValueStart)
 	if err != nil {
 		return nil, err
 	}
-	prom, err := findMember(line, pm, "prom")
-	if err != nil {
-		return nil, err
-	}
-	if prom != nil {
-		return concat(line[:prom.valStart], []byte(value), line[prom.valEnd:]), nil
-	}
-	return insertMember(line, pm, props.valStart, pClose, `"prom": `+value), nil
-}
-
-type member struct{ keyStart, keyEnd, valStart, valEnd int }
-
-// objectMembers scans the object starting at line[open] == '{'.
-func objectMembers(line []byte, open int) ([]member, int, error) {
-	var ms []member
-	i := skipWS(line, open+1)
-	if i < len(line) && line[i] == '}' {
-		return nil, i, nil
-	}
-	for {
-		if i >= len(line) || line[i] != '"' {
-			return nil, 0, errors.New("malformed JSON object: expected a key")
-		}
-		ke, err := scanString(line, i)
-		if err != nil {
-			return nil, 0, err
-		}
-		j := skipWS(line, ke)
-		if j >= len(line) || line[j] != ':' {
-			return nil, 0, errors.New("malformed JSON object: expected ':'")
-		}
-		vs := skipWS(line, j+1)
-		ve, err := scanValue(line, vs)
-		if err != nil {
-			return nil, 0, err
-		}
-		ms = append(ms, member{i, ke, vs, ve})
-		i = skipWS(line, ve)
-		if i < len(line) && line[i] == ',' {
-			i = skipWS(line, i+1)
-			continue
-		}
-		if i < len(line) && line[i] == '}' {
-			return ms, i, nil
-		}
-		return nil, 0, errors.New("malformed JSON object: expected ',' or '}'")
-	}
-}
-
-// findMember returns the member whose decoded key is name. A duplicated key is refused:
-// Python keeps the first position and the last value, which a text splice cannot
-// honestly reproduce, and no writer in this pipeline emits one.
-func findMember(line []byte, ms []member, name string) (*member, error) {
-	var found *member
-	for k := range ms {
-		var key string
-		if err := json.Unmarshal(line[ms[k].keyStart:ms[k].keyEnd], &key); err != nil {
-			return nil, err
-		}
-		if key == name {
-			if found != nil {
-				return nil, fmt.Errorf("duplicate key %q", name)
-			}
-			found = &ms[k]
-		}
-	}
-	return found, nil
-}
-
-func insertMember(line []byte, ms []member, open, closeAt int, text string) []byte {
-	if len(ms) == 0 {
-		return concat(line[:open+1], []byte(text), line[closeAt:])
-	}
-	at := ms[len(ms)-1].valEnd
-	return concat(line[:at], []byte(", "+text), line[at:])
-}
-
-func concat(parts ...[]byte) []byte {
-	var b []byte
-	for _, p := range parts {
-		b = append(b, p...)
-	}
-	return b
-}
-
-func skipWS(b []byte, i int) int {
-	for i < len(b) && (b[i] == ' ' || b[i] == '\t' || b[i] == '\n' || b[i] == '\r') {
-		i++
-	}
-	return i
-}
-
-// scanString returns the index just past the string starting at b[i] == '"'.
-func scanString(b []byte, i int) (int, error) {
-	for j := i + 1; j < len(b); j++ {
-		switch b[j] {
-		case '\\':
-			j++
-		case '"':
-			return j + 1, nil
-		}
-	}
-	return 0, errors.New("unterminated JSON string")
-}
-
-// scanValue returns the index just past the JSON value starting at b[i]. It only finds
-// the value's extent; json.Unmarshal of the whole line (loadCoords) is what validated it.
-func scanValue(b []byte, i int) (int, error) {
-	if i >= len(b) {
-		return 0, errors.New("expected a JSON value")
-	}
-	switch b[i] {
-	case '"':
-		return scanString(b, i)
-	case '{', '[':
-		depth := 0
-		for j := i; j < len(b); j++ {
-			switch b[j] {
-			case '"':
-				e, err := scanString(b, j)
-				if err != nil {
-					return 0, err
-				}
-				j = e - 1
-			case '{', '[':
-				depth++
-			case '}', ']':
-				depth--
-				if depth == 0 {
-					return j + 1, nil
-				}
-			}
-		}
-		return 0, errors.New("unterminated JSON container")
-	default:
-		j := i
-		for j < len(b) && !bytes.ContainsRune([]byte(",}] \t\r\n"), rune(b[j])) {
-			_, size := utf8.DecodeRune(b[j:])
-			j += size
-		}
-		if j == i {
-			return 0, errors.New("expected a JSON value")
-		}
-		return j, nil
-	}
+	return props.Set(line, "prom", []byte(value))
 }

@@ -1,0 +1,640 @@
+{ "type": "FeatureCollection", "properties": {
+"antimeridian_adjusted_bounds": "-7.591274,54.753028,-0.918267,60.779665",
+"bounds": "-7.591274,54.753028,-0.918267,60.779665",
+"center": "-7.591274,54.753028,2",
+"description": "ratmap peaks",
+"format": "pbf",
+"generator": "tippecanoe v2.79.0",
+"generator_options": "tippecanoe -q -o /Users/adam/dev/ratmap/infra/scripts/tools/cmd/check-peak-tiles/testdata/peaks.pmtiles -zg --drop-densest-as-needed --extend-zooms-if-still-dropping '--include=name' '--include=ele' '--include=prom' '--include=prominence' '--include=wikidata' '--include=lists' -l peaks -n 'ratmap peaks' --force /Users/adam/dev/ratmap/infra/scripts/tools/cmd/check-peak-tiles/testdata/peaks.geojsonl",
+"json": "{\"vector_layers\":[{\"id\":\"peaks\",\"description\":\"\",\"minzoom\":0,\"maxzoom\":2,\"fields\":{\"ele\":\"Number\",\"lists\":\"String\",\"name\":\"String\",\"prominence\":\"String\",\"wikidata\":\"String\"}}],\"tilestats\":{\"layerCount\":1,\"layers\":[{\"layer\":\"peaks\",\"count\":300,\"geometry\":\"Point\",\"attributeCount\":5,\"attributes\":[{\"attribute\":\"ele\",\"count\":217,\"type\":\"number\",\"values\":[1004,1006,101,1010,102,1021,1032,1038,1056,106,1067,1068,1076,1083,1094,110,1103,1105,111,1112,1115,1117,1120,1130,1174,1177,1214,1220,1221,1234,1244,1258,1291,1296,1309,131,132,1345,141,147,153,154,157,159,163,164,165,166,171,174,178,181,184,185,186,198,206,214,216,218,219,230,232,240,241,242,244,247,249,251,257,259,264,265,271,273,276,277,280,282,283,290,291,295,30,304,307,309,310,311,325,326,332,334,335.3,340,341,342,343,347],\"min\":30,\"max\":1345},{\"attribute\":\"lists\",\"count\":1,\"type\":\"string\",\"values\":[\"munro\"]},{\"attribute\":\"name\",\"count\":259,\"type\":\"string\",\"values\":[\"A' Chràileag\",\"Achnaslishaig Hill\",\"Airds Hill\",\"Am Bodach\",\"Am Buth\",\"Am Bàthach\",\"An Cromhagan\",\"An Gearanach\",\"An Tobha\",\"An t-Socach\",\"Aonach Beag\",\"Aonach Mòr\",\"Baillie Hill\",\"Bealach a' Charrain\",\"Bealach a' Sgail\",\"Bealach an Oir\",\"Beinn Achaladair\",\"Beinn Bhanasaraidh\",\"Beinn Bharabhais\",\"Beinn Bhuidhe\",\"Beinn Chabhair\",\"Beinn Dearg\",\"Beinn Dorain\",\"Beinn Eunaich\",\"Beinn Ghlas\",\"Beinn Leacach\",\"Beinn Orasaigh\",\"Beinn Ruigh Choinnich\",\"Beinn Sgiath\",\"Beinn Tarsuinn\",\"Beinn a' Bheurlaich\",\"Beinn a' Chleibh\",\"Beinn a' Mhadaidh\",\"Beinn a' Mhuinidh\",\"Beinn an Dothaidh\",\"Beinn an Tuim\",\"Beinn na Srèine\",\"Beinn nam Fuaran\",\"Beinn nan Eun\",\"Beinn nan Gabhar\",\"Beinne na Grèine\",\"Ben Arnaboll\",\"Ben Chonzie\",\"Ben Lawers\",\"Ben Lomond\",\"Ben Lui\",\"Ben Macdui\",\"Ben More\",\"Ben Nevis\",\"Binnein Furachail\",\"Binnein Mor\",\"Birkshaw Rig\",\"Black Hill\",\"Black Law\",\"Blackhill or Gawky Hill\",\"Blowplain Hill\",\"Blyth Muir\",\"Braeriach\",\"Bridge End Hill\",\"Brindy Hill\",\"Broad Law\",\"Byre Hill\",\"Bàrr Cruinn\",\"Cairn Gorm\",\"Cairn O' Mount Pass\",\"Cairn Toul\",\"Camp Hill\",\"Carlunie Hill\",\"Carn na Coinnse\",\"Carn na Guaille\",\"Carswell Hill\",\"Carwaur\",\"Castleward\",\"Cavarra Hill\",\"Ceann Beag\",\"Cleite Ghiosla\",\"Clews Mount\",\"Cnoc Abhail\",\"Cnoc Cragaidh\",\"Cnoc Mòr\",\"Cnoc Uaine\",\"Cnoc a' Bharra Leathain\",\"Cnoc a' Chota\",\"Cnoc an Daimh Beag\",\"Cnoc na Moine\",\"Comb Head\",\"Corn Hill\",\"Craig Mellon\",\"Craiggowrie\",\"Craiglee\",\"Creag Dhubh\",\"Creag Mhòr\",\"Creag Riabhach\",\"Creag an Duine\",\"Creag an Fhir-Eoin\",\"Creag an-t Sithein\",\"Creagan a' Chaorainn\",\"Cruach Kilfinan\",\"Cruach Mhòr\",\"Cruach a' Bhàillidh\"]},{\"attribute\":\"prominence\",\"count\":62,\"type\":\"string\",\"values\":[\"108\",\"109.1\",\"118\",\"120.3\",\"13\",\"133\",\"1345\",\"140\",\"141\",\"145.8\",\"151\",\"152.8\",\"158\",\"159\",\"165\",\"166\",\"169\",\"171\",\"174\",\"175\",\"177\",\"202\",\"206\",\"212\",\"225\",\"231\",\"231.8\",\"234\",\"247\",\"252\",\"255\",\"260\",\"265\",\"271\",\"314\",\"331\",\"332\",\"376\",\"378\",\"383\",\"404\",\"425\",\"446\",\"461\",\"469\",\"532\",\"611\",\"614\",\"622\",\"645\",\"663\",\"716\",\"74\",\"759\",\"786\",\"819\",\"842\",\"875\",\"915\",\"950\",\"96.8\",\"989\"]},{\"attribute\":\"wikidata\",\"count\":70,\"type\":\"string\",\"values\":[\"Q1025927\",\"Q1025930\",\"Q104674\",\"Q109222564\",\"Q111133617\",\"Q13125564\",\"Q13125846\",\"Q13125875\",\"Q13125932\",\"Q13126668\",\"Q13130017\",\"Q13130089\",\"Q13131320\",\"Q13131689\",\"Q13131942\",\"Q20581979\",\"Q20585329\",\"Q20585347\",\"Q20597149\",\"Q20597941\",\"Q20598141\",\"Q2395787\",\"Q2412502\",\"Q24648069\",\"Q24654318\",\"Q24661213\",\"Q24678009\",\"Q25374223\",\"Q3009632\",\"Q3355649\",\"Q3355685\",\"Q3355709\",\"Q3356604\",\"Q3395632\",\"Q3396990\",\"Q3397176\",\"Q3397457\",\"Q3397729\",\"Q3397894\",\"Q3397984\",\"Q3399676\",\"Q3399686\",\"Q3402891\",\"Q3403886\",\"Q3406232\",\"Q3406610\",\"Q3500856\",\"Q458148\",\"Q4881329\",\"Q4881338\",\"Q4881355\",\"Q4971895\",\"Q4982096\",\"Q5017670\",\"Q59247123\",\"Q603956\",\"Q6503045\",\"Q6979322\",\"Q6980184\",\"Q7459802\",\"Q7459828\",\"Q7617758\",\"Q7617762\",\"Q767214\",\"Q7994603\",\"Q816556\",\"Q816560\",\"Q897186\",\"Q926932\",\"Q948061\"]}]}]}}",
+"maxzoom": "2",
+"minzoom": "0",
+"name": "ratmap peaks",
+"strategies": "[{\"dropped_by_rate\":252},{\"dropped_by_rate\":235},{}]",
+"type": "overlay",
+"version": "2"
+}, "features": [
+{ "type": "FeatureCollection", "properties": { "zoom": 2, "x": 1, "y": 1 }, "features": [
+{ "type": "FeatureCollection", "properties": { "layer": "peaks", "version": 2, "extent": 4096 }, "features": [
+{ "type": "Feature", "properties": {"ele": 30}, "geometry": {"type": "Point", "coordinates": [-7.580566, 0.0]}}
+,
+{ "type": "Feature", "properties": { "ele": 88 }, "geometry": { "type": "Point", "coordinates": [ -7.580566, 58.286395 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 186, "name": "Taireabhal" }, "geometry": { "type": "Point", "coordinates": [ -7.097168, 58.112714 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 102, "name": "Beinn Bhanasaraidh" }, "geometry": { "type": "Point", "coordinates": [ -7.448730, 57.633640 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Bealach a' Sgail" }, "geometry": { "type": "Point", "coordinates": [ -7.141113, 57.574779 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 206, "name": "Oileasail" }, "geometry": { "type": "Point", "coordinates": [ -6.921387, 58.170702 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 184, "name": "Cleite Ghiosla" }, "geometry": { "type": "Point", "coordinates": [ -6.921387, 58.135921 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 280, "name": "Beinn Bharabhais" }, "geometry": { "type": "Point", "coordinates": [ -6.503906, 58.263287 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 240, "name": "Feadan Dìrigil" }, "geometry": { "type": "Point", "coordinates": [ -6.965332, 58.031372 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 257 }, "geometry": { "type": "Point", "coordinates": [ -6.745605, 57.938183 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 380, "name": "Leac nan Fionn" }, "geometry": { "type": "Point", "coordinates": [ -6.262207, 57.645401 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Sron Dubh" }, "geometry": { "type": "Point", "coordinates": [ -6.218262, 57.515823 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 111, "name": "Meall Mòr" }, "geometry": { "type": "Point", "coordinates": [ -5.998535, 57.515823 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Meall Dearg" }, "geometry": { "type": "Point", "coordinates": [ -6.020508, 57.468589 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 276, "name": "Beinn Ruigh Choinnich", "prominence": "174", "wikidata": "Q4881338" }, "geometry": { "type": "Point", "coordinates": [ -7.294922, 57.160078 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 171, "name": "An Tobha", "prominence": "171" }, "geometry": { "type": "Point", "coordinates": [ -7.580566, 56.848972 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 50, "name": "Beinn Orasaigh" }, "geometry": { "type": "Point", "coordinates": [ -7.536621, 56.944974 ] } }
+,
+{ "type": "Feature", "properties": { "name": "An Cromhagan" }, "geometry": { "type": "Point", "coordinates": [ -6.328125, 57.183902 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 343, "name": "Minishal" }, "geometry": { "type": "Point", "coordinates": [ -6.372070, 57.016814 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 232, "name": "Gualann na Pairce" }, "geometry": { "type": "Point", "coordinates": [ -6.394043, 56.980911 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Cnoc Mòr" }, "geometry": { "type": "Point", "coordinates": [ -6.459961, 56.680374 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 271, "name": "Beinn Leacach" }, "geometry": { "type": "Point", "coordinates": [ -6.108398, 57.183902 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Bealach an Oir" }, "geometry": { "type": "Point", "coordinates": [ -6.306152, 56.968936 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 106, "name": "Sìthean Beag" }, "geometry": { "type": "Point", "coordinates": [ -5.998535, 57.100452 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 241 }, "geometry": { "type": "Point", "coordinates": [ -5.976562, 57.183902 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Beinne na Grèine" }, "geometry": { "type": "Point", "coordinates": [ -5.734863, 57.231503 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 101, "name": "Dùn Ì" }, "geometry": { "type": "Point", "coordinates": [ -6.394043, 56.340901 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 521, "name": "Beinn na Srèine", "prominence": "376" }, "geometry": { "type": "Point", "coordinates": [ -6.130371, 56.401744 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 572, "name": "Beinn nan Gabhar" }, "geometry": { "type": "Point", "coordinates": [ -5.998535, 56.450349 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 87, "name": "Binnein Furachail" }, "geometry": { "type": "Point", "coordinates": [ -5.646973, 56.243350 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 147, "name": "Cnoc Abhail" }, "geometry": { "type": "Point", "coordinates": [ -6.130371, 55.850650 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 65, "name": "Cnoc a' Chota" }, "geometry": { "type": "Point", "coordinates": [ -5.954590, 56.010666 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 74, "name": "Cnoc na Moine" }, "geometry": { "type": "Point", "coordinates": [ -5.800781, 56.010666 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 354, "name": "Withi Gill" }, "geometry": { "type": "Point", "coordinates": [ -3.295898, 58.859224 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 154, "name": "Septa Field" }, "geometry": { "type": "Point", "coordinates": [ -1.516113, 60.522158 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 70, "name": "Quhaap Knowe" }, "geometry": { "type": "Point", "coordinates": [ -1.428223, 60.348696 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 75, "name": "Robert Tait's Hill" }, "geometry": { "type": "Point", "coordinates": [ -1.516113, 60.261617 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 153, "name": "Houllna Gruna" }, "geometry": { "type": "Point", "coordinates": [ -0.922852, 60.780619 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 166, "name": "Evra Houll" }, "geometry": { "type": "Point", "coordinates": [ -1.164551, 60.532968 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 165, "name": "Gardie Hill" }, "geometry": { "type": "Point", "coordinates": [ -1.252441, 60.381290 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 60, "name": "Lambs Knowe" }, "geometry": { "type": "Point", "coordinates": [ -1.142578, 60.294299 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 57, "name": "Noup Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.768555, 59.243415 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 99, "name": "Flaughton Hill", "wikidata": "Q109222564" }, "geometry": { "type": "Point", "coordinates": [ -2.790527, 59.175928 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 198, "name": "Midi Field" }, "geometry": { "type": "Point", "coordinates": [ -1.296387, 59.998986 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 153, "name": "Druim na Buainn" }, "geometry": { "type": "Point", "coordinates": [ -5.075684, 58.528125 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 242, "name": "Creag Dhubh" }, "geometry": { "type": "Point", "coordinates": [ -5.097656, 58.321030 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 230, "name": "Ben Arnaboll" }, "geometry": { "type": "Point", "coordinates": [ -4.636230, 58.493694 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 295, "name": "Cnoc an Daimh Beag" }, "geometry": { "type": "Point", "coordinates": [ -4.526367, 58.332567 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 163, "name": "Meall Dearg" }, "geometry": { "type": "Point", "coordinates": [ -5.405273, 58.043004 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Càrn an Achaidh Mhòir" }, "geometry": { "type": "Point", "coordinates": [ -5.339355, 57.914848 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -4.943848, 57.891497 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 730, "name": "Meall Doire Faid", "prominence": "175", "wikidata": "Q20598141" }, "geometry": { "type": "Point", "coordinates": [ -4.987793, 57.762799 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 705, "name": "Ceann Beag" }, "geometry": { "type": "Point", "coordinates": [ -5.537109, 57.621875 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 932, "name": "Sgùrr an Tuill Bhàin", "wikidata": "Q20597941" }, "geometry": { "type": "Point", "coordinates": [ -5.317383, 57.668911 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 937, "name": "Beinn Tarsuinn", "prominence": "202", "wikidata": "Q20581979", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.295410, 57.704147 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 692, "name": "Beinn a' Mhuinidh", "prominence": "378" }, "geometry": { "type": "Point", "coordinates": [ -5.295410, 57.645401 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 732, "name": "Sgùrr a' Gharaidh", "prominence": "331" }, "geometry": { "type": "Point", "coordinates": [ -5.537109, 57.444949 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 923, "name": "Sgùrr nan Each", "prominence": "108", "wikidata": "Q7459828", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.053711, 57.680660 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 807 }, "geometry": { "type": "Point", "coordinates": [ -5.273438, 57.456771 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Creag an Duine" }, "geometry": { "type": "Point", "coordinates": [ -4.877930, 57.844751 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 743, "name": "Beinn nan Eun", "prominence": "255" }, "geometry": { "type": "Point", "coordinates": [ -4.614258, 57.751076 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 552, "name": "Creagan a' Chaorainn" }, "geometry": { "type": "Point", "coordinates": [ -4.899902, 57.492214 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1006, "name": "An t-Socach" }, "geometry": { "type": "Point", "coordinates": [ -4.570312, 57.680660 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 232 }, "geometry": { "type": "Point", "coordinates": [ -3.757324, 58.482209 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Baillie Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.625488, 58.562523 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 403, "name": "Beinn a' Mhadaidh" }, "geometry": { "type": "Point", "coordinates": [ -4.108887, 58.344101 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 309, "name": "Creag Riabhach" }, "geometry": { "type": "Point", "coordinates": [ -4.174805, 58.089493 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 141, "name": "Hill of Olrig" }, "geometry": { "type": "Point", "coordinates": [ -3.427734, 58.573981 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 396, "name": "Cnoc Cragaidh" }, "geometry": { "type": "Point", "coordinates": [ -3.933105, 58.066256 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Ormond Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.174805, 57.551208 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 482, "name": "Beinn a' Bheurlaich" }, "geometry": { "type": "Point", "coordinates": [ -4.108887, 57.397624 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 469, "name": "Tom a' Ghealagaidh" }, "geometry": { "type": "Point", "coordinates": [ -3.955078, 57.373938 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 456, "name": "Knock of Braemoray", "prominence": "169", "wikidata": "Q24654318" }, "geometry": { "type": "Point", "coordinates": [ -3.647461, 57.456771 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 396, "name": "Càrn na Doire" }, "geometry": { "type": "Point", "coordinates": [ -3.515625, 57.385783 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 277, "name": "Knock of Allachie" }, "geometry": { "type": "Point", "coordinates": [ -3.208008, 57.456771 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 218, "name": "Scotch Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.076172, 57.586559 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 906, "wikidata": "Q13125875" }, "geometry": { "type": "Point", "coordinates": [ -5.559082, 57.148161 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Beinn Bhuidhe" }, "geometry": { "type": "Point", "coordinates": [ -5.537109, 57.148161 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1067, "name": "Sgùrr Fhuaran", "prominence": "663", "wikidata": "Q7459802", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.339355, 57.195808 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 640, "name": "Stob na Mucraidh" }, "geometry": { "type": "Point", "coordinates": [ -5.537109, 57.064630 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 798, "name": "Am Bàthach", "prominence": "231", "wikidata": "Q3406610" }, "geometry": { "type": "Point", "coordinates": [ -5.185547, 57.183902 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1120, "name": "A' Chràileag", "prominence": "786", "wikidata": "Q3356604", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.163574, 57.183902 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1112, "name": "Tom a' Choinich", "prominence": "13", "wikidata": "Q13131942", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.053711, 57.302790 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 862, "name": "Càrn nan Coireachan Cuaidh", "wikidata": "Q13125564" }, "geometry": { "type": "Point", "coordinates": [ -5.009766, 57.219608 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 363, "name": "Meall nan Ruadhag" }, "geometry": { "type": "Point", "coordinates": [ -5.031738, 57.040730 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 955, "name": "Sgùrr nan Coireachan", "prominence": "231.8", "wikidata": "Q20597149", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.449219, 56.932987 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 963, "name": "Sgùrr Thuilm", "prominence": "614", "wikidata": "Q3406232", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.383301, 56.932987 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 810, "name": "Beinn an Tuim", "wikidata": "Q13131689" }, "geometry": { "type": "Point", "coordinates": [ -5.405273, 56.897004 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 987, "name": "Gulvain", "prominence": "842", "wikidata": "Q3403886", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.295410, 56.932987 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Bealach a' Charrain" }, "geometry": { "type": "Point", "coordinates": [ -5.449219, 56.788845 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1220, "name": "Càrn Mòr Dearg", "prominence": "165", "wikidata": "Q3009632", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.987793, 56.800878 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1221, "name": "Aonach Mòr", "prominence": "133", "wikidata": "Q2395787", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.965820, 56.812908 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1345, "name": "Ben Nevis", "prominence": "1345", "wikidata": "Q104674", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.009766, 56.800878 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 982, "name": "An Gearanach", "prominence": "151", "wikidata": "Q3355685", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.965820, 56.764768 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1234, "name": "Aonach Beag", "prominence": "404", "wikidata": "Q2412502", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.943848, 56.800878 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1130, "name": "Binnein Mor", "prominence": "759", "wikidata": "Q3396990", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.921875, 56.752723 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 999, "name": "Stob Bàn", "prominence": "234", "wikidata": "Q926932", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.031738, 56.740674 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 967, "name": "Sgor nam Fiannaidh", "prominence": "622", "wikidata": "Q13131320", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.031738, 56.680374 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1032, "name": "Am Bodach", "prominence": "152.8", "wikidata": "Q3355649", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.987793, 56.740674 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1056, "name": "Na Gruagaichean", "prominence": "96.8", "wikidata": "Q3399676", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.943848, 56.740674 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 953, "name": "Meall Dearg", "prominence": "120.3", "wikidata": "Q13130017", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.009766, 56.680374 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 958, "name": "Stob Dubh", "prominence": "469", "wikidata": "Q4982096", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.965820, 56.644147 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 925, "name": "Stob Coire Raineach", "prominence": "177", "wikidata": "Q20585329", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.943848, 56.644147 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Creag an Fhir-Eoin" }, "geometry": { "type": "Point", "coordinates": [ -4.812012, 57.231503 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 865, "name": "Geal Charn" }, "geometry": { "type": "Point", "coordinates": [ -4.570312, 57.052682 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 867, "name": "Beinn Sgiath" }, "geometry": { "type": "Point", "coordinates": [ -4.372559, 57.052682 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1117, "name": "Stob Coire an Laoigh", "prominence": "74", "wikidata": "Q3397894", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.877930, 56.812908 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1177, "name": "Stob Choire Claurigh", "prominence": "446", "wikidata": "Q3355709", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.855957, 56.824933 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 977, "name": "Stob Bàn", "prominence": "174", "wikidata": "Q7617758", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.833984, 56.812908 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1094, "name": "Sgùrr Choinnich Mòr", "prominence": "159", "wikidata": "Q24678009", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.899902, 56.800878 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1115, "name": "Stob Coire Easain", "prominence": "611", "wikidata": "Q7617762", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.768066, 56.812908 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1105, "name": "Stob a' Choire Mheadhoin", "prominence": "140", "wikidata": "Q3397176", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.768066, 56.824933 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1010, "name": "Sgùrr Eilde Mòr", "prominence": "271", "wikidata": "Q6980184", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.899902, 56.752723 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1021, "name": "Stob Dearg", "prominence": "532", "wikidata": "Q20585347", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.899902, 56.644147 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -4.482422, 56.836954 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 837, "name": "Sròn a' Choire Chnapanich", "prominence": "206" }, "geometry": { "type": "Point", "coordinates": [ -4.526367, 56.571589 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 71, "name": "Bàrr Cruinn" }, "geometry": { "type": "Point", "coordinates": [ -5.471191, 56.426054 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 181, "name": "Airds Hill", "prominence": "158" }, "geometry": { "type": "Point", "coordinates": [ -5.383301, 56.559482 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 512, "name": "Beinn Ghlas", "prominence": "265" }, "geometry": { "type": "Point", "coordinates": [ -5.317383, 56.377419 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 93, "name": "Am Buth" }, "geometry": { "type": "Point", "coordinates": [ -5.515137, 56.353078 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 863 }, "geometry": { "type": "Point", "coordinates": [ -5.185547, 56.559482 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1068 }, "geometry": { "type": "Point", "coordinates": [ -5.053711, 56.535258 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 989, "name": "Beinn Eunaich", "prominence": "425", "wikidata": "Q13125846", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -5.031738, 56.450349 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 589, "name": "Cruach Mhòr", "prominence": "383", "wikidata": "Q59247123" }, "geometry": { "type": "Point", "coordinates": [ -5.141602, 56.279961 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -5.031738, 56.182254 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 487, "name": "Stob Liath" }, "geometry": { "type": "Point", "coordinates": [ -4.943848, 56.206704 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 214, "name": "Cruach a' Bhàillidh" }, "geometry": { "type": "Point", "coordinates": [ -5.581055, 55.813629 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 97, "name": "Cnoc a' Bharra Leathain" }, "geometry": { "type": "Point", "coordinates": [ -5.559082, 55.801281 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 481, "name": "Dubh Chreag" }, "geometry": { "type": "Point", "coordinates": [ -5.537109, 55.875311 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 174, "name": "Creag Mhòr" }, "geometry": { "type": "Point", "coordinates": [ -5.537109, 55.813629 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 325, "name": "Cruach Kilfinan" }, "geometry": { "type": "Point", "coordinates": [ -5.273438, 55.949200 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 282, "name": "Meall Donn" }, "geometry": { "type": "Point", "coordinates": [ -5.383301, 55.801281 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 509, "name": "Srón Mhór" }, "geometry": { "type": "Point", "coordinates": [ -5.053711, 56.059769 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 247, "name": "Cnoc Uaine" }, "geometry": { "type": "Point", "coordinates": [ -5.273438, 55.924586 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 916, "name": "Beinn a' Chleibh", "prominence": "141", "wikidata": "Q3402891", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.833984, 56.389584 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 739, "name": "Meall nan Tighearn", "wikidata": "Q13130089" }, "geometry": { "type": "Point", "coordinates": [ -4.855957, 56.365250 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1130, "name": "Ben Lui", "prominence": "875", "wikidata": "Q3397729", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.812012, 56.401744 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1004, "name": "Beinn an Dothaidh", "prominence": "247", "wikidata": "Q4881355", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.724121, 56.535258 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1038, "name": "Beinn Achaladair", "prominence": "225", "wikidata": "Q3397457", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.702148, 56.547372 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1076, "name": "Beinn Dorain", "prominence": "332", "wikidata": "Q3500856", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.724121, 56.498892 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 806, "name": "Beinn nam Fuaran", "prominence": "260", "wikidata": "Q13125932" }, "geometry": { "type": "Point", "coordinates": [ -4.658203, 56.511018 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 808 }, "geometry": { "type": "Point", "coordinates": [ -4.746094, 56.279961 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 933, "name": "Beinn Chabhair", "prominence": "314", "wikidata": "Q4881329", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.636230, 56.328721 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 974, "name": "Ben Lomond", "prominence": "819", "wikidata": "Q816556", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.636230, 56.194481 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Meall Garbh" }, "geometry": { "type": "Point", "coordinates": [ -4.548340, 56.438204 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1174, "name": "Ben More", "prominence": "989", "wikidata": "Q3395632", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.548340, 56.389584 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1103, "name": "Beinn Ghlas", "prominence": "109.1", "wikidata": "Q3399686", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.240723, 56.535258 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1214, "name": "Ben Lawers", "prominence": "915", "wikidata": "Q603956", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.218750, 56.547372 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 603, "name": "Meall Gaothach" }, "geometry": { "type": "Point", "coordinates": [ -4.482422, 56.292157 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 975, "name": "Stùc a' Chroin", "prominence": "252", "wikidata": "Q6979322", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.240723, 56.328721 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 427, "name": "Beinn Dearg", "prominence": "212" }, "geometry": { "type": "Point", "coordinates": [ -4.284668, 56.206704 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Sarahs Knowe" }, "geometry": { "type": "Point", "coordinates": [ -4.855957, 55.912273 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 304 }, "geometry": { "type": "Point", "coordinates": [ -4.702148, 55.850650 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Killoch Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.438477, 55.801281 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 672, "name": "Carn na Guaille", "wikidata": "Q13126668" }, "geometry": { "type": "Point", "coordinates": [ -4.020996, 57.231503 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 687, "name": "Craiggowrie" }, "geometry": { "type": "Point", "coordinates": [ -3.713379, 57.195808 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 419, "name": "Carn na Coinnse" }, "geometry": { "type": "Point", "coordinates": [ -3.581543, 57.290918 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1296, "name": "Braeriach", "prominence": "461", "wikidata": "Q897186", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -3.735352, 57.076575 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1258, "name": "Sgor an Lochain Uaine", "prominence": "118", "wikidata": "Q767214", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -3.735352, 57.052682 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1291, "name": "Cairn Toul", "prominence": "166", "wikidata": "Q1025930", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -3.713379, 57.052682 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1244, "name": "Cairn Gorm", "prominence": "145.8", "wikidata": "Q1025927", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -3.647461, 57.112385 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1309, "name": "Ben Macdui", "prominence": "950", "wikidata": "Q816560", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -3.669434, 57.064630 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 1083, "name": "Schiehallion", "prominence": "716", "wikidata": "Q948061", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -4.108887, 56.668302 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 845 }, "geometry": { "type": "Point", "coordinates": [ -3.845215, 56.920997 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 632, "name": "Creag an-t Sithein" }, "geometry": { "type": "Point", "coordinates": [ -3.581543, 56.776808 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 159, "name": "Dunmore Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.757324, 56.704506 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 708, "name": "Little Geal Chàrn" }, "geometry": { "type": "Point", "coordinates": [ -3.339844, 57.136239 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 691 }, "geometry": { "type": "Point", "coordinates": [ -3.515625, 57.136239 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 560, "name": "Tom a'Bhuraich" }, "geometry": { "type": "Point", "coordinates": [ -3.142090, 57.171992 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -2.812500, 57.100452 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 861, "name": "Càrn Ait" }, "geometry": { "type": "Point", "coordinates": [ -3.405762, 56.848972 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 518, "name": "Càrn an Fhìdhleir" }, "geometry": { "type": "Point", "coordinates": [ -3.361816, 56.776808 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 858, "name": "Craig Mellon" }, "geometry": { "type": "Point", "coordinates": [ -3.208008, 56.872996 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 673, "name": "Hard Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.966309, 56.920997 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 734, "name": "Ruragh" }, "geometry": { "type": "Point", "coordinates": [ -2.944336, 56.824933 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 559 }, "geometry": { "type": "Point", "coordinates": [ -3.098145, 56.728622 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Little Law" }, "geometry": { "type": "Point", "coordinates": [ -3.054199, 56.583692 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 273, "name": "Castleward" }, "geometry": { "type": "Point", "coordinates": [ -3.076172, 56.583692 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 340, "name": "Carlunie Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.032227, 56.571589 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 273, "name": "White Top" }, "geometry": { "type": "Point", "coordinates": [ -2.922363, 56.728622 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 510, "name": "Creag Dhubh" }, "geometry": { "type": "Point", "coordinates": [ -4.196777, 56.426054 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 931, "name": "Ben Chonzie", "prominence": "645", "wikidata": "Q3397984", "lists": "munro" }, "geometry": { "type": "Point", "coordinates": [ -3.999023, 56.450349 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 290, "name": "Tom a' Bhranndaidh" }, "geometry": { "type": "Point", "coordinates": [ -4.196777, 56.279961 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 648, "name": "King's Seat Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.713379, 56.182254 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Thorny Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.669434, 56.304349 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Rashie Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.537598, 56.255557 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 435, "name": "Hart Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.086914, 56.072035 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 264, "name": "Cult Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.559570, 56.145550 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Black Law" }, "geometry": { "type": "Point", "coordinates": [ -3.735352, 55.776573 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 366, "name": "Dochrie Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.493652, 56.255557 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 174, "name": "Dundee Law", "wikidata": "Q458148" }, "geometry": { "type": "Point", "coordinates": [ -2.988281, 56.474628 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 110, "name": "Hare Law" }, "geometry": { "type": "Point", "coordinates": [ -2.900391, 56.450349 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 157, "name": "Murdochcairnie Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.054199, 56.365250 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -2.922363, 56.231139 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 164, "name": "Montquey Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.273926, 56.072035 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 259, "name": "Kaimes Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.383789, 55.887635 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 537, "name": "The Mount", "wikidata": "Q24661213" }, "geometry": { "type": "Point", "coordinates": [ -3.361816, 55.801281 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 291, "name": "Hurcheon Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.032227, 55.801281 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 216, "name": "Corn Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.702637, 57.598335 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Hill of Firfolds" }, "geometry": { "type": "Point", "coordinates": [ -2.570801, 57.621875 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 154 }, "geometry": { "type": "Point", "coordinates": [ -2.790527, 57.480403 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Fallow Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.702637, 57.350237 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Knockmomean" }, "geometry": { "type": "Point", "coordinates": [ -1.977539, 57.645401 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 244, "name": "Brindy Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.658691, 57.279043 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 342, "name": "Black Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.614746, 57.160078 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Gallow Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.680664, 57.088515 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 454, "name": "Cairn O' Mount Pass", "wikidata": "Q5017670" }, "geometry": { "type": "Point", "coordinates": [ -2.570801, 56.920997 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 132, "name": "Wuddy Law" }, "geometry": { "type": "Point", "coordinates": [ -2.614746, 56.656226 ] } }
+,
+{ "type": "Feature", "properties": { "name": "The Lamb" }, "geometry": { "type": "Point", "coordinates": [ -2.746582, 56.072035 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -2.680664, 55.899956 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 341, "name": "Duddy Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.482910, 55.887635 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 307, "name": "Achnaslishaig Hill" }, "geometry": { "type": "Point", "coordinates": [ -5.712891, 55.366625 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 291 }, "geometry": { "type": "Point", "coordinates": [ -5.515137, 55.590763 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 251, "name": "Tòrr a' Ghobhainn" }, "geometry": { "type": "Point", "coordinates": [ -5.537109, 55.565922 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 352 }, "geometry": { "type": "Point", "coordinates": [ -5.603027, 55.404070 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 265, "name": "Knockdolian" }, "geometry": { "type": "Point", "coordinates": [ -4.965820, 55.116085 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 178, "name": "Law Hill", "wikidata": "Q6503045" }, "geometry": { "type": "Point", "coordinates": [ -4.833984, 55.689972 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Carswell Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.438477, 55.751849 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Rieve Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.328613, 55.727110 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Mount Mary" }, "geometry": { "type": "Point", "coordinates": [ -4.548340, 55.466399 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Clews Mount" }, "geometry": { "type": "Point", "coordinates": [ -4.350586, 55.491304 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -4.724121, 55.166319 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 290, "name": "Carwaur" }, "geometry": { "type": "Point", "coordinates": [ -4.416504, 55.291628 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 335.3, "name": "Stob Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.548340, 55.254077 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Prickeny Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.284668, 55.316643 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 531, "name": "Craiglee" }, "geometry": { "type": "Point", "coordinates": [ -4.416504, 55.090944 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Drigmorn Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.394531, 55.040614 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Fell of Craigcaffie" }, "geometry": { "type": "Point", "coordinates": [ -4.987793, 54.939766 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Knocktaggart" }, "geometry": { "type": "Point", "coordinates": [ -4.943848, 54.749991 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Meadow Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.526367, 54.927142 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Dam Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.482422, 54.826008 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 406, "name": "Glenmuir Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.064941, 55.453941 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 452, "name": "Gart Law" }, "geometry": { "type": "Point", "coordinates": [ -3.977051, 55.491304 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 332, "name": "Birkshaw Rig" }, "geometry": { "type": "Point", "coordinates": [ -3.779297, 55.541065 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 532, "name": "White Dod" }, "geometry": { "type": "Point", "coordinates": [ -3.801270, 55.379110 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 492, "name": "Lamington Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.581543, 55.553495 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 408, "name": "Unthank Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.559570, 55.578345 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 131, "name": "Trow Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.603516, 55.491304 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 347, "name": "Watermeetings Rig" }, "geometry": { "type": "Point", "coordinates": [ -3.647461, 55.391592 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 415, "name": "Mid Height" }, "geometry": { "type": "Point", "coordinates": [ -3.625488, 55.391592 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 429, "name": "Middle Rig" }, "geometry": { "type": "Point", "coordinates": [ -3.559570, 55.429013 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 418, "name": "Tinny Bank" }, "geometry": { "type": "Point", "coordinates": [ -3.537598, 55.404070 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 351, "name": "Harthope Bank" }, "geometry": { "type": "Point", "coordinates": [ -3.537598, 55.391592 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Byre Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.064941, 55.078367 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Blowplain Hill" }, "geometry": { "type": "Point", "coordinates": [ -4.086914, 55.078367 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 515, "name": "Greentrough Head" }, "geometry": { "type": "Point", "coordinates": [ -3.735352, 55.341642 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 609, "name": "Comb Head" }, "geometry": { "type": "Point", "coordinates": [ -3.735352, 55.366625 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Goldie Knoll" }, "geometry": { "type": "Point", "coordinates": [ -3.757324, 55.279115 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 249, "name": "Shancastle Doon" }, "geometry": { "type": "Point", "coordinates": [ -3.867188, 55.191412 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 666, "name": "Wedder Law" }, "geometry": { "type": "Point", "coordinates": [ -3.669434, 55.304138 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 611, "name": "Earncraig" }, "geometry": { "type": "Point", "coordinates": [ -3.625488, 55.291628 ] } }
+,
+{ "type": "Feature", "properties": { "name": "West Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.669434, 55.053203 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 240, "name": "Hillhead Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.691406, 55.028022 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Lamb Rig", "wikidata": "Q25374223" }, "geometry": { "type": "Point", "coordinates": [ -3.405762, 55.776573 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 310, "name": "Blyth Muir" }, "geometry": { "type": "Point", "coordinates": [ -3.383789, 55.714735 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 571, "name": "Pyked Stane Hill (Pyket Stave)" }, "geometry": { "type": "Point", "coordinates": [ -3.405762, 55.652798 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 420, "name": "Cavarra Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.186035, 55.702355 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Blackhill or Gawky Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.515625, 55.578345 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 456, "name": "Great Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.405762, 55.528631 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 840, "name": "Broad Law", "wikidata": "Q4971895" }, "geometry": { "type": "Point", "coordinates": [ -3.361816, 55.503750 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 411, "name": "Tweedhopefoot Rig" }, "geometry": { "type": "Point", "coordinates": [ -3.493652, 55.429013 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -3.295898, 55.528631 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -3.208008, 55.565922 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 744, "name": "Dun Rig", "wikidata": "Q24648069" }, "geometry": { "type": "Point", "coordinates": [ -3.186035, 55.578345 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Bridge End Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.229980, 55.491304 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 588, "name": "Muckle Knees" }, "geometry": { "type": "Point", "coordinates": [ -3.273926, 55.453941 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 821, "name": "White Coomb", "wikidata": "Q7994603" }, "geometry": { "type": "Point", "coordinates": [ -3.317871, 55.416544 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Makeness Kipps" }, "geometry": { "type": "Point", "coordinates": [ -3.142090, 55.689972 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 560 }, "geometry": { "type": "Point", "coordinates": [ -2.966309, 55.689972 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 334 }, "geometry": { "type": "Point", "coordinates": [ -2.834473, 55.764213 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 513, "name": "Middle Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.966309, 55.590763 ] } }
+,
+{ "type": "Feature", "properties": { "name": "The Steel" }, "geometry": { "type": "Point", "coordinates": [ -2.922363, 55.379110 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Newbigging Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.361816, 55.191412 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 311, "name": "Peat Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.295898, 55.229023 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 392, "name": "Macmaw Edge" }, "geometry": { "type": "Point", "coordinates": [ -3.273926, 55.266598 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Dormont Rig" }, "geometry": { "type": "Point", "coordinates": [ -3.251953, 55.191412 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Camp Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.493652, 55.090944 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Baillie Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.449707, 55.065787 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 326, "name": "Fell Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.098145, 55.216490 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 595, "name": "Wisp Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.966309, 55.279115 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 309, "name": "Inner Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.878418, 55.354135 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 544, "name": "Langtae Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.878418, 55.291628 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 432, "name": "Dod Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.834473, 55.266598 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 283 }, "geometry": { "type": "Point", "coordinates": [ -3.164062, 55.153766 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 185, "name": "Whitshields Knowe" }, "geometry": { "type": "Point", "coordinates": [ -2.988281, 55.153766 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Fairgirth Hill" }, "geometry": { "type": "Point", "coordinates": [ -3.735352, 54.889246 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 404, "name": "Eildon Hill North", "wikidata": "Q111133617" }, "geometry": { "type": "Point", "coordinates": [ -2.702637, 55.590763 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -2.526855, 55.714735 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -2.592773, 55.603178 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -2.746582, 55.441479 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Whiteacres Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.746582, 55.404070 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 214 }, "geometry": { "type": "Point", "coordinates": [ -2.548828, 55.528631 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Galla Knowe" }, "geometry": { "type": "Point", "coordinates": [ -2.482910, 55.466399 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Mervins Law" }, "geometry": { "type": "Point", "coordinates": [ -2.526855, 55.404070 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -2.307129, 55.739482 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 219, "name": "Morebattle Hill" }, "geometry": { "type": "Point", "coordinates": [ -2.373047, 55.503750 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Hounam Steeple" }, "geometry": { "type": "Point", "coordinates": [ -2.351074, 55.466399 ] } }
+,
+{ "type": "Feature", "properties": {  }, "geometry": { "type": "Point", "coordinates": [ -2.329102, 55.441479 ] } }
+,
+{ "type": "Feature", "properties": { "name": "Pudding Law" }, "geometry": { "type": "Point", "coordinates": [ -2.263184, 55.453941 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 394, "name": "Peat Shank" }, "geometry": { "type": "Point", "coordinates": [ -2.416992, 55.366625 ] } }
+] }
+] }
+,
+{ "type": "FeatureCollection", "properties": { "zoom": 2, "x": 2, "y": 1 }, "features": [
+{ "type": "FeatureCollection", "properties": { "layer": "peaks", "version": 2, "extent": 4096 }, "features": [
+{ "type": "Feature", "properties": { "ele": 154, "name": "Septa Field" }, "geometry": { "type": "Point", "coordinates": [ -1.516113, 60.522158 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 70, "name": "Quhaap Knowe" }, "geometry": { "type": "Point", "coordinates": [ -1.428223, 60.348696 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 75, "name": "Robert Tait's Hill" }, "geometry": { "type": "Point", "coordinates": [ -1.516113, 60.261617 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 153, "name": "Houllna Gruna" }, "geometry": { "type": "Point", "coordinates": [ -0.922852, 60.780619 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 166, "name": "Evra Houll" }, "geometry": { "type": "Point", "coordinates": [ -1.164551, 60.532968 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 165, "name": "Gardie Hill" }, "geometry": { "type": "Point", "coordinates": [ -1.252441, 60.381290 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 60, "name": "Lambs Knowe" }, "geometry": { "type": "Point", "coordinates": [ -1.142578, 60.294299 ] } }
+,
+{ "type": "Feature", "properties": { "ele": 198, "name": "Midi Field" }, "geometry": { "type": "Point", "coordinates": [ -1.296387, 59.998986 ] } }
+] }
+] }
+] }

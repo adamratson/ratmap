@@ -22,7 +22,7 @@ multi-day unattended run needs and a laptop run doesn't.
 | GDAL | Debian trixie (3.10.3) | `gdal_contour`, `ogr2ogr` with the GeoJSONSeq driver |
 | python3 + sqlite3 | Debian trixie | Stdlib scripts and inline snippets; `sqlite3` for inspecting `places.sqlite` by hand. The index itself is built by `scripts/tools/cmd/build-places-db` with its own SQLite (modernc.org/sqlite), and the image build **fails** if its tests — FTS5 with `unicode61 remove_diacritics 2` among them, C9's whole search index — do not pass |
 | awscli | Debian trixie (v2) | uploads (`upload.sh` uses `aws s3 cp`, not `pmtiles upload` — see its header comment); request checksums forced to `when_required` so an aws-cli-v2 checksum disagreement with a non-AWS S3 gateway (hit against both R2 and Krystal) can't fail the last step of a multi-day run |
-| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/tools` (prominence, avalanche slope, the paths reduce step, the places index, `sac_scale` grades) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25) |
+| Go | 1.27.1, release tarball, SHA256-verified | Compiles `scripts/contour-cell` and `scripts/tools` (prominence, avalanche slope, the paths reduce step, the places index, `sac_scale` grades, the peaks helpers) from the working copy on every run; the image build runs both modules' tests. Replaced the numpy + scipy venv the prominence and slope scripts needed (2026-09-25) |
 
 Build args move any version without editing the Dockerfile:
 `--build-arg TIPPECANOE_VERSION=2.80.0`. Bumping `PMTILES_VERSION` also requires bumping
@@ -75,7 +75,7 @@ is too small.
 
 For reference, the numbers behind those figures, measured rather than estimated. A parsed
 GeoJSON feature costs ~1,162 B of Python objects, **5.0×** its JSON text (real OSM data).
-Running `normalize-peaks.py` over a Europe-sized 2 M-feature export, whole-document load
+Running `normalize-peaks.py` (since ported to Go, still streaming) over a Europe-sized 2 M-feature export, whole-document load
 versus streaming:
 
 | | peak RSS | wall |

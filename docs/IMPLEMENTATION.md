@@ -531,7 +531,7 @@ phase at Adam's call, since that is what was actually asked for.
 **Munros — clean, built.** Verified against taginfo (2026-09-11) before writing anything:
 OSM's own `munro=yes` tag has exactly 282 uses, matching the SMC's current published
 count exactly — no editorial join needed, C19 is satisfied by the OSM tag alone.
-`infra/scripts/normalize-peaks.py` derives a `lists` property (`"munro"`) straight from
+`infra/scripts/tools/cmd/normalize-peaks` derives a `lists` property (`"munro"`) straight from
 the tag; `infra/scripts/build-peaks.sh` bakes it into `peaks-global.pmtiles` and asserts
 the count is exactly 282 at build time, same standard as the Ben Nevis elevation check.
 App side (`src/overlays/peaks.ts`): a `▲` label prefix and a distinct marker colour/size for Munros,

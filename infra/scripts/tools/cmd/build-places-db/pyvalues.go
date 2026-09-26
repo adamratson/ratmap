@@ -12,14 +12,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
-)
 
-// pyIsSpace is str.isspace(): Go's unicode.IsSpace plus the four ASCII separators
-// (\x1c-\x1f) that Python counts as whitespace and Go does not.
-func pyIsSpace(r rune) bool {
-	return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f)
-}
+	"ratmap/infra/tools/internal/pytext"
+)
 
 // toInt is `int(str(value).replace(",", "").strip())`, returning ok=false where that
 // raised TypeError or ValueError (the Python's to_int returned None), and an error where
@@ -61,7 +56,7 @@ func pyStr(raw json.RawMessage) (string, bool) {
 // decimal digits (Arabic-Indic, Devanagari, fullwidth… — OSM has them) with single
 // underscores between digits.
 func pyInt(s string) (int64, bool, error) {
-	s = strings.TrimFunc(s, pyIsSpace)
+	s = strings.TrimFunc(s, pytext.IsSpace)
 	neg := false
 	if s != "" && (s[0] == '+' || s[0] == '-') {
 		neg, s = s[0] == '-', s[1:]
@@ -82,7 +77,7 @@ func pyInt(s string) (int64, bool, error) {
 			afterUnderscore = true
 			continue
 		}
-		d := digitValue(r)
+		d := pytext.DigitValue(r)
 		if d < 0 {
 			return 0, false, nil
 		}
@@ -97,25 +92,6 @@ func pyInt(s string) (int64, bool, error) {
 		return 0, false, fmt.Errorf("population %q does not fit a 64-bit integer", s)
 	}
 	return n, true, nil
-}
-
-// digitValue is the decimal value of a Unicode Nd (decimal digit) character, or -1.
-// Nd characters come in runs of whole 0-9 sets, each starting at a zero — the
-// mathematical digits are five sets back to back — so the value is the distance from the
-// start of the run, mod 10. Checked against Python's unicodedata.decimal for every Nd
-// character (2026-09-25), and the run shape against Go's own tables in the tests.
-func digitValue(r rune) int {
-	if r >= '0' && r <= '9' {
-		return int(r - '0')
-	}
-	if !unicode.Is(unicode.Nd, r) {
-		return -1
-	}
-	start := r
-	for unicode.Is(unicode.Nd, start-1) {
-		start--
-	}
-	return int((r - start) % 10)
 }
 
 // num is a JSON value as Python's round() and float() saw it: an int or float, or a bool,
@@ -139,19 +115,6 @@ func num(raw json.RawMessage) (float64, bool) {
 	return f, true
 }
 
-// str returns a JSON string's value; ok=false for any other type.
-func str(raw json.RawMessage) (string, bool) {
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 || raw[0] != '"' {
-		return "", false
-	}
-	var s string
-	if json.Unmarshal(raw, &s) != nil {
-		return "", false
-	}
-	return s, true
-}
-
 // unhashable is a list or dict: `x in some_set` raised TypeError for those.
 func unhashable(raw json.RawMessage) bool {
 	raw = bytes.TrimSpace(raw)
@@ -170,7 +133,7 @@ func falsy(raw json.RawMessage) bool {
 	case 't':
 		return false
 	case '"':
-		s, _ := str(raw)
+		s, _ := pytext.Str(raw)
 		return s == ""
 	case '[':
 		var a []json.RawMessage

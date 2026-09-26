@@ -1,3 +1,6 @@
+# normalize-peaks.py as build-peaks.sh and build-places.sh ran it, before
+# cmd/normalize-peaks replaced it (copied verbatim). Kept only to regenerate the golden
+# files — see gen-vectors.py.
 #!/usr/bin/env python3
 """Normalize peak GeoJSON before tippecanoe.
 

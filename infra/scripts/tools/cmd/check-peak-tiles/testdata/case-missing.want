@@ -1,0 +1,10 @@
+exit 1
+FAIL: 300 peaks in the z2 tiles, 306 in the input
+FAIL: 48 munros in the z2 tiles, 50 in the input
+  6 input peaks have no match in the tiles:
+    node 900001  Not in the archive  -4.100000, 57.300000
+    node 900002  (unnamed)  -4.200000, 57.100000
+    node ?  Antimeridian  179.999990, 10.000000
+    node 900003  None  7.000000, 46.000000
+    node 900004  Munro top  -4.300000, 57.200000
+    node 8870212  Ben Nevis  -5.003526, 56.796858

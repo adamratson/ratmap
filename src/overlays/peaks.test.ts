@@ -26,8 +26,9 @@ describe('formatElevation', () => {
   });
 
   it('returns null for anything not a finite number, rather than rendering "NaN m"', () => {
-    // ele is normalized to a number at build time (normalize-peaks.py); if that ever
-    // regresses, a summit must show nothing rather than a wrong or nonsense elevation.
+    // ele is normalized to a number at build time (infra/scripts/tools/cmd/normalize-peaks);
+    // if that ever regresses, a summit must show nothing rather than a wrong or nonsense
+    // elevation.
     for (const bad of ['1345', '~340', undefined, null, Number.NaN, Infinity, {}]) {
       expect(formatElevation(bad)).toBeNull();
     }

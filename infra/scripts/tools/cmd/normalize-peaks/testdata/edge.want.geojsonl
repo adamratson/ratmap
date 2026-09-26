@@ -1,0 +1,25 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 1, "natural": "peak", "name": "Ben Nevis", "ele": 1345.0, "munro": "yes", "wikidata": "Q180", "lists": "munro"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 2, "natural": "peak", "name": "Tilde", "ele": 340.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 3, "ele": 1141.0, "natural": "peak", "name": "Unit first"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 4, "natural": "peak", "ele": 1345.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 5, "natural": "peak", "ele": 664.4, "munro": "no"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 6, "natural": "peak"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 21, "natural": "peak", "ele": 2000.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 7, "natural": "peak"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 8, "natural": "peak", "ele": 812.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 9, "natural": "peak", "ele": 812.4}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 10, "natural": "peak", "ele": 1.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 11, "natural": "peak"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 12, "natural": "peak"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 13, "natural": "peak", "ele": 1345.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 14, "natural": "peak", "munro": "yes", "lists": "munro"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 15, "natural": "peak", "munro": "yes", "lists": "munro"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 16, "natural": "peak", "munro": true}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"ele": 1000.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 17, "place": "village", "name": "Stra\u00dfe <&> \"quoted\"", "population": "1,200", "ele": 95.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 18, "natural": "saddle", "ele": -0.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 19, "natural": "peak", "ele": 1345.0}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"@id": 20, "ele": 882.0, "natural": "peak"}, "id": "node/20"}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"ele": 1345.0, "name": "Spaced (json.dumps default)"}}

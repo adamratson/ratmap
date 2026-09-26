@@ -1,3 +1,5 @@
+# check-peak-tiles.py as build-peaks.sh ran it, before cmd/check-peak-tiles replaced it
+# (copied verbatim). Kept only to regenerate the golden files — see gen-fixtures.py.
 #!/usr/bin/env python3
 """Check that a peaks archive's top zoom holds every peak it was built from.
 

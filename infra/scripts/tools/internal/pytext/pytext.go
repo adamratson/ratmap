@@ -1,4 +1,8 @@
-package main
+// Package pytext is the Python behaviour the ported pipeline scripts depended on, for
+// text and for values as json.loads decoded them: what counts as whitespace, a word
+// character or a decimal digit to Python, and what str() and repr() print. Each port
+// checks its own use of these against CPython's output in its tests.
+package pytext
 
 import (
 	"bytes"
@@ -12,31 +16,70 @@ import (
 	"ratmap/infra/tools/internal/pyfloat"
 )
 
-// The report prints each unreadable value as Python printed it: `repr(str(value))`. These
-// reproduce the two conversions for a decoded JSON value, so a report read today compares
-// with one from before the port.
-
-// pyStrValue is str() of a JSON value as json.loads decoded it.
-func pyStrValue(raw json.RawMessage) string {
-	raw = bytes.TrimSpace(raw)
-	if len(raw) > 0 && raw[0] == '"' {
-		s, _ := str(raw)
-		return s
-	}
-	return pyReprValue(raw)
+// IsSpace is str.isspace(): Go's unicode.IsSpace plus the four ASCII separators
+// (\x1c-\x1f) that Python counts as whitespace and Go does not.
+func IsSpace(r rune) bool {
+	return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f)
 }
 
-// pyReprValue is repr() of a JSON value: strings quoted, lists and dicts with Python's
+// IsWord is Python's regex \w for str patterns: underscore, or str.isalnum().
+func IsWord(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r)
+}
+
+// DigitValue is the decimal value of a Unicode Nd (decimal digit) character, or -1.
+// Nd characters come in runs of whole 0-9 sets, each starting at a zero — the
+// mathematical digits are five sets back to back — so the value is the distance from the
+// start of the run, mod 10. Checked against Python's unicodedata.decimal for every Nd
+// character (2026-09-25), and the run shape against Go's own tables in the tests.
+func DigitValue(r rune) int {
+	if r >= '0' && r <= '9' {
+		return int(r - '0')
+	}
+	if !unicode.Is(unicode.Nd, r) {
+		return -1
+	}
+	start := r
+	for unicode.Is(unicode.Nd, start-1) {
+		start--
+	}
+	return int((r - start) % 10)
+}
+
+// Str returns a JSON string's value; ok=false for any other type.
+func Str(raw json.RawMessage) (string, bool) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] != '"' {
+		return "", false
+	}
+	var s string
+	if json.Unmarshal(raw, &s) != nil {
+		return "", false
+	}
+	return s, true
+}
+
+// StrValue is str() of a JSON value as json.loads decoded it.
+func StrValue(raw json.RawMessage) string {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) > 0 && raw[0] == '"' {
+		s, _ := Str(raw)
+		return s
+	}
+	return ReprValue(raw)
+}
+
+// ReprValue is repr() of a JSON value: strings quoted, lists and dicts with Python's
 // brackets and ", " / ": " separators, None/True/False, ints as digits, floats as repr.
-func pyReprValue(raw json.RawMessage) string {
+func ReprValue(raw json.RawMessage) string {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 {
 		return ""
 	}
 	switch raw[0] {
 	case '"':
-		s, _ := str(raw)
-		return pyReprString(s)
+		s, _ := Str(raw)
+		return ReprString(s)
 	case 'n':
 		return "None"
 	case 't':
@@ -48,7 +91,7 @@ func pyReprValue(raw json.RawMessage) string {
 		json.Unmarshal(raw, &items)
 		parts := make([]string, len(items))
 		for i, it := range items {
-			parts[i] = pyReprValue(it)
+			parts[i] = ReprValue(it)
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
 	case '{':
@@ -70,7 +113,7 @@ func pyReprValue(raw json.RawMessage) string {
 		}
 		parts := make([]string, len(keys))
 		for i, k := range keys {
-			parts[i] = pyReprString(k) + ": " + pyReprValue(vals[k])
+			parts[i] = ReprString(k) + ": " + ReprValue(vals[k])
 		}
 		return "{" + strings.Join(parts, ", ") + "}"
 	}
@@ -91,11 +134,11 @@ func pyReprValue(raw json.RawMessage) string {
 	return pyfloat.Repr(f)
 }
 
-// pyReprString is repr() of a str: single quotes unless the text has a single quote and
+// ReprString is repr() of a str: single quotes unless the text has a single quote and
 // no double one; backslash and the chosen quote escaped; \t \n \r; other control
 // characters as \xhh; and non-ASCII kept unless it is not printable (Python's
 // str.isprintable, which Go's unicode.IsPrint matches), then \xhh, \uhhhh or \Uhhhhhhhh.
-func pyReprString(s string) string {
+func ReprString(s string) string {
 	quote := '\''
 	if strings.ContainsRune(s, '\'') && !strings.ContainsRune(s, '"') {
 		quote = '"'

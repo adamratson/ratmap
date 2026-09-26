@@ -51,7 +51,7 @@ Geofabrik's continent extracts — that's 85 GB of source; don't kick it off by 
 `docker/` packages exactly that run — see [Running the whole planet](#running-the-whole-planet-docker).
 
 `build-peaks.sh` normalizes OSM's free-text `ele` into a real number
-(`normalize-peaks.py` — the raw tag includes values like `~340` and `1141m`) and asserts
+(`scripts/tools/cmd/normalize-peaks` — the raw tag includes values like `~340` and `1141m`) and asserts
 known summit elevations (Ben Nevis 1345 m) so a parsing or schema regression fails the
 build rather than surfacing on a mountain.
 
@@ -102,14 +102,14 @@ python3 ./scripts/build-manifest.py --base-live   # merge, don't rebuild
 Phones that already hold a region see **Update** for it, and fetch only the new file.
 
 **The tile check.** `build-peaks.sh` builds the archive under a dotted name and moves it
-into place only once `check-peak-tiles.py` agrees that the top zoom holds every peak and
+into place only once `check-peak-tiles` (scripts/tools) agrees that the top zoom holds every peak and
 every Munro. It counts each peak where MapLibre would draw it: only inside its own tile,
 never from a neighbour's buffer. A failed check exits non-zero and names the peaks that
 went missing. It also keeps the archive and its input in `dist/.peaks-failed/`, which
 `upload.sh` never sees, so a failure after hours of prominence scoring can be looked at
 without running it all again.
 
-tippecanoe can silently lose a peak in two ways, and `prepare-peak-tiles.py` deals with
+tippecanoe can silently lose a peak in two ways, and `prepare-peak-tiles` (scripts/tools) deals with
 both before tiling, with counts in the log:
 
 - **Beyond Web Mercator.** Tiles stop at ±85.0511°, so peaks beyond ±85.0501° are left

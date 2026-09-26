@@ -265,7 +265,7 @@ func TestDownsampleMax(t *testing.T) {
 
 func TestSetProm(t *testing.T) {
 	cases := []struct{ in, want string }{
-		// normalize-peaks.py's shape: prom appended as the last property.
+		// json.dumps' shape, as normalize-peaks.py wrote it: prom appended as the last property.
 		{`{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"name": "Ben Nevis", "ele": 1345.0}}`,
 			`{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"name": "Ben Nevis", "ele": 1345.0, "prom": 1340.0}}`},
 		// An existing prom is replaced where it stands.

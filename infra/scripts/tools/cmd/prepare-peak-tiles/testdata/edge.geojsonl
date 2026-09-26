@@ -1,0 +1,14 @@
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.003526,56.7968582]},"properties":{"@id":8870212,"name":"Ben Nevis","ele":1345.0}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[101.2496567,51.7042]},"properties":{"@id":4707311223,"name":"Хонголдойский Голец","ele":2300.0}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[101.2496567,51.7042,2300]},"properties":{"@id":1,"name":"Tie with a height"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[160.5,-85.06]},"properties":{"@id":2,"name":"Beyond the limit"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[160.5,-85.0501]},"properties":{"@id":3,"name":"Inside the margin"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[160.5,-85.05]},"properties":{"@id":4,"name":"Exactly -85.05 stays"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[10,-86]},"properties":{"@id":5}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[10,86]}}
+
+   
+{"type":"Feature","geometry":{"type":"Point","coordinates":[7,46]},"properties":{"@id":6,"name":"Int coordinates"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [8.5, 47.25]}, "properties": {"@id": 7, "name": "Spaced"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[101.2496567,10.0]},"properties":{"@id":8,"name":42}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[101.2496567,20.0]},"properties":{"@id":9}}

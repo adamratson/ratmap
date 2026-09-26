@@ -1,0 +1,3 @@
+exit 1
+FAIL: 299 peaks in the z2 tiles, 300 in the input
+  0 input peaks have no match in the tiles:

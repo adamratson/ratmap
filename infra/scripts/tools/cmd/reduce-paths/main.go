@@ -28,7 +28,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"unicode"
+
+	"ratmap/infra/tools/internal/pytext"
 )
 
 func main() {
@@ -59,7 +60,7 @@ func reduce(srcPath, destPath string) (kept, skipped int, err error) {
 
 	for n := 1; ; n++ {
 		raw, rerr := r.ReadBytes('\n')
-		line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pyIsSpace)
+		line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace)
 		if len(line) > 0 {
 			geometry, detail, ferr := classify(line)
 			if ferr != nil {
@@ -152,10 +153,4 @@ func member(obj json.RawMessage, name, key string) (any, error) {
 		return nil, err
 	}
 	return v, nil
-}
-
-// pyIsSpace is str.isspace(): Go's unicode.IsSpace plus the four ASCII separators
-// (\x1c-\x1f) that Python counts as whitespace and Go does not.
-func pyIsSpace(r rune) bool {
-	return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f)
 }

@@ -1,0 +1,26 @@
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":1,"natural":"peak","name":"Ben Nevis","ele":"1345","munro":"yes","wikidata":"Q180"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":2,"natural":"peak","name":"Tilde","ele":"~340"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":3,"ele":"1141m","natural":"peak","name":"Unit first"}}
+
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":4,"natural":"peak","ele":"1,345"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":5,"natural":"peak","ele":"664.4m","munro":"no"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":6,"natural":"peak","ele":"unknown"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":21,"natural":"peak","ele":"2000"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":7,"natural":"peak","ele":"12000"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":8,"natural":"peak","ele":812}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":9,"natural":"peak","ele":812.35}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":10,"natural":"peak","ele":true}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":11,"natural":"peak","ele":null}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":12,"natural":"peak","ele":["1345"]}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":13,"natural":"peak","ele":"١٣٤٥"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":14,"natural":"peak","munro":"yes"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":15,"natural":"peak","munro":"yes","lists":"old"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":16,"natural":"peak","munro":true}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"ele":"1000"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":17,"place":"village","name":"Straße <&> \"quoted\"","population":"1,200","ele":"95"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":18,"natural":"saddle","ele":"-0"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":19,"natural":"peak","ele":"1345.05"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-5.0,56.8]},"properties":{"@id":20,"ele":"  882 ","natural":"peak"},"id":"node/20"}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"ele": "1345", "name": "Spaced (json.dumps default)"}}

@@ -50,6 +50,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"ratmap/infra/tools/internal/pytext"
 )
 
 func main() {
@@ -105,7 +107,7 @@ func run(srcPath, destPath string, out io.Writer) error {
 		raw, rerr := r.ReadBytes('\n')
 		// RFC8142 puts an RS (0x1e) before each record; our callers turn it off, but
 		// stripping it anyway means this also works on a plain geojsonseq export.
-		if line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pyIsSpace); len(line) > 0 {
+		if line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace); len(line) > 0 {
 			if err := feature(line, w, seen, &c); err != nil {
 				dest.Close()
 				return fmt.Errorf("%s: line %d: %w", srcPath, n, err)
@@ -143,7 +145,7 @@ func run(srcPath, destPath string, out io.Writer) error {
 		}
 		var items []string
 		for _, v := range top {
-			items = append(items, fmt.Sprintf("%s x%d", pyReprString(v), c.unparsed[v]))
+			items = append(items, fmt.Sprintf("%s x%d", pytext.ReprString(v), c.unparsed[v]))
 		}
 		fmt.Fprintf(out, "  unreadable values: %s\n", strings.Join(items, ", "))
 	}
@@ -167,7 +169,7 @@ func feature(line []byte, w *bufio.Writer, seen map[string]struct{}, c *counts) 
 	if err != nil {
 		return err
 	}
-	if t, _ := str(geomType); t != "LineString" && t != "MultiLineString" {
+	if t, _ := pytext.Str(geomType); t != "LineString" && t != "MultiLineString" {
 		c.notALine++
 		return nil
 	}
@@ -211,7 +213,7 @@ func feature(line []byte, w *bufio.Writer, seen map[string]struct{}, c *counts) 
 		return err
 	}
 	if !ok {
-		s := pyStrValue(raw)
+		s := pytext.StrValue(raw)
 		if _, known := c.unparsed[s]; !known {
 			c.unparsedOrder = append(c.unparsedOrder, s)
 		}
@@ -224,7 +226,7 @@ func feature(line []byte, w *bufio.Writer, seen map[string]struct{}, c *counts) 
 	w.WriteString(`{"type":"Feature","geometry":`)
 	w.Write(geometry)
 	w.WriteString(`,"properties":{"t":` + strconv.Itoa(grade))
-	if name, ok := str(props["name"]); ok {
+	if name, ok := pytext.Str(props["name"]); ok {
 		w.WriteString(`,"name":`)
 		w.Write(jsonString(name))
 	}
@@ -250,18 +252,6 @@ func member(obj json.RawMessage, name, key string) (json.RawMessage, error) {
 	return m[key], nil
 }
 
-func str(raw json.RawMessage) (string, bool) {
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 || raw[0] != '"' {
-		return "", false
-	}
-	var s string
-	if json.Unmarshal(raw, &s) != nil {
-		return "", false
-	}
-	return s, true
-}
-
 func isNull(raw json.RawMessage) bool { return string(bytes.TrimSpace(raw)) == "null" }
 
 // jsonString encodes s as JSON without Go's HTML escaping of <, > and &.
@@ -282,7 +272,7 @@ func hashKey(raw json.RawMessage) (string, error) {
 	case len(raw) == 0:
 		return "", errors.New("empty @id")
 	case raw[0] == '"':
-		s, _ := str(raw)
+		s, _ := pytext.Str(raw)
 		return "s" + s, nil
 	case raw[0] == '[' || raw[0] == '{':
 		return "", fmt.Errorf("@id is %s: unhashable in Python", raw)

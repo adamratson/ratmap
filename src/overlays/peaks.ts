@@ -14,7 +14,7 @@ import type { Theme } from '../ui/theme';
 // Summits overlay, backed by our own peaks-global.pmtiles — Protomaps v4 dropped `ele`
 // from its POI layer (C6), so upstream peaks are unusable for a mountain map.
 //
-// `ele` arrives here already normalized to a number by infra/scripts/normalize-peaks.py;
+// `ele` arrives here already normalized to a number by infra/scripts/tools/cmd/normalize-peaks;
 // the raw OSM tag is free text ("~340", "1141m"). Keep the messy-input handling in the
 // build pipeline, not in style expressions.
 
@@ -39,7 +39,7 @@ export interface PeakProperties {
   /**
    * Semicolon-delimited editorial/rule-derived list membership, e.g. `"munro"` — see
    * docs/IMPLEMENTATION.md Phase 3.5. Only `munro` is populated today: it comes straight
-   * from OSM's own `munro=yes` tag (infra/scripts/normalize-peaks.py), which taginfo shows
+   * from OSM's own `munro=yes` tag (infra/scripts/tools/cmd/normalize-peaks), which taginfo shows
    * at exactly 282 uses — the SMC's current published Munro count — so it needs no
    * separate editorial join. Wainwrights are deliberately not here: no OSM tag exists for
    * them, and Wikidata carries no structured membership for the list either (verified

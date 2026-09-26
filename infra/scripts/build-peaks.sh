@@ -31,6 +31,17 @@ PEAKS_SOURCE_URLS="${PEAKS_SOURCE_URLS:-$(python3 "$(dirname "${BASH_SOURCE[0]}"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
+# Every step below that is not osmium, GDAL or tippecanoe is Go, in tools/cmd: the ports
+# of normalize-peaks.py, compute-prominence.py, prepare-peak-tiles.py and
+# check-peak-tiles.py, each giving the features, report and verdict its Python did.
+# Built here, before any of the work, from this checkout (lib.sh): a checkout that does
+# not compile fails in the first second rather than after hours of prominence scoring.
+echo "==> building the peaks tools"
+NORMALIZE_PEAKS_BIN="$(go_tool normalize-peaks "$WORK_DIR")"
+PROM_BIN="$(go_tool compute-prominence "$WORK_DIR")"
+PREPARE_PEAK_TILES_BIN="$(go_tool prepare-peak-tiles "$WORK_DIR")"
+CHECK_PEAK_TILES_BIN="$(go_tool check-peak-tiles "$WORK_DIR")"
+
 PEAKS_FILTER="n/natural=peak,volcano,saddle n/mountain_pass=yes"
 
 filtered_pbfs=()
@@ -50,7 +61,7 @@ done
 
 # munro=yes lives on the same natural=peak nodes the filter above already keeps in full
 # (osmium tags-filter keeps every tag on a matching object, it doesn't project down to the
-# filter tags), so no extra filter expression is needed here — normalize-peaks.py reads it
+# filter tags), so no extra filter expression is needed here — normalize-peaks reads it
 # straight off the export.
 if [ "${#filtered_pbfs[@]}" -gt 1 ]; then
   echo "Merging ${#filtered_pbfs[@]} filtered extracts"
@@ -66,8 +77,9 @@ fi
 osmium export "$WORK_DIR/peaks-raw.osm.pbf" -o "$WORK_DIR/peaks.geojsonl" \
   -f geojsonseq -x print_record_separator=false --overwrite -a id
 
-# Clean the free-text OSM `ele` into a real number before tiling — see normalize-peaks.py.
-python3 "$(dirname "${BASH_SOURCE[0]}")/normalize-peaks.py" \
+# Clean the free-text OSM `ele` into a real number before tiling — see
+# tools/cmd/normalize-peaks.
+"$NORMALIZE_PEAKS_BIN" \
   "$WORK_DIR/peaks.geojsonl" "$WORK_DIR/peaks-normalized.geojsonl"
 
 # Compute topographic prominence from the DEM, per region bbox.
@@ -81,10 +93,7 @@ python3 "$(dirname "${BASH_SOURCE[0]}")/normalize-peaks.py" \
 #
 # Peaks outside every region bbox keep no `prom` and fall back to elevation in the app.
 SCRIPT_DIR_PK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Go (tools/cmd/compute-prominence), the port of compute-prominence.py: the same
-# output, byte for byte, without numpy or scipy. Built from this checkout (lib.sh).
-echo "==> building compute-prominence"
-PROM_BIN="$(go_tool compute-prominence "$WORK_DIR")"
+# tools/cmd/compute-prominence, built at the top of this script.
 
 # 90 m rather than the DEM's native 30 m: GDAL serves it straight from the COG overviews,
 # and Scotland at 30 m would be a 2.7 GB raster for no gain — prominence of a *notable*
@@ -132,7 +141,7 @@ EXPECTED = {
 }
 TOLERANCE_M = 2
 
-# Streamed for the same reason normalize-peaks.py is: this only ever needs the handful of
+# Streamed for the same reason normalize-peaks is: this only ever needs the handful of
 # named summits in EXPECTED, so there is no reason to materialise a planet's worth of
 # features to find them.
 by_name = {}
@@ -206,14 +215,14 @@ trap 'rm -rf "$WORK_DIR" "$PARTIAL"' EXIT
 
 # Only peaks the app can draw: tippecanoe loses some without a word, beyond Web Mercator's
 # edge and on a rounding tie at a tile edge (181 and 1 of them on the planet, 2026-09-25).
-# prepare-peak-tiles.py leaves the first out and moves the second 1 cm, and says so. The
+# prepare-peak-tiles leaves the first out and moves the second 1 cm, and says so. The
 # places database still has every peak, from its own copy.
-python3 "$(dirname "${BASH_SOURCE[0]}")/prepare-peak-tiles.py" \
+"$PREPARE_PEAK_TILES_BIN" \
   "$WORK_DIR/peaks-final.geojsonl" "$WORK_DIR/peaks-tiled.geojsonl"
 
 # `prom` is the computed prominence the app's zoom filter ranks on; `prominence` is OSM's
 # own sparse tag, kept for reference. `lists` is the summit-list membership derived in
-# normalize-peaks.py (Phase 3.5, C19).
+# normalize-peaks (Phase 3.5, C19).
 # `--extend-zooms-if-still-dropping`: `--drop-densest-as-needed` thins even the top zoom
 # when a tile is too big, and the top zoom is the complete set — the app overzooms from
 # it. Found 2026-09-24 decoding the published archive: "Sandpit Hil" (-0.108, 53.832) is
@@ -228,16 +237,17 @@ tippecanoe -o "$PARTIAL" -zg --drop-densest-as-needed --extend-zooms-if-still-dr
   "$WORK_DIR/peaks-tiled.geojsonl"
 
 # Check the tiles, not only the input: every peak and every Munro at the top zoom. See
-# check-peak-tiles.py, which on failure also names the peaks that went missing.
+# tools/cmd/check-peak-tiles, which on failure also names the peaks that went missing.
 #
 # A failure keeps the archive and what it was built from, in dist/.peaks-failed/ (dotted,
 # so upload.sh never sees it). This step runs after hours of prominence scoring; a failure
 # here should be something to look at, not something to reproduce by running it all again.
-# To re-check them by hand:
-#   tippecanoe-decode -zZ -ZZ peaks.pmtiles | check-peak-tiles.py peaks.geojsonl peaks.pmtiles Z
+# To re-check them by hand, from infra/:
+#   go build -C scripts/tools -o "$PWD/check-peak-tiles" ./cmd/check-peak-tiles
+#   tippecanoe-decode -zZ -ZZ peaks.pmtiles | ./check-peak-tiles peaks.geojsonl peaks.pmtiles Z
 MAXZOOM="$(pmtiles show --header-json "$PARTIAL" | python3 -c 'import json, sys; print(json.load(sys.stdin)["maxzoom"])')"
 if ! tippecanoe-decode -z"$MAXZOOM" -Z"$MAXZOOM" "$PARTIAL" \
-    | python3 "$(dirname "${BASH_SOURCE[0]}")/check-peak-tiles.py" \
+    | "$CHECK_PEAK_TILES_BIN" \
         "$WORK_DIR/peaks-tiled.geojsonl" "$PARTIAL" "$MAXZOOM"; then
   FAILED="$DIST_DIR/.peaks-failed"
   rm -rf "$FAILED"

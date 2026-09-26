@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"unicode"
 )
 
 // testdata/edge.want.* were written by the Python this replaces (testdata/dump-rows.py
@@ -164,23 +163,6 @@ func TestToIntMatchesCPython(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("to_int(%s): got %s, want %s", raw, got, want)
-		}
-	}
-}
-
-// digitValue relies on every run of Nd characters in Go's Unicode tables being whole sets
-// of ten starting at a zero; a future Unicode version that broke that would break it.
-func TestDecimalDigitRunsAreWholeSetsOfTen(t *testing.T) {
-	for r := rune(0); r <= unicode.MaxRune; r++ {
-		if unicode.Is(unicode.Nd, r) && !unicode.Is(unicode.Nd, r-1) {
-			end := r
-			for unicode.Is(unicode.Nd, end+1) {
-				end++
-			}
-			if (end-r+1)%10 != 0 {
-				t.Errorf("Nd run U+%04X..U+%04X is %d long", r, end, end-r+1)
-			}
-			r = end
 		}
 	}
 }

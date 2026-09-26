@@ -33,7 +33,7 @@ for url in $PLACES_SOURCE_URLS; do
 
   osmium tags-filter "$src" $PLACES_FILTER -o "$WORK_DIR/filtered-$i.osm.pbf" --overwrite
 
-  # Line-delimited so normalize-peaks.py and build-places-db can stream it — a
+  # Line-delimited so normalize-peaks and build-places-db can stream it — a
   # continent's settlements+summits run to millions of features. See build-peaks.sh.
   osmium export "$WORK_DIR/filtered-$i.osm.pbf" \
     -o "$WORK_DIR/places-$i.geojsonl" \
@@ -41,11 +41,12 @@ for url in $PLACES_SOURCE_URLS; do
   geojsons+=("$WORK_DIR/places-$i.geojsonl")
 done
 
-# Reuse the peaks elevation normalizer so `ele` is a real number here too — the search
-# results show elevation, and "~340" would render as junk.
+# Reuse the peaks elevation normalizer (tools/cmd/normalize-peaks) so `ele` is a real
+# number here too — the search results show elevation, and "~340" would render as junk.
+NORMALIZE_PEAKS_BIN="$(go_tool normalize-peaks "$WORK_DIR")"
 normalized=()
 for f in "${geojsons[@]}"; do
-  python3 "$SCRIPT_DIR/normalize-peaks.py" "$f" "$f.norm"
+  "$NORMALIZE_PEAKS_BIN" "$f" "$f.norm"
   normalized+=("$f.norm")
 done
 

@@ -1,3 +1,5 @@
+# prepare-peak-tiles.py as build-peaks.sh ran it, before cmd/prepare-peak-tiles replaced
+# it (copied verbatim). Kept only to regenerate the golden files — see gen-vectors.py.
 #!/usr/bin/env python3
 """Make peaks safe to tile: every one that goes in has to come out drawable.
 

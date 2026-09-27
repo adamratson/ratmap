@@ -55,8 +55,15 @@ func ReadInfo(path string) (Info, error) {
 
 // TranslateENVIFloat32 converts src to a flat little-endian float32 array at raw, with
 // GDAL's .hdr sidecar beside it.
+//
+// With a 512 MB block cache, as fetch-dem.sh gives its own copies: the image sets
+// GDAL_CACHEMAX=2048 for the whole pipeline, and a straight conversion fills whatever it
+// is given — Aragón's 118 Mpx DEM took compute-prominence from 964 MB to 1304 MB, more
+// than the raster it then holds (2026-09-27). Capped, the copy costs no more than the
+// arrays that follow it, so the per-pixel budget in build-global.sh holds for any region.
 func TranslateENVIFloat32(src, raw string) error {
-	cmd := exec.Command("gdal_translate", "-q", "-of", "ENVI", "-ot", "Float32", src, raw)
+	cmd := exec.Command("gdal_translate", "-q", "--config", "GDAL_CACHEMAX", "512",
+		"-of", "ENVI", "-ot", "Float32", src, raw)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("gdal_translate %s -> ENVI: %w", src, err)

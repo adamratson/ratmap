@@ -67,11 +67,11 @@ that is ~1.1 GB for the planet's ~5.1 M places+peaks. (The Python it replaced al
 every row until the end: ~319 B a row, ~1.6 GB.)
 
 What scales with the largest *region* is the peaks stage's prominence pass, which holds
-one region's 90 m DEM at a time: ~9.5 bytes a pixel, so svalbard-janmayen's 712 Mpx is
-~6.3 GB. Up to `PROM_FETCH_WORKERS` DEM fetches run ahead of it, each capped at ~1.25 GB.
-The preflight works out the worst pairing from the catalogue whenever `peaks` is a stage:
-8 GB for today's with three fetches, 7 GB with one. It fails at minute one on a box that
-is too small.
+one region's 90 m DEM at a time: budgeted at 8.5 bytes a pixel, so svalbard-janmayen's
+712 Mpx is ~5.6 GB. Up to `PROM_FETCH_WORKERS` DEM fetches run ahead of it, each capped at
+~1.25 GB. The preflight works out the worst pairing from the catalogue whenever `peaks` is
+a stage: 7 GB for today's with three fetches, 6 GB with one or two. It fails at minute one
+on a box that is too small.
 
 For reference, the numbers behind those figures, measured rather than estimated. A parsed
 GeoJSON feature costs ~1,162 B of Python objects, **5.0×** its JSON text (real OSM data).
@@ -403,18 +403,20 @@ gives the cells. It needs the DEM cache: with
 
 Every knob below defaults to the value that is safe on the smallest box the preflight
 allows, not the fastest on a large one. These are the measured per-worker costs
-(2026-09-08, macOS/arm64 with the same tool versions) for deciding how far to raise them.
+(macOS/arm64 with the same tool versions; the GDAL rows re-measured 2026-09-27 under the
+image's GDAL settings, `GDAL_CACHEMAX=2048` and a 512 MB VSI cache) for deciding how far to
+raise them.
 
 | Stage | What dominates memory | Peak RSS per worker | Scales with |
 |---|---|---|---|
 | `paths`, `sac` — `osmium tags-filter` | id bitmap over OSM's *global* id space | **1.89 GB** on a 33 MB extract, **1.96 GB** on a 310 MB one | nothing — it is flat, which is why 33 GB europe passes on a box this size |
 | `paths` — reduce step (`tools/cmd/reduce-paths`) | streams a line at a time | 10 MB (the Python it replaced, 17 MB) | nothing |
 | `paths` — `tippecanoe` | disk-backed sort | 172 MB at 259 k features, 227 MB at 1.04 M | sublinearly |
-| `contours` — `gdal_contour`, one cell | lines open in the sweep, within one 3600-pixel cell | **281 MB** worst measured (synthetic mountains denser than Corsica); budgeted 1 GB | nothing: every region is cells. It was ~6.4 GB (Corsica) and grew with the region, when it wrote GeoJSON in one pass |
+| `contours` — `gdal_contour`, one cell | lines open in the sweep, within one 3600-pixel cell | **373 MB** worst measured (the densest Swiss alpine cell; `contour-cell` after it, 32 MB); budgeted 1 GB | nothing: every region is cells. It was ~6.4 GB (Corsica) and grew with the region, when it wrote GeoJSON in one pass |
 | `places` — `build-places-db` (scripts/tools) | the dedupe set; rows stream into SQLite | ~210 B a row: 349 MB on 1.5 M, ~1.1 GB for the planet (the Python held rows too: ~1.6 GB) | feature count |
-| `peaks` — prominence scoring (`tools/cmd/compute-prominence`) | one region's 90 m DEM and an int32 union-find of the same shape | **9.1 bytes/px**: 1.30 GB on Scotland's 143 Mpx, budgeted at 9.5 (the Python it replaced was 1.35 GB, 1.94 GB before its buffers were reused) | the region's bbox — svalbard-janmayen's 712 Mpx is ~6.3 GB |
+| `peaks` — prominence scoring (`tools/cmd/compute-prominence`) | one region's 90 m DEM and an int32 union-find of the same shape | **~73 MB + 7.8 bytes/px**: 1.12 GB on Scotland's 143 Mpx, 3.26 GB on 429 Mpx, 8.1-8.2 bytes/px all told from 118 Mpx up; budgeted at 8.5. Its DEM conversion caps GDAL's block cache at 512 MB — uncapped, the image's 2048 took a 118 Mpx region to 11.6 bytes/px | the region's bbox — svalbard-janmayen's 712 Mpx is ~5.6 GB |
 | `peaks` — DEM fetch (`fetch-dem.sh`), `PROM_FETCH_WORKERS` of them | `gdal_translate`'s block cache (capped at 512 MB) + the VSI cache | **229 MB** for Bosnia at 90 m; ~1.25 GB at most | region size, up to the cap |
-| `avalanche` — `gdalwarp`, then `tools/cmd/encode-avalanche` | the warp's block cache; then three DEM rows | **694 MB** warping; the encode **15 MB** on Aragón's 113 Mpx (2026-09-25) — the Python it replaced was 792 MB at 108 Mpx and 1459 MB at 216, most of it evictable page cache | the warp; the encode only with raster width |
+| `avalanche` — DEM fetch, `gdalwarp`, `tools/cmd/encode-avalanche`, then `tools/cmd/assemble-avalanche` | GDAL's block cache, which `build-avalanche.sh` caps at 512 MB | the fetch **≤ ~1.25 GB**; the warp **1.04-1.08 GB** (Aragón, Switzerland, ~118 Mpx each; 1.21 and 1.46 GB with the image's 2048); the tiling **0.83 GB**; the encode **15 MB** | nothing past the cap: the phases run in sequence, so a region peaks at ~1.1-1.25 GB |
 
 **Defaults, and what they assume.** There are no fixed defaults any more: each stage
 takes the per-worker cost measured above, divides it into the memory this box can
@@ -431,7 +433,7 @@ What that comes out as, per box (`contours` is regions at once × cells each):
 | memory / cores | `paths` | prominence fetches | `regions` | `avalanche` | `contours` |
 |---|---|---|---|---|---|
 | 4 GB / 2 | 1 | 1 | 1 | 1 | 1 × 1 |
-| 8 GB / 4 | 2 | 2 | 2 | 2 | 2 × 2 |
+| 8 GB / 4 | 2 | 3 | 2 | 2 | 2 × 2 |
 | 16 GB / 8 | 3 | 3 | 4 | 4 | 2 × 4 |
 | 32 GB / 16 | 3 | 3 | 4 | 4 | 2 × 8 |
 | 64 GB / 32 | 3 | 3 | 4 | 4 | 2 × 16 |
@@ -452,7 +454,8 @@ What that comes out as, per box (`contours` is regions at once × cells each):
   costs what liechtenstein does, per cell. Its DEMs are fetched ahead of
   the builds, two at a time (`RATMAP_CONTOURS_FETCH_AHEAD`).
 - **`avalanche`: 4.** A region's phases run in sequence, so its peak is the largest of
-  them and not their sum: ~0.8-1.5 GB, so four is ~6 GB on a 32 GB host. The warp phase is
+  them and not their sum: ~1.1-1.25 GB with GDAL's cache capped, budgeted 1.5, so four is
+  ~6 GB on a 32 GB host. The warp phase is
   network-bound off `/vsicurl` with the cpu idle, which is what makes overlapping regions
   worth doing at all.
 

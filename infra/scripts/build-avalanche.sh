@@ -72,6 +72,15 @@ ASSEMBLE_BIN="$(go_tool assemble-avalanche "$WORK_DIR")"
 echo "==> checking the slope maths"
 "$ENCODE_BIN" --self-test
 
+# A 512 MB GDAL block cache for everything below — the warp, the level rasters and
+# assemble-avalanche's tiling, which inherits it — where the image sets 2048 for the whole
+# pipeline. Every one of them streams and fills whatever cache it is given, so with 2048 a
+# region's cost grew with the region: the warp peaked at 1209 MB for Aragón and 1460 MB
+# for Switzerland, against 1078 MB and 1042 MB capped, and ran no slower (2026-09-27).
+# Capped, a region costs the same ~1.1 GB whatever its size, which is what
+# build-global.sh's avalanche budget assumes. fetch-dem.sh caps its own at the same figure.
+export GDAL_CACHEMAX=512
+
 echo "==> fetching DEM"
 "$SCRIPT_DIR/fetch-dem.sh" "$WEST" "$SOUTH" "$EAST" "$NORTH" "$WORK_DIR/clip.tif"
 
@@ -137,11 +146,10 @@ fi
 
 echo "==> tiling"
 # `--bounds=` with an equals sign, not a space. A bbox whose western longitude is negative
-# starts with `-`, and argparse reads that as an option name rather than a value: every
-# region west of Greenwich died with "argument --bounds: expected one argument". It got
-# through review because the first two regions built — Liechtenstein and Switzerland —
-# both sit east of it. Aragón (-2.1791) was the first to run, and Scotland, Iceland and
-# most of Iberia would all have followed.
+# starts with `-`, which a parser can read as an option name rather than a value: under
+# the Python's argparse every region west of Greenwich died with "argument --bounds:
+# expected one argument". Go's flag package would take it either way; the equals sign
+# keeps it unambiguous for any parser.
 # shellcheck disable=SC2086
 "$ASSEMBLE_BIN" \
   --out "$WORK_DIR/out.mbtiles" \

@@ -40,8 +40,9 @@ CONTOUR_MAXZOOM="${CONTOUR_MAXZOOM:-14}"
 
 # Traced in cells of this many DEM pixels a side (3600 is 1 degree of GLO-30), and this
 # many at once. See "tracing contours" below for why cells. CONTOUR_CELL_GB is what one
-# cell is budgeted: measured at 281 MB for a full 3600-pixel cell of synthetic mountains
-# denser in contours than Corsica (2026-09-25), so 1 GB is 3-4x that. CONTOUR_WORKERS
+# cell is budgeted: 373 MB worst measured, gdal_contour on the densest full 3600-pixel
+# Swiss alpine cell under the image's GDAL settings (2026-09-27; contour-cell after it
+# took 32 MB), so 1 GB is ~2.7x that. CONTOUR_WORKERS
 # defaults to as many as the box can hold; build-global.sh sets it when it runs several
 # regions at once.
 CONTOUR_CELL_PX="${CONTOUR_CELL_PX:-3600}"

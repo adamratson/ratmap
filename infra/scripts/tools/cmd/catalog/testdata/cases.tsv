@@ -43,7 +43,7 @@ ids-avalanche	ids	testdata/regions.json	avalanche
 ids-filter	ids	testdata/regions.json		^(a|n)
 ids-flag-filter	ids	testdata/regions.json	avalanche	land
 bboxes	bboxes	testdata/regions.json	neg0	aragon	ok	ints
-dist-gb	dist-gb	testdata/regions.json	testdata/dist
+dist-gb	dist-gb	testdata/regions.json	testdata/built
 dist-gb-none	dist-gb	testdata/regions.json	testdata/nodist
 peaks-mem-3-9.5	peaks-mem	testdata/regions.json	0.000833333	3	2.5	9.5
 peaks-mem-1-9.5	peaks-mem	testdata/regions.json	0.000833333	1	2.5	9.5

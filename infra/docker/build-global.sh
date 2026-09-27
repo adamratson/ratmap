@@ -150,7 +150,8 @@ workers_for_budget() {
 # How the contours stage spends the box, as "<regions at once> <cells each>".
 #
 # build-contours.sh traces every region in cells of at most 3600 DEM pixels a side and
-# budgets CONTOURS_CELL_GB for one (measured at 281 MB, 2026-09-25; see there), so the
+# budgets CONTOURS_CELL_GB for one (373 MB worst measured, a Swiss alpine cell under the
+# image's GDAL settings, 2026-09-27; see there), so the
 # cost of a region no longer depends on its size. It used to be estimated from Corsica's
 # 6.4 GB, scaled by the square root of area, which came to 70 GB for morocco; that figure
 # was GDAL's GeoJSON writer, not the tracing, and cells bound the rest.
@@ -220,16 +221,20 @@ catalogue_dist_gb() {
 # Memory the peaks stage's prominence pass needs, as "<GB> <largest region> <its Mpx>".
 #
 # compute-prominence (scripts/tools) scores one region's 90 m DEM at a time, holding
-# the raster and a union-find of the same shape: ~9.1 bytes a pixel, measured at 1.30 GB
-# on Scotland's 143 Mpx (2026-09-25), and it hands each region's memory back before
-# reading the next. Budgeted at the 9.5 the Python it replaced measured (1.35 GB,
-# 2026-09-23). Beside it run up to PROM_FETCH_WORKERS DEM fetches for
-# the regions next in line, each a gdal_translate whose block cache fetch-dem.sh caps at
-# 512 MB, plus the image's 512 MB VSI cache and the process itself: FETCH_DEM_GB at most.
+# the raster and a union-find of the same shape, and hands each region's memory back
+# before reading the next. Measured under the image's GDAL settings (2026-09-27): ~73 MB
+# plus 7.8 bytes a pixel, which is 8.1-8.2 bytes a pixel all told from 118 Mpx up (1.12 GB
+# for Scotland's 143 Mpx, 3.26 GB for 429 Mpx). Budgeted at 8.5: the regions that decide
+# the figure are the big ones, and below ~60 Mpx the fixed part is under 100 MB. That
+# holds because its DEM conversion caps GDAL's block cache (internal/gdal); uncapped, the
+# conversion alone took a 118 Mpx region to 11.6 bytes a pixel. Beside it run up to
+# PROM_FETCH_WORKERS DEM fetches for the regions next in line, each a gdal_translate whose
+# block cache fetch-dem.sh caps at 512 MB, plus the image's 512 MB VSI cache and the
+# process itself: FETCH_DEM_GB at most.
 # Regions are scored smallest first, so the fetches running ahead are always for bigger
 # regions than the one being scored; the peak is the worst of those pairings, computed
 # here in that same order — the largest region itself is scored with nothing left to fetch.
-PEAKS_BYTES_PER_PX=9.5
+PEAKS_BYTES_PER_PX=8.5
 FETCH_DEM_GB=1.25
 peaks_mem_gb() {
   catalog peaks-mem "$INFRA_DIR/regions.json" "${PROM_DEM_RES:-0.000833333}" "${PROM_FETCH_WORKERS:-3}" \
@@ -988,22 +993,17 @@ stage_avalanche() {
   fi
 
   # Four. A region's phases run in sequence, so its peak is the largest of them rather
-  # than their sum, and that is ~0.8-1.5 GB — measured 2026-09-08 on a 108 and a 216 Mpx
-  # raster: gdalwarp ~694 MB, encode-avalanche.py 792 MB and 1459 MB (most of it evictable
-  # page cache for the memmaps), the tiler a few MB. The encoder is Go now and streams
-  # three rows (15 MB on 113 Mpx, 2026-09-25), so the warp is the peak and this is
-  # conservative. Four regions is ~6 GB on a 32 GB host,
-  # and the warp phase is network-bound with the cpu idle, so overlapping several is close
-  # to free.
+  # than their sum. Measured under the image's GDAL settings with build-avalanche.sh's
+  # 512 MB block cache (2026-09-27, Aragón and Switzerland, ~118 Mpx each): the DEM fetch
+  # at most ~1.25 GB (fetch-dem.sh's own cap), gdalwarp 1.04-1.08 GB, the tiling pass
+  # 0.83 GB, the Go encoder 15 MB. So a region peaks at ~1.1-1.25 GB whatever its size,
+  # and 1.5 GB a worker leaves room; four regions is ~6 GB on a 32 GB host, and the fetch
+  # and warp are network-bound with the cpu idle, so overlapping several is close to free.
+  # Without the cache cap the warp alone grew with the region (1.46 GB for Switzerland).
   #
-  # What four does *not* fit is the cpu: assemble-avalanche's WebP proof pass already
-  # runs a thread per core, so several regions reaching it together oversubscribe rather
-  # than go faster. Capping that inner pool by this number is what would make 4 pay off in
-  # wall-clock as well as in memory; until then it is bounded by cores, not by RAM.
-  #
-  # So: four where there is room for four, and fewer where there is not — 1.5 GB a worker
-  # is the top of the measured range, and overlapping_io_parallel keeps the cap at 4 and
-  # at half the cores, which is the cpu reason above made explicit.
+  # The cpu is shared out separately: build-avalanche.sh divides the cores by this number
+  # for assemble-avalanche's WebP pass, so regions reaching it together do not
+  # oversubscribe. overlapping_io_parallel keeps the count at 4 and at half the cores.
   local parallel="${RATMAP_AVALANCHE_PARALLEL:-$(overlapping_io_parallel 1.5 4)}"
   # Exported, and with the default resolved rather than left unset: build-avalanche.sh
   # divides the machine's cores by this to size the WebP pass, and a child that cannot

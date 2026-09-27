@@ -1,10 +1,10 @@
 # NAME	ARG... (see internal/golden)
-changed-some	changed	testdata/listing-some.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-changed-empty	changed	testdata/listing-empty.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-changed-all	changed	testdata/listing-all.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-~changed-bad	changed	testdata/listing-bad.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-changed-null	changed	testdata/listing-null.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
-~changed-junk	changed	testdata/listing-junk.json	testdata/dist	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+changed-some	changed	testdata/listing-some.json	testdata/built	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+changed-empty	changed	testdata/listing-empty.json	testdata/built	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+changed-all	changed	testdata/listing-all.json	testdata/built	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+~changed-bad	changed	testdata/listing-bad.json	testdata/built	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+changed-null	changed	testdata/listing-null.json	testdata/built	regions/a/a-basemap.pmtiles	sac-global.pmtiles
+~changed-junk	changed	testdata/listing-junk.json	testdata/built	regions/a/a-basemap.pmtiles	sac-global.pmtiles
 unpublished-live.json-fewer.json	unpublished	testdata/live.json	testdata/fewer.json
 unpublished-live.json.gz-fewer.json	unpublished	testdata/live.json.gz	testdata/fewer.json
 unpublished-live.json-live.json	unpublished	testdata/live.json	testdata/live.json

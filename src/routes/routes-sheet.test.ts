@@ -73,6 +73,17 @@ afterEach(() => {
 });
 
 describe('the saved routes list', () => {
+  it('shows the Naismith time beside the climb', async () => {
+    await render();
+    expect(container.querySelector('.route-meta')?.textContent).toBe('8.20 km · ↑ 1300 m · ~3 hr 50 min');
+  });
+
+  it('gives no time for a route saved without a climb figure', async () => {
+    store.routes = [{ ...ROUTE, ascentM: null, descentM: null }];
+    await render();
+    expect(container.querySelector('.route-meta')?.textContent).toBe('8.20 km');
+  });
+
   it('deletes at once, with an Undo that brings the same route back', async () => {
     await render();
     deleteButton().click();

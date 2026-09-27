@@ -192,6 +192,33 @@ describe('the follow screen', () => {
   });
 });
 
+describe('Naismith time in the panel', () => {
+  const profile = {
+    points: [],
+    ascentM: 1300,
+    descentM: 20,
+    minEle: 20,
+    maxEle: 1345,
+    coverage: 1,
+  };
+  const stats = (panel: HTMLElement) =>
+    Object.fromEntries(
+      [...panel.querySelectorAll('.route-stat')].map((n) => [
+        n.querySelector('dt')!.textContent,
+        n.querySelector('dd')!.textContent,
+      ]),
+    );
+
+  it('estimates from distance and climb', () => {
+    // 8.2 km / 5 km/h + 1300 m / 600 m/h = 3.8 hr.
+    expect(stats(render({ profile }))['Naismith']).toBe('3 hr 50 min');
+  });
+
+  it('gives no time without a climb figure, rather than a flat-ground guess', () => {
+    expect(stats(render({ profile: null }))).not.toHaveProperty('Naismith');
+  });
+});
+
 describe('SAC grades in the panel', () => {
   const graded = (over: Partial<import('./sac-sampler').SacSummary> = {}) => ({
     hardest: 3,

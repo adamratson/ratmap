@@ -120,6 +120,8 @@ test.describe('route planning', () => {
     expect(state.coverage).toBe(1);
 
     await expect(page.locator('.route-stats')).toContainText('Ascent');
+    // Naismith rides on the ascent figure, so it appears with it and never before.
+    await expect(page.locator('.route-stats')).toContainText(/Naismith\s*\d+ (hr|min)/);
     await expect(page.locator('svg.profile-chart')).toBeVisible();
   });
 

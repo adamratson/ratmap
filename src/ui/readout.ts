@@ -10,28 +10,38 @@
 // The space between value and unit is a real text node, so `textContent` reads exactly
 // the formatter's output — which is what the e2e suite asserts against.
 
-const FIGURE = /^([−-]?[\d.,]+)\s?(m|km|kB|MB|GB|%|min|hr)$/;
+// Longest first: unanchored, `m` would otherwise take the front off `min`.
+const UNIT = '(?:min|hr|km|kB|MB|GB|m|%)';
+const PART = `[−-]?[\\d.,]+\\s?${UNIT}`;
+// One figure, or several run together — "3 hr 20 min" is one reading in two units.
+const FIGURE = new RegExp(`^${PART}(?: ${PART})*$`);
+const PARTS = new RegExp(`([−-]?[\\d.,]+)(\\s?)(${UNIT})`, 'g');
 
 export function fillReadout(target: HTMLElement, text: string): void {
   target.classList.add('readout');
   target.replaceChildren();
 
-  const match = FIGURE.exec(text);
-  if (!match) {
+  if (!FIGURE.test(text)) {
     target.textContent = text;
     return;
   }
 
-  const [, value, unit] = match;
-  const valueEl = document.createElement('span');
-  valueEl.className = 'readout-value';
-  valueEl.textContent = value;
+  let last = 0;
+  for (const match of text.matchAll(PARTS)) {
+    const [whole, value, gap, unit] = match;
+    // The space between one figure and the next, as written.
+    if (match.index > last) target.append(text.slice(last, match.index));
 
-  const unitEl = document.createElement('span');
-  unitEl.className = 'readout-unit';
-  unitEl.textContent = unit;
+    const valueEl = document.createElement('span');
+    valueEl.className = 'readout-value';
+    valueEl.textContent = value;
 
-  // "45%" has no space in the source string, and must not grow one.
-  const gap = text.slice(value.length, text.length - unit.length);
-  target.append(valueEl, gap, unitEl);
+    const unitEl = document.createElement('span');
+    unitEl.className = 'readout-unit';
+    unitEl.textContent = unit;
+
+    // "45%" has no space in the source string, and must not grow one.
+    target.append(valueEl, gap, unitEl);
+    last = match.index + whole.length;
+  }
 }

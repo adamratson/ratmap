@@ -1,4 +1,5 @@
 import { formatDistance, type LngLat } from './geo';
+import { formatWalkingTime, naismithSeconds } from './naismith';
 import { formatElevationChange } from './profile';
 import { renderProfileChart } from './profile-chart';
 import { parseRouteFile, toGeoJson, toGpx } from './gpx';
@@ -168,6 +169,15 @@ function statsRow(summary: RouteSummary): HTMLElement {
       stat('Ascent', formatElevationChange(summary.profile.ascentM)),
       stat('Descent', formatElevationChange(summary.profile.descentM)),
     );
+
+    // Only with a profile: Naismith without the climb term is just distance over 5 km/h,
+    // which on a hill route is badly optimistic and looks exactly like the real thing.
+    const time = stat(
+      'Naismith',
+      formatWalkingTime(naismithSeconds(summary.distanceM, summary.profile.ascentM)),
+    );
+    time.title = '5 km/h plus an hour per 600 m climbed. No stops, weather or rough ground.';
+    stats.append(time);
   }
 
   const hardest = summary.sac?.hardest != null ? sacGradeInfo(summary.sac.hardest) : null;
@@ -443,7 +453,10 @@ function routeRow(route: SavedRoute, deps: RoutesUiDeps): HTMLLIElement {
   open.append(el('span', 'route-name', route.name));
 
   const parts = [formatDistance(route.distanceM)];
-  if (route.ascentM !== null) parts.push(`↑ ${formatElevationChange(route.ascentM)}`);
+  if (route.ascentM !== null) {
+    parts.push(`↑ ${formatElevationChange(route.ascentM)}`);
+    parts.push(`~${formatWalkingTime(naismithSeconds(route.distanceM, route.ascentM))}`);
+  }
   if (route.hasStraightLegs) parts.push('has straight sections');
   open.append(el('span', 'route-meta', parts.join(' · ')));
 

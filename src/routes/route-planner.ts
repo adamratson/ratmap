@@ -489,7 +489,7 @@ export class RoutePlanner {
       this.profile = buildProfile(samples, elevations);
       this.profileNote =
         this.profile.coverage < 1
-          ? `Elevation data covers ${Math.round(this.profile.coverage * 100)}% of this route; the climb totals are understated.`
+          ? `Elevation data covers ${Math.round(this.profile.coverage * 100)}% of this route; the climb totals and Naismith time are understated.`
           : null;
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') throw err;

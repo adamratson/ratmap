@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
@@ -99,8 +98,9 @@ func TestCacheSkipsAFileThatChangedWhileHashed(t *testing.T) {
 	if err := c.save(); err != nil {
 		t.Fatal(err)
 	}
-	saved, _ := os.ReadFile(filepath.Join(dir, cacheName))
-	if !strings.HasPrefix(string(saved), `{"entries": {"regions/x/x-basemap.pmtiles": {"ino": `) {
-		t.Fatalf("cache text: %s", saved)
+	// Saved and read back: the entry and its stamp survive, keyed relative to dist/.
+	back := loadHashCache(dir)
+	if e, ok := back.entries["regions/x/x-basemap.pmtiles"]; !ok || e.SHA256 != "digest-of-one" || e != c.entries["regions/x/x-basemap.pmtiles"] {
+		t.Fatalf("read back %+v", back.entries)
 	}
 }

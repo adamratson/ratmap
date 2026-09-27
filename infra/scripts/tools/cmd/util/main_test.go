@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -15,24 +15,23 @@ import (
 
 func TestMain(m *testing.M) { golden.Main(m, main) }
 
-// testdata/cases.tsv runs url-quote and dem-tiles against the Python they replaced (from
-// vendor-assets.sh and fetch-dem.sh): non-ASCII and reserved
-// characters; bboxes on whole degrees, across the equator and antimeridian, at the pole,
-// empty, and written the way regions.json writes them.
-func TestMatchesPython(t *testing.T) { golden.Run(t) }
+// testdata/cases.tsv runs url-quote and dem-tiles as vendor-assets.sh and fetch-dem.sh
+// call them: non-ASCII and reserved characters; bboxes on whole degrees, across the
+// equator and antimeridian, at the pole, empty, and written the way regions.json writes
+// them. -update rewrites the goldens.
+func TestGolden(t *testing.T) { golden.Run(t) }
 
-// testdata/subset-keys.tsv is lib.sh's Python cache key for files of a given size and
-// mtime, with times a few nanoseconds short of a second.
-func TestSubsetKeyMatchesPython(t *testing.T) {
-	f, err := os.Open("testdata/subset-keys.tsv")
+// testdata/subset-keys.tsv is the OSM subset cache key for files of a given size and
+// mtime and a given filter union (JSON), with times a few nanoseconds short of a second.
+// -update rewrites the keys.
+func TestSubsetKey(t *testing.T) {
+	data, err := os.ReadFile("testdata/subset-keys.tsv")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	n := 0
-	for sc.Scan() {
-		cols := strings.Split(sc.Text(), "\t")
+	var out bytes.Buffer
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		cols := strings.Split(line, "\t")
 		size, _ := strconv.Atoi(cols[0])
 		ns, _ := strconv.ParseInt(cols[1], 10, 64)
 		var union string
@@ -51,12 +50,7 @@ func TestSubsetKeyMatchesPython(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got != cols[3] {
-			t.Errorf("subset key of %d bytes at %d ns, %q: got %s, Python %s", size, ns, union, got, cols[3])
-		}
-		n++
+		out.WriteString(strings.Join(cols[:3], "\t") + "\t" + got + "\n")
 	}
-	if n == 0 {
-		t.Fatal("no cases")
-	}
+	golden.Check(t, "keys", out.Bytes(), "testdata/subset-keys.tsv")
 }

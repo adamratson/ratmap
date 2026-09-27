@@ -208,16 +208,14 @@ RUN chmod +x /usr/local/bin/ratmap /usr/local/bin/ratmap-global \
 # /tmp and is thrown away: TMPDIR and HOME point at the /work volume, which only exists
 # at run time, where Go caches its builds under $HOME.
 #
-# Same for scripts/tools, every Go port of the pipeline's Python — compute-prominence and
+# Same for scripts/tools, every Go tool in the pipeline — compute-prominence and
 # encode-avalanche (which replaced the numpy/scipy virtualenv this image used to carry),
-# reduce-paths, build-places-db, normalize-sac, normalize-terrain-features, the peaks
-# helpers, and the commands that replaced the scripts' inline Python snippets (catalog,
-# pmtiles-header, check-output, ...); there is no Python left in the image. Their tests include
-# the slope maths' self-test, the union-find checked against per-threshold relabelling,
-# Python's float formatting against CPython's own output, the paths reduce against what
-# the Python kept, the sac_scale parser against the Python's on 6,000 values, the peaks
-# tile check's verdicts against the Python's on a real archive (which needs this image's
-# tippecanoe-decode), and places.sqlite row for row against the Python's — FTS5 with
+# reduce-paths, build-places-db, the normalizers, the peaks helpers, and the commands the
+# scripts call inline (catalog, pmtiles-header, check-output, ...); there is no Python
+# left in the image. Their tests include the slope maths' self-test, the union-find
+# checked against per-threshold relabelling, the sac_scale parser on 6,000 values, the
+# peaks tile check's verdicts on a real archive (which needs this image's
+# tippecanoe-decode), and places.sqlite row for row against golden files — FTS5 with
 # unicode61 remove_diacritics 2 included, which this image used to check in Debian's
 # libsqlite3 instead (C9: the whole search index is FTS5). Their first build fetches
 # modernc.org/sqlite and its dependencies from the Go module proxy.

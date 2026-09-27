@@ -1,10 +1,8 @@
 // Command compute-prominence computes topographic prominence for peaks from a DEM and
 // writes it onto each feature as `prom`.
 //
-// A port of scripts/compute-prominence.py, which it replaces in build-peaks.sh: same
-// arguments, same output bytes, no numpy/scipy. The Python's docstring is the full
-// account of the method and its limits; the parts that decide behaviour are repeated at
-// the code they govern, here and in prominence.go.
+// Run by build-peaks.sh. The method and its limits are set out below and at the code they
+// govern, here and in prominence.go.
 //
 // # Why this exists
 //
@@ -14,7 +12,7 @@
 // Montenegro has ~674 (measured 2026-08-23). OSM tags `prominence` far too sparsely to
 // rely on, so it is computed here.
 //
-// # Honest limitations (unchanged from the Python)
+// # Honest limitations
 //
 //   - Prominence is quantised to --step (default 20 m). Fine for ranking; do not present
 //     these as surveyed figures.
@@ -40,6 +38,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -52,7 +51,6 @@ import (
 
 	"ratmap/infra/tools/internal/cli"
 	"ratmap/infra/tools/internal/gdal"
-	"ratmap/infra/tools/internal/pyfloat"
 )
 
 const usage = `usage: compute-prominence [--regions R --fetch-dem F --res X --work-dir D] [DEM] PEAKS_IN PEAKS_OUT
@@ -62,46 +60,43 @@ With --regions: PEAKS_IN PEAKS_OUT, fetching every region's DEM.
 Without: DEM PEAKS_IN PEAKS_OUT, scoring one raster (spot checks).`
 
 func main() {
-	a := cli.Parse(os.Args[1:], usage, []cli.Spec{
-		{Name: "regions", Help: "regions.json — score every region in it"},
-		{Name: "fetch-dem", Help: "fetch-dem.sh, with --regions"},
-		{Name: "res", Help: "DEM degrees per pixel for fetch-dem.sh, with --regions"},
-		{Name: "work-dir", Help: "where fetched DEMs land, with --regions"},
-		{Name: "fetch-workers", Help: "DEM fetches in flight at once, with --regions (default 3)"},
-		{Name: "step", Help: "metres per level set (default 20)"},
-		{Name: "floor", Help: "stop descending here (default 0)"},
-		{Name: "downsample", Help: "block-max factor (default 3)"},
-	})
-	usageErr := func(msg string) {
-		fmt.Fprintf(os.Stderr, "%s\nerror: %s\n", usage, msg)
-		os.Exit(2)
-	}
+	fs := flag.NewFlagSet("compute-prominence", flag.ExitOnError)
+	regionsFlag := fs.String("regions", "", "regions.json — score every region in it")
+	fetchDEM := fs.String("fetch-dem", "", "fetch-dem.sh, with --regions")
+	res := fs.String("res", "", "DEM degrees per pixel for fetch-dem.sh, with --regions")
+	workDir := fs.String("work-dir", "", "where fetched DEMs land, with --regions")
+	fetchWorkers := fs.Int("fetch-workers", 3, "DEM fetches in flight at once, with --regions")
+	step := fs.Float64("step", 20, "metres per level set")
+	floor := fs.Float64("floor", 0, "stop descending here")
+	downsample := fs.Int("downsample", 3, "block-max factor")
+	args := cli.Parse(fs, usage, os.Args[1:])
+	usageErr := func(msg string) { cli.Fail(fs, "%s", msg) }
 
 	o := opts{
-		step:         a.Float("step", 20),
-		floor:        a.Float("floor", 0),
-		factor:       max(1, a.Int("downsample", 3)),
-		fetchWorkers: max(1, a.Int("fetch-workers", 3)),
-		fetchDEM:     a.String("fetch-dem", ""),
-		res:          a.String("res", ""),
-		workDir:      a.String("work-dir", ""),
+		step:         *step,
+		floor:        *floor,
+		factor:       max(1, *downsample),
+		fetchWorkers: max(1, *fetchWorkers),
+		fetchDEM:     *fetchDEM,
+		res:          *res,
+		workDir:      *workDir,
 	}
-	regions := a.String("regions", "")
+	regions := *regionsFlag
 
 	var demPath, peaksIn, peaksOut string
 	if regions != "" {
-		if len(a.Positionals) != 2 {
+		if len(args) != 2 {
 			usageErr("with --regions, give PEAKS_IN PEAKS_OUT")
 		}
 		if o.fetchDEM == "" || o.res == "" || o.workDir == "" {
 			usageErr("--regions needs --fetch-dem, --res and --work-dir")
 		}
-		peaksIn, peaksOut = a.Positionals[0], a.Positionals[1]
+		peaksIn, peaksOut = args[0], args[1]
 	} else {
-		if len(a.Positionals) != 3 {
+		if len(args) != 3 {
 			usageErr("give DEM PEAKS_IN PEAKS_OUT, or --regions with PEAKS_IN PEAKS_OUT")
 		}
-		demPath, peaksIn, peaksOut = a.Positionals[0], a.Positionals[1], a.Positionals[2]
+		demPath, peaksIn, peaksOut = args[0], args[1], args[2]
 	}
 
 	if err := run(o, regions, demPath, peaksIn, peaksOut); err != nil {
@@ -144,11 +139,11 @@ func run(o opts, regions, demPath, peaksIn, peaksOut string) error {
 // readDEM returns the DEM as float32 plus its size and geotransform, block-max
 // downsampled by factor.
 //
-// A plain read into memory, not a mapping, for the reason the Python learned the hard
-// way: a mapping outliving its temporary directory on a filesystem that renames a
-// still-open file aside (NFS's .nfsXXXX, FUSE/VirtioFS's .fuse_hiddenXXXX; /work is a
-// mounted volume) made the cleanup die with "Directory not empty" after the DEM fetch and
-// before a single peak was scored (2026-08-24 planet run, lochaber).
+// A plain read into memory, not a mapping: a mapping outliving its temporary directory on
+// a filesystem that renames a still-open file aside (NFS's .nfsXXXX, FUSE/VirtioFS's
+// .fuse_hiddenXXXX; /work is a mounted volume) made the cleanup die with "Directory not
+// empty" after the DEM fetch and before a single peak was scored (2026-08-24 planet run,
+// lochaber).
 func readDEM(path string, factor int) ([]float32, int, int, [6]float64, error) {
 	var gt [6]float64
 	tmp, err := os.MkdirTemp("", "prominence-")
@@ -187,7 +182,7 @@ func readDEM(path string, factor int) ([]float32, int, int, [6]float64, error) {
 
 func report(scored map[int]float64, candidates, total, w, h, factor int, step float64) {
 	fmt.Printf("prominence: %d of %d candidate peaks scored, %d in all (raster %dx%d @ %dx, %s m steps)\n",
-		len(scored), candidates, total, w, h, factor, pyfloat.FormatG(step))
+		len(scored), candidates, total, w, h, factor, strconv.FormatFloat(step, 'g', 6, 64))
 	values := make([]float64, 0, len(scored))
 	for _, v := range scored {
 		values = append(values, v)
@@ -248,12 +243,12 @@ func runRegions(o opts, regionsPath string, lons, lats []float64) (map[int]float
 	sort.SliceStable(order, func(a, b int) bool { return order[a].area() < order[b].area() })
 
 	fetch := func(r region) fetched {
-		// The bbox exactly as Python's str() wrote it, byte for byte what build-peaks.sh
-		// used to pass — and what fetch-dem.sh's cache key is built from, so a changed
-		// spelling here would miss every cached DEM.
+		// The bbox exactly as regions.json writes it — what fetch-dem.sh's cache key is
+		// built from, and what build-global.sh's DEM prefetch passes (catalog bboxes), so
+		// a changed spelling here would miss every cached DEM.
 		args := []string{o.fetchDEM}
 		for _, v := range r.BBox {
-			args = append(args, pyStr(v))
+			args = append(args, v.String())
 		}
 		dem := filepath.Join(o.workDir, "dem-"+r.ID+".tif")
 		args = append(args, dem, o.res)
@@ -270,7 +265,7 @@ func runRegions(o opts, regionsPath string, lons, lats []float64) (map[int]float
 				res.code = -1
 			}
 		} else if err != nil {
-			res.err = err // bash itself would not start: fatal, as it was in Python
+			res.err = err // bash itself would not start: fatal
 		}
 		return res
 	}
@@ -327,11 +322,10 @@ func runRegions(o opts, regionsPath string, lons, lats []float64) (map[int]float
 		}
 		report(scored, candidates, len(lons), w, h, o.factor, o.step)
 
-		// Hand this region's raster and union-find back before the next is read. Python's
-		// `del dem` freed them on the spot; Go's collector would otherwise let the next
-		// region's arrays grow the heap to about twice the live size first, so two
-		// regions' rasters could be resident at once — against the one-region budget
-		// build-global.sh sizes the fetch-ahead by.
+		// Hand this region's raster and union-find back before the next is read. Go's
+		// collector would otherwise let the next region's arrays grow the heap to about
+		// twice the live size first, so two regions' rasters could be resident at once —
+		// against the one-region budget build-global.sh sizes the fetch-ahead by.
 		dem = nil
 		debug.FreeOSMemory()
 	}
@@ -343,21 +337,4 @@ func runRegions(o opts, regionsPath string, lons, lats []float64) (map[int]float
 			len(noDEM), len(order), strings.Join(noDEM, " "))
 	}
 	return prom, nil
-}
-
-// pyStr is Python's str() of a JSON number as json.load parsed it: an integer literal
-// stays an int (so "-0" is "0"), anything else is a float and prints as its repr.
-func pyStr(n json.Number) string {
-	s := n.String()
-	if !strings.ContainsAny(s, ".eE") {
-		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
-			return strconv.FormatInt(i, 10)
-		}
-		return s // beyond int64: JSON allows no leading zeros, so already canonical
-	}
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return s
-	}
-	return pyfloat.Repr(f)
 }

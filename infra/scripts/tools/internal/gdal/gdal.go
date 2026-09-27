@@ -1,10 +1,9 @@
-// Package gdal reads and writes rasters through GDAL's command-line tools, the way the
-// Python this replaces did: `gdal_translate -of ENVI` for a flat binary array plus a text
-// header, and `gdalinfo -json` for the size and geotransform.
+// Package gdal reads and writes rasters through GDAL's command-line tools:
+// `gdal_translate -of ENVI` for a flat binary array plus a text header, and
+// `gdalinfo -json` for the size and geotransform.
 //
-// Through the CLI rather than cgo bindings for the same reason the Python avoided the
-// osgeo bindings: the toolchain image already has gdal-bin, and a static Go binary that
-// links nothing is the point of the port.
+// Through the CLI rather than cgo bindings: the toolchain image already has gdal-bin, and
+// a static Go binary that links nothing builds anywhere Go does.
 package gdal
 
 import (
@@ -45,7 +44,7 @@ func ReadInfo(path string) (Info, error) {
 		return Info{}, fmt.Errorf("gdalinfo -json %s: no size", path)
 	}
 	// Refused rather than defaulted: without a geotransform nothing can say where a pixel
-	// is, and the Python raised KeyError here too.
+	// is.
 	if doc.GeoTransform == nil || len(*doc.GeoTransform) != 6 {
 		return Info{}, fmt.Errorf("gdalinfo -json %s: no geoTransform", path)
 	}
@@ -65,9 +64,9 @@ func TranslateENVIFloat32(src, raw string) error {
 	return checkLittleEndian(raw)
 }
 
-// checkLittleEndian reads GDAL's ENVI header and refuses a big-endian array. The Python
-// read the file in native order and never looked; every host this runs on is
-// little-endian, so this only ever turns an impossible silent misread into an error.
+// checkLittleEndian reads GDAL's ENVI header and refuses a big-endian array. Every host
+// this runs on is little-endian, so this only ever turns an impossible silent misread
+// into an error.
 func checkLittleEndian(raw string) error {
 	hdr := strings.TrimSuffix(raw, filepath.Ext(raw)) + ".hdr"
 	f, err := os.Open(hdr)
@@ -101,8 +100,7 @@ func ReadFloat32(raw string, w, h int) ([]float32, error) {
 		return nil, fmt.Errorf("%s: %d bytes, expected %d x %d float32 = %d", raw, st.Size(), w, h, int64(n)*4)
 	}
 	out := make([]float32, n)
-	// In chunks, so the file never sits in memory twice: one copy of the raster, as the
-	// Python's np.fromfile made.
+	// In chunks, so the file never sits in memory twice: one copy of the raster.
 	buf := make([]byte, 1<<20)
 	for i := 0; i < n; {
 		want := min(len(buf)/4, n-i)

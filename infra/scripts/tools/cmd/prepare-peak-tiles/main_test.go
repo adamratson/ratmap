@@ -12,14 +12,15 @@ import (
 	"strings"
 	"testing"
 
-	"ratmap/infra/tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/golden"
 )
 
-// testdata/untie.tsv is the Python's world_xy and untie on 28,706 coordinates, 5,247 of
-// them moved: coordinates aimed at a rounding tie on each axis at every zoom 0-14, and
-// random ones. Both answers have to match: the world position
+// testdata/untie.tsv is the world position and the untied coordinates for 28,706
+// coordinates, 5,247 of them moved: coordinates aimed at a rounding tie on each axis at
+// every zoom 0-14, and random ones. Written by the Python this replaced, whose replay of
+// tippecanoe's arithmetic this matches. Both answers have to match: the world position
 // is what decides a tie, and the move is what gets written.
-func TestUntieMatchesPython(t *testing.T) {
+func TestUntie(t *testing.T) {
 	f, err := os.Open("testdata/untie.tsv")
 	if err != nil {
 		t.Fatal(err)
@@ -33,14 +34,16 @@ func TestUntieMatchesPython(t *testing.T) {
 		lat, _ := strconv.ParseFloat(c[1], 64)
 		x, y := worldXY(lon, lat)
 		if strconv.FormatInt(x, 10) != c[2] || strconv.FormatInt(y, 10) != c[3] {
-			t.Errorf("world_xy(%s, %s): got %d, %d; Python %s, %s", c[0], c[1], x, y, c[2], c[3])
+			t.Errorf("worldXY(%s, %s): got %d, %d; want %s, %s", c[0], c[1], x, y, c[2], c[3])
 		}
 		nl, nt, err := untie(lon, lat)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := pyfloat.Repr(nl) + " " + pyfloat.Repr(nt); got != pyNum(c[4])+" "+pyNum(c[5]) {
-			t.Errorf("untie(%s, %s): got %s; Python %s %s", c[0], c[1], got, c[4], c[5])
+		wl, _ := strconv.ParseFloat(c[4], 64)
+		wt, _ := strconv.ParseFloat(c[5], 64)
+		if nl != wl || nt != wt {
+			t.Errorf("untie(%s, %s): got %v %v; want %s %s", c[0], c[1], nl, nt, c[4], c[5])
 		}
 		if nl != lon || nt != lat {
 			moved++
@@ -52,39 +55,26 @@ func TestUntieMatchesPython(t *testing.T) {
 	}
 }
 
-// pyNum is a Python repr from the TSV, as pyfloat.Repr writes the same value (the file
-// has ints where the Python kept an int).
-func pyNum(s string) string {
-	f, _ := strconv.ParseFloat(s, 64)
-	return pyfloat.Repr(f)
-}
-
-func TestMercatorLimitMatchesPython(t *testing.T) {
-	// math.degrees(math.atan(math.sinh(math.pi))) in CPython: 85.0511287798066.
-	if got := pyfloat.Repr(mercatorLimit); got != "85.0511287798066" {
-		t.Fatalf("got %s", got)
-	}
-}
-
-// testdata/edge.want.* are the Python's report and output for testdata/edge.geojsonl:
-// peaks beyond the limit and inside the margin, the known tie (Хонголдойский Голец), a
-// tie with a third coordinate, names that are missing or not strings, blank lines.
-// Lines left alone must be byte-identical; moved ones are compared parsed.
-func TestMatchesPython(t *testing.T) {
+// testdata/edge.want.* are the report and output for testdata/edge.geojsonl: peaks beyond
+// the limit and inside the margin, the known tie (Хонголдойский Голец), a tie with a third
+// coordinate, names that are missing or not strings, blank lines. Lines left alone must
+// be byte-identical; moved ones are compared parsed. -update rewrites them.
+func TestEdgeCases(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out.geojsonl")
 	var report bytes.Buffer
 	if err := run("testdata/edge.geojsonl", out, &report); err != nil {
 		t.Fatal(err)
 	}
-	want, _ := os.ReadFile("testdata/edge.want.stdout")
-	if report.String() != string(want) {
-		t.Errorf("report:\n got  %s want %s", report.String(), want)
-	}
+	golden.Check(t, "report", report.Bytes(), "testdata/edge.want.stdout")
 	got, _ := os.ReadFile(out)
+	if *golden.Update {
+		golden.Check(t, "output", got, "testdata/edge.want.geojsonl")
+		return
+	}
 	wantOut, _ := os.ReadFile("testdata/edge.want.geojsonl")
 	g, w := strings.Split(strings.TrimRight(string(got), "\n"), "\n"), strings.Split(strings.TrimRight(string(wantOut), "\n"), "\n")
 	if len(g) != len(w) {
-		t.Fatalf("%d lines, Python wrote %d", len(g), len(w))
+		t.Fatalf("%d lines, want %d", len(g), len(w))
 	}
 	input, _ := os.ReadFile("testdata/edge.geojsonl")
 	copied := map[string]bool{}
@@ -96,7 +86,7 @@ func TestMatchesPython(t *testing.T) {
 			continue
 		}
 		if copied[w[i]] {
-			// The Python copied this line through untouched; so must this.
+			// An unchanged line is copied through untouched.
 			t.Errorf("line %d was rewritten:\n got  %s\n want %s", i+1, g[i], w[i])
 			continue
 		}

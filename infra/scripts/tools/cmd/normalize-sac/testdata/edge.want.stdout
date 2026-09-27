@@ -1,2 +1,2 @@
-  graded 14 ways; skipped 3 non-line features, 3 untagged, 16 unreadable, 3 already seen (continent seams)
-  unreadable values: 'strolling' x3, 'yes' x2, '7' x1, 'True' x1, "['T3']" x1, "{'k': 'v'}" x1, '?' x1, "it's" x1
+  graded 16 ways; skipped 3 non-line features, 3 untagged, 16 unreadable, 1 already seen (continent seams)
+  unreadable values: "strolling" x3, "yes" x2, "7" x1, "true" x1, "[\"T3\"]" x1, "{\"k\": \"v\"}" x1, "?" x1, "it's" x1

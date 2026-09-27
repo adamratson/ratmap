@@ -160,9 +160,9 @@ exec %q -quiet -lossless -exact %q -o "$out"
 	}
 }
 
-func TestPyList(t *testing.T) {
-	if pyList([]int64{10}) != "[10]" || pyList([]int64{10, 11}) != "[10, 11]" || pyList(nil) != "[]" {
-		t.Fatal("pyList is not Python's list repr")
+func TestIntList(t *testing.T) {
+	if intList([]int64{10}) != "[10]" || intList([]int64{10, 11}) != "[10, 11]" || intList(nil) != "[]" {
+		t.Fatal("intList")
 	}
 	_ = binary.LittleEndian
 }

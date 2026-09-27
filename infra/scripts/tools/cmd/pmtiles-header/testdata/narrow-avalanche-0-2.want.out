@@ -1,1 +1,1 @@
-{"tile_compression": "none", "tile_type": "webp", "minzoom": 0, "maxzoom": 2, "bounds": [9.4711, 47.0477, 9.6362, 47.2712999], "center": [9.55365, 47.1594999, 2]}
+{"bounds":[9.4711,47.0477,9.6362,47.2712999],"center":[9.55365,47.1594999,2],"maxzoom":2,"minzoom":0,"tile_compression":"none","tile_type":"webp"}

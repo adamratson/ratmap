@@ -7,14 +7,14 @@
 //	check-output sac FILE                # build-sac.sh: known paths' hardest grades
 //	check-output terrain-features FILE   # build-terrain-features.sh: every kind present
 //
-// Ports of the Python checks those scripts carried inline: same assertions, same lines
-// in the log, exit status 1 with the same message where they failed. The expected values
-// and why each was chosen are documented beside the calls in the scripts.
+// Each prints a line per assertion and exits 1 with a FAIL line when one fails. The
+// expected values and why each was chosen are documented beside the calls in the scripts.
 package main
 
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,11 +24,10 @@ import (
 	"strconv"
 	"strings"
 
-	"ratmap/infra/tools/internal/pyjson"
-	"ratmap/infra/tools/internal/pytext"
+	"ratmap/infra/tools/internal/rawjson"
 )
 
-// failure is sys.exit("..."): the message on stderr, status 1.
+// failure is a failed assertion: the message on stderr, status 1.
 type failure string
 
 func (f failure) Error() string { return string(f) }
@@ -57,10 +56,9 @@ func main() {
 	}
 }
 
-// eachProps calls fn with every feature's properties. strip: skip blank lines and strip
-// an RS prefix, as the peaks checks did; without it every line must be a feature, as the
-// sac and terrain checks assumed.
-func eachProps(path string, strip bool, fn func(*pyjson.Object) error) error {
+// eachProps calls fn with every feature's properties, a feature with none getting an
+// empty set. Blank lines are skipped and a GeoJSONSeq record separator is stripped.
+func eachProps(path string, fn func(map[string]json.RawMessage) error) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -69,31 +67,15 @@ func eachProps(path string, strip bool, fn func(*pyjson.Object) error) error {
 	r := bufio.NewReaderSize(f, 1<<20)
 	for n := 1; ; n++ {
 		line, rerr := r.ReadBytes('\n')
-		if len(line) > 0 || rerr == nil {
-			text := line
-			if strip {
-				text = bytes.TrimFunc(bytes.TrimLeft(line, "\x1e"), pytext.IsSpace)
+		if text := bytes.TrimSpace(bytes.TrimLeft(line, "\x1e")); len(text) > 0 {
+			var feature struct {
+				Properties map[string]json.RawMessage `json:"properties"`
 			}
-			if !strip || len(text) > 0 {
-				v, err := pyjson.Decode(text)
-				if err != nil {
-					return fmt.Errorf("%s: line %d: %w", path, n, err)
-				}
-				feature, ok := v.(*pyjson.Object)
-				if !ok {
-					return fmt.Errorf("%s: line %d is not a JSON object", path, n)
-				}
-				pv, has := feature.Get("properties")
-				props, ok := pv.(*pyjson.Object)
-				if !has && strip {
-					props, ok = &pyjson.Object{}, true // .get("properties", {})
-				}
-				if !ok {
-					return fmt.Errorf("%s: line %d has no properties object", path, n)
-				}
-				if err := fn(props); err != nil {
-					return err
-				}
+			if err := json.Unmarshal(text, &feature); err != nil {
+				return fmt.Errorf("%s: line %d: %w", path, n, err)
+			}
+			if err := fn(feature.Properties); err != nil {
+				return fmt.Errorf("%s: line %d: %w", path, n, err)
 			}
 		}
 		if rerr == io.EOF {
@@ -105,12 +87,16 @@ func eachProps(path string, strip bool, fn func(*pyjson.Object) error) error {
 	}
 }
 
-func pyStr(v pyjson.Value) string {
-	if s, ok := v.(string); ok {
-		return s
+// number is a JSON number's value and its text as written; ok=false for anything else,
+// a numeric string included (which json.Number alone would accept).
+func number(raw json.RawMessage) (float64, string, bool) {
+	raw = bytes.TrimSpace(raw)
+	var n json.Number
+	if len(raw) == 0 || raw[0] == '"' || json.Unmarshal(raw, &n) != nil {
+		return 0, "", false
 	}
-	s, _ := pyjson.Encode(v, pyjson.Options{})
-	return pytext.StrValue([]byte(s))
+	f, err := n.Float64()
+	return f, n.String(), err == nil
 }
 
 // peaks checks known summit elevations, matched on name prefix (OSM often carries a
@@ -122,17 +108,20 @@ func peaks(path string, out io.Writer) error {
 	}{{"Ben Nevis", 1345}, {"Mont Blanc", 4808}, {"Bobotov Kuk", 2523}, {"Zla Kolata", 2535}}
 	const tolerance = 2
 
-	byName := map[string]pyjson.Value{}
-	err := eachProps(path, true, func(p *pyjson.Object) error {
-		nv, _ := p.Get("name")
-		name, ok := nv.(string)
-		ev, _ := p.Get("ele")
-		if _, isNum := pyjson.Number(ev); !ok || !isNum {
+	type ele struct {
+		v    float64
+		text string
+	}
+	byName := map[string]ele{}
+	err := eachProps(path, func(p map[string]json.RawMessage) error {
+		name, ok := rawjson.String(p["name"])
+		v, text, isNum := number(p["ele"])
+		if !ok || !isNum {
 			return nil
 		}
 		for _, e := range expected {
 			if _, seen := byName[e.name]; !seen && strings.HasPrefix(name, e.name) {
-				byName[e.name] = ev
+				byName[e.name] = ele{v, text}
 			}
 		}
 		return nil
@@ -147,11 +136,10 @@ func peaks(path string, out io.Writer) error {
 			fmt.Fprintf(out, "  (skip %s: not in this extract)\n", e.name)
 			continue
 		}
-		a, _ := pyjson.Number(actual)
-		if math.Abs(a-e.ele) > tolerance {
-			return failure(fmt.Sprintf("FAIL: %s ele=%s, expected ~%d", e.name, pyStr(actual), int(e.ele)))
+		if math.Abs(actual.v-e.ele) > tolerance {
+			return failure(fmt.Sprintf("FAIL: %s ele=%s, expected ~%d", e.name, actual.text, int(e.ele)))
 		}
-		fmt.Fprintf(out, "  OK %s: %s m\n", e.name, pyStr(actual))
+		fmt.Fprintf(out, "  OK %s: %s m\n", e.name, actual.text)
 		checked++
 	}
 	if checked == 0 {
@@ -164,12 +152,12 @@ func peaks(path string, out io.Writer) error {
 func munros(path string, out io.Writer) error {
 	const want = 282
 	count := 0
-	err := eachProps(path, true, func(p *pyjson.Object) error {
+	err := eachProps(path, func(p map[string]json.RawMessage) error {
 		lists := ""
-		if v, ok := p.Get("lists"); ok {
-			s, isStr := v.(string)
+		if v, ok := p["lists"]; ok {
+			s, isStr := rawjson.String(v)
 			if !isStr {
-				return fmt.Errorf("lists is %s, not a string", pyStr(v))
+				return fmt.Errorf("lists is %s, not a string", v)
 			}
 			lists = s
 		}
@@ -205,15 +193,13 @@ func sac(path string, out io.Writer) error {
 	}{{"Ben Nevis Mountain Path", 2}, {"West Highland Way", 1}, {"Aonach Eagach", 5}}
 	hardest := map[string]int64{}
 	histogram := map[int64]int{}
-	err := eachProps(path, false, func(p *pyjson.Object) error {
-		tv, ok := p.Get("t")
-		grade, isInt := pyjson.IntValue(tv)
-		if !ok || !isInt {
-			return fmt.Errorf("a feature's t is %s, not a grade", pyStr(tv))
+	err := eachProps(path, func(p map[string]json.RawMessage) error {
+		grade, err := strconv.ParseInt(string(bytes.TrimSpace(p["t"])), 10, 64)
+		if err != nil {
+			return fmt.Errorf("t is %s, not a grade", p["t"])
 		}
 		histogram[grade]++
-		nv, _ := p.Get("name")
-		if name, ok := nv.(string); ok {
+		if name, ok := rawjson.String(p["name"]); ok {
 			for _, e := range expected {
 				if e.name == name {
 					hardest[name] = max(hardest[name], grade)
@@ -265,12 +251,12 @@ func terrainFeatures(path string, out io.Writer) error {
 		n    int
 	}{{"scree", 20}, {"shingle", 5}, {"rock", 5}, {"stone", 5}}
 	histogram := map[string]int{}
-	err := eachProps(path, false, func(p *pyjson.Object) error {
-		kv, ok := p.Get("kind")
+	err := eachProps(path, func(p map[string]json.RawMessage) error {
+		kv, ok := p["kind"]
 		if !ok {
-			return errors.New(`a feature has no "kind"`)
+			return errors.New(`no "kind"`)
 		}
-		histogram[pyStr(kv)]++
+		histogram[rawjson.Text(kv)]++
 		return nil
 	})
 	if err != nil {

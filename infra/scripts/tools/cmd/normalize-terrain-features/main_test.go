@@ -8,10 +8,12 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"ratmap/infra/tools/internal/golden"
 )
 
-// testdata/selftest.want.stdout is what the Python this replaced printed for --self-test.
-func TestSelfTestMatchesPython(t *testing.T) {
+// testdata/selftest.want.stdout is what --self-test prints.
+func TestSelfTest(t *testing.T) {
 	var out bytes.Buffer
 	if err := selfTest(&out); err != nil {
 		t.Fatal(err)
@@ -22,20 +24,24 @@ func TestSelfTestMatchesPython(t *testing.T) {
 	}
 }
 
-// testdata/edge.want.* are the Python's output and report for testdata/edge.geojsonl:
-// every recognised kind, values it drops, a name with characters JSON escapes, and seam
-// duplicates whose @id is 1, 1.0, true and "1" — equal or not as Python's set saw them.
-// The features are compared parsed: the Python wrote json.dumps' spacing, this writes
-// compact JSON, and tippecanoe reads the same thing from both.
-func TestMatchesPython(t *testing.T) {
+// testdata/edge.want.* are the output and report for testdata/edge.geojsonl: every
+// recognised kind, values it drops, a name with characters JSON escapes, and seam
+// duplicates (only an id written the same way twice: 1, 1.0, true and "1" are four ids).
+// The features are compared parsed, not as bytes. -update rewrites them.
+func TestEdgeCases(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out.geojsonl")
 	var report bytes.Buffer
 	if err := run("testdata/edge.geojsonl", out, &report); err != nil {
 		t.Fatal(err)
 	}
-	want, _ := os.ReadFile("testdata/edge.want.stdout")
-	if report.String() != string(want) {
-		t.Errorf("report differs:\n got:\n%s\n want:\n%s", report.String(), want)
+	golden.Check(t, "report", report.Bytes(), "testdata/edge.want.stdout")
+	if *golden.Update {
+		data, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.Check(t, "features", data, "testdata/edge.want.geojsonl")
+		return
 	}
 	got, wantF := features(t, out), features(t, "testdata/edge.want.geojsonl")
 	if !reflect.DeepEqual(got, wantF) {

@@ -10,9 +10,9 @@ func TestSetAndDelete(t *testing.T) {
 		in, op, key, value, want string
 	}{
 		{`{"a":1,"ele":"1345","b":2}`, "set", "ele", `1345.0`, `{"a":1,"ele":1345.0,"b":2}`},
-		{`{"a":1}`, "set", "lists", `"munro"`, `{"a":1, "lists": "munro"}`},
-		{`{}`, "set", "lists", `"munro"`, `{"lists": "munro"}`},
-		{`{ }`, "set", "k", `1`, `{"k": 1}`},
+		{`{"a":1}`, "set", "lists", `"munro"`, `{"a":1,"lists":"munro"}`},
+		{`{}`, "set", "lists", `"munro"`, `{"lists":"munro"}`},
+		{`{ }`, "set", "k", `1`, `{"k":1}`},
 		{`{"ele":"x","a":1}`, "del", "ele", ``, `{"a":1}`},
 		{`{"a":1,"ele":"x","b":2}`, "del", "ele", ``, `{"a":1,"b":2}`},
 		{`{"a":1,"ele":"x"}`, "del", "ele", ``, `{"a":1}`},

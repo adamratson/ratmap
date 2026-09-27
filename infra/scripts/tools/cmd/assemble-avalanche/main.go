@@ -38,6 +38,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -57,7 +58,7 @@ type tile struct {
 	data    []byte
 }
 
-// errFail is a check that failed: printed as the Python's sys.exit("FAIL: ...") was.
+// errFail is a check that failed: its FAIL message printed on its own, exit status 1.
 type errFail struct{ msg string }
 
 func (e errFail) Error() string { return e.msg }
@@ -65,26 +66,24 @@ func (e errFail) Error() string { return e.msg }
 const usage = `usage: assemble-avalanche --out OUT --name NAME --bounds W,S,E,N [--webp] [--jobs N] Z:RASTER [Z:RASTER ...]`
 
 func main() {
-	a := cli.Parse(os.Args[1:], usage, []cli.Spec{
-		{Name: "out", Help: "the MBTiles to write"},
-		{Name: "name", Help: "its metadata name"},
-		{Name: "bounds", Help: "w,s,e,n in degrees"},
-		{Name: "webp", Bool: true, Help: "re-encode tiles as lossless WebP"},
-		{Name: "jobs", Help: "tiles to re-encode at once (default: half the cores). Set this below " +
-			"the core count when several regions build in parallel."},
-	})
+	fs := flag.NewFlagSet("assemble-avalanche", flag.ExitOnError)
+	out := fs.String("out", "", "the MBTiles to write")
+	name := fs.String("name", "", "its metadata name")
+	bounds := fs.String("bounds", "", "w,s,e,n in degrees")
+	webp := fs.Bool("webp", false, "re-encode tiles as lossless WebP")
+	jobs := fs.Int("jobs", 0, "tiles to re-encode at once (0: half the cores). Set this below "+
+		"the core count when several regions build in parallel.")
+	levels := cli.Parse(fs, usage, os.Args[1:])
+	given := cli.Given(fs)
 	for _, req := range []string{"out", "name", "bounds"} {
-		if !a.Has(req) {
-			fmt.Fprintf(os.Stderr, "%s\nerror: the following arguments are required: --%s\n", usage, req)
-			os.Exit(2)
+		if !given[req] {
+			cli.Fail(fs, "--%s is required", req)
 		}
 	}
-	if len(a.Positionals) == 0 {
-		fmt.Fprintf(os.Stderr, "%s\nerror: the following arguments are required: levels\n", usage)
-		os.Exit(2)
+	if len(levels) == 0 {
+		cli.Fail(fs, "at least one Z:RASTER is required")
 	}
-	err := run(a.String("out", ""), a.String("name", ""), a.String("bounds", ""), a.Has("webp"),
-		a.Int("jobs", 0), a.Positionals)
+	err := run(*out, *name, *bounds, *webp, *jobs, levels)
 	if err != nil {
 		var fail errFail
 		if errors.As(err, &fail) {
@@ -132,7 +131,7 @@ func run(out, name, boundsArg string, webp bool, jobs int, levels []string) erro
 		// tile grid have drifted apart — which would silently stack two levels on top of
 		// each other in the merged archive.
 		if len(got) != 1 || got[0] != z {
-			return errFail{fmt.Sprintf("FAIL: raster for z%d tiled as %s; resolution and tile grid disagree", z, pyList(got))}
+			return errFail{fmt.Sprintf("FAIL: raster for z%d tiled as %s; resolution and tile grid disagree", z, intList(got))}
 		}
 		fmt.Printf("  z%d: %d tiles\n", z, len(rows))
 		all = append(all, rows...)
@@ -181,8 +180,8 @@ func totalBytes(rows []tile) int64 {
 	return n
 }
 
-// pyList is Python's repr of a list of ints.
-func pyList(v []int64) string {
+// intList writes ints as "[10, 11]".
+func intList(v []int64) string {
 	parts := make([]string, len(v))
 	for i, n := range v {
 		parts[i] = strconv.FormatInt(n, 10)
@@ -332,8 +331,7 @@ func toLosslessWebP(rows []tile, work string, jobs int) ([]tile, error) {
 	// the laptop they are also using: taking every core (including the efficiency cores
 	// macOS runs background work on) makes the machine unusable for the duration, which
 	// is exactly what happened on the first Aragón run. A build box can have the lot via
-	// --jobs. (runtime.NumCPU counts the cores this process may run on, where Python's
-	// os.cpu_count counted the machine's; they differ only under a CPU affinity mask.)
+	// --jobs. (runtime.NumCPU counts the cores this process may run on.)
 	want := jobs
 	if want <= 0 {
 		want = max(1, runtime.NumCPU()/2)

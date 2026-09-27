@@ -10,13 +10,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"ratmap/infra/tools/internal/golden"
 )
 
-// Each testdata/case-* is the Python's verdict (exit code and stdout) on the same source,
-// decoded tiles and archive: every peak present; extra input
-// peaks the archive lacks (named, unnamed, a Munro, one at the antimeridian, a null name);
-// more than the 50 it lists; and a decoded coordinate moved onto a half pixel.
-func TestMatchesPython(t *testing.T) {
+// Each testdata/case-* is the verdict (exit code and stdout) on the same source, decoded
+// tiles and archive: every peak present; extra input peaks the archive lacks (named,
+// unnamed, a Munro, one at the antimeridian, a null name); more than the 50 it lists; and
+// a decoded coordinate moved onto a half pixel. -update rewrites them.
+func TestVerdicts(t *testing.T) {
 	if _, err := exec.LookPath("tippecanoe-decode"); err != nil {
 		t.Skip("tippecanoe-decode not on PATH; the failure cases decode the archive again")
 	}
@@ -43,10 +45,7 @@ func TestMatchesPython(t *testing.T) {
 				code = 1
 			}
 			got := fmt.Sprintf("exit %d\n%s", code, out.String())
-			want, _ := os.ReadFile(filepath.Join("testdata", "case-"+name+".want"))
-			if got != string(want) {
-				t.Errorf("got:\n%s\nPython:\n%s", got, want)
-			}
+			golden.Check(t, "verdict", []byte(got), filepath.Join("testdata", "case-"+name+".want"))
 		})
 	}
 }
@@ -66,7 +65,7 @@ func TestPixel(t *testing.T) {
 }
 
 func TestPyMod(t *testing.T) {
-	if pyMod(-1, 10) != 9 || pyMod(11, 10) != 1 || pyMod(0, 10) != 0 {
-		t.Fatal("pyMod is not Python's %")
+	if floorMod(-1, 10) != 9 || floorMod(11, 10) != 1 || floorMod(0, 10) != 0 {
+		t.Fatal("floorMod")
 	}
 }

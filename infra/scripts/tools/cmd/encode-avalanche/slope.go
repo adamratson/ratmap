@@ -73,13 +73,14 @@ func hornRow(above, row, below []float64, scale float64, slope, aspect []float64
 		slope[c] = float64(math.Atan(math.Hypot(dzdx, dzdy)) * rad2deg)
 
 		asp := float64(math.Atan2(-dzdx, dzdy)*rad2deg) + 360.0
-		aspect[c] = pyMod(asp, 360.0)
+		aspect[c] = floorMod(asp, 360.0)
 	}
 }
 
-// pyMod is numpy's float remainder (npy_divmod): fmod, moved into the divisor's sign, and
-// +0.0 rather than -0.0 for an exact zero.
-func pyMod(a, b float64) float64 {
+// floorMod is a mod b with the divisor's sign, as numpy's float remainder (npy_divmod)
+// computed it for the published layer: fmod, moved into the divisor's sign, and +0.0
+// rather than -0.0 for an exact zero.
+func floorMod(a, b float64) float64 {
 	m := math.Mod(a, b)
 	if m != 0 {
 		if (b < 0) != (m < 0) {
@@ -115,7 +116,7 @@ func quantise(slope, aspect float64) (uint8, uint8) {
 	if s == 0 {
 		return 0, 0
 	}
-	o := math.Floor(pyMod(aspect+22.5, 360.0)/45.0) + 1
+	o := math.Floor(floorMod(aspect+22.5, 360.0)/45.0) + 1
 	if o != o {
 		return uint8(s), 0
 	}

@@ -1,15 +1,11 @@
 // Package jsonedit edits one member of a JSON object in place, leaving every other byte
 // of the text as it was.
 //
-// The Python scripts these tools replace rewrote a feature by json.loads, a dict edit and
-// json.dumps. Re-encoding every feature the way json.dumps did would mean reproducing
-// Python's encoder for every value; editing only the member that changed keeps the rest
-// exactly as osmium (or whoever) wrote it, and it means the same thing to every reader.
-// An edit follows Python's dict semantics: an existing key is replaced where it stands,
-// a new one goes last.
+// Editing only the member that changes keeps the rest of a feature exactly as osmium (or
+// whoever) wrote it, rather than re-encoding every value. An existing key is replaced
+// where it stands; a new one goes last.
 //
-// It scans, it does not validate: callers json.Unmarshal the whole text first, which is
-// what json.loads did.
+// It scans, it does not validate: callers json.Unmarshal the whole text first.
 package jsonedit
 
 import (
@@ -80,9 +76,9 @@ func Parse(text []byte, start int) (Object, error) {
 	}
 }
 
-// Find returns the index of the member named key, or -1. A repeated key is refused:
-// Python keeps the first position and the last value, which an edit of the text cannot
-// honestly reproduce, and no writer in this pipeline emits one.
+// Find returns the index of the member named key, or -1. A repeated key is refused: which
+// of the two a reader takes differs between parsers, so there is no one member to edit,
+// and no writer in this pipeline emits one.
 func (o Object) Find(key string) (int, error) {
 	found := -1
 	for i, m := range o.Members {
@@ -101,8 +97,8 @@ func (o Object) Value(text []byte, i int) []byte {
 	return text[o.Members[i].ValueStart:o.Members[i].ValueEnd]
 }
 
-// Set is `obj[key] = value`: replaced in place if the key exists, appended last if not.
-// value is JSON text. New members use json.dumps' separators (", " and ": ").
+// Set sets key to value (JSON text): replaced in place if the key exists, appended last
+// if not, compactly, as osmium writes.
 func (o Object) Set(text []byte, key string, value []byte) ([]byte, error) {
 	i, err := o.Find(key)
 	if err != nil {
@@ -113,16 +109,16 @@ func (o Object) Set(text []byte, key string, value []byte) ([]byte, error) {
 		return join(text[:m.ValueStart], value, text[m.ValueEnd:]), nil
 	}
 	k, _ := json.Marshal(key)
-	member := append(append(k, ": "...), value...)
+	member := append(append(k, ':'), value...)
 	if len(o.Members) == 0 {
 		return join(text[:o.Open+1], member, text[o.Close:]), nil
 	}
 	at := o.Members[len(o.Members)-1].ValueEnd
-	return join(text[:at], []byte(", "), member, text[at:]), nil
+	return join(text[:at], []byte(","), member, text[at:]), nil
 }
 
-// Delete is `del obj[key]`, taking the separating comma with it. Deleting a key that is
-// not there is a no-op.
+// Delete removes key, taking the separating comma with it. Deleting a key that is not
+// there is a no-op.
 func (o Object) Delete(text []byte, key string) ([]byte, error) {
 	i, err := o.Find(key)
 	if err != nil || i < 0 {

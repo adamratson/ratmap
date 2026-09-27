@@ -8,15 +8,13 @@ import (
 	"io"
 	"math"
 	"os"
+	"strconv"
 
 	"ratmap/infra/tools/internal/jsonedit"
-	"ratmap/infra/tools/internal/pyfloat"
-	"ratmap/infra/tools/internal/pytext"
 )
 
 // eachLine calls fn with every non-blank line of a line-delimited GeoJSON file, in order,
-// stripped the way the Python stripped it: a leading RS (\x1e, RFC 8142's record
-// separator) and surrounding whitespace.
+// with a leading RS (\x1e, RFC 8142's record separator) and surrounding space stripped.
 func eachLine(path string, fn func(line []byte) error) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -27,7 +25,7 @@ func eachLine(path string, fn func(line []byte) error) error {
 	for {
 		raw, err := r.ReadBytes('\n')
 		if len(raw) > 0 {
-			line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace)
+			line := bytes.TrimSpace(bytes.TrimLeft(raw, "\x1e"))
 			if len(line) > 0 {
 				if ferr := fn(line); ferr != nil {
 					return ferr
@@ -75,12 +73,8 @@ func loadCoords(path string) ([]float64, []float64, error) {
 
 // writeOutput streams the input to the output, adding `prom` where scored.
 //
-// The Python round-tripped every feature through json.loads/json.dumps. This splices
-// `"prom": <value>` into each scored line's text instead and copies every other byte
-// through. When the input was json.dumps text — normalize-peaks.py's output, before it
-// too was ported — the result was byte-identical to the Python's (checked 2026-09-25).
-// normalize-peaks now writes osmium's compact text with its edits, so the bytes follow
-// that; the features, and every value in them, are the same.
+// It splices `"prom": <value>` into each scored line's text and copies every other byte
+// through, rather than re-encoding the feature.
 func writeOutput(peaksIn, peaksOut string, prom map[int]float64) error {
 	out, err := os.Create(peaksOut)
 	if err != nil {
@@ -91,7 +85,7 @@ func writeOutput(peaksIn, peaksOut string, prom map[int]float64) error {
 	err = eachLine(peaksIn, func(line []byte) error {
 		defer func() { i++ }()
 		if v, ok := prom[i]; ok {
-			spliced, err := setProm(line, pyfloat.Repr(v))
+			spliced, err := setProm(line, strconv.FormatFloat(v, 'f', -1, 64))
 			if err != nil {
 				return fmt.Errorf("%s: feature %d: %w", peaksIn, i+1, err)
 			}
@@ -111,10 +105,9 @@ func writeOutput(peaksIn, peaksOut string, prom map[int]float64) error {
 	return out.Close()
 }
 
-// setProm is `feature.setdefault("properties", {})["prom"] = value` done on the JSON
-// text: an existing "prom" has its value replaced in place, a new one is appended as the
-// last property, and a feature with no "properties" gets one appended as its last
-// member. Separators are json.dumps' own (", " and ": ").
+// setProm sets properties.prom on the JSON text: an existing "prom" has its value
+// replaced in place, a new one is appended as the last property, and a feature with no
+// "properties" gets one appended as its last member.
 func setProm(line []byte, value string) ([]byte, error) {
 	top, err := jsonedit.Parse(line, 0)
 	if err != nil {
@@ -125,10 +118,9 @@ func setProm(line []byte, value string) ([]byte, error) {
 		return nil, err
 	}
 	if i < 0 {
-		return top.Set(line, "properties", []byte(`{"prom": `+value+`}`))
+		return top.Set(line, "properties", []byte(`{"prom":`+value+`}`))
 	}
 	if v := top.Value(line, i); v[0] != '{' {
-		// Python would raise here too: None/list/number has no item assignment.
 		return nil, fmt.Errorf(`"properties" is %s, not an object`, v)
 	}
 	props, err := jsonedit.Parse(line, top.Members[i].ValueStart)

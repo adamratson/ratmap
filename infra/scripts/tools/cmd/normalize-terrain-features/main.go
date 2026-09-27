@@ -29,9 +29,8 @@
 // by default `osmium export` emits a closed way as both a LineString and a MultiPolygon;
 // build-terrain-features.sh exports `--geometry-types=point,polygon`.
 //
-// The output is not the Python's bytes: it copies osmium's geometry text through rather
-// than re-serializing it, and writes the new properties compactly. Its readers —
-// build-terrain-features.sh's check and tippecanoe — parse it.
+// Each feature's geometry is osmium's text, copied through rather than re-serialized, and
+// its new properties are written compactly.
 package main
 
 import (
@@ -46,7 +45,7 @@ import (
 	"sort"
 	"strings"
 
-	"ratmap/infra/tools/internal/pytext"
+	"ratmap/infra/tools/internal/rawjson"
 )
 
 var kinds = map[string]bool{"scree": true, "shingle": true, "rock": true, "stone": true}
@@ -91,13 +90,13 @@ func run(srcPath, destPath string, out io.Writer) error {
 
 	for n := 1; ; n++ {
 		raw, rerr := r.ReadBytes('\n')
-		if line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace); len(line) > 0 {
+		if line := bytes.TrimSpace(bytes.TrimLeft(raw, "\x1e")); len(line) > 0 {
 			var f map[string]json.RawMessage
 			if err := json.Unmarshal(line, &f); err != nil {
 				dest.Close()
 				return fmt.Errorf("%s: line %d: %w", srcPath, n, err)
 			}
-			// feature.get("properties", {}): present but not an object raised in Python.
+			// Properties present but not an object are a broken export.
 			props := map[string]json.RawMessage{}
 			if p, ok := f["properties"]; ok {
 				if err := json.Unmarshal(p, &props); err != nil || props == nil {
@@ -105,22 +104,14 @@ func run(srcPath, destPath string, out io.Writer) error {
 					return fmt.Errorf("%s: line %d: properties is %s, not an object", srcPath, n, p)
 				}
 			}
-			nat := bytes.TrimSpace(props["natural"])
-			if len(nat) > 0 && (nat[0] == '[' || nat[0] == '{') {
-				dest.Close()
-				return fmt.Errorf("%s: line %d: natural is %s (unhashable in Python)", srcPath, n, nat)
-			}
-			kind, ok := pytext.Str(nat)
+			kind, ok := rawjson.String(props["natural"])
 			if !ok || !kinds[kind] {
 				unrecognized++
 			} else {
 				dup := false
 				if id, ok := props["@id"]; ok && string(bytes.TrimSpace(id)) != "null" {
-					k, err := pytext.HashKey(id)
-					if err != nil {
-						dest.Close()
-						return fmt.Errorf("%s: line %d: %w", srcPath, n, err)
-					}
+					// Keyed by the id as written: osmium writes an integer, always.
+					k := string(bytes.TrimSpace(id))
 					if seen[kind+"\x00"+k] {
 						duplicated++
 						dup = true
@@ -137,7 +128,7 @@ func run(srcPath, destPath string, out io.Writer) error {
 					w.Write(geom)
 					w.WriteString(`,"properties":{"kind":`)
 					w.Write(jsonString(kind))
-					if name, ok := pytext.Str(props["name"]); ok {
+					if name, ok := rawjson.String(props["name"]); ok {
 						w.WriteString(`,"name":`)
 						w.Write(jsonString(name))
 					}
@@ -188,10 +179,10 @@ func jsonString(s string) []byte {
 	return bytes.TrimRight(b.Bytes(), "\n")
 }
 
-// selfTest is the Python's --self-test, case for case: thin on purpose — there is no
-// free-text parsing here to stress — but a change to the kind/dedup/rename logic still
-// has something to break against, the standard every normalize step here holds to. Like
-// the Python it runs the real normalizer, so its report lines are printed too.
+// selfTest is --self-test: thin on purpose — there is no free-text parsing here to
+// stress — but a change to the kind/dedup/rename logic still has something to break
+// against, the standard every normalize step here holds to. It runs the real normalizer,
+// so its report lines are printed too.
 func selfTest(out io.Writer) error {
 	cases := []struct{ props, want string }{
 		{`{"natural": "scree", "@id": 1}`, `{"kind": "scree"}`},

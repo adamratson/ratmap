@@ -1,12 +1,11 @@
-// Command util holds the small helpers the shell scripts used Python for.
+// Command util holds small helpers for the shell scripts.
 //
 //	util subset-key SRC UNION     # lib.sh osm_subset: the cache key of a shared OSM subset
-//	util url-quote TEXT           # vendor-assets.sh: urllib.parse.quote(TEXT)
+//	util url-quote TEXT           # vendor-assets.sh: TEXT percent-encoded for a URL path
 //	util dem-tiles W S E N        # fetch-dem.sh: the Copernicus GLO-30 tiles covering a bbox
 //
-// Ports of the Python snippets those scripts carried inline, printing what they printed.
-// subset-key in particular has to: it names cached subsets, and a different key would
-// orphan every one already built.
+// subset-key names cached subsets: changing how it is built orphans every one already
+// built, so it changes only deliberately.
 package main
 
 import (
@@ -18,8 +17,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"ratmap/infra/tools/internal/pytext"
 )
 
 const usage = `usage: util subset-key SRC UNION
@@ -57,21 +54,16 @@ func run(args []string, out io.Writer) error {
 	return errUsage
 }
 
-// subsetKey is "<sha1 of the normalised filter union, 12 hex>-<size>-<mtime>": any change
-// to the filters or the source extract makes a new key, so a stale subset is never used.
-// The mtime is int(os.stat().st_mtime): CPython's st_mtime is sec + nsec*1e-9 as a double,
-// which can round a time just short of a whole second up to it, so this does the same
-// arithmetic rather than taking the seconds field.
+// subsetKey is "<sha1 of the filter union, spaces collapsed, 12 hex>-<size>-<mtime in
+// whole seconds>": any change to the filters or the source extract makes a new key, so a
+// stale subset is never used.
 func subsetKey(src, union string) (string, error) {
 	st, err := os.Stat(src)
 	if err != nil {
 		return "", err
 	}
-	sum := sha1.Sum([]byte(strings.Join(strings.FieldsFunc(union, pytext.IsSpace), " ")))
-	mt := st.ModTime()
-	sec, nsec := mt.Unix(), mt.Nanosecond()
-	mtime := float64(sec) + float64(float64(nsec)*1e-9)
-	return fmt.Sprintf("%s-%d-%d", hex.EncodeToString(sum[:])[:12], st.Size(), int64(mtime)), nil
+	sum := sha1.Sum([]byte(strings.Join(strings.Fields(union), " ")))
+	return fmt.Sprintf("%s-%d-%d", hex.EncodeToString(sum[:])[:12], st.Size(), st.ModTime().Unix()), nil
 }
 
 // urlQuote is urllib.parse.quote with its default safe="/": letters, digits, "_.-~" and

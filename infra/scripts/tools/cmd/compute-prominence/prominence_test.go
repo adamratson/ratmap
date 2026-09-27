@@ -8,7 +8,7 @@ import (
 	"sort"
 	"testing"
 
-	"ratmap/infra/tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/num"
 )
 
 // referenceCompute is compute-prominence.py's compute() transcribed as literally as Go
@@ -115,13 +115,13 @@ func referenceCompute(dem []float32, w, h int, gt [6]float64, lons, lats []float
 			if l == 0 || resolved[n] || best[l] == n {
 				continue
 			}
-			prom[p.i] = pyfloat.Round(math.Max(0, p.ele-t), 1)
+			prom[p.i] = num.Round(math.Max(0, p.ele-t), 1)
 			resolved[n] = true
 		}
 	}
 	for n, p := range located {
 		if !resolved[n] {
-			prom[p.i] = pyfloat.Round(math.Max(0, p.ele-demMin), 1)
+			prom[p.i] = num.Round(math.Max(0, p.ele-demMin), 1)
 		}
 	}
 	return prom
@@ -265,19 +265,19 @@ func TestDownsampleMax(t *testing.T) {
 
 func TestSetProm(t *testing.T) {
 	cases := []struct{ in, want string }{
-		// json.dumps' shape, as normalize-peaks.py wrote it: prom appended as the last property.
-		{`{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"name": "Ben Nevis", "ele": 1345.0}}`,
-			`{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"name": "Ben Nevis", "ele": 1345.0, "prom": 1340.0}}`},
-		// An existing prom is replaced where it stands.
-		{`{"properties": {"prom": 5.0, "name": "x"}}`, `{"properties": {"prom": 1340.0, "name": "x"}}`},
-		{`{"properties": {}}`, `{"properties": {"prom": 1340.0}}`},
-		{`{"type": "Feature"}`, `{"type": "Feature", "properties": {"prom": 1340.0}}`},
-		{`{}`, `{"properties": {"prom": 1340.0}}`},
+		// Appended as the last property, compactly, as osmium writes.
+		{`{"type":"Feature","geometry":{"type":"Point","coordinates":[-5,56.8]},"properties":{"name":"Ben Nevis","ele":1345}}`,
+			`{"type":"Feature","geometry":{"type":"Point","coordinates":[-5,56.8]},"properties":{"name":"Ben Nevis","ele":1345,"prom":1340}}`},
+		// An existing prom is replaced where it stands, whatever the spacing around it.
+		{`{"properties": {"prom": 5.0, "name": "x"}}`, `{"properties": {"prom": 1340, "name": "x"}}`},
+		{`{"properties":{}}`, `{"properties":{"prom":1340}}`},
+		{`{"type":"Feature"}`, `{"type":"Feature","properties":{"prom":1340}}`},
+		{`{}`, `{"properties":{"prom":1340}}`},
 		// Braces and quotes inside strings must not confuse the scanner.
-		{`{"properties": {"name": "a \"}\" b", "x": [1, {"y": "}"}]}}`, `{"properties": {"name": "a \"}\" b", "x": [1, {"y": "}"}], "prom": 1340.0}}`},
+		{`{"properties":{"name":"a \"}\" b","x":[1,{"y":"}"}]}}`, `{"properties":{"name":"a \"}\" b","x":[1,{"y":"}"}],"prom":1340}}`},
 	}
 	for _, c := range cases {
-		got, err := setProm([]byte(c.in), "1340.0")
+		got, err := setProm([]byte(c.in), "1340")
 		if err != nil {
 			t.Errorf("%s: %v", c.in, err)
 			continue
@@ -292,18 +292,7 @@ func TestSetProm(t *testing.T) {
 	}
 	for _, bad := range []string{`{"properties": null}`, `{"properties": [1]}`, `[1]`} {
 		if _, err := setProm([]byte(bad), "1.0"); err == nil {
-			t.Errorf("setProm(%s): want an error, as Python raises", bad)
-		}
-	}
-}
-
-func TestPyStr(t *testing.T) {
-	for in, want := range map[string]string{
-		"-5": "-5", "-0": "0", "56.8": "56.8", "-7.50": "-7.5", "1e1": "10.0", "10.0": "10.0",
-		"-8.6493305": "-8.6493305", "0.000833333": "0.000833333",
-	} {
-		if got := pyStr(json.Number(in)); got != want {
-			t.Errorf("pyStr(%s) = %q, want %q", in, got, want)
+			t.Errorf("setProm(%s): want an error", bad)
 		}
 	}
 }

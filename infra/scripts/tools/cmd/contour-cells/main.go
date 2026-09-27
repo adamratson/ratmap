@@ -3,8 +3,7 @@
 //	contour-cells CLIP.tif CELL_PX
 //	<n> <xoff> <yoff> <xsize> <ysize> <xmin> <xmax> <ymin> <ymax>
 //
-// A port of the Python snippet build-contours.sh carried inline, printing what it
-// printed. Cells are even (none is a sliver), each window runs one pixel past its seams
+// Cells are even (none is a sliver), each window runs one pixel past its seams
 // so the squares either side of a seam are computed whole in both cells, and the bounds
 // are pixel-centre coordinates, "-inf"/"inf" at the region's own edges — see
 // build-contours.sh for why, and contour-cell for how they are used.
@@ -19,7 +18,6 @@ import (
 	"strings"
 
 	"ratmap/infra/tools/internal/gdal"
-	"ratmap/infra/tools/internal/pyfloat"
 )
 
 func main() {
@@ -55,7 +53,7 @@ type span struct {
 }
 
 // seams splits size into even cells: n cells, seams at the pixel indices between them.
-// round() is Python's: an exact half goes to the even neighbour.
+// An exact half rounds to the even neighbour.
 func seams(size, cell int) []int {
 	n := max(1, int(math.Ceil(float64(size)/float64(cell))))
 	var cuts []int
@@ -97,13 +95,13 @@ func run(info gdal.Info, cell int, out io.Writer) error {
 	if gt[2] != 0 || gt[4] != 0 {
 		return fmt.Errorf("build-contours.sh: rotated DEM geotransform, cells assume north-up")
 	}
-	// The float64() conversions stop Go fusing the multiply into the add (FMA, which it
-	// may do on arm64): Python rounds each operation on its own.
+	// The float64() conversion stops Go fusing the multiply into the add (FMA, which it
+	// may do on arm64), so the bounds are the same on every machine.
 	coord := func(origin, step float64, b bound, edge string) string {
 		if b.none {
 			return edge
 		}
-		return pyfloat.Repr(origin + float64(b.v*step))
+		return strconv.FormatFloat(origin+float64(b.v*step), 'f', -1, 64)
 	}
 	n := 0
 	for _, row := range spans(info.Height, seams(info.Height, cell)) {

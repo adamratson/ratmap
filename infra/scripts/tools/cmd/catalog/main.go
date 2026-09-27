@@ -8,14 +8,15 @@
 //	catalog dist-gb   REGIONS_JSON DIST_DIR                 # build-global.sh catalogue_dist_gb
 //	catalog peaks-mem REGIONS_JSON RES WORKERS PER_FETCH_GB BYTES_PER_PX  # peaks_mem_gb
 //
-// Ports of the Python snippets those scripts carried inline, each printing what its
-// snippet printed: `region-vars` output is eval'd, so it is shell assignments quoted with
-// shlex.quote's rules, and every number is written as Python's str() wrote it — the bbox
-// strings in particular, because fetch-dem.sh builds its DEM cache key from them and a
-// different spelling would miss every cached DEM.
+// `region-vars` output is eval'd, so it is shell assignments, quoted. Every catalogue
+// number is written exactly as regions.json writes it — the bbox strings in particular,
+// because fetch-dem.sh builds its DEM cache key from them and a different spelling would
+// miss every cached DEM.
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -27,9 +28,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ratmap/infra/tools/internal/pyfloat"
-	"ratmap/infra/tools/internal/pyjson"
-	"ratmap/infra/tools/internal/pytext"
+	"ratmap/infra/tools/internal/shell"
 )
 
 const usage = `usage: catalog region-vars region|contours|avalanche REGIONS_JSON ID [ZMIN]
@@ -38,7 +37,7 @@ const usage = `usage: catalog region-vars region|contours|avalanche REGIONS_JSON
        catalog dist-gb REGIONS_JSON DIST_DIR
        catalog peaks-mem REGIONS_JSON RES WORKERS PER_FETCH_GB BYTES_PER_PX`
 
-// exitMsg is sys.exit("..."): the message on stderr, status 1.
+// exitMsg is a message for the person running the script: printed on its own, status 1.
 type exitMsg string
 
 func (e exitMsg) Error() string { return string(e) }
@@ -128,137 +127,136 @@ func run(args []string, out io.Writer) error {
 	return errUsage
 }
 
-func load(path string) ([]*pyjson.Object, error) {
+// region is one catalogue entry. Numbers stay as written (json.Number): the bbox text is
+// what the scripts pass on to fetch-dem.sh, which builds its DEM cache key from it, so
+// re-spelling a number would miss every cached DEM. Flags stay raw, so that any one can
+// be asked for by name.
+type region struct {
+	ID             string        `json:"id"`
+	Name           string        `json:"name"`
+	BBox           []json.Number `json:"bbox"`
+	BasemapMaxzoom *json.Number  `json:"basemapMaxzoom"`
+	TerrainMaxzoom *json.Number  `json:"terrainMaxzoom"`
+	EstimatedBytes json.Number   `json:"estimatedBytes"`
+	fields         map[string]json.RawMessage
+}
+
+// flag reports whether the region sets key to true.
+func (r *region) flag(key string) bool {
+	return string(bytes.TrimSpace(r.fields[key])) == "true"
+}
+
+// wantsTerrain is true unless the region opts out with "terrain": false.
+func (r *region) wantsTerrain() bool {
+	return string(bytes.TrimSpace(r.fields["terrain"])) != "false"
+}
+
+func load(path string) ([]*region, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	doc, err := pyjson.Decode(data)
-	if err != nil {
+	var doc struct {
+		Regions []json.RawMessage `json:"regions"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	top, _ := doc.(*pyjson.Object)
-	if top == nil {
-		return nil, fmt.Errorf("%s: not an object", path)
-	}
-	rv, _ := top.Get("regions")
-	list, ok := rv.([]pyjson.Value)
-	if !ok {
+	if doc.Regions == nil {
 		return nil, fmt.Errorf(`%s: no "regions" list`, path)
 	}
-	out := make([]*pyjson.Object, len(list))
-	for i, r := range list {
-		if out[i], ok = r.(*pyjson.Object); !ok {
-			return nil, fmt.Errorf("%s: a region is not an object", path)
+	out := make([]*region, len(doc.Regions))
+	for i, raw := range doc.Regions {
+		r := &region{}
+		if err := json.Unmarshal(raw, r); err != nil {
+			return nil, fmt.Errorf("%s: region %d: %w", path, i, err)
 		}
+		if err := json.Unmarshal(raw, &r.fields); err != nil {
+			return nil, fmt.Errorf("%s: region %d: %w", path, i, err)
+		}
+		out[i] = r
 	}
 	return out, nil
 }
 
-func str(o *pyjson.Object, key string) string {
-	v, _ := o.Get(key)
-	s, _ := v.(string)
-	return s
-}
-
-// find is next(r for r in regions if r["id"] == id), with the snippets' message when
-// there is none.
-func find(regions []*pyjson.Object, id string) (*pyjson.Object, error) {
+// find is the region with this id, or the message the scripts print when there is none.
+func find(regions []*region, id string) (*region, error) {
 	for _, r := range regions {
-		if str(r, "id") == id {
+		if r.ID == id {
 			return r, nil
 		}
 	}
 	known := make([]string, len(regions))
 	for i, r := range regions {
-		known[i] = str(r, "id")
+		known[i] = r.ID
 	}
 	return nil, exitMsg(fmt.Sprintf("Unknown region '%s'. Known: %s", id, strings.Join(known, ", ")))
 }
 
-// bbox is `west, south, east, north = r["bbox"]`: the four values, and each as a float.
-func bbox(r *pyjson.Object) ([]pyjson.Value, [4]float64, error) {
+// bbox is the region's west, south, east, north, as written and as floats.
+func bbox(r *region) ([]string, [4]float64, error) {
 	var f [4]float64
-	v, _ := r.Get("bbox")
-	list, ok := v.([]pyjson.Value)
-	if !ok || len(list) != 4 {
-		return nil, f, fmt.Errorf("region %s: bbox is not four numbers", str(r, "id"))
+	if len(r.BBox) != 4 {
+		return nil, f, fmt.Errorf("region %s: bbox is not four numbers", r.ID)
 	}
-	for i, x := range list {
-		if f[i], ok = pyjson.Number(x); !ok {
-			return nil, f, fmt.Errorf("region %s: bbox is not four numbers", str(r, "id"))
+	text := make([]string, 4)
+	for i, n := range r.BBox {
+		v, err := n.Float64()
+		if err != nil {
+			return nil, f, fmt.Errorf("region %s: bbox is not four numbers", r.ID)
 		}
+		f[i], text[i] = v, n.String()
 	}
-	return list, f, nil
+	return text, f, nil
 }
 
-// pyStr is str() of a decoded JSON value: a string itself, anything else as Python
-// prints it (an int's digits, a float's repr, None, True…).
-func pyStr(v pyjson.Value) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return pytext.StrValue([]byte(encode(v)))
-}
-
-func joinStr(vs []pyjson.Value, sep string) string {
-	parts := make([]string, len(vs))
-	for i, v := range vs {
-		parts[i] = pyStr(v)
-	}
-	return strings.Join(parts, sep)
-}
-
-func regionVars(out io.Writer, regions []*pyjson.Object, id string) error {
+func regionVars(out io.Writer, regions []*region, id string) error {
 	r, err := find(regions, id)
 	if err != nil {
 		return err
 	}
-	raw, b, err := bbox(r)
+	text, b, err := bbox(r)
 	if err != nil {
 		return err
 	}
 	if !(b[0] < b[2] && b[1] < b[3]) {
-		bv, _ := r.Get("bbox")
-		return exitMsg(fmt.Sprintf("Region '%s' has an invalid bbox %s (need west<east, south<north). Fix regions.json before building.",
-			str(r, "id"), pytext.ReprValue([]byte(encode(bv)))))
+		return exitMsg(fmt.Sprintf("Region '%s' has an invalid bbox [%s] (need west<east, south<north). Fix regions.json before building.",
+			r.ID, strings.Join(text, ", ")))
 	}
-	fmt.Fprintf(out, "REGION_NAME=%s\n", pytext.ShellQuote(str(r, "name")))
+	fmt.Fprintf(out, "REGION_NAME=%s\n", shell.Quote(r.Name))
 	// Opt-out, not opt-in: every region gets terrain unless it says otherwise.
 	want := "1"
-	if v, ok := r.Get("terrain"); ok && v == false {
+	if !r.wantsTerrain() {
 		want = "0"
 	}
 	fmt.Fprintf(out, "WANT_TERRAIN=%s\n", want)
-	fmt.Fprintf(out, "BBOX=%s\n", pytext.ShellQuote(joinStr(raw, ",")))
+	fmt.Fprintf(out, "BBOX=%s\n", shell.Quote(strings.Join(text, ",")))
 	// Empty unless the catalogue caps this region below the defaults.
-	for _, kv := range [][2]string{{"REGION_BASEMAP_Z", "basemapMaxzoom"}, {"REGION_TERRAIN_Z", "terrainMaxzoom"}} {
+	for _, kv := range []struct {
+		name string
+		v    *json.Number
+	}{{"REGION_BASEMAP_Z", r.BasemapMaxzoom}, {"REGION_TERRAIN_Z", r.TerrainMaxzoom}} {
 		val := ""
-		if v, ok := r.Get(kv[1]); ok {
-			val = pyStr(v)
+		if kv.v != nil {
+			val = kv.v.String()
 		}
-		fmt.Fprintf(out, "%s=%s\n", kv[0], val)
+		fmt.Fprintf(out, "%s=%s\n", kv.name, val)
 	}
 	return nil
 }
 
-func encode(v pyjson.Value) string {
-	s, _ := pyjson.Encode(v, pyjson.Options{})
-	return s
-}
-
-func contoursVars(out io.Writer, regions []*pyjson.Object, id string) error {
+func contoursVars(out io.Writer, regions []*region, id string) error {
 	r, err := find(regions, id)
 	if err != nil {
 		return err
 	}
-	raw, _, err := bbox(r)
+	text, _, err := bbox(r)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "REGION_NAME=%s\n", pytext.ShellQuote(str(r, "name")))
+	fmt.Fprintf(out, "REGION_NAME=%s\n", shell.Quote(r.Name))
 	for i, k := range []string{"WEST", "SOUTH", "EAST", "NORTH"} {
-		fmt.Fprintf(out, "%s=%s\n", k, pyStr(raw[i]))
+		fmt.Fprintf(out, "%s=%s\n", k, text[i])
 	}
 	return nil
 }
@@ -272,25 +270,24 @@ const (
 // avalancheVars is build-avalanche.sh's region maths: the zoom range the DEM supports and
 // the extent snapped to the tile grid at the finest zoom. See build-avalanche.sh for why
 // each number is what it is. The float64() conversions stop Go fusing a multiply into
-// the following add or subtract (FMA, which it may do on arm64): Python rounds each
-// operation on its own.
-func avalancheVars(out io.Writer, regions []*pyjson.Object, id, zminArg string) error {
+// the following add or subtract (FMA, which it may do on arm64), so each operation is
+// rounded on its own and the grid comes out the same on every machine.
+func avalancheVars(out io.Writer, regions []*region, id, zminArg string) error {
 	r, err := find(regions, id)
 	if err != nil {
 		return err
 	}
-	if v, _ := r.Get("avalanche"); !truthy(v) {
+	if !r.flag("avalanche") {
 		return exitMsg(fmt.Sprintf("Region '%s' does not set \"avalanche\": true in regions.json. "+
-			"This artifact is opt-in per region (A8) — add the flag if it is wanted here.", str(r, "id")))
+			"This artifact is opt-in per region (A8) — add the flag if it is wanted here.", r.ID))
 	}
-	raw, b, err := bbox(r)
+	text, b, err := bbox(r)
 	if err != nil {
 		return err
 	}
 	west, south, east, north := b[0], b[1], b[2], b[3]
 	if !(west < east && south < north) {
-		bv, _ := r.Get("bbox")
-		return exitMsg(fmt.Sprintf("Region '%s' has an invalid bbox %s.", str(r, "id"), pytext.ReprValue([]byte(encode(bv)))))
+		return exitMsg(fmt.Sprintf("Region '%s' has an invalid bbox [%s].", r.ID, strings.Join(text, ", ")))
 	}
 	zminIn, err := strconv.Atoi(strings.TrimSpace(zminArg))
 	if err != nil {
@@ -311,10 +308,9 @@ func avalancheVars(out io.Writer, regions []*pyjson.Object, id, zminArg string) 
 	toMerc := func(lon, latitude float64) (float64, float64, error) {
 		x := float64(lon*half) / 180.0
 		t := math.Tan(pi/4 + float64(latitude*degToRad)/2)
-		// math.log raised "math domain error" at the pole (tan 0), where Go returns -Inf
-		// and carries on; stop where the Python stopped.
+		// At the pole tan is 0 and the log -Inf: no grid to snap to.
 		if !(t > 0) {
-			return 0, 0, fmt.Errorf("region %s: latitude %v has no Mercator y (math domain error)", str(r, "id"), latitude)
+			return 0, 0, fmt.Errorf("region %s: latitude %v has no Mercator y", r.ID, latitude)
 		}
 		y := float64(math.Log(t)*half) / pi
 		return x, y, nil
@@ -334,44 +330,27 @@ func avalancheVars(out io.Writer, regions []*pyjson.Object, id, zminArg string) 
 	ax0, ay0 := snap(x0, math.Floor), snap(y0, math.Floor)
 	ax1, ay1 := snap(x1, math.Ceil), snap(y1, math.Ceil)
 
-	fmt.Fprintf(out, "REGION_NAME=%s\n", pytext.ShellQuote(str(r, "name")))
-	fmt.Fprintf(out, "BBOX=%s\n", pytext.ShellQuote(joinStr(raw, ",")))
+	fmt.Fprintf(out, "REGION_NAME=%s\n", shell.Quote(r.Name))
+	fmt.Fprintf(out, "BBOX=%s\n", shell.Quote(strings.Join(text, ",")))
 	for i, k := range []string{"WEST", "SOUTH", "EAST", "NORTH"} {
-		fmt.Fprintf(out, "%s=%s\n", k, pyStr(raw[i]))
+		fmt.Fprintf(out, "%s=%s\n", k, text[i])
 	}
 	fmt.Fprintf(out, "ZMAX=%d\nZMIN=%d\n", zmax, zmin)
 	// Quoted so `eval` assigns all four numbers to TE; the caller then leaves `$TE`
 	// unquoted so it word-splits back into gdalwarp's four -te arguments.
-	fmt.Fprintf(out, "TE=%s\n", pytext.ShellQuote(strings.Join([]string{
-		pyfloat.Repr(ax0), pyfloat.Repr(ay0), pyfloat.Repr(ax1), pyfloat.Repr(ay1)}, " ")))
-	fmt.Fprintf(out, "RES=%s\n", pyfloat.Repr(2*half/math.Pow(2, float64(zmax))/512))
+	fmt.Fprintf(out, "TE=%s\n", shell.Quote(strings.Join([]string{
+		metres(ax0), metres(ay0), metres(ax1), metres(ay1)}, " ")))
+	fmt.Fprintf(out, "RES=%s\n", metres(2*half/math.Pow(2, float64(zmax))/512))
 	return nil
 }
 
-func truthy(v pyjson.Value) bool {
-	switch t := v.(type) {
-	case nil:
-		return false
-	case bool:
-		return t
-	case string:
-		return t != ""
-	case pyjson.Int:
-		return t != "0"
-	case float64:
-		return t != 0
-	case []pyjson.Value:
-		return len(t) > 0
-	case *pyjson.Object:
-		return len(t.Keys) > 0
-	}
-	return true
-}
+// metres writes a Web Mercator coordinate or resolution for gdalwarp: the shortest digits
+// that read back as the same double, never in exponent notation.
+func metres(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 
-// ids prints "<id> <wants-terrain>" for each region, optionally only those opting into
-// FLAG and whose id matches REGEX (Go's RE2 syntax, where the Python took Python's; the
-// patterns RATMAP_REGION_FILTER is documented with mean the same in both).
-func ids(out io.Writer, regions []*pyjson.Object, flag, pattern string) error {
+// ids prints "<id> <wants-terrain>" for each region, optionally only those setting FLAG
+// to true and whose id matches REGEX (RE2 syntax).
+func ids(out io.Writer, regions []*region, flag, pattern string) error {
 	var re *regexp.Regexp
 	if pattern != "" {
 		var err error
@@ -380,55 +359,57 @@ func ids(out io.Writer, regions []*pyjson.Object, flag, pattern string) error {
 		}
 	}
 	for _, r := range regions {
-		if flag != "" {
-			if v, _ := r.Get(flag); !truthy(v) {
-				continue
-			}
+		if flag != "" && !r.flag(flag) {
+			continue
 		}
-		if re != nil && !re.MatchString(str(r, "id")) {
+		if re != nil && !re.MatchString(r.ID) {
 			continue
 		}
 		terrain := 1
-		if v, ok := r.Get("terrain"); ok && v == false {
+		if !r.wantsTerrain() {
 			terrain = 0
 		}
-		fmt.Fprintf(out, "%s %d\n", str(r, "id"), terrain)
+		fmt.Fprintf(out, "%s %d\n", r.ID, terrain)
 	}
 	return nil
 }
 
-// bboxes prints "<id> <w> <s> <e> <n>" for each id given, the numbers as Python's str()
-// wrote them — exactly as build-contours.sh and build-avalanche.sh hand them to
+// bboxes prints "<id> <w> <s> <e> <n>" for each id given, the numbers as regions.json
+// writes them — exactly as build-contours.sh and build-avalanche.sh hand them to
 // fetch-dem.sh, which is what makes a DEM fetched from here the cache entry those scripts
 // look for.
-func bboxes(out io.Writer, regions []*pyjson.Object, idList []string) error {
-	by := map[string]*pyjson.Object{}
+func bboxes(out io.Writer, regions []*region, idList []string) error {
+	by := map[string]*region{}
 	for _, r := range regions {
-		by[str(r, "id")] = r
+		by[r.ID] = r
 	}
 	for _, id := range idList {
 		r, ok := by[id]
 		if !ok {
 			return fmt.Errorf("no region %q in regions.json", id)
 		}
-		v, _ := r.Get("bbox")
-		list, _ := v.([]pyjson.Value)
-		fmt.Fprintln(out, id+" "+joinStr(list, " "))
+		text, _, err := bbox(r)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(out, id+" "+strings.Join(text, " "))
 	}
 	return nil
 }
 
 // distGB is the GB the regions stage still has to write, from the catalogue's own
 // estimates, counting only regions whose basemap is not already built, with 10% headroom.
-func distGB(out io.Writer, regions []*pyjson.Object, dist string) error {
+func distGB(out io.Writer, regions []*region, dist string) error {
 	var total float64
 	for _, r := range regions {
-		id := str(r, "id")
-		if _, err := os.Stat(filepath.Join(dist, "regions", id, id+"-basemap.pmtiles")); err == nil {
+		if _, err := os.Stat(filepath.Join(dist, "regions", r.ID, r.ID+"-basemap.pmtiles")); err == nil {
 			continue
 		}
-		if v, ok := r.Get("estimatedBytes"); ok {
-			n, _ := pyjson.Number(v)
+		if r.EstimatedBytes != "" {
+			n, err := r.EstimatedBytes.Float64()
+			if err != nil {
+				return fmt.Errorf("region %s: estimatedBytes %q", r.ID, r.EstimatedBytes)
+			}
 			total += n
 		}
 	}
@@ -438,7 +419,7 @@ func distGB(out io.Writer, regions []*pyjson.Object, dist string) error {
 
 // peaksMem is the memory the peaks stage's prominence pass needs, as
 // "<GB> <largest region> <its Mpx>" — see build-global.sh's peaks_mem_gb.
-func peaksMem(out io.Writer, regions []*pyjson.Object, args []string) error {
+func peaksMem(out io.Writer, regions []*region, args []string) error {
 	nums := make([]float64, 4)
 	for i, a := range args {
 		f, err := strconv.ParseFloat(strings.TrimSpace(a), 64)
@@ -465,7 +446,7 @@ func peaksMem(out io.Writer, regions []*pyjson.Object, args []string) error {
 		if err != nil {
 			return err
 		}
-		order[i] = entry{str(r, "id"), (b[2] - b[0]) * (b[3] - b[1])}
+		order[i] = entry{r.ID, (b[2] - b[0]) * (b[3] - b[1])}
 	}
 	sort.SliceStable(order, func(i, j int) bool { return order[i].area < order[j].area })
 	n := len(order)

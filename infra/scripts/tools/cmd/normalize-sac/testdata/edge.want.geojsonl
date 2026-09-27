@@ -1,14 +1,16 @@
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 2, "name": "Ben Nevis Mountain Path"}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 3, "name": "Scramble <&> path"}}
-{"type": "Feature", "geometry": {"type": "MultiLineString", "coordinates": [[[-5.0, 56.6], [-4.9, 56.65]]]}, "properties": {"t": 5, "name": "Aonach Eagach"}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 1}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 4, "name": ""}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 4}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 2}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 4, "name": "Record separator"}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 1, "name": "Id as a string is different"}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 1, "name": "True is 1"}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 1, "name": "No id at all"}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 1, "name": "No id at all"}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 1, "name": "Null id"}}
-{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]}, "properties": {"t": 1, "name": "Kept though untagged elsewhere"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":2,"name":"Ben Nevis Mountain Path"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":3,"name":"Scramble <&> path"}}
+{"type":"Feature","geometry":{"type": "MultiLineString", "coordinates": [[[-5.0, 56.6], [-4.9, 56.65]]]},"properties":{"t":5,"name":"Aonach Eagach"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":1}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":4,"name":""}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":4}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":2}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":4,"name":"Record separator"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":1,"name":"Same id as a float"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":1,"name":"Id as a string is different"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":1,"name":"True is 1"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":1,"name":"Dup of id 1 via True"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":1,"name":"No id at all"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":1,"name":"No id at all"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":1,"name":"Null id"}}
+{"type":"Feature","geometry":{"type": "LineString", "coordinates": [[-5.0, 56.8], [-4.99, 56.81]]},"properties":{"t":1,"name":"Kept though untagged elsewhere"}}

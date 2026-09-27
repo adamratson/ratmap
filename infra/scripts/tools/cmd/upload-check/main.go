@@ -4,23 +4,22 @@
 //	upload-check unpublished PUBLISHED LOCAL          # regions a new manifest would drop
 //	upload-check served HEADERS BODY LOCAL            # the live manifest is served right
 //
-// Ports of the Python snippets upload.sh carried inline: same output, same exit status
-// where they refused. See upload.sh beside each call for why each check exists.
+// See upload.sh beside each call for why each check exists.
 package main
 
 import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
-
-	"ratmap/infra/tools/internal/pyjson"
 )
 
 type failure string
@@ -71,32 +70,23 @@ func changed(listing, dist string, keys []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	remote := map[string]pyjson.Value{}
+	remote := map[string]float64{}
 	// An empty bucket lists as no output at all, not as an empty Contents array.
 	if text := bytes.TrimSpace(data); len(text) > 0 {
-		doc, err := pyjson.Decode(text)
-		if err != nil {
+		var doc struct {
+			Contents []struct {
+				Key  *string
+				Size *float64
+			}
+		}
+		if err := json.Unmarshal(text, &doc); err != nil {
 			return failure("listing was not readable JSON: " + err.Error())
 		}
-		top, ok := doc.(*pyjson.Object)
-		if !ok {
-			return failure("listing was not readable JSON: not an object")
-		}
-		if c, ok := top.Get("Contents"); ok && c != nil {
-			list, ok := c.([]pyjson.Value)
-			if !ok {
-				return failure("listing was not readable JSON: Contents is not a list")
+		for _, o := range doc.Contents {
+			if o.Key == nil || o.Size == nil {
+				return failure("listing was not readable JSON: an entry has no Key and Size")
 			}
-			for _, o := range list {
-				obj, ok := o.(*pyjson.Object)
-				k, hasK := obj.Get("Key")
-				s, hasS := obj.Get("Size")
-				ks, isStr := k.(string)
-				if !ok || !hasK || !hasS || !isStr {
-					return failure("listing was not readable JSON: an entry has no Key and Size")
-				}
-				remote[ks] = s
-			}
+			remote[*o.Key] = *o.Size
 		}
 	}
 	for _, key := range keys {
@@ -104,55 +94,53 @@ func changed(listing, dist string, keys []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		size, ok := pyjson.Number(remote[key])
-		if _, present := remote[key]; !present || !ok || size != float64(st.Size()) {
+		if size, present := remote[key]; !present || size != float64(st.Size()) {
 			fmt.Fprintln(out, key)
 		}
 	}
 	return nil
 }
 
-func readManifest(path string) (*pyjson.Object, error) {
+// readManifest reads a manifest, plain or gzipped: the published copy is stored gzipped,
+// and `aws s3 cp` returns it as stored.
+func readManifest(path string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	// The published copy is stored gzipped; `aws s3 cp` returns it as stored.
 	if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
 		zr, err := gzip.NewReader(bytes.NewReader(data))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", path, err)
 		}
 		if data, err = io.ReadAll(zr); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", path, err)
 		}
 	}
-	v, err := pyjson.Decode(data)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	o, ok := v.(*pyjson.Object)
-	if !ok {
-		return nil, fmt.Errorf("%s: not an object", path)
-	}
-	return o, nil
+	return data, nil
 }
 
-func regionIDs(m *pyjson.Object) (map[string]bool, error) {
+type manifestRegions struct {
+	Regions []struct {
+		ID *string `json:"id"`
+	} `json:"regions"`
+}
+
+func regionIDs(path string) (map[string]bool, error) {
+	data, err := readManifest(path)
+	if err != nil {
+		return nil, err
+	}
+	var m manifestRegions
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 	ids := map[string]bool{}
-	rv, _ := m.Get("regions")
-	list, _ := rv.([]pyjson.Value)
-	for _, r := range list {
-		ro, ok := r.(*pyjson.Object)
-		if !ok {
-			return nil, errors.New("a region is not an object")
+	for _, r := range m.Regions {
+		if r.ID == nil {
+			return nil, fmt.Errorf("%s: a region has no id", path)
 		}
-		id, _ := ro.Get("id")
-		s, ok := id.(string)
-		if !ok {
-			return nil, errors.New("a region has no string id")
-		}
-		ids[s] = true
+		ids[*r.ID] = true
 	}
 	return ids, nil
 }
@@ -160,19 +148,11 @@ func regionIDs(m *pyjson.Object) (map[string]bool, error) {
 // unpublished prints the region ids in the published manifest that the local one drops,
 // sorted and space-separated — empty when it drops none.
 func unpublished(published, local string, out io.Writer) error {
-	p, err := readManifest(published)
+	pids, err := regionIDs(published)
 	if err != nil {
 		return err
 	}
-	l, err := readManifest(local)
-	if err != nil {
-		return err
-	}
-	pids, err := regionIDs(p)
-	if err != nil {
-		return err
-	}
-	lids, err := regionIDs(l)
+	lids, err := regionIDs(local)
 	if err != nil {
 		return err
 	}
@@ -227,75 +207,24 @@ func served(headersPath, bodyPath, localPath string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("served body is not gzip: %w", err)
 	}
-	servedDoc, err := pyjson.Decode(plain)
-	if err != nil {
+	var servedDoc, localDoc any
+	if err := json.Unmarshal(plain, &servedDoc); err != nil {
 		return fmt.Errorf("served body: %w", err)
 	}
 	localData, err := os.ReadFile(localPath)
 	if err != nil {
 		return err
 	}
-	localDoc, err := pyjson.Decode(localData)
-	if err != nil {
+	if err := json.Unmarshal(localData, &localDoc); err != nil {
 		return fmt.Errorf("%s: %w", localPath, err)
 	}
-	if !equal(servedDoc, localDoc) {
+	// The same values, whatever the key order or spacing: numbers decode to float64, so
+	// 1 and 1.0 match, and nothing else of a different type does.
+	if !reflect.DeepEqual(servedDoc, localDoc) {
 		return failure("served manifest does not match the one just uploaded")
 	}
-	so, _ := servedDoc.(*pyjson.Object)
-	var regions []pyjson.Value
-	if so != nil {
-		rv, _ := so.Get("regions")
-		regions, _ = rv.([]pyjson.Value)
-	}
-	fmt.Fprintf(out, "Verified: served gzipped, %d regions\n", len(regions))
+	var m manifestRegions
+	json.Unmarshal(plain, &m)
+	fmt.Fprintf(out, "Verified: served gzipped, %d regions\n", len(m.Regions))
 	return nil
-}
-
-// equal is Python's == on decoded JSON: objects by key regardless of order, lists in
-// order, and numbers by value — 1 == 1.0 == True.
-func equal(a, b pyjson.Value) bool {
-	if an, ok := pyjson.Number(a); ok {
-		bn, ok := pyjson.Number(b)
-		if !ok {
-			return false
-		}
-		ai, aInt := pyjson.IntValue(a)
-		bi, bInt := pyjson.IntValue(b)
-		if aInt && bInt {
-			return ai == bi
-		}
-		return an == bn
-	}
-	switch at := a.(type) {
-	case nil:
-		return b == nil
-	case string:
-		bs, ok := b.(string)
-		return ok && at == bs
-	case []pyjson.Value:
-		bl, ok := b.([]pyjson.Value)
-		if !ok || len(at) != len(bl) {
-			return false
-		}
-		for i := range at {
-			if !equal(at[i], bl[i]) {
-				return false
-			}
-		}
-		return true
-	case *pyjson.Object:
-		bo, ok := b.(*pyjson.Object)
-		if !ok || len(at.Keys) != len(bo.Keys) {
-			return false
-		}
-		for i, k := range at.Keys {
-			bv, ok := bo.Get(k)
-			if !ok || !equal(at.Vals[i], bv) {
-				return false
-			}
-		}
-		return true
-	}
-	return false
 }

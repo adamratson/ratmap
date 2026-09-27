@@ -5,10 +5,9 @@
 //	./scripts/build-catalog.sh --no-estimate   # rough pass off bbox area, for a quick look
 //	./scripts/build-catalog.sh --print         # summarise without writing regions.json
 //
-// A port of scripts/build-catalog.py, which it replaces; scripts/build-catalog.sh builds
-// and runs it with the same arguments. Same regions, same summary, and the same
-// regions.json, byte for byte (json.dumps' text via internal/pyjson) — it is a checked-in
-// file, and a regeneration's diff should show what changed, not a reformatting.
+// scripts/build-catalog.sh builds and runs it with the same arguments. regions.json is a
+// checked-in file, so a regeneration writes it the same way every time: a diff shows what
+// changed, not a reformatting.
 //
 // Why this exists: the catalogue *is* regions.json. Nothing in the pipeline discovers
 // regions — `ratmap global regions` loops over whatever ids this file defines — so "cover
@@ -42,7 +41,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -56,12 +58,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"ratmap/infra/tools/internal/cli"
 	"ratmap/infra/tools/internal/infra"
-	"ratmap/infra/tools/internal/pyfloat"
-	"ratmap/infra/tools/internal/pyjson"
-	"ratmap/infra/tools/internal/pytext"
+	"ratmap/infra/tools/internal/num"
 )
 
 const indexURL = "https://download.geofabrik.de/index-v1.json"
@@ -163,7 +164,7 @@ func sortedKeys(m map[string]bool) []string {
 	return out
 }
 
-// failure is a refusal printed as the Python's SystemExit message was, exit status 1.
+// failure is a refusal: the message printed on its own, exit status 1.
 type failure string
 
 func (f failure) Error() string { return string(f) }
@@ -185,21 +186,19 @@ func pathsFor(infraDir string) paths {
 		filepath.Join(cache, "catalog-estimates.json"), filepath.Join(infraDir, "regions.json")}
 }
 
-const usage = `usage: build-catalog [-h] [--max-bytes MAX_BYTES] [--no-estimate] [--max-depth MAX_DEPTH] [--workers WORKERS] [--refresh-index] [--only ONLY] [--print]`
+const usage = `usage: build-catalog [flags]`
 
 func main() {
-	a := cli.Parse(os.Args[1:], usage, []cli.Spec{
-		{Name: "max-bytes", Help: "per-artifact cap; a region over it is subdivided (default 900 MB)"},
-		{Name: "no-estimate", Bool: true, Help: "guess sizes from bbox area instead of measuring — fast, and wrong by 3x"},
-		{Name: "max-depth", Help: "how many times a region with no children may be quartered to fit the cap (default 3, i.e. up to 64 cells)"},
-		{Name: "workers", Help: "parallel dry runs (default 4)"},
-		{Name: "refresh-index", Bool: true, Help: "re-download Geofabrik's index"},
-		{Name: "only", Help: "one continent id, for a quick look (implies --print)"},
-		{Name: "print", Bool: true, Help: "summarise without writing regions.json"},
-	})
-	if len(a.Positionals) > 0 {
-		fmt.Fprintf(os.Stderr, "%s\nbuild-catalog: error: unrecognized arguments: %s\n", usage, strings.Join(a.Positionals, " "))
-		os.Exit(2)
+	fs := flag.NewFlagSet("build-catalog", flag.ExitOnError)
+	maxBytes := fs.Float64("max-bytes", defaultMaxBytes, "per-artifact cap in bytes; a region over it is subdivided")
+	noEstimate := fs.Bool("no-estimate", false, "guess sizes from bbox area instead of measuring — fast, and wrong by 3x")
+	maxDepth := fs.Int("max-depth", 3, "how many times a region with no children may be quartered to fit the cap (3: up to 64 cells)")
+	workers := fs.Int("workers", 4, "parallel dry runs")
+	refreshIndex := fs.Bool("refresh-index", false, "re-download Geofabrik's index")
+	only := fs.String("only", "", "one continent id, for a quick look (implies --print)")
+	printOnly := fs.Bool("print", false, "summarise without writing regions.json")
+	if args := cli.Parse(fs, usage, os.Args[1:]); len(args) > 0 {
+		cli.Fail(fs, "unexpected arguments: %s", strings.Join(args, " "))
 	}
 	infraDir, err := infra.Dir()
 	if err != nil {
@@ -207,16 +206,15 @@ func main() {
 		os.Exit(1)
 	}
 	o := options{
-		maxBytes:     int64(a.Float("max-bytes", defaultMaxBytes)),
-		estimate:     !a.Has("no-estimate"),
-		maxDepth:     a.Int("max-depth", 3),
-		workers:      a.Int("workers", 4),
-		refreshIndex: a.Has("refresh-index"),
-		printOnly:    a.Has("print"),
+		maxBytes:     int64(*maxBytes),
+		estimate:     !*noEstimate,
+		maxDepth:     *maxDepth,
+		workers:      *workers,
+		refreshIndex: *refreshIndex,
+		printOnly:    *printOnly,
 	}
-	if a.Has("only") {
-		s := a.String("only", "")
-		o.only = &s
+	if cli.Given(fs)["only"] {
+		o.only = only
 	}
 	if err := run(pathsFor(infraDir), o, os.Stdout, os.Stderr); err != nil {
 		var f failure
@@ -251,14 +249,14 @@ func run(p paths, o options, out, errOut io.Writer) error {
 	if err != nil {
 		return err
 	}
-	var generated []*pyjson.Object
+	var generated []*genRegion
 	err = func() error {
 		caps := map[string]int64{}
 		for _, id := range ov.order {
-			if v, ok := ov.byID[id].Get("maxBytes"); ok {
-				n, err := pyInt(v)
+			if v, ok := ov.byID[id]["maxBytes"]; ok {
+				n, err := strconv.ParseInt(string(bytes.TrimSpace(v)), 10, 64)
 				if err != nil {
-					return err
+					return fmt.Errorf("regions.json: %s: maxBytes %s is not a whole number", id, v)
 				}
 				caps[id] = n
 			}
@@ -270,8 +268,7 @@ func run(p paths, o options, out, errOut io.Writer) error {
 		generated, err = buildRegions(idx, accepted, est, o.maxBytes, caps, o.maxDepth, ov)
 		return err
 	}()
-	// Saved whatever happened, as the Python's `finally` did: an interrupted run keeps
-	// the measurements it made.
+	// Saved whatever happened: an interrupted run keeps the measurements it made.
 	if serr := est.save(false); err == nil {
 		err = serr
 	}
@@ -306,28 +303,31 @@ func run(p paths, o options, out, errOut io.Writer) error {
 	return nil
 }
 
-// pyInt is int() of a JSON value: an int as itself, a float truncated, a numeric string
-// parsed.
-func pyInt(v pyjson.Value) (int64, error) {
-	if n, ok := pyjson.IntValue(v); ok {
-		return n, nil
-	}
-	switch t := v.(type) {
-	case float64:
-		return int64(t), nil
-	case string:
-		return strconv.ParseInt(strings.TrimSpace(t), 10, 64)
-	}
-	return 0, fmt.Errorf("maxBytes %v is not a number", v)
-}
-
 // ---------------------------------------------------------------------------- index
 
 type index struct {
-	features map[string]*pyjson.Object
+	features map[string]*feature
 	order    []string // feature ids in file order
 	// children by parent id; "" is the top level (no parent). Values in index order.
 	children map[string][]string
+}
+
+// feature is one region of Geofabrik's index.
+type feature struct {
+	Properties featureProps `json:"properties"`
+	Geometry   struct {
+		Type        string `json:"type"`
+		Coordinates any    `json:"coordinates"` // nested lists of [lon, lat]
+	} `json:"geometry"`
+}
+
+type featureProps struct {
+	ID     string `json:"id"`
+	Parent string `json:"parent"`
+	Name   string `json:"name"`
+	URLs   struct {
+		PBF string `json:"pbf"`
+	} `json:"urls"`
 }
 
 func loadIndex(p paths, refresh bool, errOut io.Writer) (*index, error) {
@@ -357,58 +357,32 @@ func loadIndex(p paths, refresh bool, errOut io.Writer) (*index, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc, err := pyjson.Decode(data)
-	if err != nil {
+	var doc struct {
+		Features []*feature `json:"features"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("%s: %w", p.indexCache, err)
 	}
-	fv, _ := doc.(*pyjson.Object).Get("features")
-	list, _ := fv.([]pyjson.Value)
-	idx := &index{features: map[string]*pyjson.Object{}, children: map[string][]string{}}
-	for _, f := range list {
-		fo := f.(*pyjson.Object)
-		id := idOf(fo)
+	idx := &index{features: map[string]*feature{}, children: map[string][]string{}}
+	for _, f := range doc.Features {
+		id := f.Properties.ID
 		if _, seen := idx.features[id]; !seen {
 			idx.order = append(idx.order, id)
 		}
-		idx.features[id] = fo
+		idx.features[id] = f
 	}
-	for _, f := range list {
-		fo := f.(*pyjson.Object)
-		id := idOf(fo)
+	for _, f := range doc.Features {
+		id := f.Properties.ID
 		if aggregateIDs[id] || excludedIDs[id] {
 			continue
 		}
-		parent := effectiveParent(id, props(fo), idx.features)
+		parent := effectiveParent(id, &f.Properties, idx.features)
 		idx.children[parent] = append(idx.children[parent], id)
 	}
 	if err := checkAggregates(idx.children); err != nil {
 		return nil, err
 	}
 	return idx, nil
-}
-
-func props(f *pyjson.Object) *pyjson.Object {
-	if f == nil {
-		return &pyjson.Object{}
-	}
-	p, _ := f.Get("properties")
-	po, _ := p.(*pyjson.Object)
-	if po == nil {
-		return &pyjson.Object{}
-	}
-	return po
-}
-
-func idOf(f *pyjson.Object) string {
-	v, _ := props(f).Get("id")
-	s, _ := v.(string)
-	return s
-}
-
-func str(o *pyjson.Object, key string) string {
-	v, _ := o.Get(key)
-	s, _ := v.(string)
-	return s
 }
 
 // checkAggregates refuses an aggregate that has children: dropping it drops the subtree.
@@ -441,34 +415,35 @@ func checkAggregates(children map[string][]string) error {
 // `parent: north-america` — as siblings of `us`, not children of it. Taken at face value
 // the catalogue would list the whole United States *and* every state, publishing the same
 // ground twice at two zoom levels. The id path is the real hierarchy wherever it exists.
-func effectiveParent(id string, p *pyjson.Object, features map[string]*pyjson.Object) string {
+func effectiveParent(id string, p *featureProps, features map[string]*feature) string {
 	if i := strings.LastIndex(id, "/"); i >= 0 {
 		if _, ok := features[id[:i]]; ok {
 			return id[:i]
 		}
 	}
-	return str(p, "parent")
+	return p.Parent
 }
 
 type box [4]float64 // west, south, east, north
 
-func polygonParts(f *pyjson.Object) []pyjson.Value {
-	g, _ := f.Get("geometry")
-	geom := g.(*pyjson.Object)
-	c, _ := geom.Get("coordinates")
-	if str(geom, "type") == "MultiPolygon" {
-		return c.([]pyjson.Value)
+func polygonParts(f *feature) []any {
+	c := f.Geometry.Coordinates
+	if list, ok := c.([]any); ok && f.Geometry.Type == "MultiPolygon" {
+		return list
 	}
-	return []pyjson.Value{c}
+	return []any{c}
 }
 
-func partBBox(part pyjson.Value) box {
+func partBBox(part any) box {
 	b := box{math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)}
-	var walk func(pyjson.Value)
-	walk = func(node pyjson.Value) {
-		list := node.([]pyjson.Value)
-		if x, ok := pyjson.Number(list[0]); ok {
-			y, _ := pyjson.Number(list[1])
+	var walk func(any)
+	walk = func(node any) {
+		list, _ := node.([]any)
+		if len(list) == 0 {
+			return
+		}
+		if x, ok := list[0].(float64); ok {
+			y, _ := list[1].(float64)
 			b[0], b[1], b[2], b[3] = math.Min(b[0], x), math.Min(b[1], y), math.Max(b[2], x), math.Max(b[3], y)
 			return
 		}
@@ -524,7 +499,7 @@ func cluster(values []interval, gap float64) [][]interval {
 // Usually one. More when the region has parts an ocean apart, or crosses the
 // antimeridian — `pmtiles extract` takes west < east and cannot wrap, so a crossing has to
 // become two extracts rather than one box spanning the entire planet the wrong way round.
-func regionBoxes(f *pyjson.Object) ([]box, error) {
+func regionBoxes(f *feature) ([]box, error) {
 	var boxes []box
 	for _, p := range polygonParts(f) {
 		boxes = append(boxes, partBBox(p))
@@ -603,7 +578,7 @@ func regionBoxes(f *pyjson.Object) ([]box, error) {
 	}
 	for i := range out {
 		for j := range out[i] {
-			out[i][j] = pyfloat.Round(out[i][j], 4)
+			out[i][j] = num.Round(out[i][j], 4)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return area(out[i]) > area(out[j]) })
@@ -615,18 +590,19 @@ func regionBoxes(f *pyjson.Object) ([]box, error) {
 		west, south, east, north := b[0], b[1], b[2], b[3]
 		if !(west < east && south < north && -180 <= west && east <= 180 && -90 <= south && north <= 90) {
 			return nil, failure(fmt.Sprintf("FAIL: %s produced an invalid bbox %s.\n      west<east, south<north, and within [-180,180]/[-90,90].",
-				idOf(f), pyTuple(b)))
+				f.Properties.ID, bboxText(b)))
 		}
 	}
 	return out, nil
 }
 
-func pyTuple(b box) string {
+// bboxText is a box for a message, as regions.json would write it.
+func bboxText(b box) string {
 	parts := make([]string, 4)
 	for i, v := range b {
-		parts[i] = pyfloat.Repr(v)
+		parts[i] = strconv.FormatFloat(v, 'f', -1, 64)
 	}
-	return "(" + strings.Join(parts, ", ") + ")"
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 var compass = []struct {
@@ -694,27 +670,23 @@ func parseSize(text string) (int64, bool) {
 // A dry run is two to twenty seconds of range requests against a 135 GB archive, and the
 // walk asks for hundreds of them. Caching by (source, bbox, zoom) makes a re-run free and
 // lets an interrupted one resume — which matters, because the first full pass takes an
-// hour or two. Same file and keys as the Python's, so its cache carries over.
+// hour or two.
 type estimator struct {
 	p       paths
 	enabled bool
 	workers int
 	errOut  io.Writer
 	mu      sync.Mutex
-	cache   *pyjson.Object // key -> int, in load/insert order
+	cache   map[string]int64
 	misses  int
 }
 
 func newEstimator(p paths, workers int, enabled bool, errOut io.Writer) (*estimator, error) {
-	e := &estimator{p: p, enabled: enabled, workers: workers, errOut: errOut, cache: &pyjson.Object{}}
+	e := &estimator{p: p, enabled: enabled, workers: workers, errOut: errOut, cache: map[string]int64{}}
 	data, err := os.ReadFile(p.estimateCache)
 	if err == nil {
-		doc, err := pyjson.Decode(data)
-		if err != nil {
+		if err := json.Unmarshal(data, &e.cache); err != nil {
 			return nil, fmt.Errorf("%s: %w", p.estimateCache, err)
-		}
-		if o, ok := doc.(*pyjson.Object); ok {
-			e.cache = o
 		}
 	}
 	return e, nil
@@ -726,8 +698,8 @@ type request struct {
 	zoom   int
 }
 
-// key is the cache key, formatted as the Python's f'{c:g}' did — the same key, or every
-// cached measurement would be taken again.
+// key is the cache key: the kind, the bbox to six significant digits (%g), and the zoom.
+// Changing how it is spelled would take every cached measurement again.
 func key(r request) string {
 	kind := "terrain"
 	if r.source == basemapSource {
@@ -739,7 +711,7 @@ func key(r request) string {
 func bboxArg(b box) string {
 	parts := make([]string, 4)
 	for i, v := range b {
-		parts[i] = pyfloat.FormatG(v)
+		parts[i] = strconv.FormatFloat(v, 'g', 6, 64)
 	}
 	return strings.Join(parts, ",")
 }
@@ -747,12 +719,8 @@ func bboxArg(b box) string {
 func (e *estimator) cached(k string) (int64, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	v, ok := e.cache.Get(k)
-	if !ok {
-		return 0, false
-	}
-	n, _ := pyjson.IntValue(v)
-	return n, true
+	n, ok := e.cache[k]
+	return n, ok
 }
 
 // measure is guessed from bbox area when estimation is off, measured otherwise.
@@ -807,7 +775,7 @@ func (e *estimator) measure(r request) (int64, error) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.cache.Set(k, pyjson.FromInt(size))
+	e.cache[k] = size
 	e.misses++
 	// Checkpoint as we go. The first full pass is an hour of range requests against two
 	// archives; losing it to a Ctrl-C or a dropped connection would mean starting from
@@ -857,8 +825,8 @@ func (e *estimator) warm(reqs []request) error {
 	return e.save(false)
 }
 
-// save writes the cache as json.dump(indent=0, sort_keys=True) did. locked: the caller
-// already holds the lock.
+// save writes the cache, one key a line in sorted order so that it diffs. locked: the
+// caller already holds the lock.
 func (e *estimator) save(locked bool) error {
 	if !e.enabled {
 		return nil
@@ -870,11 +838,11 @@ func (e *estimator) save(locked bool) error {
 		e.mu.Lock()
 		defer e.mu.Unlock()
 	}
-	text, err := pyjson.Encode(e.cache, pyjson.Options{Indent: pyjson.Indent(0), EnsureASCII: true, SortKeys: true})
+	text, err := json.MarshalIndent(e.cache, "", "")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(e.p.estimateCache, []byte(text), 0o644)
+	return os.WriteFile(e.p.estimateCache, text, 0o644)
 }
 
 // ------------------------------------------------------------------------- walking
@@ -882,20 +850,16 @@ func (e *estimator) save(locked bool) error {
 // topLevel is the continent-level ancestor — the group a region is listed under, and the
 // OSM extract its peaks and search come from. Geofabrik has *nine* of these, not eight:
 // Russia is its own top-level file, not part of europe or asia.
-func topLevel(idx *index, id string) (*pyjson.Object, error) {
-	p := props(idx.features[id])
-	for {
-		parent, _ := p.Get("parent")
-		ps, ok := parent.(string)
-		if !ok || ps == "" {
-			return p, nil
-		}
-		f, ok := idx.features[ps]
+func topLevel(idx *index, id string) (*featureProps, error) {
+	p := &idx.features[id].Properties
+	for p.Parent != "" {
+		f, ok := idx.features[p.Parent]
 		if !ok {
-			return nil, fmt.Errorf("index: %s's parent %q is not in the index", str(p, "id"), ps)
+			return nil, fmt.Errorf("index: %s's parent %q is not in the index", p.ID, p.Parent)
 		}
-		p = props(f)
+		p = &f.Properties
 	}
+	return p, nil
 }
 
 func largestBasemap(est *estimator, boxes []box) (int64, error) {
@@ -989,25 +953,44 @@ func chooseZoom(est *estimator, source string, zooms []int, b box, maxBytes int6
 }
 
 // cleanName tidies a Geofabrik name, which carries markup and sometimes just repeats the
-// id. Written out rather than with regexp: Python's \s is every Unicode space, RE2's only
-// ASCII.
-func cleanName(p *pyjson.Object) string {
-	name := collapseSpaces(strings.TrimFunc(replaceBr(str(p, "name")), pytext.IsSpace))
-	if name == str(p, "id") || strings.Contains(name, "/") {
+// id. Written out rather than with regexp, whose \s is only ASCII space: a name can hold a
+// no-break space.
+func cleanName(p *featureProps) string {
+	name := collapseSpaces(strings.TrimSpace(replaceBr(p.Name)))
+	if name == p.ID || strings.Contains(name, "/") {
 		last := name[strings.LastIndex(name, "/")+1:]
-		name = pytext.Title(strings.ReplaceAll(last, "-", " "))
+		name = capitalizeWords(strings.ReplaceAll(last, "-", " "))
 	}
 	return name
 }
 
-// replaceBr is re.sub(r"<br\s*/?>", " ", s).
+// capitalizeWords upper-cases the first letter of each space-separated word and
+// lower-cases the rest: "new york" is "New York".
+func capitalizeWords(s string) string {
+	var b strings.Builder
+	start := true
+	for _, r := range s {
+		switch {
+		case r == ' ':
+			start = true
+		case start:
+			r, start = unicode.ToUpper(r), false
+		default:
+			r = unicode.ToLower(r)
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// replaceBr replaces each <br>, <br/> and <br /> with a space.
 func replaceBr(s string) string {
 	var b strings.Builder
 	r := []rune(s)
 	for i := 0; i < len(r); {
 		if i+3 <= len(r) && string(r[i:i+3]) == "<br" {
 			j := i + 3
-			for j < len(r) && pytext.IsSpace(r[j]) {
+			for j < len(r) && unicode.IsSpace(r[j]) {
 				j++
 			}
 			if j < len(r) && r[j] == '/' {
@@ -1025,12 +1008,12 @@ func replaceBr(s string) string {
 	return b.String()
 }
 
-// collapseSpaces is re.sub(r"\s+", " ", s).
+// collapseSpaces replaces each run of spaces with one.
 func collapseSpaces(s string) string {
 	var b strings.Builder
 	inSpace := false
 	for _, r := range s {
-		if pytext.IsSpace(r) {
+		if unicode.IsSpace(r) {
 			if !inSpace {
 				b.WriteByte(' ')
 			}
@@ -1043,12 +1026,12 @@ func collapseSpaces(s string) string {
 	return b.String()
 }
 
-// safeID is the id as a filename, an OPFS key and a TileSourceRegistry key (C3):
-// re.sub(r"[^a-z0-9-]+", "-", id.lower()).strip("-").
+// safeID is the id as a filename, an OPFS key and a TileSourceRegistry key (C3): lower
+// case, each run of anything but a-z, 0-9 and - as one -, and no - at either end.
 func safeID(id string) string {
 	var b strings.Builder
 	inRun := false
-	for _, r := range pytext.Lower(id) {
+	for _, r := range strings.ToLower(id) {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
 			b.WriteRune(r)
 			inRun = false
@@ -1174,30 +1157,29 @@ func splitToFit(boxes []box, est *estimator, limit int64, maxDepth int, withTerr
 // 980 MB at z15, and dropping it to z14 to stay under 900 MB trades away detail over the
 // Alps to save 20% of a download people take on wifi before a trip.
 type overrideSet struct {
-	byID  map[string]*pyjson.Object
+	byID  map[string]map[string]json.RawMessage
 	order []string
 }
 
 var overrideKeys = []string{"contours", "avalanche", "maxBytes", "terrain"}
 
 func overrides(p paths) (overrideSet, error) {
-	o := overrideSet{byID: map[string]*pyjson.Object{}}
+	o := overrideSet{byID: map[string]map[string]json.RawMessage{}}
 	regions, err := existingRegions(p)
 	if err != nil || regions == nil {
 		return o, err
 	}
 	for _, r := range regions {
-		kept := &pyjson.Object{}
+		kept := map[string]json.RawMessage{}
 		for _, k := range overrideKeys {
-			if v, ok := r.Get(k); ok {
-				kept.Set(k, v)
+			if v, ok := r.fields[k]; ok {
+				kept[k] = v
 			}
 		}
-		id := str(r, "id")
-		if _, seen := o.byID[id]; !seen {
-			o.order = append(o.order, id)
+		if _, seen := o.byID[r.ID]; !seen {
+			o.order = append(o.order, r.ID)
 		}
-		o.byID[id] = kept
+		o.byID[r.ID] = kept
 	}
 	return o, nil
 }
@@ -1206,15 +1188,22 @@ func overrides(p paths) (overrideSet, error) {
 func (o overrideSet) skipsTerrain() map[string]bool {
 	s := map[string]bool{}
 	for id, over := range o.byID {
-		if v, ok := over.Get("terrain"); ok && v == false {
+		if string(bytes.TrimSpace(over["terrain"])) == "false" {
 			s[id] = true
 		}
 	}
 	return s
 }
 
+// existing is a region already in regions.json: its text as written, and its fields.
+type existing struct {
+	raw    json.RawMessage
+	fields map[string]json.RawMessage
+	ID     string
+}
+
 // existingRegions is regions.json's regions, or nil if there is no regions.json.
-func existingRegions(p paths) ([]*pyjson.Object, error) {
+func existingRegions(p paths) ([]existing, error) {
 	data, err := os.ReadFile(p.regionsJSON)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -1222,29 +1211,47 @@ func existingRegions(p paths) ([]*pyjson.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc, err := pyjson.Decode(data)
-	if err != nil {
+	var doc struct {
+		Regions []json.RawMessage `json:"regions"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("%s: %w", p.regionsJSON, err)
 	}
-	top, _ := doc.(*pyjson.Object)
-	if top == nil {
-		return nil, fmt.Errorf("%s: not an object", p.regionsJSON)
-	}
-	rv, _ := top.Get("regions")
-	list, _ := rv.([]pyjson.Value)
-	out := []*pyjson.Object{}
-	for _, r := range list {
-		ro, ok := r.(*pyjson.Object)
-		if !ok {
-			return nil, fmt.Errorf("%s: a region is not an object", p.regionsJSON)
+	out := []existing{}
+	for _, raw := range doc.Regions {
+		e := existing{raw: raw}
+		if err := json.Unmarshal(raw, &e.fields); err != nil {
+			return nil, fmt.Errorf("%s: %w", p.regionsJSON, err)
 		}
-		out = append(out, ro)
+		json.Unmarshal(e.fields["id"], &e.ID)
+		out = append(out, e)
 	}
 	return out, nil
 }
 
+// genRegion is a region this generates, its fields in the order regions.json has always
+// had them. The overrides are whatever regions.json said, carried over as written.
+type genRegion struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	BBox        box    `json:"bbox"`
+	OSMExtract  string `json:"osmExtract"`
+	Group       string `json:"group"`
+	GeofabrikID string `json:"geofabrikId"`
+	// Advisory: what `pmtiles extract --dry-run` says this will weigh. The manifest
+	// carries the real byte counts once built; this is for deciding what to build and in
+	// what order.
+	EstimatedBytes int64           `json:"estimatedBytes"`
+	BasemapMaxzoom int             `json:"basemapMaxzoom,omitempty"`
+	TerrainMaxzoom int             `json:"terrainMaxzoom,omitempty"`
+	Contours       json.RawMessage `json:"contours,omitempty"`
+	Avalanche      json.RawMessage `json:"avalanche,omitempty"`
+	MaxBytes       json.RawMessage `json:"maxBytes,omitempty"`
+	Terrain        json.RawMessage `json:"terrain,omitempty"`
+}
+
 func buildRegions(idx *index, accepted []string, est *estimator, maxBytes int64, caps map[string]int64,
-	maxDepth int, ov overrideSet) ([]*pyjson.Object, error) {
+	maxDepth int, ov overrideSet) ([]*genRegion, error) {
 	boxesBy := map[string][]box{}
 	for _, gid := range accepted {
 		b, err := regionBoxes(idx.features[gid])
@@ -1330,9 +1337,9 @@ func buildRegions(idx *index, accepted []string, est *estimator, maxBytes int64,
 		}
 	}
 
-	var records []*pyjson.Object
+	var records []*genRegion
 	for _, gid := range accepted {
-		p := props(idx.features[gid])
+		p := &idx.features[gid].Properties
 		continent, err := topLevel(idx, gid)
 		if err != nil {
 			return nil, err
@@ -1392,38 +1399,30 @@ func buildRegions(idx *index, accepted []string, est *estimator, maxBytes int64,
 				}
 			}
 
-			r := &pyjson.Object{}
-			r.Set("id", regionID)
-			r.Set("name", regionName)
-			r.Set("bbox", []pyjson.Value{b[0], b[1], b[2], b[3]})
-			// The *continent* extract, not this region's own. peaks and places are single
-			// global artifacts built from the union of these (region-osm-sources);
-			// pointing 700 regions at 700 country extracts would make that union a
-			// 700-file download instead of a nine-file one, for exactly the same coverage.
-			urls, _ := continent.Get("urls")
-			pbf, _ := urls.(*pyjson.Object).Get("pbf")
-			r.Set("osmExtract", pbf)
-			r.Set("group", cleanName(continent))
-			r.Set("geofabrikId", gid)
-			// Advisory: what `pmtiles extract --dry-run` says this will weigh. The
-			// manifest carries the real byte counts once built; this is for deciding what
-			// to build and in what order.
-			r.Set("estimatedBytes", pyjson.FromInt(bb+tb))
+			r := &genRegion{
+				ID: regionID, Name: regionName, BBox: b,
+				// The *continent* extract, not this region's own. peaks and places are
+				// single global artifacts built from the union of these
+				// (region-osm-sources); pointing 700 regions at 700 country extracts would
+				// make that union a 700-file download instead of a nine-file one, for
+				// exactly the same coverage.
+				OSMExtract: continent.URLs.PBF, Group: cleanName(continent), GeofabrikID: gid,
+				EstimatedBytes: bb + tb,
+			}
 			if bz != basemapZooms[0] {
-				r.Set("basemapMaxzoom", pyjson.FromInt(int64(bz)))
+				r.BasemapMaxzoom = bz
 			}
 			if tz != terrainZooms[0] {
-				r.Set("terrainMaxzoom", pyjson.FromInt(int64(tz)))
+				r.TerrainMaxzoom = tz
 			}
 			records = append(records, r)
 		}
 	}
 	sort.SliceStable(records, func(i, j int) bool {
-		gi, gj := str(records[i], "group"), str(records[j], "group")
-		if gi != gj {
-			return gi < gj
+		if records[i].Group != records[j].Group {
+			return records[i].Group < records[j].Group
 		}
-		return str(records[i], "name") < str(records[j], "name")
+		return records[i].Name < records[j].Name
 	})
 	return records, nil
 }
@@ -1444,42 +1443,73 @@ func contains(xs []string, s string) bool {
 // published — a regions.json without them would delist them on the next upload. Generated
 // regions are identified by `geofabrikId`; anything without one is manual and survives a
 // regeneration untouched.
-func mergeWithManual(p paths, generated []*pyjson.Object, ov overrideSet) ([]*pyjson.Object, []*pyjson.Object, error) {
+func mergeWithManual(p paths, generated []*genRegion, ov overrideSet) ([]record, []record, error) {
 	existing, err := existingRegions(p)
 	if err != nil {
 		return nil, nil, err
 	}
-	var manual []*pyjson.Object
+	var manual []record
 	for _, r := range existing {
-		if !r.Has("geofabrikId") {
-			manual = append(manual, r)
+		if _, generated := r.fields["geofabrikId"]; !generated {
+			rec, err := recordOf(r.raw)
+			if err != nil {
+				return nil, nil, err
+			}
+			manual = append(manual, rec)
 		}
 	}
 	// Human decisions survive a regeneration rather than being silently reset on the next
 	// run — see overrides.
 	taken := map[string]bool{}
 	for _, r := range manual {
-		taken[str(r, "id")] = true
+		taken[r.ID] = true
 	}
 	for id := range retiredIDs {
 		taken[id] = true
 	}
 	for _, r := range generated {
-		if over, ok := ov.byID[str(r, "id")]; ok {
-			for i, k := range over.Keys {
-				r.Set(k, over.Vals[i])
-			}
+		if over, ok := ov.byID[r.ID]; ok {
+			r.Contours, r.Avalanche, r.MaxBytes, r.Terrain = over["contours"], over["avalanche"], over["maxBytes"], over["terrain"]
 		}
 	}
+	records := append([]record(nil), manual...)
 	for _, r := range generated {
-		id := str(r, "id")
-		if taken[id] {
-			id += "-region"
-			r.Set("id", id)
+		if taken[r.ID] {
+			r.ID += "-region"
 		}
-		taken[id] = true
+		taken[r.ID] = true
+		raw, err := json.Marshal(r)
+		if err != nil {
+			return nil, nil, err
+		}
+		rec, err := recordOf(raw)
+		if err != nil {
+			return nil, nil, err
+		}
+		records = append(records, rec)
 	}
-	return append(append([]*pyjson.Object(nil), manual...), generated...), manual, nil
+	return records, manual, nil
+}
+
+// record is a region as written to regions.json — hand-written ones verbatim — and what
+// the summary reads of it.
+type record struct {
+	raw            json.RawMessage
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	BBox           []float64 `json:"bbox"`
+	GeofabrikID    *string   `json:"geofabrikId"`
+	EstimatedBytes int64     `json:"estimatedBytes"`
+	BasemapMaxzoom *int64    `json:"basemapMaxzoom"`
+	TerrainMaxzoom *int64    `json:"terrainMaxzoom"`
+}
+
+func recordOf(raw json.RawMessage) (record, error) {
+	r := record{raw: raw}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return r, fmt.Errorf("regions.json: %s: %w", raw, err)
+	}
+	return r, nil
 }
 
 // overlaps is the fraction of a covered by b, for flagging a generated duplicate of a
@@ -1493,13 +1523,9 @@ func overlaps(a, b box) float64 {
 	return (w * h) / area(a)
 }
 
-func bboxOf(r *pyjson.Object) box {
-	v, _ := r.Get("bbox")
-	list, _ := v.([]pyjson.Value)
+func bboxOf(r record) box {
 	var b box
-	for i := 0; i < 4 && i < len(list); i++ {
-		b[i], _ = pyjson.Number(list[i])
-	}
+	copy(b[:], r.BBox)
 	return b
 }
 
@@ -1535,27 +1561,21 @@ const catalogueComment = "Region definitions for the offline download catalogue.
 	"documented avalanche activity, which is a judgement about winter use rather than " +
 	"about the shape of the ground."
 
-func estimatedBytes(r *pyjson.Object) int64 {
-	v, _ := r.Get("estimatedBytes")
-	n, _ := pyjson.IntValue(v)
-	return n
-}
-
 var (
 	cellNameRE  = regexp.MustCompile(`\(\d+\x{00b0}[NS] \d+\x{00b0}[EW]`)
 	splitNameRE = regexp.MustCompile(`\((north|south|east|west|outlying)`)
 )
 
-func summarise(w io.Writer, records, manual []*pyjson.Object, est *estimator) error {
-	var generated []*pyjson.Object
+func summarise(w io.Writer, records, manual []record, est *estimator) error {
+	var generated []record
 	for _, r := range records {
-		if r.Has("geofabrikId") {
+		if r.GeofabrikID != nil {
 			generated = append(generated, r)
 		}
 	}
 	var total int64
 	for _, r := range generated {
-		total += estimatedBytes(r)
+		total += r.EstimatedBytes
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "catalogue: %d regions (%d hand-written, %d generated)\n", len(records), len(manual), len(generated))
@@ -1563,7 +1583,7 @@ func summarise(w io.Writer, records, manual []*pyjson.Object, est *estimator) er
 	if len(generated) > 0 {
 		sizes := make([]int64, len(generated))
 		for i, r := range generated {
-			sizes[i] = estimatedBytes(r)
+			sizes[i] = r.EstimatedBytes
 		}
 		sort.Slice(sizes, func(i, j int) bool { return sizes[i] < sizes[j] })
 		fmt.Fprintf(w, "  median region: %s\n", human(float64(sizes[len(sizes)/2])))
@@ -1576,13 +1596,13 @@ func summarise(w io.Writer, records, manual []*pyjson.Object, est *estimator) er
 
 	type group struct {
 		gid     string
-		records []*pyjson.Object
+		records []record
 	}
 	var cells []*group
 	byGID := map[string]*group{}
 	for _, r := range generated {
-		if cellNameRE.MatchString(str(r, "name")) {
-			gid := str(r, "geofabrikId")
+		if cellNameRE.MatchString(r.Name) {
+			gid := *r.GeofabrikID
 			g, ok := byGID[gid]
 			if !ok {
 				g = &group{gid: gid}
@@ -1603,52 +1623,52 @@ func summarise(w io.Writer, records, manual []*pyjson.Object, est *estimator) er
 		for _, g := range sorted[:min(10, len(sorted))] {
 			var t, largest int64
 			for _, r := range g.records {
-				t += estimatedBytes(r)
-				largest = max(largest, estimatedBytes(r))
+				t += r.EstimatedBytes
+				largest = max(largest, r.EstimatedBytes)
 			}
 			fmt.Fprintf(w, "    %-32s %3d cells, %9s total, largest %s\n", g.gid, len(g.records), human(float64(t)), human(float64(largest)))
 		}
 	}
 
-	var degraded []*pyjson.Object
+	var degraded []record
 	for _, r := range generated {
-		if r.Has("basemapMaxzoom") || r.Has("terrainMaxzoom") {
+		if r.BasemapMaxzoom != nil || r.TerrainMaxzoom != nil {
 			degraded = append(degraded, r)
 		}
 	}
 	if len(degraded) > 0 {
 		fmt.Fprintf(w, "\n  %d region(s) capped below the default zoom (too large to split further):\n", len(degraded))
-		sorted := append([]*pyjson.Object(nil), degraded...)
-		sort.SliceStable(sorted, func(i, j int) bool { return estimatedBytes(sorted[i]) > estimatedBytes(sorted[j]) })
+		sorted := append([]record(nil), degraded...)
+		sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].EstimatedBytes > sorted[j].EstimatedBytes })
 		for _, r := range sorted[:min(10, len(sorted))] {
 			bz, tz := int64(basemapZooms[0]), int64(terrainZooms[0])
-			if v, ok := r.Get("basemapMaxzoom"); ok {
-				bz, _ = pyjson.IntValue(v)
+			if r.BasemapMaxzoom != nil {
+				bz = *r.BasemapMaxzoom
 			}
-			if v, ok := r.Get("terrainMaxzoom"); ok {
-				tz, _ = pyjson.IntValue(v)
+			if r.TerrainMaxzoom != nil {
+				tz = *r.TerrainMaxzoom
 			}
-			fmt.Fprintf(w, "    %-32s %9s  (basemap z%d, terrain z%d)\n", str(r, "id"), human(float64(estimatedBytes(r))), bz, tz)
+			fmt.Fprintf(w, "    %-32s %9s  (basemap z%d, terrain z%d)\n", r.ID, human(float64(r.EstimatedBytes)), bz, tz)
 		}
 	}
 
-	var split []*pyjson.Object
+	var split []record
 	for _, r := range generated {
-		if splitNameRE.MatchString(str(r, "name")) {
+		if splitNameRE.MatchString(r.Name) {
 			split = append(split, r)
 		}
 	}
 	if len(split) > 0 {
 		fmt.Fprintf(w, "\n  %d region(s) split off a distant or antimeridian-crossing part:\n", len(split))
 		for _, r := range split[:min(12, len(split))] {
-			fmt.Fprintf(w, "    %-32s %s\n", str(r, "id"), str(r, "name"))
+			fmt.Fprintf(w, "    %-32s %s\n", r.ID, r.Name)
 		}
 	}
 
 	for _, m := range manual {
 		for _, g := range generated {
 			if overlaps(bboxOf(m), bboxOf(g)) > 0.95 && overlaps(bboxOf(g), bboxOf(m)) > 0.95 {
-				fmt.Fprintf(w, "\n  ! %s and %s cover the same ground — consider dropping one\n", str(m, "id"), str(g, "id"))
+				fmt.Fprintf(w, "\n  ! %s and %s cover the same ground — consider dropping one\n", m.ID, g.ID)
 			}
 		}
 	}
@@ -1658,15 +1678,15 @@ func summarise(w io.Writer, records, manual []*pyjson.Object, est *estimator) er
 		inside []string
 	}
 	var swallowed []swallow
-	for _, outer := range generated {
+	for i, outer := range generated {
 		var inside []string
-		for _, inner := range generated {
-			if inner != outer && overlaps(bboxOf(inner), bboxOf(outer)) > 0.9 {
-				inside = append(inside, str(inner, "id"))
+		for j, inner := range generated {
+			if i != j && overlaps(bboxOf(inner), bboxOf(outer)) > 0.9 {
+				inside = append(inside, inner.ID)
 			}
 		}
 		if len(inside) >= 3 {
-			swallowed = append(swallowed, swallow{str(outer, "id"), inside})
+			swallowed = append(swallowed, swallow{outer.ID, inside})
 		}
 	}
 	if len(swallowed) > 0 {
@@ -1686,10 +1706,10 @@ func summarise(w io.Writer, records, manual []*pyjson.Object, est *estimator) er
 	}
 
 	fmt.Fprintf(w, "\n  largest 10:\n")
-	largest := append([]*pyjson.Object(nil), generated...)
-	sort.SliceStable(largest, func(i, j int) bool { return estimatedBytes(largest[i]) > estimatedBytes(largest[j]) })
+	largest := append([]record(nil), generated...)
+	sort.SliceStable(largest, func(i, j int) bool { return largest[i].EstimatedBytes > largest[j].EstimatedBytes })
 	for _, r := range largest[:min(10, len(largest))] {
-		fmt.Fprintf(w, "    %-32s %9s  %s\n", str(r, "id"), human(float64(estimatedBytes(r))), str(r, "name"))
+		fmt.Fprintf(w, "    %-32s %9s  %s\n", r.ID, human(float64(r.EstimatedBytes)), r.Name)
 	}
 	if est.enabled {
 		fmt.Fprintf(w, "\n  %d new measurement(s); cache: %s\n", est.misses, est.p.estimateCache)
@@ -1704,17 +1724,20 @@ var bboxLineRE = regexp.MustCompile(`\[\s+(-?[\d.]+),\s+(-?[\d.]+),\s+(-?[\d.]+)
 // dumps is indented JSON, but with each bbox on one line. Four hundred regions is a file
 // people still have to read and diff; a bbox split across four lines turns every one of
 // them into a five-line block for no gain.
-func dumps(records []*pyjson.Object) (string, error) {
-	doc := &pyjson.Object{}
-	doc.Set("comment", catalogueComment)
-	list := make([]pyjson.Value, len(records))
-	for i, r := range records {
-		list[i] = r
+func dumps(records []record) (string, error) {
+	doc := struct {
+		Comment string            `json:"comment"`
+		Regions []json.RawMessage `json:"regions"`
+	}{Comment: catalogueComment}
+	for _, r := range records {
+		doc.Regions = append(doc.Regions, r.raw)
 	}
-	doc.Set("regions", list)
-	text, err := pyjson.Encode(doc, pyjson.Options{Indent: pyjson.Indent(2)})
-	if err != nil {
+	var text bytes.Buffer
+	enc := json.NewEncoder(&text)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(doc); err != nil {
 		return "", err
 	}
-	return bboxLineRE.ReplaceAllString(text, "[$1, $2, $3, $4]") + "\n", nil
+	return bboxLineRE.ReplaceAllString(text.String(), "[$1, $2, $3, $4]"), nil
 }

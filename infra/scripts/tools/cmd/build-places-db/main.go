@@ -3,13 +3,6 @@
 //
 //	build-places-db SOURCE.geojsonl... DEST.sqlite
 //
-// A port of scripts/build-places-db.py, which it replaces in build-places.sh: same
-// arguments, same summary, and the same database — built from the same input, the two
-// files differ only in the header bytes recording which SQLite version wrote them
-// (2026-09-25: Scotland, Montenegro and Liechtenstein, and 1.5 M synthetic places; every
-// row identical to the float bit and storage type, and the app's own search, through its
-// sqlite-wasm 3.41.2, returning identical results from both).
-//
 // Input: one or more line-delimited GeoJSON files of point features (places and peaks), as
 // produced by normalize-peaks. Output: a SQLite DB with an FTS5 index over names.
 //
@@ -37,8 +30,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"ratmap/infra/tools/internal/pyfloat"
-	"ratmap/infra/tools/internal/pytext"
+	"ratmap/infra/tools/internal/num"
+	"ratmap/infra/tools/internal/rawjson"
 )
 
 // Settlement kinds worth searching. Deliberately excludes isolated_dwelling/farm/locality:
@@ -109,9 +102,9 @@ func build(sources []string, dest string, out io.Writer) error {
 		return err
 	}
 
-	// Rows go in as they are read, in one transaction, rather than being collected first
-	// as the Python did: same rows, same order, same ids, and memory is the dedupe set
-	// rather than every row (349 MB against the Python's 809 MB on 1.5 M places).
+	// Rows go in as they are read, in one transaction, rather than being collected first:
+	// memory is the dedupe set rather than every row (349 MB against 809 MB on 1.5 M
+	// places).
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -130,7 +123,7 @@ func build(sources []string, dest string, out io.Writer) error {
 			}
 			// The same feature can appear in overlapping extracts; dedupe on
 			// name+rounded position rather than OSM id, which differs across sources.
-			k := dedupeKey{r.name, r.kind, pyfloat.Round(r.lat, 4), pyfloat.Round(r.lon, 4)}
+			k := dedupeKey{r.name, r.kind, num.Round(r.lat, 4), num.Round(r.lon, 4)}
 			if _, dup := seen[k]; dup {
 				return nil
 			}
@@ -198,7 +191,7 @@ func report(db *sql.DB, out io.Writer) error {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM places`).Scan(&total); err != nil {
 		return err
 	}
-	// Stable, so equal counts keep the query's order — Python's sorted() on the same rows.
+	// Stable, so equal counts keep the query's order.
 	sort.SliceStable(counts, func(a, b int) bool { return counts[a].count > counts[b].count })
 	fmt.Fprintf(out, "places.sqlite: %d rows\n", total)
 	for _, c := range counts {
@@ -218,7 +211,7 @@ func eachLine(path string, fn func([]byte) error) error {
 	r := bufio.NewReaderSize(f, 1<<20)
 	for n := 1; ; n++ {
 		raw, rerr := r.ReadBytes('\n')
-		if line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace); len(line) > 0 {
+		if line := bytes.TrimSpace(bytes.TrimLeft(raw, "\x1e")); len(line) > 0 {
 			if err := fn(line); err != nil {
 				return fmt.Errorf("%s: line %d: %w", path, n, err)
 			}
@@ -245,114 +238,71 @@ type place struct {
 	rank       int64
 }
 
-// placeRow turns one feature into a row, ok=false to skip it. It errs where the Python
-// raised — properties that are not an object, a place or natural tag that is a list or
-// dict, a geometry that is truthy but not an object, a Point without two numeric
-// coordinates — so the stage fails where it failed.
+// placeRow turns one feature into a row, ok=false to skip it. A line that is not a
+// feature — properties or geometry present but not an object, a Point without two
+// numeric coordinates — is an error: the export is broken, and the stage stops.
 func placeRow(line []byte) (place, bool, error) {
-	var feature map[string]json.RawMessage
+	var feature struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+		Geometry   *struct {
+			Type        string            `json:"type"`
+			Coordinates []json.RawMessage `json:"coordinates"`
+		} `json:"geometry"`
+	}
 	if err := json.Unmarshal(line, &feature); err != nil {
 		return place{}, false, err
 	}
-
-	// feature.get("properties", {})
-	props := map[string]json.RawMessage{}
-	if p, ok := feature["properties"]; ok {
-		if err := json.Unmarshal(p, &props); err != nil || props == nil {
-			return place{}, false, fmt.Errorf("properties is %s, not an object", p)
-		}
-	}
-	name, ok := pytext.Str(props["name"])
+	props := feature.Properties
+	name, ok := rawjson.String(props["name"])
 	if !ok || name == "" {
 		return place{}, false, nil
 	}
 
-	kind, population, ok, err := classify(props)
-	if err != nil || !ok {
-		return place{}, false, err
-	}
-
-	// (feature.get("geometry") or {}).get("type") != "Point"
-	var geometry map[string]json.RawMessage
-	if g, ok := feature["geometry"]; ok && !falsy(g) {
-		if err := json.Unmarshal(g, &geometry); err != nil {
-			return place{}, false, fmt.Errorf("geometry is %s, not an object", g)
-		}
-	}
-	if t, ok := pytext.Str(geometry["type"]); !ok || t != "Point" {
+	kind, pop, ok := classify(props)
+	if !ok {
 		return place{}, false, nil
 	}
-
-	// lon, lat = geometry["coordinates"][:2]
-	c, ok := geometry["coordinates"]
-	if !ok {
-		return place{}, false, errors.New("Point has no coordinates")
+	g := feature.Geometry
+	if g == nil || g.Type != "Point" {
+		return place{}, false, nil
 	}
-	var coords []json.RawMessage
-	if err := json.Unmarshal(c, &coords); err != nil || len(coords) < 2 {
-		return place{}, false, fmt.Errorf("coordinates %s: not a list of two or more", c)
+	if len(g.Coordinates) < 2 {
+		return place{}, false, errors.New("Point has fewer than two coordinates")
 	}
-	lon, ok1 := num(coords[0])
-	lat, ok2 := num(coords[1])
+	lon, ok1 := number(g.Coordinates[0])
+	lat, ok2 := number(g.Coordinates[1])
 	if !ok1 || !ok2 {
-		return place{}, false, fmt.Errorf("coordinates %s are not numbers", c)
+		return place{}, false, fmt.Errorf("coordinates %s, %s are not numbers", g.Coordinates[0], g.Coordinates[1])
 	}
 
 	r := place{name: name, kind: kind, lat: lat, lon: lon}
-	// float(ele) if isinstance(ele, (int, float)) else None
-	if e, ok := num(props["ele"]); ok {
+	if e, ok := number(props["ele"]); ok {
 		r.ele = e
 	}
-	// population or None: an unset or zero population is NULL, not 0.
-	if population != 0 {
-		r.population = population
+	// An unset or zero population is NULL, not 0.
+	if pop != 0 {
+		r.population = pop
 	}
-	r.rank = kindRank[kind] + min(floorDiv(population, 1000), 40)
+	r.rank = kindRank[kind] + min(pop/1000, 40)
 	return r, true, nil
 }
 
 // classify returns (kind, population), ok=false to skip the feature.
-func classify(props map[string]json.RawMessage) (string, int64, bool, error) {
-	if p, ok := props["place"]; ok {
-		if unhashable(p) {
-			return "", 0, false, fmt.Errorf("place is %s (unhashable in Python)", p)
+func classify(props map[string]json.RawMessage) (string, int64, bool) {
+	if s, ok := rawjson.String(props["place"]); ok && placeKinds[s] {
+		// Population drives ranking among settlements; a city with no population tag
+		// still outranks a hamlet via the kind ordering.
+		var pop int64
+		if n, ok := population(props["population"]); ok {
+			pop = n
 		}
-		if s, ok := pytext.Str(p); ok && placeKinds[s] {
-			// Population drives ranking among settlements; a city with no population tag
-			// still outranks a hamlet via the kind ordering.
-			var population int64
-			if raw, ok := props["population"]; ok {
-				n, ok, err := toInt(raw)
-				if err != nil {
-					return "", 0, false, err
-				}
-				if ok {
-					population = n
-				}
-			}
-			return s, population, true, nil
-		}
+		return s, pop, true
 	}
-	if n, ok := props["natural"]; ok {
-		if unhashable(n) {
-			return "", 0, false, fmt.Errorf("natural is %s (unhashable in Python)", n)
-		}
-		if s, ok := pytext.Str(n); ok && peakKinds[s] {
-			return s, 0, true, nil
-		}
+	if s, ok := rawjson.String(props["natural"]); ok && peakKinds[s] {
+		return s, 0, true
 	}
-	if s, ok := pytext.Str(props["mountain_pass"]); ok && s == "yes" {
-		return "mountain_pass", 0, true, nil
+	if s, ok := rawjson.String(props["mountain_pass"]); ok && s == "yes" {
+		return "mountain_pass", 0, true
 	}
-	return "", 0, false, nil
-}
-
-// floorDiv is Python's //: it rounds toward negative infinity, where Go's / truncates.
-// A population of -5 is rank - 1 in Python, not rank + 0.
-func floorDiv(a, b int64) int64 {
-	q := a / b
-	if a%b != 0 && (a < 0) != (b < 0) {
-		q--
-	}
-	return q
+	return "", 0, false
 }

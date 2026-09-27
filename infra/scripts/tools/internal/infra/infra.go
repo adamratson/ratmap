@@ -1,7 +1,7 @@
 // Package infra locates the infra/ directory for the commands that read or write files
-// there by fixed path (regions.json, dist/, .cache/, .env). The Python scripts found it
-// from their own location; a Go binary is built into a scratch directory, so lib.sh's
-// go_run passes it in RATMAP_INFRA_DIR instead.
+// there by fixed path (regions.json, dist/, .cache/, .env). A Go binary is built into a
+// scratch directory, so it cannot find infra/ from its own location; lib.sh's go_run
+// passes it in RATMAP_INFRA_DIR.
 package infra
 
 import (

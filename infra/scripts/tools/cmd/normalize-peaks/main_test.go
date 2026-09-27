@@ -1,64 +1,64 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
-	"ratmap/infra/tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/golden"
 )
 
-// testdata/ele.tsv is the Python's parse_elevation on 6,500-odd values: the tail the package comment names, rounding ties, the
-// range edges, non-ASCII digits, and random mixtures.
-func TestParseElevationMatchesPython(t *testing.T) {
-	f, err := os.Open("testdata/ele.tsv")
+// testdata/ele.tsv is what 6,500-odd `ele` values read as ("None" for no elevation): the
+// tail the package comment names, rounding ties, the range edges, digits in other
+// scripts, and random mixtures. The first version was written by the Python this
+// replaced; -update rewrites it.
+func TestParseElevation(t *testing.T) {
+	data, err := os.ReadFile("testdata/ele.tsv")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 1<<16), 1<<20)
+	var got bytes.Buffer
 	n := 0
-	for sc.Scan() {
-		value, want, _ := strings.Cut(sc.Text(), "\t")
-		v, ok, err := parseElevation(json.RawMessage(value))
-		got := "None"
-		if err != nil {
-			got = "ERROR"
-		} else if ok {
-			got = pyfloat.Repr(v)
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		value, _, _ := strings.Cut(line, "\t")
+		out := "None"
+		if v, ok := parseElevation(json.RawMessage(value)); ok {
+			out = strconv.FormatFloat(v, 'f', -1, 64)
 		}
-		if got != want {
-			t.Errorf("parse_elevation(%s): got %s, Python %s", value, got, want)
-		}
+		got.WriteString(value + "\t" + out + "\n")
 		n++
 	}
 	if n < 6500 {
 		t.Fatalf("only %d vectors", n)
 	}
+	golden.Check(t, "elevations", got.Bytes(), "testdata/ele.tsv")
 }
 
-// testdata/edge.want.* are the Python's output and report for testdata/edge.geojsonl.
-// Compared as parsed features: the output keeps osmium's text where the Python
-// re-encoded it (see the package comment), so the bytes differ by design.
-func TestMatchesPython(t *testing.T) {
+// testdata/edge.want.* are the output and report for testdata/edge.geojsonl, compared as
+// parsed features. -update rewrites them.
+func TestEdgeCases(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out.geojsonl")
 	var report bytes.Buffer
 	if err := run("testdata/edge.geojsonl", out, &report); err != nil {
 		t.Fatal(err)
 	}
-	want, _ := os.ReadFile("testdata/edge.want.stdout")
-	if report.String() != string(want) {
-		t.Errorf("report:\n got  %s want %s", report.String(), want)
+	golden.Check(t, "report", report.Bytes(), "testdata/edge.want.stdout")
+	if *golden.Update {
+		data, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.Check(t, "features", data, "testdata/edge.want.geojsonl")
+		return
 	}
 	got, wantF := features(t, out), features(t, "testdata/edge.want.geojsonl")
 	if len(got) != len(wantF) {
-		t.Fatalf("%d features, Python wrote %d", len(got), len(wantF))
+		t.Fatalf("%d features, want %d", len(got), len(wantF))
 	}
 	for i := range wantF {
 		if !reflect.DeepEqual(got[i], wantF[i]) {
@@ -67,9 +67,9 @@ func TestMatchesPython(t *testing.T) {
 	}
 }
 
-// Key order counts too, as a Python dict's: an edited `ele` stays where it was, and a new
-// `lists` goes last. (DeepEqual on maps cannot see order, so this checks it directly.)
-func TestKeyOrderMatchesPython(t *testing.T) {
+// Key order counts too: an edited `ele` stays where it was, and a new `lists` goes last.
+// (DeepEqual on maps cannot see order, so this checks it directly.)
+func TestKeyOrder(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out.geojsonl")
 	if err := run("testdata/edge.geojsonl", out, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
@@ -89,18 +89,26 @@ func TestUntouchedFeaturesPassThrough(t *testing.T) {
 	}
 }
 
-// Where the Python raised, this must fail too rather than write something new.
-func TestRefusesWhatPythonRaisedOn(t *testing.T) {
+// A line that is not a feature is an error: the export is broken.
+func TestRefusesMalformedFeatures(t *testing.T) {
 	for _, line := range []string{
 		`[1]`,
-		`{"properties": null}`,
 		`{"properties": ["ele"]}`,
 		`{"properties": "elevation"}`,
-		`{"properties": {"ele": 1` + strings.Repeat("0", 400) + `}}`,
 		`{"properties": {"ele": "1"}`,
 	} {
 		if _, err := normalize([]byte(line), &counts{}); err == nil {
-			t.Errorf("normalize(%.60s): want an error, as Python raises", line)
+			t.Errorf("normalize(%.60s): want an error", line)
+		}
+	}
+	// Null properties pass through; an elevation too big for a float is none.
+	for line, want := range map[string]string{
+		`{"properties": null}`: `{"properties": null}`,
+		`{"properties": {"ele": 1` + strings.Repeat("0", 400) + `}}`: `{"properties": {}}`,
+	} {
+		got, err := normalize([]byte(line), &counts{})
+		if err != nil || string(got) != want {
+			t.Errorf("normalize(%.60s) = %s, %v; want %s", line, got, err, want)
 		}
 	}
 }

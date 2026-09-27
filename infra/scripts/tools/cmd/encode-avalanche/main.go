@@ -1,8 +1,7 @@
 // Command encode-avalanche computes slope and aspect from a Web Mercator DEM, as two
 // single-band Byte rasters per zoom, max-reduced down a pyramid.
 //
-// A port of scripts/encode-avalanche.py, which it replaces in build-avalanche.sh: same
-// arguments, same files out, no numpy. The avalanche terrain layer
+// Run by build-avalanche.sh. The avalanche terrain layer
 // (plans/avalanche-terrain.md) needs the *shape* of the ground — how steep, and which way
 // it faces. Both are pure derivatives of the DEM, computed once at build time from
 // Copernicus GLO-30 and shipped as tiles: no third-party feed, nothing live, nothing
@@ -32,16 +31,18 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"strconv"
 
 	"ratmap/infra/tools/internal/cli"
 	"ratmap/infra/tools/internal/gdal"
-	"ratmap/infra/tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/num"
 )
 
 const usage = `usage: encode-avalanche [--self-test] DEM OUT_DIR --zmax Z --zmin Z [--stats-json PATH]
@@ -49,13 +50,13 @@ const usage = `usage: encode-avalanche [--self-test] DEM OUT_DIR --zmax Z --zmin
 Slope and aspect from a Web Mercator DEM, as slope-<z>/aspect-<z> Byte rasters per zoom.`
 
 func main() {
-	a := cli.Parse(os.Args[1:], usage, []cli.Spec{
-		{Name: "self-test", Bool: true, Help: "check the maths against known planes and exit"},
-		{Name: "zmax", Help: "zoom the DEM is gridded at"},
-		{Name: "zmin", Help: "coarsest zoom to reduce down to"},
-		{Name: "stats-json", Help: "write the class histogram here"},
-	})
-	if a.Has("self-test") {
+	fs := flag.NewFlagSet("encode-avalanche", flag.ExitOnError)
+	self := fs.Bool("self-test", false, "check the maths against known planes and exit")
+	zmax := fs.Int("zmax", 0, "zoom the DEM is gridded at")
+	zmin := fs.Int("zmin", 0, "coarsest zoom to reduce down to")
+	stats := fs.String("stats-json", "", "write the class histogram here")
+	args := cli.Parse(fs, usage, os.Args[1:])
+	if *self {
 		if failures := selfTest(os.Stdout); len(failures) > 0 {
 			for _, f := range failures {
 				fmt.Fprintf(os.Stderr, "  FAIL %s\n", f)
@@ -66,11 +67,10 @@ func main() {
 		fmt.Println("  self-test passed")
 		return
 	}
-	if len(a.Positionals) != 2 || !a.Has("zmax") || !a.Has("zmin") {
-		fmt.Fprintf(os.Stderr, "%s\nerror: dem, out_dir, --zmax and --zmin are required unless --self-test\n", usage)
-		os.Exit(2)
+	if given := cli.Given(fs); len(args) != 2 || !given["zmax"] || !given["zmin"] {
+		cli.Fail(fs, "DEM, OUT_DIR, --zmax and --zmin are required unless --self-test")
 	}
-	err := run(a.Positionals[0], a.Positionals[1], a.Int("zmax", 0), a.Int("zmin", 0), a.String("stats-json", ""))
+	err := run(args[0], args[1], *zmax, *zmin, *stats)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -104,14 +104,14 @@ func run(demPath, outDir string, zmax, zmin int, statsPath string) error {
 	}
 	maxSlope := maxNonzero(counts)
 	fmt.Printf("  slope at z%d: max %d deg\n", zmax, maxSlope)
-	var classes []string
+	classes := map[string]float64{} // keys sort in order, as "25-29" .. "45-60"
 	for _, b := range [][2]int{{25, 30}, {30, 35}, {35, 40}, {40, 45}, {45, 61}} {
 		var n int64
 		for v := b[0]; v < b[1]; v++ {
 			n += counts[v]
 		}
 		pct := float64(100.0*float64(n)) / float64(max(1, total))
-		classes = append(classes, fmt.Sprintf(`  "%d-%d": %s`, b[0], b[1]-1, pyfloat.Repr(pyfloat.Round(pct, 4))))
+		classes[fmt.Sprintf("%d-%d", b[0], b[1]-1)] = num.Round(pct, 4)
 		fmt.Printf("    %d-%d deg: %6.2f%%\n", b[0], b[1]-1, pct)
 	}
 
@@ -132,16 +132,25 @@ func run(demPath, outDir string, zmax, zmin int, statsPath string) error {
 	}
 
 	if statsPath != "" {
-		// json.dump(stats, indent=1)'s exact text, so anything diffing the file sees no
-		// change from the Python.
-		doc := fmt.Sprintf("{\n \"zmax\": %d,\n \"cells\": %d,\n \"max_slope\": %d,\n \"classes\": {\n%s\n }\n}",
-			zmax, total, maxSlope, strings.Join(classes, ",\n"))
-		if err := os.WriteFile(statsPath, []byte(doc), 0o644); err != nil {
+		doc, err := json.MarshalIndent(struct {
+			ZMax     int                `json:"zmax"`
+			Cells    int64              `json:"cells"`
+			MaxSlope int                `json:"max_slope"`
+			Classes  map[string]float64 `json:"classes"`
+		}{zmax, total, maxSlope, classes}, "", " ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(statsPath, doc, 0o644); err != nil {
 			return err
 		}
 	}
 	return nil
 }
+
+// metres writes a Web Mercator coordinate for gdal_translate: the shortest digits that
+// read back as the same double.
+func metres(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 
 // enviToTIF georeferences a flat byte array as a GeoTIFF, without copying it through
 // memory.
@@ -153,8 +162,8 @@ func enviToTIF(raw string, w, h int, gt [6]float64, path string) error {
 	cmd := exec.Command("gdal_translate", "-q", "-of", "GTiff", "-co", "COMPRESS=DEFLATE",
 		"-a_srs", "EPSG:3857",
 		"-a_ullr",
-		pyfloat.Repr(ulx), pyfloat.Repr(uly),
-		pyfloat.Repr(ulx+float64(float64(w)*xres)), pyfloat.Repr(uly+float64(float64(h)*yres)),
+		metres(ulx), metres(uly),
+		metres(ulx+float64(float64(w)*xres)), metres(uly+float64(float64(h)*yres)),
 		raw, path)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {

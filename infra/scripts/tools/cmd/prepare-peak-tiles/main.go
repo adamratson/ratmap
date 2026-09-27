@@ -3,9 +3,7 @@
 //
 //	prepare-peak-tiles IN.geojsonl OUT.geojsonl
 //
-// A port of scripts/prepare-peak-tiles.py, which it replaces in build-peaks.sh: same
-// arguments, same report, same peaks left out and moved. Lines it does not change are
-// copied through byte for byte, as the Python did.
+// Run by build-peaks.sh. Lines it does not change are copied through byte for byte.
 //
 // MapLibre draws a point only from a tile that holds it, 0 <= x, y < extent in that
 // tile's own coordinates: points in a tile's buffer are skipped, so none is drawn twice
@@ -57,11 +55,12 @@ import (
 	"io"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 
 	"ratmap/infra/tools/internal/jsonedit"
-	"ratmap/infra/tools/internal/pyfloat"
-	"ratmap/infra/tools/internal/pytext"
+	"ratmap/infra/tools/internal/num"
+	"ratmap/infra/tools/internal/rawjson"
 )
 
 const (
@@ -74,7 +73,7 @@ const (
 )
 
 // mercatorLimit is the latitude where Web Mercator's square world ends:
-// math.degrees(math.atan(math.sinh(math.pi))) as CPython computes it. Written out rather
+// degrees(atan(sinh(pi))) as the C library computes it, as tippecanoe does. Written out rather
 // than recomputed because Go's math.Sinh(math.Pi) is one ulp above the C library's
 // (11.548739357257748 against ...746), which carries through to a limit one ulp lower.
 const mercatorLimit = 85.0511287798066
@@ -109,7 +108,7 @@ func run(srcPath, destPath string, out io.Writer) error {
 	var moved []string
 	for n := 1; ; n++ {
 		line, rerr := r.ReadBytes('\n')
-		if len(bytes.TrimFunc(line, pytext.IsSpace)) > 0 {
+		if len(bytes.TrimSpace(line)) > 0 {
 			result, name, note, err := prepare(line, limit)
 			if err != nil {
 				dest.Close()
@@ -147,15 +146,9 @@ func run(srcPath, destPath string, out io.Writer) error {
 
 	first := fmt.Sprintf("  %d peaks to tile; %d beyond Web Mercator (+-%.4f) left out", kept, len(beyond), limit)
 	if len(beyond) > 0 {
-		// ', '.join(beyond[:5]): every one of those names has to be a string, or the
-		// Python raised TypeError here.
 		var names []string
 		for _, raw := range beyond[:min(5, len(beyond))] {
-			s, ok := pytext.Str(raw)
-			if !ok {
-				return fmt.Errorf("peak name %s is not a string (join() raised in Python)", raw)
-			}
-			names = append(names, s)
+			names = append(names, rawjson.Text(raw))
 		}
 		first += ", e.g. " + strings.Join(names, ", ")
 	}
@@ -172,8 +165,8 @@ func run(srcPath, destPath string, out io.Writer) error {
 // nothing changes), or nil for a peak beyond Web Mercator along with its name; note
 // describes a move for the report.
 func prepare(line []byte, limit float64) ([]byte, json.RawMessage, string, error) {
-	// feature["geometry"]["coordinates"][:2]. Maps, not a struct: encoding/json matches
-	// struct fields case-insensitively, and "Geometry" was a KeyError to the Python.
+	// Maps, not a struct: encoding/json matches struct fields case-insensitively, and a
+	// "Geometry" member is not the geometry.
 	var feature map[string]json.RawMessage
 	if err := json.Unmarshal(line, &feature); err != nil {
 		return nil, nil, "", err
@@ -193,11 +186,10 @@ func prepare(line []byte, limit float64) ([]byte, json.RawMessage, string, error
 		return nil, nil, "", fmt.Errorf("coordinates %s, %s are not numbers", lonRaw, latRaw)
 	}
 
-	// feature.get("properties", {}).get("name", "(unnamed)")
 	name := json.RawMessage(`"(unnamed)"`)
 	if p, ok := feature["properties"]; ok {
 		var props map[string]json.RawMessage
-		if err := json.Unmarshal(p, &props); err != nil || props == nil {
+		if err := json.Unmarshal(p, &props); err != nil {
 			return nil, nil, "", fmt.Errorf("properties is %s, not an object", p)
 		}
 		if v, ok := props["name"]; ok {
@@ -216,8 +208,7 @@ func prepare(line []byte, limit float64) ([]byte, json.RawMessage, string, error
 		return line, nil, "", nil
 	}
 
-	// feature["geometry"]["coordinates"] = [new_lon, new_lat], as json.dumps writes a
-	// list — a third coordinate goes, as it did.
+	// The moved position replaces the whole list: a third coordinate, if any, goes.
 	top, err := jsonedit.Parse(line, 0)
 	if err != nil {
 		return nil, nil, "", err
@@ -231,35 +222,21 @@ func prepare(line []byte, limit float64) ([]byte, json.RawMessage, string, error
 		return nil, nil, "", err
 	}
 	edited, err := geom.Set(line, "coordinates",
-		[]byte("["+pyfloat.Repr(newLon)+", "+pyfloat.Repr(newLat)+"]"))
+		[]byte("["+strconv.FormatFloat(newLon, 'f', -1, 64)+", "+strconv.FormatFloat(newLat, 'f', -1, 64)+"]"))
 	if err != nil {
 		return nil, nil, "", err
 	}
-	note := fmt.Sprintf("%s (%s, %s)", pytext.StrValue(name), pyNumber(lonRaw), pyNumber(latRaw))
+	note := fmt.Sprintf("%s (%s, %s)", rawjson.Text(name), rawjson.Text(lonRaw), rawjson.Text(latRaw))
 	return edited, nil, note, nil
 }
 
-// number reads a coordinate as Python arithmetic sees it: an int, a float, or a bool
-// (True is 1).
+// number reads a coordinate: a JSON number, and nothing else.
 func number(raw json.RawMessage) (float64, bool) {
-	raw = bytes.TrimSpace(raw)
-	switch string(raw) {
-	case "true":
-		return 1, true
-	case "false":
-		return 0, true
-	}
 	var f float64
 	if err := json.Unmarshal(raw, &f); err != nil {
 		return 0, false
 	}
 	return f, true
-}
-
-// pyNumber is str() of a JSON number as json.loads decoded it: an int's digits (so -0 is
-// 0), a float's repr.
-func pyNumber(raw json.RawMessage) string {
-	return pytext.StrValue(raw)
 }
 
 // llround is C's llround: halves go away from zero.
@@ -272,7 +249,7 @@ func llround(v float64) int64 {
 
 // worldXY is tippecanoe's lonlat2tile(lon, lat, 32), operation for operation. The
 // float64() conversions stop Go fusing a multiply into the next add or subtract (FMA,
-// which it may do on arm64): C, like Python, rounds each operation on its own.
+// which it may do on arm64): C rounds each operation on its own.
 func worldXY(lon, lat float64) (int64, int64) {
 	latRad := float64(lat*math.Pi) / 180
 	x := llround(float64(world * ((lon + 180) / 360)))
@@ -286,15 +263,16 @@ func tieZoom(w int64) bool {
 	for z := minZ; z <= maxZ; z++ {
 		tile := int64(1) << (32 - z)
 		half := int64(1) << (32 - z - detail - 1)
-		if pyMod(w+half, tile) == 0 {
+		if floorMod(w+half, tile) == 0 {
 			return true
 		}
 	}
 	return false
 }
 
-// pyMod is Python's %, which for a positive divisor is never negative.
-func pyMod(a, b int64) int64 {
+// floorMod is a mod b rounded toward negative infinity: never negative for a positive b,
+// where Go's % takes the sign of a.
+func floorMod(a, b int64) int64 {
 	m := a % b
 	if m < 0 {
 		m += b
@@ -312,10 +290,10 @@ func untie(lon, lat float64) (float64, float64, error) {
 			return lon, lat, nil
 		}
 		if tx {
-			lon = pyfloat.Round(lon-step, 7)
+			lon = num.Round(lon-step, 7)
 		}
 		if ty {
-			lat = pyfloat.Round(lat+step, 7)
+			lat = num.Round(lat+step, 7)
 		}
 	}
 	return 0, 0, fmt.Errorf("could not move (%v, %v) off a tile-edge tie", lon, lat)

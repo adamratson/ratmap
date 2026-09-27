@@ -1,1 +1,1 @@
-{"tile_compression": "gzip", "minzoom": 5, "maxzoom": 4, "name": "Z\u00fcrich \u2014 \u2713", "center": [8.5, 47.3, 4], "bounds": [-0.0, 1e-07, 2, 3]}
+{"bounds":[-0.0,1e-07,2,3],"center":[8.5,47.3,4],"maxzoom":4,"minzoom":5,"name":"Z\u00fcrich \u2014 \u2713","tile_compression":"gzip"}

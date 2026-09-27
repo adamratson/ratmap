@@ -4,9 +4,6 @@
 //	normalize-sac SAC.geojsonl FINAL.geojsonl
 //	normalize-sac --self-test
 //
-// A port of scripts/normalize-sac.py, which it replaces in build-sac.sh: same arguments,
-// same grades, same features kept and dropped, same report.
-//
 // `sac_scale` is a documented enum and is still free text in practice: taginfo lists 184
 // distinct values behind the seven official ones (2026-09-06), including "T3", "3",
 // "T2-T3", "mountain_hiking;demanding_mountain_hiking", "yes" and "?". Cleaning that here
@@ -33,9 +30,8 @@
 // *unreadable value*, though, is a way someone graded and we failed to read, so those are
 // the ones printed with their values.
 //
-// The output is not the Python's bytes: it copies osmium's geometry text through rather
-// than re-serializing it, and writes the new properties compactly. Its readers —
-// build-sac.sh's grade check and tippecanoe — parse it, and both see the same features.
+// Each feature's geometry is osmium's text, copied through rather than re-serialized, and
+// its new properties are written compactly.
 package main
 
 import (
@@ -49,7 +45,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ratmap/infra/tools/internal/pytext"
+	"ratmap/infra/tools/internal/rawjson"
 )
 
 func main() {
@@ -73,8 +69,8 @@ func main() {
 
 type counts struct {
 	kept, notALine, untagged, duplicated int
-	// Unreadable values by str(value), in first-seen order: the report lists the most
-	// common, and Python's stable sort left ties in the order they were first met.
+	// Unreadable values by their text, in first-seen order: the report lists the most
+	// common, ties in the order they were first met.
 	unparsed      map[string]int
 	unparsedOrder []string
 }
@@ -105,7 +101,7 @@ func run(srcPath, destPath string, out io.Writer) error {
 		raw, rerr := r.ReadBytes('\n')
 		// RFC8142 puts an RS (0x1e) before each record; our callers turn it off, but
 		// stripping it anyway means this also works on a plain geojsonseq export.
-		if line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace); len(line) > 0 {
+		if line := bytes.TrimSpace(bytes.TrimLeft(raw, "\x1e")); len(line) > 0 {
 			if err := feature(line, w, seen, &c); err != nil {
 				dest.Close()
 				return fmt.Errorf("%s: line %d: %w", srcPath, n, err)
@@ -143,46 +139,40 @@ func run(srcPath, destPath string, out io.Writer) error {
 		}
 		var items []string
 		for _, v := range top {
-			items = append(items, fmt.Sprintf("%s x%d", pytext.ReprString(v), c.unparsed[v]))
+			items = append(items, fmt.Sprintf("%q x%d", v, c.unparsed[v]))
 		}
 		fmt.Fprintf(out, "  unreadable values: %s\n", strings.Join(items, ", "))
 	}
 	return nil
 }
 
-// feature handles one line. It errs where the Python raised — a geometry or properties
-// that is present but not an object, an @id that is a list or dict, an infinite number —
-// so the stage fails where it failed.
+// feature handles one line. A line that is not a feature — geometry or properties present
+// but not an object — is an error: the export is broken, and the stage stops.
 func feature(line []byte, w *bufio.Writer, seen map[string]struct{}, c *counts) error {
-	var f map[string]json.RawMessage
+	var f struct {
+		Geometry   json.RawMessage            `json:"geometry"`
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
 	if err := json.Unmarshal(line, &f); err != nil {
 		return err
+	}
+	var geometry struct {
+		Type string `json:"type"`
+	}
+	if len(f.Geometry) > 0 && !isNull(f.Geometry) {
+		if err := json.Unmarshal(f.Geometry, &geometry); err != nil {
+			return fmt.Errorf("geometry: %w", err)
+		}
 	}
 
 	// The scale describes a stretch of path. A node tagged with it is either a tagging
 	// error or, far more often, just a gate that happened to be on a graded way and came
 	// through the filter with it.
-	geometry := f["geometry"]
-	geomType, err := member(geometry, "geometry", "type")
-	if err != nil {
-		return err
-	}
-	if t, _ := pytext.Str(geomType); t != "LineString" && t != "MultiLineString" {
+	if geometry.Type != "LineString" && geometry.Type != "MultiLineString" {
 		c.notALine++
 		return nil
 	}
-
-	// Only now, as in the Python: properties that are not an object only raised once
-	// something was read from them, which a non-line never reached.
-	var props map[string]json.RawMessage
-	if p, ok := f["properties"]; ok {
-		if len(bytes.TrimSpace(p)) == 0 || bytes.TrimSpace(p)[0] != '{' {
-			return fmt.Errorf("properties is %s, not an object", p)
-		}
-		if err := json.Unmarshal(p, &props); err != nil {
-			return err
-		}
-	}
+	props := f.Properties
 
 	raw, ok := props["sac_scale"]
 	if !ok || isNull(raw) {
@@ -194,11 +184,9 @@ func feature(line []byte, w *bufio.Writer, seen map[string]struct{}, c *counts) 
 	// real export, 2026-09-08 — reading `id` silently deduplicated nothing at all).
 	// Absent when the caller did not pass the flag, in which case deduplication is
 	// skipped rather than half-applied.
+	// Keyed by the id as written: osmium writes an integer, always.
 	if id, ok := props["@id"]; ok && !isNull(id) {
-		k, err := pytext.HashKey(id)
-		if err != nil {
-			return err
-		}
+		k := string(bytes.TrimSpace(id))
 		if _, dup := seen[k]; dup {
 			c.duplicated++
 			return nil
@@ -211,7 +199,7 @@ func feature(line []byte, w *bufio.Writer, seen map[string]struct{}, c *counts) 
 		return err
 	}
 	if !ok {
-		s := pytext.StrValue(raw)
+		s := rawjson.Text(raw)
 		if _, known := c.unparsed[s]; !known {
 			c.unparsedOrder = append(c.unparsedOrder, s)
 		}
@@ -222,32 +210,15 @@ func feature(line []byte, w *bufio.Writer, seen map[string]struct{}, c *counts) 
 	// `t` and `name` only. Every byte of this artifact is downloaded onto a phone over
 	// whatever signal a glen has, and nothing else here is read by the app.
 	w.WriteString(`{"type":"Feature","geometry":`)
-	w.Write(geometry)
+	w.Write(f.Geometry)
 	w.WriteString(`,"properties":{"t":` + strconv.Itoa(grade))
-	if name, ok := pytext.Str(props["name"]); ok {
+	if name, ok := rawjson.String(props["name"]); ok {
 		w.WriteString(`,"name":`)
 		w.Write(jsonString(name))
 	}
 	w.WriteString("}}\n")
 	c.kept++
 	return nil
-}
-
-// member is Python's `obj.get(key)` on a value that defaulted to {} when absent: nil if
-// either is missing, an error if the value is present but not an object.
-func member(obj json.RawMessage, name, key string) (json.RawMessage, error) {
-	if obj == nil {
-		return nil, nil
-	}
-	o := bytes.TrimSpace(obj)
-	if len(o) == 0 || o[0] != '{' {
-		return nil, fmt.Errorf("%s is %s, not an object", name, obj)
-	}
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(o, &m); err != nil {
-		return nil, err
-	}
-	return m[key], nil
 }
 
 func isNull(raw json.RawMessage) bool { return string(bytes.TrimSpace(raw)) == "null" }

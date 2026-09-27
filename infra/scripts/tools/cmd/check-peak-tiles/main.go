@@ -55,7 +55,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ratmap/infra/tools/internal/pytext"
+	"ratmap/infra/tools/internal/rawjson"
 )
 
 var (
@@ -89,17 +89,17 @@ func main() {
 type peak struct {
 	props    map[string]json.RawMessage
 	lon, lat float64
-	// The coordinates as written, for printing them as Python's str() did.
+	// The coordinates as written, for printing.
 	lonRaw, latRaw json.RawMessage
 }
 
 func (p peak) name() json.RawMessage { return p.props["name"] }
 
 func isMunro(props map[string]json.RawMessage) bool {
-	// "munro" in str(props.get("lists", "")).split(";")
+	// A "munro" entry in the ;-separated lists.
 	lists := ""
 	if v, ok := props["lists"]; ok {
-		lists = pytext.StrValue(v)
+		lists = rawjson.Text(v)
 	}
 	for _, s := range strings.Split(lists, ";") {
 		if s == "munro" {
@@ -139,7 +139,7 @@ func run(source, archive string, z int, decoded io.Reader, out io.Writer) (bool,
 
 	for _, u := range unclear[:min(maxListed, len(unclear))] {
 		fmt.Fprintf(out, "FAIL: cannot tell which pixel of tile %d/%d/%d holds %s (%s, %s)\n",
-			z, u.tx, u.ty, nameOr(u.peak.props, "(unnamed)"), pytext.StrValue(u.peak.lonRaw), pytext.StrValue(u.peak.latRaw))
+			z, u.tx, u.ty, nameOr(u.peak.props, "(unnamed)"), rawjson.Text(u.peak.lonRaw), rawjson.Text(u.peak.latRaw))
 	}
 	if count != expected {
 		fmt.Fprintf(out, "FAIL: %d peaks in the z%d tiles, %d in the input\n", count, z, expected)
@@ -164,14 +164,14 @@ func run(source, archive string, z int, decoded io.Reader, out io.Writer) (bool,
 	return false, nil
 }
 
-// nameOr is str(props.get(key, def)), key defaulting to "name".
+// nameOr is the text of props[key] (key defaulting to "name"), or def if it is absent.
 func nameOr(props map[string]json.RawMessage, def string, key ...string) string {
 	k := "name"
 	if len(key) > 0 {
 		k = key[0]
 	}
 	if v, ok := props[k]; ok {
-		return pytext.StrValue(v)
+		return rawjson.Text(v)
 	}
 	return def
 }
@@ -186,7 +186,7 @@ func readSource(path string, fn func(peak) error) error {
 	r := bufio.NewReaderSize(f, 1<<20)
 	for n := 1; ; n++ {
 		raw, rerr := r.ReadBytes('\n')
-		if line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace); len(line) > 0 {
+		if line := bytes.TrimSpace(bytes.TrimLeft(raw, "\x1e")); len(line) > 0 {
 			p, err := parsePeak(line)
 			if err != nil {
 				return fmt.Errorf("%s: line %d: %w", path, n, err)
@@ -204,18 +204,22 @@ func readSource(path string, fn func(peak) error) error {
 	}
 }
 
-// parsePeak reads a feature's properties and first two coordinates, erring where the
-// Python's indexing raised.
+// parsePeak reads a feature's properties and first two coordinates. A feature without a
+// geometry and two numeric coordinates, or with properties that are not an object, is an
+// error: every peak that goes in has to be checkable.
 func parsePeak(text []byte) (peak, error) {
 	var feature map[string]json.RawMessage
 	if err := json.Unmarshal(text, &feature); err != nil {
 		return peak{}, err
 	}
-	p := peak{props: map[string]json.RawMessage{}}
+	p := peak{}
 	if raw, ok := feature["properties"]; ok {
-		if err := json.Unmarshal(raw, &p.props); err != nil || p.props == nil {
+		if err := json.Unmarshal(raw, &p.props); err != nil {
 			return peak{}, fmt.Errorf("properties is %s, not an object", raw)
 		}
+	}
+	if p.props == nil {
+		p.props = map[string]json.RawMessage{}
 	}
 	var geometry map[string]json.RawMessage
 	if err := json.Unmarshal(feature["geometry"], &geometry); err != nil || geometry == nil {
@@ -241,8 +245,8 @@ type unclearFeature struct {
 }
 
 // pixel is the whole pixel a decoded coordinate stands for, ok=false if it is too near a
-// half. (round() rounds half to even in Python, but a value that near a half is refused
-// either way, so the mode never matters.)
+// half. (A value that near a half is refused, so which way an exact half rounds never
+// matters.)
 func pixel(value float64) (int, bool) {
 	whole := math.Round(value)
 	if math.Abs(value-whole) <= 0.25 {
@@ -256,7 +260,8 @@ func pixel(value float64) (int, bool) {
 // are not counted.
 //
 // The float64() conversions stop Go fusing a multiply into the following subtraction
-// (FMA, which it may do on arm64): Python rounds each operation on its own.
+// (FMA, which it may do on arm64), so each operation is rounded on its own, as
+// tippecanoe's C does.
 func countedFeatures(stream io.Reader, z int, unclear *[]unclearFeature, fn func(peak, int)) error {
 	n := float64(int64(1) << z)
 	piv := math.Pi
@@ -278,7 +283,7 @@ func countedFeatures(stream io.Reader, z int, unclear *[]unclearFeature, fn func
 				if e := extentRE.FindStringSubmatch(line); e != nil {
 					extent, _ = strconv.Atoi(e[1])
 				}
-			} else if text := strings.TrimRight(strings.TrimFunc(line, pytext.IsSpace), ","); haveTile && strings.HasPrefix(text, `{ "type": "Feature"`) {
+			} else if text := strings.TrimRight(strings.TrimSpace(line), ","); haveTile && strings.HasPrefix(text, `{ "type": "Feature"`) {
 				p, err := parsePeak([]byte(text))
 				if err != nil {
 					return err
@@ -306,7 +311,7 @@ func countedFeatures(stream io.Reader, z int, unclear *[]unclearFeature, fn func
 }
 
 type indexKey struct {
-	name   string // the name's Python value, keyed as a dict would key it
+	name   string // nameKey
 	cx, cy int64
 }
 
@@ -315,16 +320,16 @@ type entry struct {
 	used     bool
 }
 
-// nameKey keys a name value the way a Python dict did: strings by their text, and a
-// missing name and a null one alike (props.get("name") was None for both).
+// nameKey keys a name value: a string by its text, anything else by its JSON, and a
+// missing name and a null one alike.
 func nameKey(raw json.RawMessage) string {
 	if raw == nil || string(bytes.TrimSpace(raw)) == "null" {
 		return "None"
 	}
-	if s, ok := pytext.Str(raw); ok {
+	if s, ok := rawjson.String(raw); ok {
 		return "s" + s
 	}
-	return "v" + pytext.ReprValue(raw)
+	return "v" + rawjson.Text(raw)
 }
 
 // missingPeaks is the input peaks with no counted peak of the same name within a few
@@ -351,7 +356,7 @@ func missingPeaks(source, archive string, z int) ([]peak, error) {
 			cells = int64(math.Ceil(360 / tol))
 			haveTol = true
 		}
-		k := indexKey{nameKey(p.name()), pyMod(int64(math.Floor((p.lon+180)/tol)), cells), int64(math.Floor((p.lat + 90) / tol))}
+		k := indexKey{nameKey(p.name()), floorMod(int64(math.Floor((p.lon+180)/tol)), cells), int64(math.Floor((p.lat + 90) / tol))}
 		index[k] = append(index[k], &entry{p.lon, p.lat, false})
 	})
 	if waitErr := cmd.Wait(); err == nil {
@@ -367,14 +372,14 @@ func missingPeaks(source, archive string, z int) ([]peak, error) {
 		return missing, err
 	}
 	err = readSource(source, func(p peak) error {
-		cx := pyMod(int64(math.Floor((p.lon+180)/tol)), cells)
+		cx := floorMod(int64(math.Floor((p.lon+180)/tol)), cells)
 		cy := int64(math.Floor((p.lat + 90) / tol))
 		name := nameKey(p.name())
 		var best *entry
 		bestD := 0.0
 		for _, dx := range []int64{-1, 0, 1} {
 			for _, dy := range []int64{-1, 0, 1} {
-				for _, e := range index[indexKey{name, pyMod(cx+dx, cells), cy + dy}] {
+				for _, e := range index[indexKey{name, floorMod(cx+dx, cells), cy + dy}] {
 					if e.used {
 						continue
 					}
@@ -397,9 +402,9 @@ func missingPeaks(source, archive string, z int) ([]peak, error) {
 	return missing, err
 }
 
-// pyMod is Python's %, never negative for a positive divisor: a peak just west of -180
-// wraps to the last column.
-func pyMod(a, b int64) int64 {
+// floorMod is a mod b, never negative for a positive divisor (Go's % takes a's sign): a
+// peak just west of -180 wraps to the last column.
+func floorMod(a, b int64) int64 {
 	m := a % b
 	if m < 0 {
 		m += b

@@ -5,7 +5,7 @@ import (
 	"math"
 	"sort"
 
-	"ratmap/infra/tools/internal/pyfloat"
+	"ratmap/infra/tools/internal/num"
 )
 
 // downsampleMax is a block-max downsample. Max, not mean: it preserves summit
@@ -94,8 +94,8 @@ type located struct {
 //	    any peak that now shares a component with a higher peak has just been connected
 //	    to higher ground, so its key col is at t and its prominence is elev - t
 //
-// The Python relabelled the whole raster with scipy.ndimage.label at every threshold:
-// (thresholds) x (raster) work. Here the components are kept in a union-find instead,
+// Relabelling the whole raster at every threshold (scipy.ndimage.label, in the first
+// version of this) is (thresholds) x (raster) work. Here the components are kept in a union-find instead,
 // and each threshold only adds the cells that have just come above water — every cell is
 // added once over the whole descent. That is the same set of components at every
 // threshold (4-connected, scipy's default structure), so the same peaks merge at the same
@@ -109,7 +109,7 @@ func compute(dem []float32, w, h int, gt [6]float64, lons, lats []float64, step,
 		if math.IsNaN(lons[i]) || math.IsNaN(lats[i]) {
 			continue
 		}
-		// Go's float-to-int conversion truncates toward zero, as Python's int() does.
+		// Go's float-to-int conversion truncates toward zero.
 		col := int((lons[i] - lon0) / dlon)
 		row := int((lats[i] - lat0) / dlat)
 		if !(row >= 0 && row < h && col >= 0 && col < w) {
@@ -144,8 +144,7 @@ func compute(dem []float32, w, h int, gt [6]float64, lons, lats []float64, step,
 		p.ele = float64(dem[p.row*w+p.col])
 	}
 
-	// Highest first; equal heights keep input order (Python's sorted(reverse=True) is
-	// stable too).
+	// Highest first; equal heights keep input order.
 	order := make([]int, len(peaks))
 	for n := range order {
 		order[n] = n
@@ -182,7 +181,7 @@ func compute(dem []float32, w, h int, gt [6]float64, lons, lats []float64, step,
 		demMin = 0
 	}
 
-	thresholds, err := arange(math.Floor(demMax/step)*step, pyMax(floor, demMin)-step, -step)
+	thresholds, err := arange(math.Floor(demMax/step)*step, max(floor, demMin)-step, -step)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +202,7 @@ func compute(dem []float32, w, h int, gt [6]float64, lons, lats []float64, step,
 	}
 
 	// -1 = not yet above water. A cell's entry is set the threshold it first satisfies
-	// dem >= t, so "parent >= 0" is exactly the Python's `mask`.
+	// dem >= t, so "parent >= 0" is exactly the cells with dem >= t.
 	parent := make([]int32, w*h)
 	for i := range parent {
 		parent[i] = -1
@@ -295,7 +294,7 @@ func compute(dem []float32, w, h int, gt [6]float64, lons, lats []float64, step,
 			// max(0, …) is a safety net, not the fix: with the summit height read from the
 			// same DEM as the col, a merge cannot happen above the summit. Guards against
 			// a future change reintroducing mixed sources.
-			prominence[p.i] = pyfloat.Round(pyMax(0, p.ele-t), 1)
+			prominence[p.i] = num.Round(atLeastZero(p.ele-t), 1)
 			resolved[n] = true
 			nResolved++
 		}
@@ -304,7 +303,7 @@ func compute(dem []float32, w, h int, gt [6]float64, lons, lats []float64, step,
 	// Whatever never merged is the high point of the box.
 	for n, p := range peaks {
 		if !resolved[n] {
-			prominence[p.i] = pyfloat.Round(pyMax(0, p.ele-demMin), 1)
+			prominence[p.i] = num.Round(atLeastZero(p.ele-demMin), 1)
 		}
 	}
 	return prominence, nil
@@ -332,12 +331,12 @@ func argmax(dem []float32, w, r0, r1, c0, c1 int) (int, int) {
 	return br, bc
 }
 
-// pyMax is Python's max(a, b) for floats: b only if b > a, so NaN and -0.0 lose to a.
-func pyMax(a, b float64) float64 {
-	if b > a {
-		return b
+// atLeastZero is x if it is above zero, else 0 — NaN and -0 included.
+func atLeastZero(x float64) float64 {
+	if x > 0 {
+		return x
 	}
-	return a
+	return 0
 }
 
 // arange is numpy.arange(start, stop, step) for float64, value for value: the length is

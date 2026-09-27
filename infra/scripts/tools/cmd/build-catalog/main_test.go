@@ -4,14 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
-
-	"ratmap/infra/tools/internal/pyjson"
 )
 
-// testdata/vectors.json is the Python's own functions on real Geofabrik features and on
-// made-up inputs: the building blocks, checked one by one. The
-// whole generator was compared end to end against the Python on the full index when it
-// was ported (2026-09-26): regions.json byte-identical, stdout and stderr identical.
+// testdata/vectors.json is the building blocks' answers on real Geofabrik features and on
+// made-up inputs, checked one by one. It was written by the Python this replaced, and
+// differs in one place: "İstanbul" is now the id "istanbul", where Python's lower-casing
+// of the dotted capital I made it "i-stanbul".
 type vectors struct {
 	RegionBoxes map[string][][4]float64 `json:"region_boxes"`
 	CleanName   [][2]json.RawMessage    `json:"clean_name"`
@@ -41,25 +39,25 @@ func load(t *testing.T) vectors {
 func TestRegionBoxes(t *testing.T) {
 	v := load(t)
 	data, _ := os.ReadFile("testdata/features.json")
-	doc, err := pyjson.Decode(data)
-	if err != nil {
+	var features []*feature
+	if err := json.Unmarshal(data, &features); err != nil {
 		t.Fatal(err)
 	}
 	n := 0
-	for _, f := range doc.([]pyjson.Value) {
-		fo := f.(*pyjson.Object)
-		got, err := regionBoxes(fo)
+	for _, f := range features {
+		id := f.Properties.ID
+		got, err := regionBoxes(f)
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := v.RegionBoxes[idOf(fo)]
+		want := v.RegionBoxes[id]
 		if len(got) != len(want) {
-			t.Errorf("%s: %v, Python %v", idOf(fo), got, want)
+			t.Errorf("%s: %v, want %v", id, got, want)
 			continue
 		}
 		for i := range want {
 			if box(want[i]) != got[i] {
-				t.Errorf("%s box %d: %v, Python %v", idOf(fo), i, got[i], want[i])
+				t.Errorf("%s box %d: %v, want %v", id, i, got[i], want[i])
 			}
 		}
 		n++
@@ -72,19 +70,19 @@ func TestRegionBoxes(t *testing.T) {
 func TestCleanNameAndSafeID(t *testing.T) {
 	v := load(t)
 	for _, c := range v.CleanName {
-		p, err := pyjson.Decode(c[0])
-		if err != nil {
+		var p featureProps
+		if err := json.Unmarshal(c[0], &p); err != nil {
 			t.Fatal(err)
 		}
 		var want string
 		json.Unmarshal(c[1], &want)
-		if got := cleanName(p.(*pyjson.Object)); got != want {
-			t.Errorf("clean_name(%s) = %q, Python %q", c[0], got, want)
+		if got := cleanName(&p); got != want {
+			t.Errorf("clean_name(%s) = %q, want %q", c[0], got, want)
 		}
 	}
 	for _, c := range v.SafeID {
 		if got := safeID(c[0]); got != c[1] {
-			t.Errorf("safe_id(%q) = %q, Python %q", c[0], got, c[1])
+			t.Errorf("safe_id(%q) = %q, want %q", c[0], got, c[1])
 		}
 	}
 	if len(v.CleanName) < 500 || len(v.SafeID) < 500 {
@@ -101,7 +99,7 @@ func TestLabels(t *testing.T) {
 		json.Unmarshal(c[1], &want)
 		name, suffix := cellLabel(box(b))
 		if name != want[0] || suffix != want[1] {
-			t.Errorf("cell_label(%v) = %q %q, Python %q", b, name, suffix, want)
+			t.Errorf("cell_label(%v) = %q %q, want %q", b, name, suffix, want)
 		}
 	}
 	for _, c := range v.CompassLabelRaw {
@@ -112,7 +110,7 @@ func TestLabels(t *testing.T) {
 		json.Unmarshal(c[2], &want)
 		name, suffix := compassLabel(box(b), box(p))
 		if name != want[0] || suffix != want[1] {
-			t.Errorf("compass_label(%v, %v) = %q %q, Python %q", b, p, name, suffix, want)
+			t.Errorf("compass_label(%v, %v) = %q %q, want %q", b, p, name, suffix, want)
 		}
 	}
 }
@@ -125,15 +123,15 @@ func TestParseSize(t *testing.T) {
 		got, ok := parseSize(text)
 		want := string(c[1])
 		if (want == "null") == ok || (ok && want != jsonInt(got)) {
-			t.Errorf("parse_size(%q) = %d %v, Python %s", text, got, ok, want)
+			t.Errorf("parse_size(%q) = %d %v, want %s", text, got, ok, want)
 		}
 	}
 }
 
 func jsonInt(n int64) string { b, _ := json.Marshal(n); return string(b) }
 
-// The estimate cache's keys must be the Python's, or every cached measurement is taken
-// again: f'{c:g}' for each coordinate.
+// The estimate cache's keys must not change spelling, or every cached measurement is
+// taken again: each coordinate to six significant digits, %g.
 func TestEstimateKey(t *testing.T) {
 	got := key(request{basemapSource, box{-7.5247, 35.70641234, 180, -0.000012345}, 15})
 	if got != "basemap|-7.5247,35.7064,180,-1.2345e-05|z15" {

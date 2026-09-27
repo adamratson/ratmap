@@ -12,7 +12,8 @@ unpublished-fewer.json-live.json	unpublished	testdata/fewer.json	testdata/live.j
 served-h-gzip-live.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/live.json
 served-h-gzip-same-reordered.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/same-reordered.json
 served-h-gzip-changed.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/changed.json
-served-h-gzip-float.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/float.json
+served-h-gzip-true-as-1.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/true-as-1.json
+served-h-gzip-int-as-float.json	served	testdata/h-gzip	testdata/live.json.gz	testdata/int-as-float.json
 served-h-none-live.json	served	testdata/h-none	testdata/live.json.gz	testdata/live.json
 served-h-br-live.json	served	testdata/h-br	testdata/live.json.gz	testdata/live.json
 served-h-twice-live.json	served	testdata/h-twice	testdata/live.json.gz	testdata/live.json

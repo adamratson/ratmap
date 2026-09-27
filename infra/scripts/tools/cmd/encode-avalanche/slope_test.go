@@ -44,12 +44,12 @@ func TestProjectionCorrectionMatters(t *testing.T) {
 
 func TestPyMod(t *testing.T) {
 	for _, c := range [][3]float64{{370, 360, 10}, {360, 360, 0}, {-10, 360, 350}, {382.5, 360, 22.5}, {179.9, 360, 179.9}} {
-		if got := pyMod(c[0], c[1]); got != c[2] {
-			t.Errorf("pyMod(%v, %v) = %v, want %v", c[0], c[1], got, c[2])
+		if got := floorMod(c[0], c[1]); got != c[2] {
+			t.Errorf("floorMod(%v, %v) = %v, want %v", c[0], c[1], got, c[2])
 		}
 	}
-	if got := pyMod(-360, 360); math.Signbit(got) {
-		t.Errorf("pyMod(-360, 360) = -0, numpy gives +0")
+	if got := floorMod(-360, 360); math.Signbit(got) {
+		t.Errorf("floorMod(-360, 360) = -0, numpy gives +0")
 	}
 }
 

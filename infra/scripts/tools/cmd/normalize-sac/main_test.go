@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"ratmap/infra/tools/internal/pytext"
+	"ratmap/infra/tools/internal/golden"
 )
 
 func TestSelfTest(t *testing.T) {
@@ -20,57 +20,56 @@ func TestSelfTest(t *testing.T) {
 	}
 }
 
-// testdata/grades.tsv is the Python's parse_grade, and repr(str(value)) as its report
-// printed it, on 6,000-odd values: the documented ones, the
-// oddities taginfo lists, and random mixtures of every separator, shorthand form, bracket,
-// Unicode space, dash, digit and case trap the parser meets.
-func TestParseGradeMatchesPython(t *testing.T) {
-	f, err := os.Open("testdata/grades.tsv")
+// testdata/grades.tsv is the grade for each of 6,000-odd sac_scale values — the
+// documented ones, the oddities taginfo lists, and random mixtures of every separator,
+// shorthand form, bracket, Unicode space, dash, digit and case trap the parser meets.
+// "None" is no grade. The first version was written by the Python parser this replaced;
+// -update rewrites it from this one.
+func TestParseGrade(t *testing.T) {
+	data, err := os.ReadFile("testdata/grades.tsv")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
+	var got bytes.Buffer
 	n := 0
-	for sc.Scan() {
-		cols := strings.Split(sc.Text(), "\t")
-		value, wantGrade := json.RawMessage(cols[0]), cols[1]
-		var wantRepr string
-		json.Unmarshal([]byte(cols[2]), &wantRepr)
-
-		g, ok, err := parseGrade(value)
-		got := "None"
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		value := strings.Split(line, "\t")[0]
+		g, ok, err := parseGrade(json.RawMessage(value))
 		if err != nil {
-			got = "ERROR " + err.Error()
-		} else if ok {
-			got = strconv.Itoa(g)
+			t.Fatalf("parseGrade(%s): %v", value, err)
 		}
-		if got != wantGrade {
-			t.Errorf("parse_grade(%s): got %s, Python %s", value, got, wantGrade)
+		grade := "None"
+		if ok {
+			grade = strconv.Itoa(g)
 		}
-		if r := pytext.ReprString(pytext.StrValue(value)); r != wantRepr {
-			t.Errorf("repr(str(%s)): got %s, Python %s", value, r, wantRepr)
-		}
+		got.WriteString(value + "\t" + grade + "\n")
 		n++
 	}
 	if n < 6000 {
 		t.Fatalf("only %d vectors", n)
 	}
+	golden.Check(t, "grades", got.Bytes(), "testdata/grades.tsv")
 }
 
-// testdata/edge.want.* are the Python's output and report for testdata/edge.geojsonl:
-// every drop reason, numbers and bools and lists as grades, names that are not strings,
-// @id duplicates by Python's rules (5 == 5.0 == True-as-1, "5" is not), no @id, and more
-// unreadable values than the report lists. Features are compared parsed, not as bytes.
-func TestMatchesPython(t *testing.T) {
+// testdata/edge.want.* are the output and report for testdata/edge.geojsonl: every drop
+// reason, numbers and bools and lists as grades, names that are not strings, @id
+// duplicates (only an id written the same way twice: 5, 5.0, true and "5" are four ids),
+// no @id, and more unreadable values than the report lists. Features are compared parsed,
+// not as bytes. -update rewrites them.
+func TestEdgeCases(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "final.geojsonl")
 	var report bytes.Buffer
 	if err := run("testdata/edge.geojsonl", out, &report); err != nil {
 		t.Fatal(err)
 	}
-	want, _ := os.ReadFile("testdata/edge.want.stdout")
-	if report.String() != string(want) {
-		t.Errorf("report differs:\n got:\n%s\n want:\n%s", report.String(), want)
+	golden.Check(t, "report", report.Bytes(), "testdata/edge.want.stdout")
+	if *golden.Update {
+		data, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.Check(t, "features", data, "testdata/edge.want.geojsonl")
+		return
 	}
 	got, wantF := features(t, out), features(t, "testdata/edge.want.geojsonl")
 	if !reflect.DeepEqual(got, wantF) {
@@ -97,27 +96,31 @@ func features(t *testing.T, path string) []any {
 	return out
 }
 
-// Where the Python raised, this must fail too rather than write something new.
-func TestRefusesWhatPythonRaisedOn(t *testing.T) {
+// A line that is not a feature is an error, not a skipped line: the export is broken.
+func TestRefusesMalformedFeatures(t *testing.T) {
 	line := `{"type": "LineString", "coordinates": [[0, 0], [1, 1]]}`
 	for _, bad := range []string{
 		`[1]`,
-		`{"geometry": null, "properties": {"sac_scale": "hiking"}}`,
 		`{"geometry": [1], "properties": {"sac_scale": "hiking"}}`,
-		`{"geometry": ` + line + `, "properties": null}`,
-		`{"geometry": ` + line + `, "properties": {"sac_scale": "hiking", "@id": [1]}}`,
-		`{"geometry": ` + line + `, "properties": {"sac_scale": 1e400}}`,
+		`{"geometry": ` + line + `, "properties": [1]}`,
 	} {
 		c := counts{unparsed: map[string]int{}}
 		var buf bytes.Buffer
 		if err := feature([]byte(bad), bufio.NewWriter(&buf), map[string]struct{}{}, &c); err == nil {
-			t.Errorf("feature(%s): want an error, as Python raises", bad)
+			t.Errorf("feature(%s): want an error", bad)
 		}
 	}
-	// And where it did not: properties that are not an object were only read on a line.
-	c := counts{unparsed: map[string]int{}}
-	var buf bytes.Buffer
-	if err := feature([]byte(`{"geometry": {"type": "Point"}, "properties": null}`), bufio.NewWriter(&buf), map[string]struct{}{}, &c); err != nil || c.notALine != 1 {
-		t.Errorf("a non-line with null properties: err %v, notALine %d; Python skipped it", err, c.notALine)
+	// A missing or null geometry is not a line, null properties carry no grade, and a
+	// number too big to be a grade is not one.
+	for _, ok := range []string{
+		`{"geometry": null, "properties": {"sac_scale": "hiking"}}`,
+		`{"geometry": ` + line + `, "properties": null}`,
+		`{"geometry": ` + line + `, "properties": {"sac_scale": 1e400}}`,
+	} {
+		c := counts{unparsed: map[string]int{}}
+		var buf bytes.Buffer
+		if err := feature([]byte(ok), bufio.NewWriter(&buf), map[string]struct{}{}, &c); err != nil || c.kept != 0 {
+			t.Errorf("feature(%s): err %v, kept %d", ok, err, c.kept)
+		}
 	}
 }

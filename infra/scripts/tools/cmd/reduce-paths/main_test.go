@@ -6,31 +6,36 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
+
+	"ratmap/infra/tools/internal/golden"
 )
 
-// testdata/edge.want.* were written by the Python this replaced, from
-// testdata/edge.geojsonl: lines, multilines, points, polygons, missing geometry or
-// properties, non-string and empty highways, tracks, extra and reordered keys, a
-// duplicated key, non-ASCII names, an RS prefix and blank lines.
-//
-// Compared as parsed JSON, not bytes: the output's only reader is tippecanoe, and its
-// spacing and number spelling are deliberately osmium's rather than Python's (main.go).
-func TestMatchesPython(t *testing.T) {
+// testdata/edge.want.* are the summary and output for testdata/edge.geojsonl: lines,
+// multilines, points, polygons, missing geometry or properties, non-string and empty
+// highways, tracks, extra and reordered keys, a duplicated key, non-ASCII names, an RS
+// prefix and blank lines. The output is compared as parsed JSON, not bytes: its only
+// reader is tippecanoe. -update rewrites them.
+func TestEdgeCases(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "final.geojsonl")
 	kept, skipped, err := reduce("testdata/edge.geojsonl", out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantStdout, _ := os.ReadFile("testdata/edge.want.stdout")
-	if got := "edge: " + itoa(kept) + " walkable ways, skipped " + itoa(skipped) + " non-line features"; got != strings.TrimSpace(string(wantStdout)) {
-		t.Fatalf("got %q, Python said %q", got, strings.TrimSpace(string(wantStdout)))
+	summary := "  edge: " + itoa(kept) + " walkable ways, skipped " + itoa(skipped) + " non-line features\n"
+	golden.Check(t, "summary", []byte(summary), "testdata/edge.want.stdout")
+	if *golden.Update {
+		data, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.Check(t, "output", data, "testdata/edge.want.geojsonl")
+		return
 	}
 
 	got, want := readFeatures(t, out), readFeatures(t, "testdata/edge.want.geojsonl")
 	if len(got) != len(want) {
-		t.Fatalf("%d features, Python wrote %d", len(got), len(want))
+		t.Fatalf("%d features, want %d", len(got), len(want))
 	}
 	for i := range want {
 		for _, k := range []string{"type", "geometry", "properties"} {
@@ -62,24 +67,31 @@ func readFeatures(t *testing.T, path string) []map[string]any {
 
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
 
-// Where the Python raised, this must fail too rather than write something new.
-func TestRefusesWhatPythonRaisedOn(t *testing.T) {
+// A line that is not a feature is an error: the export is broken.
+func TestRefusesMalformedFeatures(t *testing.T) {
 	for _, line := range []string{
 		`[1, 2]`,
-		`{"geometry": null, "properties": {"highway": "path"}}`,
 		`{"geometry": [1], "properties": {"highway": "path"}}`,
-		`{"geometry": {"type": "LineString"}, "properties": null}`,
 		`{"geometry": {"type": "LineString"}, "properties": "x"}`,
 		`{"geometry": {"type": "LineString"}, "properties": {"highway": "path"}`,
 	} {
 		if _, _, err := classify([]byte(line)); err == nil {
-			t.Errorf("classify(%s): want an error, as Python raises", line)
+			t.Errorf("classify(%s): want an error", line)
+		}
+	}
+	// A null geometry is not a way, and null properties have no highway: both skipped.
+	for _, line := range []string{
+		`{"geometry": null, "properties": {"highway": "path"}}`,
+		`{"geometry": {"type": "LineString"}, "properties": null}`,
+	} {
+		if g, _, err := classify([]byte(line)); err != nil || g != nil {
+			t.Errorf("classify(%s): geometry %s, err %v; want skipped", line, g, err)
 		}
 	}
 }
 
-// Keys are matched exactly, as Python's dict does; encoding/json's struct matching would
-// have taken "Geometry" for "geometry".
+// Keys are matched exactly; encoding/json's struct matching would have taken "Geometry"
+// for "geometry".
 func TestKeysAreCaseSensitive(t *testing.T) {
 	g, _, err := classify([]byte(`{"Geometry": {"type": "LineString"}, "properties": {"highway": "path"}}`))
 	if err != nil || g != nil {

@@ -27,11 +27,9 @@
 {"type": "Feature", "geometry": {"type": "Point", "coordinates": [13.8214, 46.4336]}, "properties": {"natural": "peak", "name": "Škrlatica", "ele": 2740.0}}
 {"type": "Feature", "geometry": null, "properties": {"natural": "peak", "name": "Null Geometry"}}
 {"type": "Feature", "geometry": {}, "properties": {"natural": "peak", "name": "Empty Geometry"}}
-{"type": "Feature", "geometry": 0, "properties": {"natural": "peak", "name": "Zero Geometry"}}
 {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}, "properties": {"natural": "peak", "name": "Line"}}
 {"type": "Feature", "geometry": {"type": "Point", "coordinates": [7, 46]}, "properties": {"natural": "peak", "name": "Int Coords"}}
 {"type": "Feature", "geometry": {"type": "Point", "coordinates": [7.5, 46.5, 3000]}, "properties": {"natural": "peak", "name": "Three Coords"}}
-{"type": "Feature", "geometry": {"type": "Point", "coordinates": [true, 46.5]}, "properties": {"natural": "peak", "name": "Bool Coord"}}
 {"type": "Feature", "geometry": {"type": "Point", "coordinates": [10.00001, 20.00001]}, "properties": {"natural": "peak", "name": "Dup"}}
 {"type": "Feature", "geometry": {"type": "Point", "coordinates": [10.00002, 20.00002]}, "properties": {"natural": "peak", "name": "Dup"}}
 {"type": "Feature", "geometry": {"type": "Point", "coordinates": [10.00001, 20.00001]}, "properties": {"natural": "saddle", "name": "Dup"}}

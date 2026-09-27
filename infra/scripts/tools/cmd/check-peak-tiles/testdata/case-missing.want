@@ -5,6 +5,6 @@ FAIL: 48 munros in the z2 tiles, 50 in the input
     node 900001  Not in the archive  -4.100000, 57.300000
     node 900002  (unnamed)  -4.200000, 57.100000
     node ?  Antimeridian  179.999990, 10.000000
-    node 900003  None  7.000000, 46.000000
+    node 900003  null  7.000000, 46.000000
     node 900004  Munro top  -4.300000, 57.200000
     node 8870212  Ben Nevis  -5.003526, 56.796858

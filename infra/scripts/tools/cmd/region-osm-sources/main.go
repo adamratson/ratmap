@@ -1,8 +1,7 @@
 // Command region-osm-sources prints the deduplicated OSM extracts covering every defined
 // region, one per line.
 //
-// A port of scripts/region-osm-sources.py, which it replaces in the build scripts (run
-// through lib.sh's go_run): same output, same warnings.
+// Run by the build scripts through lib.sh's go_run.
 //
 // peaks-global.pmtiles and places.sqlite are single global artifacts, but they have to
 // cover whatever regions the catalogue publishes. Deriving their inputs from regions.json
@@ -12,14 +11,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"ratmap/infra/tools/internal/infra"
-	"ratmap/infra/tools/internal/pyjson"
 )
 
 func main() {
@@ -38,53 +38,27 @@ func run(regionsJSON string, out, errOut io.Writer) error {
 	if err != nil {
 		return err
 	}
-	doc, err := pyjson.Decode(data)
-	if err != nil {
+	var doc struct {
+		Regions []struct {
+			ID         string `json:"id"`
+			OSMExtract string `json:"osmExtract"`
+		} `json:"regions"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
 		return fmt.Errorf("%s: %w", regionsJSON, err)
 	}
-	top, ok := doc.(*pyjson.Object)
-	if !ok {
-		return fmt.Errorf("%s: not an object", regionsJSON)
-	}
-	rv, _ := top.Get("regions")
-	regions, ok := rv.([]pyjson.Value)
-	if !ok {
+	if doc.Regions == nil {
 		return fmt.Errorf(`%s: no "regions" list`, regionsJSON)
 	}
 
 	var seen []string
-	for _, r := range regions {
-		region, ok := r.(*pyjson.Object)
-		if !ok {
-			return fmt.Errorf("%s: a region is not an object", regionsJSON)
-		}
-		url, _ := region.Get("osmExtract")
-		if falsy(url) {
-			id, ok := region.Get("id")
-			if !ok {
-				return fmt.Errorf("%s: a region has neither osmExtract nor id", regionsJSON)
-			}
-			ids, _ := pyjson.Encode(id, pyjson.Options{})
-			if s, isStr := id.(string); isStr {
-				ids = s
-			}
-			fmt.Fprintf(errOut, "! %s has no osmExtract — its peaks/search will be missing\n", ids)
+	for _, r := range doc.Regions {
+		if r.OSMExtract == "" {
+			fmt.Fprintf(errOut, "! %s has no osmExtract — its peaks/search will be missing\n", r.ID)
 			continue
 		}
-		s, ok := url.(string)
-		if !ok {
-			// "\n".join() of a non-string raised TypeError.
-			return fmt.Errorf("%s: osmExtract %v is not a string", regionsJSON, url)
-		}
-		dup := false
-		for _, u := range seen {
-			if u == s {
-				dup = true
-				break
-			}
-		}
-		if !dup {
-			seen = append(seen, s)
+		if !slices.Contains(seen, r.OSMExtract) {
+			seen = append(seen, r.OSMExtract)
 		}
 	}
 
@@ -99,25 +73,4 @@ func run(regionsJSON string, out, errOut io.Writer) error {
 	}
 	fmt.Fprintln(out, strings.Join(seen, "\n"))
 	return nil
-}
-
-// falsy is Python's truth test: None, False, 0, 0.0, "" and empty containers.
-func falsy(v pyjson.Value) bool {
-	switch t := v.(type) {
-	case nil:
-		return true
-	case bool:
-		return !t
-	case string:
-		return t == ""
-	case pyjson.Int:
-		return t == "0"
-	case float64:
-		return t == 0
-	case []pyjson.Value:
-		return len(t) == 0
-	case *pyjson.Object:
-		return len(t.Keys) == 0
-	}
-	return false
 }

@@ -5,11 +5,10 @@ import (
 	"fmt"
 )
 
-// selfTestCases is the Python's --self-test table, value for value: the parser earns a
-// test of its own, run on every build by build-sac.sh, because `sac_scale` is a
-// documented enum that in practice carries 184 distinct values, and the difference
-// between reading "T2-T3" as 3 and discarding it is a graded path silently vanishing
-// from the map. 0 means "no grade" (Python's None).
+// selfTestCases is the --self-test table: the parser earns a test of its own, run on
+// every build by build-sac.sh, because `sac_scale` is a documented enum that in practice
+// carries 184 distinct values, and the difference between reading "T2-T3" as 3 and
+// discarding it is a graded path silently vanishing from the map. 0 means "no grade".
 var selfTestCases = []struct {
 	value string // JSON
 	want  int

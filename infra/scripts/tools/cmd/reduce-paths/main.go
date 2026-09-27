@@ -3,17 +3,11 @@
 //
 //	reduce-paths RAW.geojsonl FINAL.geojsonl LABEL
 //
-// A port of the Python heredoc build-paths.sh ran as reduce_to_path_properties: same
-// arguments, same features kept, same summary line. It is the one step in the pipeline
-// that streams every walkable way on the planet — ~85 M of them — and the Python managed
-// ~107 k ways a second (Scotland, 2026-09-25).
-//
-// The output is not the Python's bytes, on purpose. The Python round-tripped every line
-// through json.loads/json.dumps, which respaced it and re-spelled every number; this
-// copies osmium's geometry text through untouched and writes the new properties compactly.
-// The file's only reader is tippecanoe, which parses it: tiled from both, Scotland's
-// tiles came out identical (2026-09-25). Features are written as type, geometry and
-// properties — all an `osmium export` without `-a` puts on one.
+// Run by build-paths.sh. It is the one step in the pipeline that streams every walkable
+// way on the planet — ~85 M of them — so it copies osmium's geometry text through
+// untouched and writes the new properties compactly, rather than re-encoding each line.
+// Features are written as type, geometry and properties — all an `osmium export` without
+// `-a` puts on one.
 //
 // `kind_detail` rather than something of our own so one set of paint expressions can drive
 // both this source and the basemap's `roads` layer (see addPathLayers in
@@ -28,8 +22,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-
-	"ratmap/infra/tools/internal/pytext"
 )
 
 func main() {
@@ -60,7 +52,7 @@ func reduce(srcPath, destPath string) (kept, skipped int, err error) {
 
 	for n := 1; ; n++ {
 		raw, rerr := r.ReadBytes('\n')
-		line := bytes.TrimFunc(bytes.TrimLeft(raw, "\x1e"), pytext.IsSpace)
+		line := bytes.TrimSpace(bytes.TrimLeft(raw, "\x1e"))
 		if len(line) > 0 {
 			geometry, detail, ferr := classify(line)
 			if ferr != nil {
@@ -92,12 +84,11 @@ func reduce(srcPath, destPath string) (kept, skipped int, err error) {
 }
 
 // classify returns the geometry's JSON text and the kind_detail for a kept way, or a nil
-// geometry for one that is skipped. Where the Python would have raised — a line that is
-// not a JSON object, or a geometry or properties that is present but not an object — it
-// returns an error, so the stage fails as it did.
+// geometry for one that is skipped. A line that is not a feature — not a JSON object, or
+// a geometry or properties present but not an object — is an error: the export is broken.
 //
-// Maps rather than structs: encoding/json matches struct fields case-insensitively, and
-// "Geometry" is not "geometry" to the Python.
+// Maps rather than structs: encoding/json matches struct fields case-insensitively, and a
+// "Geometry" member is not the geometry.
 func classify(line []byte) (json.RawMessage, string, error) {
 	var feature map[string]json.RawMessage
 	if err := json.Unmarshal(line, &feature); err != nil {
@@ -131,10 +122,10 @@ func classify(line []byte) (json.RawMessage, string, error) {
 	return geometry, "path", nil
 }
 
-// member is Python's `feature.get(name, {}).get(key)`: nil if either is missing, an error
-// if the object is present but not an object (AttributeError in Python).
+// member is obj[key]: nil if obj or the key is missing or null, an error if obj is present
+// but not an object.
 func member(obj json.RawMessage, name, key string) (any, error) {
-	if obj == nil {
+	if obj == nil || string(obj) == "null" {
 		return nil, nil
 	}
 	var m map[string]json.RawMessage

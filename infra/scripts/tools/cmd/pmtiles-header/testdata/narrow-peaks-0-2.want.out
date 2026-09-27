@@ -1,1 +1,1 @@
-{"tile_compression": "gzip", "tile_type": "mvt", "minzoom": 0, "maxzoom": 2, "bounds": [-7.591274, 54.753028, -0.918267, 60.779665], "center": [-7.591274, 54.753028, 2]}
+{"bounds":[-7.591274,54.753028,-0.918267,60.779665],"center":[-7.591274,54.753028,2],"maxzoom":2,"minzoom":0,"tile_compression":"gzip","tile_type":"mvt"}

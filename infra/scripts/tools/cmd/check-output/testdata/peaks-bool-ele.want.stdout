@@ -1,1 +1,5 @@
-exit 1
+  OK Ben Nevis: 1344 m
+  (skip Mont Blanc: not in this extract)
+  (skip Bobotov Kuk: not in this extract)
+  (skip Zla Kolata: not in this extract)
+exit 0

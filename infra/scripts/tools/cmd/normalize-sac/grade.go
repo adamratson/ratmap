@@ -3,12 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"math"
 	"strconv"
 	"strings"
-
-	"ratmap/infra/tools/internal/pytext"
+	"unicode"
 )
 
 // The official scale.
@@ -22,8 +20,7 @@ var namedGrades = map[string]int{
 }
 
 // byLength is the official names longest first, so a name embedded in a longer one
-// ("mountain_hiking" inside "demanding_mountain_hiking") never wins over it; equal lengths
-// keep the table's order, as Python's stable sort of its dict did.
+// ("mountain_hiking" inside "demanding_mountain_hiking") never wins over it.
 var byLength = []string{
 	"demanding_mountain_hiking",
 	"demanding_alpine_hiking",
@@ -33,11 +30,8 @@ var byLength = []string{
 	"hiking",
 }
 
-var errOverflow = errors.New("sac_scale is infinite (int() raised OverflowError in Python)")
-
 // parseGrade is the grade a `sac_scale` value means, ok=false if it means nothing we can
-// use. See the package comment for the rules; this is the Python's parse_grade, rule for
-// rule, including the parts of Python's regex engine it leaned on.
+// use. See the package comment for the rules.
 func parseGrade(raw json.RawMessage) (int, bool, error) {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 {
@@ -45,14 +39,10 @@ func parseGrade(raw json.RawMessage) (int, bool, error) {
 	}
 	switch c := raw[0]; {
 	case c == '-' || (c >= '0' && c <= '9'):
-		// A number (never a bool — True is an int in Python, and was excluded): int()
-		// truncates toward zero, so 2.9 is grade 2.
+		// A number, truncated toward zero: 2.9 is grade 2.
 		f, err := strconv.ParseFloat(string(raw), 64)
-		if err != nil && !errors.Is(err, strconv.ErrRange) {
+		if err != nil {
 			return 0, false, nil
-		}
-		if math.IsInf(f, 0) {
-			return 0, false, errOverflow
 		}
 		v := math.Trunc(f)
 		if v >= 1 && v <= 6 {
@@ -70,14 +60,14 @@ func parseGrade(raw json.RawMessage) (int, bool, error) {
 }
 
 func parseGradeText(raw string) (int, bool, error) {
-	text := strings.ReplaceAll(pytext.Lower(strings.TrimFunc(raw, pytext.IsSpace)), " ", "_")
+	text := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(raw)), " ", "_")
 	if g, ok := namedGrades[text]; ok {
 		return g, true, nil
 	}
 
 	best, found := 0, false
 	for _, part := range splitSeparators(text) {
-		part = strings.TrimFunc(part, pytext.IsSpace)
+		part = strings.TrimSpace(part)
 		part = strings.Trim(part, "()[]")
 		part = strings.Trim(part, "_")
 		if part == "" {
@@ -105,18 +95,21 @@ func parseGradeText(raw string) (int, bool, error) {
 	return best, found, nil
 }
 
-// splitSeparators is Python's re.split on
+// splitSeparators splits text on
 //
 //	[;,/|]|\s+-\s+|-|–|—|\bto\b|\bor\b
 //
-// with Python's Unicode \s and \w. A hand-written scanner rather than Go's regexp because
-// RE2's \b only knows ASCII word characters, where Python's knows every letter and digit.
-// Like the regex engine, it takes the leftmost match, and at one position the first
-// alternative that matches, not the longest.
+// with \s any Unicode space and \b a boundary between a word character (a letter, digit
+// or underscore, in any script) and anything else. A hand-written scanner rather than
+// Go's regexp, whose \b only knows ASCII word characters: "to" beside an accented letter
+// is part of a word, not a separator. It takes the leftmost match, and at one position
+// the first alternative that matches, not the longest.
 func splitSeparators(text string) []string {
 	t := []rune(text)
 	n := len(t)
-	word := func(i int) bool { return i >= 0 && i < n && pytext.IsWord(t[i]) }
+	word := func(i int) bool {
+		return i >= 0 && i < n && (t[i] == '_' || unicode.IsLetter(t[i]) || unicode.IsNumber(t[i]))
+	}
 	boundary := func(i int) bool { return word(i-1) != word(i) }
 	isWordAt := func(i int, w string) bool {
 		return i+2 <= n && string(t[i:i+2]) == w && boundary(i) && boundary(i+2)
@@ -126,14 +119,14 @@ func splitSeparators(text string) []string {
 		case ';', ',', '/', '|':
 			return 1
 		}
-		if pytext.IsSpace(t[i]) {
+		if unicode.IsSpace(t[i]) {
 			j := i
-			for j < n && pytext.IsSpace(t[j]) {
+			for j < n && unicode.IsSpace(t[j]) {
 				j++
 			}
-			if j < n && t[j] == '-' && j+1 < n && pytext.IsSpace(t[j+1]) {
+			if j < n && t[j] == '-' && j+1 < n && unicode.IsSpace(t[j+1]) {
 				k := j + 1
-				for k < n && pytext.IsSpace(t[k]) {
+				for k < n && unicode.IsSpace(t[k]) {
 					k++
 				}
 				return k - i
@@ -163,15 +156,14 @@ func splitSeparators(text string) []string {
 	return append(parts, string(t[start:]))
 }
 
-// shorthand is Python's `^t?\s*([1-6])\s*[+-]?$` — "T3", "t3", "3", "T3+", "T3 " — with
-// Python's `$`, which also matches just before a final newline.
+// shorthand is `^t?\s*([1-6])\s*[+-]?$`: "T3", "t3", "3", "T3+", "t 3".
 func shorthand(s string) (int, bool) {
 	t := []rune(s)
 	i := 0
 	if i < len(t) && t[i] == 't' {
 		i++
 	}
-	for i < len(t) && pytext.IsSpace(t[i]) {
+	for i < len(t) && unicode.IsSpace(t[i]) {
 		i++
 	}
 	if i >= len(t) || t[i] < '1' || t[i] > '6' {
@@ -179,13 +171,13 @@ func shorthand(s string) (int, bool) {
 	}
 	g := int(t[i] - '0')
 	i++
-	for i < len(t) && pytext.IsSpace(t[i]) {
+	for i < len(t) && unicode.IsSpace(t[i]) {
 		i++
 	}
 	if i < len(t) && (t[i] == '+' || t[i] == '-') {
 		i++
 	}
-	if i == len(t) || (i == len(t)-1 && t[i] == '\n') {
+	if i == len(t) {
 		return g, true
 	}
 	return 0, false

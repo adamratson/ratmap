@@ -5,9 +5,7 @@
 //	build-manifest.sh [dist_dir] --base-live [--prune] [--only REGEX]
 //	build-manifest.sh [dist_dir] --base <manifest.json path or URL> [--prune] [--only REGEX]
 //
-// A port of scripts/build-manifest.py, which it replaces; scripts/build-manifest.sh builds
-// and runs it with the same arguments. Same manifest (json.dump's text, indent 2, via
-// internal/pyjson), same hash cache, same messages.
+// scripts/build-manifest.sh builds and runs it with the same arguments.
 //
 // C16: the schema is versioned and open-ended. A region is "a set of named artifacts", not
 // a fixed basemap+terrain pair, so contours (and later routing tiles) are an *additive*
@@ -33,9 +31,7 @@
 // holds more than this run's own output: a single corrupt archive anywhere in it would
 // otherwise abort every region's publish via the fails-closed header check, not just its
 // own (hit for real: a stray corrupt austria-contours.pmtiles blocking a
-// Scotland/Wales/England run, 2026-09). The pattern is Go's regexp syntax (RE2), where the
-// Python took Python's; the patterns this pipeline uses (`^lochaber$`, alternations) mean
-// the same in both.
+// Scotland/Wales/England run, 2026-09). The pattern is RE2 syntax.
 package main
 
 import (
@@ -44,7 +40,9 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -60,7 +58,6 @@ import (
 
 	"ratmap/infra/tools/internal/cli"
 	"ratmap/infra/tools/internal/infra"
-	"ratmap/infra/tools/internal/pyjson"
 )
 
 const schemaVersion = 1
@@ -94,31 +91,29 @@ func artifactKind(name string) string {
 	return ""
 }
 
-// failure is a refusal printed as the Python's SystemExit message was, exit status 1.
+// failure is a refusal: the message printed on its own, exit status 1.
 type failure string
 
 func (f failure) Error() string { return string(f) }
 
-const usage = `usage: build-manifest [-h] [--base MANIFEST_JSON_OR_URL] [--base-live] [--prune] [--only REGEX] [dist_dir]`
+const usage = `usage: build-manifest [--base MANIFEST_JSON_OR_URL | --base-live] [--prune] [--only REGEX] [DIST_DIR]`
 
 func main() {
-	a := cli.Parse(os.Args[1:], usage, []cli.Spec{
-		{Name: "base", Help: "existing manifest.json to merge into — a local path, or a plain http(s) URL"},
-		{Name: "base-live", Bool: true, Help: "merge into $PUBLIC_BASE_URL/regions/manifest.json (environment, then infra/.env)"},
-		{Name: "prune", Bool: true, Help: "with --base/--base-live: also drop base regions no longer in regions.json"},
-		{Name: "only", Help: "only consider region directories whose id matches this regex (Go RE2 syntax)"},
-	})
-	usageErr := func(msg string) {
-		fmt.Fprintf(os.Stderr, "%s\nbuild-manifest: error: %s\n", usage, msg)
-		os.Exit(2)
+	fs := flag.NewFlagSet("build-manifest", flag.ExitOnError)
+	baseFlag := fs.String("base", "", "existing manifest.json to merge into — a local path, or a plain http(s) URL")
+	baseLive := fs.Bool("base-live", false, "merge into $PUBLIC_BASE_URL/regions/manifest.json (environment, then infra/.env)")
+	prune := fs.Bool("prune", false, "with --base/--base-live: also drop base regions no longer in regions.json")
+	onlyFlag := fs.String("only", "", "only consider region directories whose id matches this regex (RE2 syntax)")
+	args := cli.Parse(fs, usage, os.Args[1:])
+	usageErr := func(msg string) { cli.Fail(fs, "%s", msg) }
+	given := cli.Given(fs)
+	if len(args) > 1 {
+		usageErr("unexpected arguments: " + strings.Join(args[1:], " "))
 	}
-	if len(a.Positionals) > 1 {
-		usageErr("unrecognized arguments: " + strings.Join(a.Positionals[1:], " "))
-	}
-	if a.Has("base") && a.Has("base-live") {
+	if given["base"] && *baseLive {
 		usageErr("--base and --base-live are mutually exclusive")
 	}
-	if a.Has("prune") && !a.Has("base") && !a.Has("base-live") {
+	if *prune && !given["base"] && !*baseLive {
 		usageErr("--prune only makes sense together with --base or --base-live")
 	}
 	infraDir, err := infra.Dir()
@@ -127,16 +122,16 @@ func main() {
 		os.Exit(1)
 	}
 	distDir := filepath.Join(infraDir, "dist")
-	if len(a.Positionals) == 1 {
-		distDir = a.Positionals[0]
+	if len(args) == 1 {
+		distDir = args[0]
 	}
 
 	var base string
 	hasBase := false
-	if a.Has("base") {
-		base, hasBase = a.String("base", ""), true
+	if given["base"] {
+		base, hasBase = *baseFlag, true
 	}
-	if a.Has("base-live") {
+	if *baseLive {
 		url := publicBaseURL(infraDir)
 		if url == "" {
 			usageErr("--base-live needs PUBLIC_BASE_URL — set it in the environment or in " + filepath.Join(infraDir, ".env"))
@@ -144,8 +139,8 @@ func main() {
 		base, hasBase = strings.TrimRight(url, "/")+"/regions/manifest.json", true
 	}
 	var only *regexp.Regexp
-	if a.Has("only") {
-		if only, err = regexp.Compile(a.String("only", "")); err != nil {
+	if given["only"] {
+		if only, err = regexp.Compile(*onlyFlag); err != nil {
 			usageErr("--only is not a valid regex: " + err.Error())
 		}
 	}
@@ -156,7 +151,7 @@ func main() {
 	}
 
 	err = build(distDir, filepath.Join(infraDir, "regions.json"), filepath.Join(distDir, "regions", "manifest.json"),
-		base, hasBase, a.Has("prune"), only, workers, time.Now())
+		base, hasBase, *prune, only, workers, time.Now())
 	if err != nil {
 		var f failure
 		if errors.As(err, &f) {
@@ -259,7 +254,7 @@ func zoomRange(path string) (int, int, error) {
 	for _, s := range sections {
 		off := binary.LittleEndian.Uint64(header[s.at:])
 		length := binary.LittleEndian.Uint64(header[s.at+8:])
-		// offset + length > size, without the sum overflowing where Python's ints did not.
+		// offset + length > size, without the sum overflowing.
 		if off > size || length > size-off {
 			return fail(s.name + " runs past the end of the file")
 		}
@@ -267,10 +262,49 @@ func zoomRange(path string) (int, int, error) {
 	return int(header[100]), int(header[101]), nil
 }
 
+// artifact is one archive's manifest entry, its fields in the order the app has always
+// seen them.
 type artifact struct {
-	obj  *pyjson.Object
-	path string
-	size int64
+	Kind string `json:"kind"`
+	// C3: the filename is also the OPFS/TileSourceRegistry key, so it must stay globally
+	// unique — hence the region-id prefix.
+	Filename string `json:"filename"`
+	Path     string `json:"path"`
+	Bytes    int64  `json:"bytes"`
+	MinZoom  int    `json:"minzoom"`
+	MaxZoom  int    `json:"maxzoom"`
+	// Filled in once every archive has passed the header check: lets a resumed or
+	// re-downloaded artifact be checked for integrity.
+	SHA256 string `json:"sha256,omitempty"`
+
+	file string // where it is on disk
+}
+
+// region is a manifest entry built in this run.
+type region struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Group string `json:"group,omitempty"` // absent on hand-written regions; optional to the app
+	// As regions.json writes it.
+	BBox       json.RawMessage   `json:"bbox"`
+	TotalBytes int64             `json:"totalBytes"`
+	Artifacts  []json.RawMessage `json:"artifacts"`
+}
+
+// entry is one region of the manifest being written: built here, or carried over from the
+// base manifest exactly as it was, fields this tool does not know about included (C16).
+type entry struct {
+	raw         json.RawMessage
+	group, name string
+	built       *region // nil when carried over
+	kinds       []string
+}
+
+// definition is what the manifest takes from a regions.json entry.
+type definition struct {
+	Name  *string         `json:"name"`
+	Group string          `json:"group"`
+	BBox  json.RawMessage `json:"bbox"`
 }
 
 func build(distDir, regionsJSON, dest, base string, hasBase, prune bool, only *regexp.Regexp,
@@ -284,46 +318,45 @@ func build(distDir, regionsJSON, dest, base string, hasBase, prune bool, only *r
 		return err
 	}
 
-	// regions_by_id, as a Python dict: insertion order, a repeated id keeping its first
-	// place.
-	byID := map[string]*pyjson.Object{}
+	// Regions by id, in first-seen order; a repeated id keeps its first place.
+	byID := map[string]*entry{}
 	var order []string
-	put := func(id string, r *pyjson.Object) {
+	put := func(id string, e *entry) {
 		if _, ok := byID[id]; !ok {
 			order = append(order, id)
 		}
-		byID[id] = r
+		byID[id] = e
 	}
 
 	if !hasBase {
 		for _, id := range freshOrder {
-			put(id, fresh[id])
+			e, err := builtEntry(fresh[id])
+			if err != nil {
+				return err
+			}
+			put(id, e)
 		}
 	} else {
 		baseDoc, err := loadBaseManifest(base)
 		if err != nil {
 			return err
 		}
-		if v, ok := baseDoc.Get("schemaVersion"); ok {
-			if n, ok := pyjson.Number(v); ok && n > schemaVersion {
+		if baseDoc.SchemaVersion != "" {
+			if n, err := baseDoc.SchemaVersion.Float64(); err == nil && n > schemaVersion {
 				return failure(fmt.Sprintf("FAIL: base manifest schemaVersion %s is newer than this script understands (%d). "+
-					"Refusing to merge blind — update this script first.", encode(v), schemaVersion))
+					"Refusing to merge blind — update this script first.", baseDoc.SchemaVersion, schemaVersion))
 			}
 		}
-		if rv, ok := baseDoc.Get("regions"); ok {
-			list, _ := rv.([]pyjson.Value)
-			for _, r := range list {
-				ro, ok := r.(*pyjson.Object)
-				if !ok {
-					return errors.New("base manifest: a region is not an object")
-				}
-				id, _ := ro.Get("id")
-				s, ok := id.(string)
-				if !ok {
-					return errors.New("base manifest: a region has no string id")
-				}
-				put(s, ro)
+		for _, raw := range baseDoc.Regions {
+			var head struct {
+				ID    *string `json:"id"`
+				Name  string  `json:"name"`
+				Group string  `json:"group"`
 			}
+			if err := json.Unmarshal(raw, &head); err != nil || head.ID == nil {
+				return errors.New("base manifest: a region has no string id")
+			}
+			put(*head.ID, &entry{raw: raw, group: head.Group, name: head.Name})
 		}
 
 		// Merge *by artifact kind*, not by whole region — a region already in the base
@@ -332,44 +365,20 @@ func build(distDir, regionsJSON, dest, base string, hasBase, prune bool, only *r
 		// rebuilt here would silently drop every artifact kind not present in this run's
 		// dist_dir, which is a real regression, not a hypothetical one: the first version
 		// of this merge did exactly that to Montenegro's basemap and terrain in testing
-		// (2026-09-04) before this fix.
+		// (2026-09-04) before this fix. Name, group and bbox come from regions.json —
+		// current.
 		for _, id := range freshOrder {
 			f := fresh[id]
-			existing, ok := byID[id]
-			if !ok {
-				put(id, f)
-				continue
-			}
-			byKind := &pyjson.Object{}
-			if av, ok := existing.Get("artifacts"); ok {
-				list, _ := av.([]pyjson.Value)
-				for _, a := range list {
-					if ao, ok := a.(*pyjson.Object); ok {
-						k, _ := ao.Get("kind")
-						ks, _ := k.(string)
-						byKind.Set(ks, ao)
-					}
+			if existing, ok := byID[id]; ok {
+				if err := mergeArtifacts(f, existing.raw); err != nil {
+					return fmt.Errorf("base manifest: region %s: %w", id, err)
 				}
 			}
-			fa, _ := f.Get("artifacts")
-			for _, a := range fa.([]pyjson.Value) {
-				k, _ := a.(*pyjson.Object).Get("kind")
-				byKind.Set(k.(string), a)
+			e, err := builtEntry(f)
+			if err != nil {
+				return err
 			}
-			kinds := append([]string(nil), byKind.Keys...)
-			sort.Strings(kinds)
-			var arts []pyjson.Value
-			var total pyjson.Value = pyjson.FromInt(0)
-			for _, k := range kinds {
-				a, _ := byKind.Get(k)
-				arts = append(arts, a)
-				b, _ := a.(*pyjson.Object).Get("bytes")
-				total = add(total, b)
-			}
-			merged := f.Copy() // name/group/bbox from regions.json — current
-			merged.Set("artifacts", arts)
-			merged.Set("totalBytes", total)
-			byID[id] = merged
+			put(id, e)
 		}
 
 		if prune {
@@ -388,137 +397,144 @@ func build(distDir, regionsJSON, dest, base string, hasBase, prune bool, only *r
 		}
 	}
 
-	regions := make([]*pyjson.Object, 0, len(order))
+	entries := make([]*entry, 0, len(order))
 	for _, id := range order {
-		regions = append(regions, byID[id])
+		entries = append(entries, byID[id])
 	}
-	// sorted(key=(r.get("group", ""), r["name"])): stable, so ties keep dict order.
-	sort.SliceStable(regions, func(i, j int) bool {
-		gi, gj := groupOf(regions[i]), groupOf(regions[j])
-		if gi != gj {
-			return gi < gj
+	// By group, then name; stable, so ties keep first-seen order.
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].group != entries[j].group {
+			return entries[i].group < entries[j].group
 		}
-		return nameOf(regions[i]) < nameOf(regions[j])
+		return entries[i].name < entries[j].name
 	})
-
-	manifest := &pyjson.Object{}
-	manifest.Set("schemaVersion", pyjson.FromInt(schemaVersion))
-	manifest.Set("builtAt", now.UTC().Format("2006-01-02T15:04:05Z"))
-	list := make([]pyjson.Value, len(regions))
-	for i, r := range regions {
-		list[i] = r
+	manifest := struct {
+		SchemaVersion int               `json:"schemaVersion"`
+		BuiltAt       string            `json:"builtAt"`
+		Regions       []json.RawMessage `json:"regions"`
+	}{schemaVersion, now.UTC().Format("2006-01-02T15:04:05Z"), make([]json.RawMessage, len(entries))}
+	for i, e := range entries {
+		manifest.Regions[i] = e.raw
 	}
-	manifest.Set("regions", list)
-	text, err := pyjson.Encode(manifest, pyjson.Options{Indent: pyjson.Indent(2), EnsureASCII: true})
-	if err != nil {
+	var text bytes.Buffer
+	enc := json.NewEncoder(&text)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(manifest); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(dest, []byte(text+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(dest, text.Bytes(), 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("manifest: %d region(s) -> %s\n", len(regions), dest)
+	fmt.Printf("manifest: %d region(s) -> %s\n", len(entries), dest)
 
 	// Full rebuild: every region was just computed, so list everything. Merge: only the
 	// touched ids are news; the rest is exactly what the base manifest already said, so
 	// summarise instead of repeating it.
-	var reportIDs []string
-	if !hasBase {
-		reportIDs = append(reportIDs, order...)
-	} else {
-		reportIDs = append(reportIDs, freshOrder...)
-	}
+	reportIDs := append([]string(nil), freshOrder...)
 	sort.Strings(reportIDs)
 	for _, id := range reportIDs {
-		r, ok := byID[id]
-		if !ok {
-			continue
-		}
-		tb, _ := r.Get("totalBytes")
-		mb, _ := pyjson.Number(tb)
-		av, _ := r.Get("artifacts")
-		var kinds []string
-		for _, a := range av.([]pyjson.Value) {
-			k, _ := a.(*pyjson.Object).Get("kind")
-			kinds = append(kinds, fmt.Sprint(k))
-		}
-		fmt.Printf("  %s: %.1f MB (%s)\n", id, mb/1e6, strings.Join(kinds, ", "))
+		e := byID[id]
+		fmt.Printf("  %s: %.1f MB (%s)\n", id, float64(e.built.TotalBytes)/1e6, strings.Join(e.kinds, ", "))
 	}
 	if hasBase {
-		fmt.Printf("  (%d region(s) unchanged, carried over from base manifest)\n", len(regions)-len(reportIDs))
+		fmt.Printf("  (%d region(s) unchanged, carried over from base manifest)\n", len(entries)-len(reportIDs))
 	}
 	return nil
 }
 
-func groupOf(r *pyjson.Object) string {
-	g, ok := r.Get("group")
-	if !ok {
-		return ""
+// mergeArtifacts adds to f every artifact of the base entry whose kind f did not rebuild,
+// kept exactly as the base had it, then sorts them by kind and totals their bytes.
+func mergeArtifacts(f *region, baseRaw json.RawMessage) error {
+	var base struct {
+		Artifacts []json.RawMessage `json:"artifacts"`
 	}
-	s, _ := g.(string)
-	return s
-}
-
-func nameOf(r *pyjson.Object) string {
-	n, _ := r.Get("name")
-	s, _ := n.(string)
-	return s
-}
-
-// add is Python's + on two JSON numbers: int + int stays an int, anything else a float.
-func add(a, b pyjson.Value) pyjson.Value {
-	ai, aok := pyjson.IntValue(a)
-	bi, bok := pyjson.IntValue(b)
-	if aok && bok {
-		return pyjson.FromInt(ai + bi)
+	if err := json.Unmarshal(baseRaw, &base); err != nil {
+		return err
 	}
-	af, _ := pyjson.Number(a)
-	bf, _ := pyjson.Number(b)
-	return af + bf
+	byKind := map[string]json.RawMessage{}
+	sizes := map[string]int64{}
+	for _, list := range [][]json.RawMessage{base.Artifacts, f.Artifacts} { // this run's win
+		for _, a := range list {
+			var kb struct {
+				Kind  string `json:"kind"`
+				Bytes int64  `json:"bytes"`
+			}
+			if err := json.Unmarshal(a, &kb); err != nil {
+				return fmt.Errorf("an artifact: %w", err)
+			}
+			byKind[kb.Kind], sizes[kb.Kind] = a, kb.Bytes
+		}
+	}
+	kinds := make([]string, 0, len(byKind))
+	for k := range byKind {
+		kinds = append(kinds, k)
+	}
+	sort.Strings(kinds)
+	f.Artifacts, f.TotalBytes = nil, 0
+	for _, k := range kinds {
+		f.Artifacts = append(f.Artifacts, byKind[k])
+		f.TotalBytes += sizes[k]
+	}
+	return nil
 }
 
-func encode(v pyjson.Value) string {
-	s, _ := pyjson.Encode(v, pyjson.Options{})
-	return s
+// builtEntry is a region built (or merged) in this run, ready to write.
+func builtEntry(r *region) (*entry, error) {
+	raw, err := json.Marshal(r)
+	if err != nil {
+		return nil, err
+	}
+	e := &entry{raw: raw, group: r.Group, name: r.Name, built: r}
+	for _, a := range r.Artifacts {
+		var k struct {
+			Kind string `json:"kind"`
+		}
+		if err := json.Unmarshal(a, &k); err != nil {
+			return nil, err
+		}
+		e.kinds = append(e.kinds, k.Kind)
+	}
+	return e, nil
 }
 
-func loadDefined(path string) (map[string]*pyjson.Object, error) {
+func loadDefined(path string) (map[string]definition, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	doc, err := pyjson.Decode(data)
-	if err != nil {
+	var doc struct {
+		Regions []struct {
+			ID *string `json:"id"`
+			definition
+		} `json:"regions"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	top, _ := doc.(*pyjson.Object)
-	if top == nil {
-		return nil, fmt.Errorf("%s: not an object", path)
-	}
-	rv, _ := top.Get("regions")
-	list, _ := rv.([]pyjson.Value)
-	defined := map[string]*pyjson.Object{}
-	for _, r := range list {
-		ro, ok := r.(*pyjson.Object)
-		if !ok {
-			return nil, fmt.Errorf("%s: a region is not an object", path)
-		}
-		id, _ := ro.Get("id")
-		s, ok := id.(string)
-		if !ok {
+	defined := map[string]definition{}
+	for _, r := range doc.Regions {
+		if r.ID == nil {
 			return nil, fmt.Errorf("%s: a region has no string id", path)
 		}
-		defined[s] = ro
+		defined[*r.ID] = r.definition
 	}
 	return defined, nil
+}
+
+// baseManifest is what a merge needs of the base manifest; each region stays raw.
+type baseManifest struct {
+	SchemaVersion json.Number       `json:"schemaVersion"`
+	Regions       []json.RawMessage `json:"regions"`
 }
 
 // loadBaseManifest reads the base manifest from an http(s) URL or a local path. It may be
 // gzipped: upload.sh publishes it with `Content-Encoding: gzip`, which a browser undoes
 // and `aws s3 cp` does not, so the magic number decides rather than any header.
-func loadBaseManifest(source string) (*pyjson.Object, error) {
+func loadBaseManifest(source string) (*baseManifest, error) {
 	var data []byte
 	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
 		client := &http.Client{Timeout: 30 * time.Second}
@@ -549,15 +565,11 @@ func loadBaseManifest(source string) (*pyjson.Object, error) {
 			return nil, err
 		}
 	}
-	doc, err := pyjson.Decode(data)
-	if err != nil {
+	var doc baseManifest
+	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("base manifest %s: %w", source, err)
 	}
-	o, ok := doc.(*pyjson.Object)
-	if !ok {
-		return nil, fmt.Errorf("base manifest %s: not an object", source)
-	}
-	return o, nil
+	return &doc, nil
 }
 
 // buildLocalRegions computes region entries fresh from whatever is actually present under
@@ -569,25 +581,26 @@ func loadBaseManifest(source string) (*pyjson.Object, error) {
 // empty/broken local directory as "delete this from the catalogue". A directory `only`
 // does not match is skipped without being touched at all — not even to check whether its
 // archives are readable.
-func buildLocalRegions(distDir string, defined map[string]*pyjson.Object, only *regexp.Regexp, workers int) (map[string]*pyjson.Object, []string, error) {
+func buildLocalRegions(distDir string, defined map[string]definition, only *regexp.Regexp, workers int) (map[string]*region, []string, error) {
 	regionsDir := filepath.Join(distDir, "regions")
-	byID := map[string]*pyjson.Object{}
+	byID := map[string]*region{}
 	var order []string
 	if st, err := os.Stat(regionsDir); err != nil || !st.IsDir() {
 		return byID, order, nil
 	}
-	entries, err := os.ReadDir(regionsDir)
+	dirs, err := os.ReadDir(regionsDir)
 	if err != nil {
 		return nil, nil, err
 	}
-	var pending []artifact
-	for _, e := range entries { // ReadDir sorts by name, as sorted(iterdir()) did
-		regionDir := filepath.Join(regionsDir, e.Name())
-		// is_dir() follows symlinks; DirEntry.IsDir does not.
+	var pending []*artifact
+	arts := map[string][]*artifact{}
+	for _, d := range dirs { // ReadDir sorts by name
+		regionDir := filepath.Join(regionsDir, d.Name())
+		// Following symlinks, which DirEntry.IsDir does not.
 		if st, err := os.Stat(regionDir); err != nil || !st.IsDir() {
 			continue
 		}
-		id := e.Name()
+		id := d.Name()
 		if only != nil && !only.MatchString(id) {
 			continue
 		}
@@ -597,10 +610,9 @@ func buildLocalRegions(distDir string, defined map[string]*pyjson.Object, only *
 			continue
 		}
 
-		// glob("*.pmtiles"), which matches dotfiles too: a leftover
-		// ".x-contours.building.pmtiles" is found and skipped as an unrecognised suffix.
+		// Glob matches dotfiles too: a leftover ".x-contours.building.pmtiles" is found
+		// and skipped as an unrecognised suffix.
 		files, _ := filepath.Glob(filepath.Join(regionDir, "*.pmtiles"))
-		var arts []pyjson.Value
 		var total int64
 		for _, path := range files {
 			name := filepath.Base(path)
@@ -617,42 +629,20 @@ func buildLocalRegions(distDir string, defined map[string]*pyjson.Object, only *
 			if err != nil {
 				return nil, nil, err
 			}
-			a := &pyjson.Object{}
-			a.Set("kind", kind)
-			// C3: the filename is also the OPFS/TileSourceRegistry key, so it must stay
-			// globally unique — hence the region-id prefix.
-			a.Set("filename", name)
-			a.Set("path", "regions/"+id+"/"+name)
-			a.Set("bytes", pyjson.FromInt(st.Size()))
-			a.Set("minzoom", pyjson.FromInt(int64(minZ)))
-			a.Set("maxzoom", pyjson.FromInt(int64(maxZ)))
-			// "sha256" is filled in below, once every archive has passed the header check:
-			// lets a resumed or re-downloaded artifact be checked for integrity.
-			arts = append(arts, a)
+			a := &artifact{Kind: kind, Filename: name, Path: "regions/" + id + "/" + name,
+				Bytes: st.Size(), MinZoom: minZ, MaxZoom: maxZ, file: path}
+			arts[id] = append(arts[id], a)
 			total += st.Size()
-			pending = append(pending, artifact{a, path, st.Size()})
+			pending = append(pending, a)
 		}
-		if len(arts) == 0 {
+		if len(arts[id]) == 0 {
 			fmt.Fprintf(os.Stderr, "  ! skipping %s: no artifacts built\n", id)
 			continue
 		}
-
-		r := &pyjson.Object{}
-		r.Set("id", id)
-		name, ok := meta.Get("name")
-		if !ok {
+		if meta.Name == nil {
 			return nil, nil, fmt.Errorf("regions.json: %s has no name", id)
 		}
-		r.Set("name", name)
-		// Absent on hand-written regions; the app treats it as optional.
-		if g, ok := meta.Get("group"); ok && truthy(g) {
-			r.Set("group", g)
-		}
-		bbox, _ := meta.Get("bbox")
-		r.Set("bbox", bbox)
-		r.Set("totalBytes", pyjson.FromInt(total))
-		r.Set("artifacts", arts)
-		byID[id] = r
+		byID[id] = &region{ID: id, Name: *meta.Name, Group: meta.Group, BBox: meta.BBox, TotalBytes: total}
 		order = append(order, id)
 	}
 
@@ -667,27 +657,16 @@ func buildLocalRegions(distDir string, defined map[string]*pyjson.Object, only *
 			return nil, nil, err
 		}
 	}
-	return byID, order, nil
-}
-
-func truthy(v pyjson.Value) bool {
-	switch t := v.(type) {
-	case nil:
-		return false
-	case bool:
-		return t
-	case string:
-		return t != ""
-	case pyjson.Int:
-		return t != "0"
-	case float64:
-		return t != 0
-	case []pyjson.Value:
-		return len(t) > 0
-	case *pyjson.Object:
-		return len(t.Keys) > 0
+	for _, id := range order {
+		for _, a := range arts[id] {
+			raw, err := json.Marshal(a)
+			if err != nil {
+				return nil, nil, err
+			}
+			byID[id].Artifacts = append(byID[id].Artifacts, raw)
+		}
 	}
-	return true
+	return byID, order, nil
 }
 
 // Hashes of archives that have not changed since they were last hashed, kept beside them.
@@ -700,8 +679,7 @@ func truthy(v pyjson.Value) bool {
 // and mtime, so a rebuilt archive always misses and an untouched one costs a stat.
 //
 // Not uploaded: upload.sh publishes *.pmtiles and the manifest, nothing else in dist/.
-// Deleting it is always safe; the next run hashes everything. Same file, same format as
-// the Python wrote, so an existing cache carries over.
+// Deleting it is always safe; the next run hashes everything.
 const (
 	cacheName    = ".manifest-sha256-cache.json"
 	cacheVersion = 1
@@ -721,37 +699,38 @@ func stampOf(path string) (stamp, error) {
 	return s, nil
 }
 
+type cacheEntry struct {
+	Size    int64  `json:"size"`
+	MtimeNs int64  `json:"mtime_ns"`
+	Ino     int64  `json:"ino"`
+	SHA256  string `json:"sha256"`
+}
+
+type cacheFile struct {
+	Version int                   `json:"version"`
+	Entries map[string]cacheEntry `json:"entries"`
+}
+
 type hashCache struct {
 	root    string
 	path    string
-	entries *pyjson.Object
+	entries map[string]cacheEntry
 	mu      sync.Mutex
 }
 
 func loadHashCache(distDir string) *hashCache {
-	c := &hashCache{root: distDir, path: filepath.Join(distDir, cacheName), entries: &pyjson.Object{}}
+	c := &hashCache{root: distDir, path: filepath.Join(distDir, cacheName), entries: map[string]cacheEntry{}}
 	// Missing or unreadable reads as empty: everything is hashed, which is the behaviour
 	// before this cache existed — never a wrong digest.
 	data, err := os.ReadFile(c.path)
 	if err != nil {
 		return c
 	}
-	doc, err := pyjson.Decode(data)
-	if err != nil {
+	var f cacheFile
+	if json.Unmarshal(data, &f) != nil || f.Version != cacheVersion || f.Entries == nil {
 		return c
 	}
-	top, ok := doc.(*pyjson.Object)
-	if !ok {
-		return c
-	}
-	if v, _ := top.Get("version"); encode(v) != strconv.Itoa(cacheVersion) {
-		return c
-	}
-	if e, ok := top.Get("entries"); ok {
-		if eo, ok := e.(*pyjson.Object); ok {
-			c.entries = eo
-		}
-	}
+	c.entries = f.Entries
 	return c
 }
 
@@ -764,73 +743,50 @@ func (c *hashCache) key(path string) string {
 }
 
 func (c *hashCache) get(path string) string {
-	e, ok := c.entries.Get(c.key(path))
+	e, ok := c.entries[c.key(path)]
 	if !ok {
 		return ""
 	}
-	eo, ok := e.(*pyjson.Object)
-	if !ok || len(eo.Keys) == 0 {
-		return ""
-	}
 	st, err := stampOf(path)
-	if err != nil {
+	if err != nil || e.Size != st.size || e.MtimeNs != st.mtimeNs || e.Ino != st.ino {
 		return ""
 	}
-	for _, kv := range []struct {
-		k string
-		v int64
-	}{{"size", st.size}, {"mtime_ns", st.mtimeNs}, {"ino", st.ino}} {
-		got, _ := eo.Get(kv.k)
-		if n, ok := pyjson.IntValue(got); !ok || n != kv.v {
-			return ""
-		}
-	}
-	d, _ := eo.Get("sha256")
-	s, _ := d.(string)
-	return s
+	return e.SHA256
 }
 
 func (c *hashCache) put(path, digest string, st stamp) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	e := &pyjson.Object{}
-	e.Set("size", pyjson.FromInt(st.size))
-	e.Set("mtime_ns", pyjson.FromInt(st.mtimeNs))
-	e.Set("ino", pyjson.FromInt(st.ino))
-	e.Set("sha256", digest)
-	c.entries.Set(c.key(path), e)
+	c.entries[c.key(path)] = cacheEntry{st.size, st.mtimeNs, st.ino, digest}
 }
 
 // save writes the cache, dropping entries whose file is gone — and only those. A run
 // scoped with --only never visits most regions; evicting everything it did not visit
 // would make the next full run rehash the whole catalogue.
 func (c *hashCache) save() error {
-	live := &pyjson.Object{}
-	for i, k := range c.entries.Keys {
+	live := map[string]cacheEntry{}
+	for k, e := range c.entries {
 		if _, err := os.Stat(filepath.Join(c.root, k)); err == nil {
-			live.Set(k, c.entries.Vals[i])
+			live[k] = e
 		}
 	}
-	doc := &pyjson.Object{}
-	doc.Set("version", pyjson.FromInt(cacheVersion))
-	doc.Set("entries", live)
-	text, err := pyjson.Encode(doc, pyjson.Options{EnsureASCII: true, SortKeys: true})
+	text, err := json.Marshal(cacheFile{cacheVersion, live})
 	if err != nil {
 		return err
 	}
 	tmp := c.path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(text), 0o644); err != nil {
+	if err := os.WriteFile(tmp, text, 0o644); err != nil {
 		return err
 	}
 	return os.Rename(tmp, c.path)
 }
 
-func fillDigests(pending []artifact, cache *hashCache, workers int) error {
-	var toHash []artifact
+func fillDigests(pending []*artifact, cache *hashCache, workers int) error {
+	var toHash []*artifact
 	reused := 0
 	for _, a := range pending {
-		if d := cache.get(a.path); d != "" {
-			a.obj.Set("sha256", d)
+		if d := cache.get(a.file); d != "" {
+			a.SHA256 = d
 			reused++
 		} else {
 			toHash = append(toHash, a)
@@ -842,7 +798,7 @@ func fillDigests(pending []artifact, cache *hashCache, workers int) error {
 	}
 	var total int64
 	for _, a := range toHash {
-		total += a.size
+		total += a.Bytes
 	}
 	fmt.Fprintf(os.Stderr, "  sha256: hashing %d archive(s), %.2f GB (%d unchanged, reused)\n",
 		len(toHash), float64(total)/1e9, reused)
@@ -864,13 +820,13 @@ func fillDigests(pending []artifact, cache *hashCache, workers int) error {
 				// afterwards. Stamping after would let a file rewritten mid-hash be
 				// remembered under its new mtime with a digest of neither version.
 				r := &results[i]
-				if r.before, r.err = stampOf(toHash[i].path); r.err != nil {
+				if r.before, r.err = stampOf(toHash[i].file); r.err != nil {
 					continue
 				}
-				if r.digest, r.err = sha256File(toHash[i].path); r.err != nil {
+				if r.digest, r.err = sha256File(toHash[i].file); r.err != nil {
 					continue
 				}
-				r.after, r.err = stampOf(toHash[i].path)
+				r.after, r.err = stampOf(toHash[i].file)
 			}
 		}()
 	}
@@ -884,9 +840,9 @@ func fillDigests(pending []artifact, cache *hashCache, workers int) error {
 		if r.err != nil {
 			return r.err
 		}
-		a.obj.Set("sha256", r.digest)
+		a.SHA256 = r.digest
 		if r.before == r.after {
-			cache.put(a.path, r.digest, r.before)
+			cache.put(a.file, r.digest, r.before)
 		}
 	}
 	return nil

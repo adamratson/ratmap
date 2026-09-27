@@ -6,7 +6,6 @@
 //	pmtiles-header tile-count ARCHIVE                           # build-region.sh archive_tile_count
 //	pmtiles show --header-json A | pmtiles-header narrow LO HI OUT.json   # verify_wide_header
 //
-// Ports of the Python snippets those scripts carried inline, printing what they printed.
 // `maxzoom` and `narrow` take `pmtiles show --header-json` on stdin rather than reading a
 // file, because their archive can be a URL (build-region.sh cuts peaks from the published
 // global archive).
@@ -16,15 +15,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
-
-	"ratmap/infra/tools/internal/pyjson"
-	"ratmap/infra/tools/internal/pytext"
 )
 
 const usage = `usage: pmtiles-header maxzoom < HEADER_JSON
@@ -55,12 +52,11 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		v, ok := h.Get("maxzoom")
+		v, ok := h["maxzoom"]
 		if !ok {
 			return errors.New(`header JSON has no "maxzoom"`)
 		}
-		s, _ := pyjson.Encode(v, pyjson.Options{})
-		fmt.Fprintln(out, pytext.StrValue([]byte(s)))
+		fmt.Fprintln(out, string(bytes.TrimSpace(v)))
 		return nil
 	case args[0] == "zooms" && len(args) == 2:
 		return zooms(args[1], out)
@@ -72,20 +68,19 @@ func run(args []string, in io.Reader, out io.Writer) error {
 	return errUsage
 }
 
-func readHeaderJSON(in io.Reader) (*pyjson.Object, error) {
+func readHeaderJSON(in io.Reader) (map[string]json.RawMessage, error) {
 	data, err := io.ReadAll(in)
 	if err != nil {
 		return nil, err
 	}
-	v, err := pyjson.Decode(data)
-	if err != nil {
+	var h map[string]json.RawMessage
+	if err := json.Unmarshal(data, &h); err != nil {
 		return nil, fmt.Errorf("header JSON: %w", err)
 	}
-	o, ok := v.(*pyjson.Object)
-	if !ok {
+	if h == nil {
 		return nil, errors.New("header JSON is not an object")
 	}
-	return o, nil
+	return h, nil
 }
 
 // narrow writes the header JSON with its zoom range set to lo..hi and the centre zoom
@@ -100,31 +95,31 @@ func narrow(in io.Reader, loArg, hiArg, outPath string) error {
 	if err != nil {
 		return err
 	}
-	h.Set("minzoom", pyjson.FromInt(int64(lo)))
-	h.Set("maxzoom", pyjson.FromInt(int64(hi)))
-	cv, _ := h.Get("center")
-	center, ok := cv.([]pyjson.Value)
-	if !ok || len(center) < 3 {
+	h["minzoom"] = json.RawMessage(strconv.Itoa(lo))
+	h["maxzoom"] = json.RawMessage(strconv.Itoa(hi))
+	var center []json.RawMessage
+	if json.Unmarshal(h["center"], &center) != nil || len(center) < 3 {
 		return errors.New(`header JSON has no three-value "center"`)
 	}
-	cz, ok := pyjson.Number(center[2])
-	if !ok {
+	var cz float64
+	if err := json.Unmarshal(center[2], &cz); err != nil {
 		return errors.New("center zoom is not a number")
 	}
-	// min(max(c, lo), hi), keeping c itself when it is already inside.
-	v, vf := center[2], cz
-	if vf < float64(lo) {
-		v, vf = pyjson.FromInt(int64(lo)), float64(lo)
+	// Clamped into lo..hi, and left as written when it is already inside.
+	if cz < float64(lo) {
+		center[2], cz = json.RawMessage(strconv.Itoa(lo)), float64(lo)
 	}
-	if vf > float64(hi) {
-		v = pyjson.FromInt(int64(hi))
+	if cz > float64(hi) {
+		center[2] = json.RawMessage(strconv.Itoa(hi))
 	}
-	center[2] = v
-	text, err := pyjson.Encode(h, pyjson.Options{EnsureASCII: true})
+	if h["center"], err = json.Marshal(center); err != nil {
+		return err
+	}
+	text, err := json.Marshal(h)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(outPath, []byte(text), 0o644)
+	return os.WriteFile(outPath, text, 0o644)
 }
 
 func readHeader(f *os.File) ([]byte, error) {

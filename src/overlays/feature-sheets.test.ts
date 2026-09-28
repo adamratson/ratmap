@@ -112,10 +112,36 @@ describe('the path grade card', () => {
 });
 
 describe('the coordinates card', () => {
+  const elevation = Promise.resolve(1338.6);
+
+  it('shows the ground height once it has been read', async () => {
+    let land!: (metres: number | null) => void;
+    renderCoordsSheet(body, BEN_NEVIS, { status, elevation: new Promise((r) => (land = r)) });
+
+    expect(body.querySelector('.sheet-ele')!.textContent).toBe('Reading elevation…');
+    land(1338.6);
+    await flush();
+    expect(body.querySelector('.sheet-ele')!.textContent).toBe('1339 m');
+  });
+
+  it('says where the height would come from when there is none to read', async () => {
+    renderCoordsSheet(body, BEN_NEVIS, { status, elevation: Promise.resolve(null) });
+    await flush();
+
+    expect(body.querySelector('.sheet-ele')!.textContent).toBe('Elevation needs a downloaded region');
+  });
+
+  it('reports a failed read rather than leaving it pending', async () => {
+    renderCoordsSheet(body, BEN_NEVIS, { status, elevation: Promise.reject(new Error('bad tile')) });
+    await flush();
+
+    expect(body.querySelector('.sheet-ele')!.textContent).toBe('Could not read elevation: bad tile');
+  });
+
   it('copies the coordinates and confirms it', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
-    renderCoordsSheet(body, BEN_NEVIS, { status });
+    renderCoordsSheet(body, BEN_NEVIS, { status, elevation });
 
     body.querySelector<HTMLButtonElement>('.sheet-copy')!.click();
     await flush();
@@ -125,8 +151,24 @@ describe('the coordinates card', () => {
     vi.unstubAllGlobals();
   });
 
-  it('saves the point under its coordinates, having no other name', async () => {
-    renderCoordsSheet(body, BEN_NEVIS, { status });
+  it('saves the point under its coordinates, having no other name, with its height', async () => {
+    renderCoordsSheet(body, BEN_NEVIS, { status, elevation });
+    await flush();
+
+    body.querySelector<HTMLButtonElement>('.sheet-save')!.click();
+    await flush();
+
+    expect(savePlaceMock).toHaveBeenCalledWith({
+      name: '56.79685, -5.00360',
+      lng: -5.0036,
+      lat: 56.79685,
+      ele: 1338.6,
+    });
+  });
+
+  it('saves without a height when there is none', async () => {
+    renderCoordsSheet(body, BEN_NEVIS, { status, elevation: Promise.resolve(null) });
+    await flush();
 
     body.querySelector<HTMLButtonElement>('.sheet-save')!.click();
     await flush();

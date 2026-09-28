@@ -374,6 +374,30 @@ describe('the elevation profile', () => {
   });
 });
 
+describe('the height of a single point', () => {
+  it('reads it from the downloaded region’s terrain', async () => {
+    regions = [
+      {
+        id: 'lochaber',
+        name: 'Lochaber',
+        bbox: [-5.6, 56.5, -4.6, 57.1],
+        totalBytes: 1,
+        artifacts: [{ kind: 'terrain', filename: 'lochaber-terrain.pmtiles', path: 'x', bytes: 1, maxzoom: 11 }],
+      },
+    ];
+    registry.get.mockReturnValue({});
+    fakes.terrainSample.mockResolvedValue([1338.6]);
+
+    expect(await planner.elevationAt(SUMMIT)).toBe(1338.6);
+    expect(fakes.terrainSample).toHaveBeenCalledWith([SUMMIT]);
+  });
+
+  it('is null outside every downloaded region, rather than a guess from the coarse world layer', async () => {
+    expect(await planner.elevationAt(SUMMIT)).toBeNull();
+    expect(fakes.terrainSample).not.toHaveBeenCalled();
+  });
+});
+
 describe('following a route', () => {
   const coords: LngLat[] = [ACHINTEE, SUMMIT];
 

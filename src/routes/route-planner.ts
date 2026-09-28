@@ -610,6 +610,22 @@ export class RoutePlanner {
   private readonly samplers = new Map<string, TerrainSampler>();
 
   /**
+   * The ground height at one point, in metres, read from the same downloaded terrain the
+   * profile uses — and through the same cached samplers, so {@link invalidateRegions}
+   * covers it too.
+   *
+   * Null where no downloaded region covers the point. As with the profile, the worldwide
+   * terrain layer is no fallback: at ~5 km per pixel it would quote a valley floor's
+   * height for a summit, which reads as a real answer and is not one.
+   */
+  async elevationAt(point: LngLat): Promise<number | null> {
+    const terrain = this.terrainSourceFor([point]);
+    if (!terrain) return null;
+    const [ele] = await terrain.sample([point]);
+    return ele;
+  }
+
+  /**
    * Put the route back on the map after the style underneath it has been replaced.
    *
    * Switching theme swaps the whole style, which takes the route's source and layers with

@@ -379,7 +379,10 @@ map.on('click', (e) => {
 });
 
 function showCoordsSheet(lngLat: maplibregl.LngLat, { focus = false } = {}): void {
-  views.open('coords', (body) => renderCoordsSheet(body, lngLat, { status }), { focus });
+  const elevation = planner.elevationAt([lngLat.lng, lngLat.lat]);
+  views.open('coords', (body) => renderCoordsSheet(body, lngLat, { status, elevation }), {
+    focus,
+  });
 }
 
 // Coordinates for a bare point are a secondary action, not the primary tap — a plain click

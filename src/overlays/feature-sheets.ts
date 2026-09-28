@@ -89,24 +89,41 @@ export function renderPathSheet(body: HTMLElement, hit: SacHit & { grade: NonNul
 
 /**
  * Right-click or long-press anywhere on the map to read off its coordinates — just the raw
- * lat/lng, with copy and save as the only actions since there's no OSM feature behind a bare
- * point to link out to.
+ * lat/lng and the ground height there, with copy and save as the only actions since there's
+ * no OSM feature behind a bare point to link out to.
+ *
+ * `elevation` is a promise because it is read from a terrain archive, which can take a tile
+ * fetch and decode; the sheet opens at once and fills the height in when it lands. It
+ * resolves null where there is no downloaded terrain to read.
  */
 export function renderCoordsSheet(
   body: HTMLElement,
   lngLat: LngLat,
-  { status }: { status: Toasts },
+  { status, elevation }: { status: Toasts; elevation: Promise<number | null> },
 ): void {
   const coordsText = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
 
   body.innerHTML = `
     <h2></h2>
+    <p class="sheet-ele">Reading elevation…</p>
     <div class="sheet-actions">
       <button class="sheet-copy" type="button">Copy</button>
       <button class="sheet-save" type="button">Save place</button>
     </div>
   `;
   body.querySelector('h2')!.textContent = coordsText;
+
+  // Saved with the place once known, as a summit's height is. A save tapped before the
+  // read lands goes without it rather than waiting on it.
+  let ele: number | undefined;
+  const eleLine = body.querySelector<HTMLElement>('.sheet-ele')!;
+  elevation
+    .then((metres) => {
+      const text = formatElevation(metres);
+      if (text && metres !== null) ele = metres;
+      fillReadout(eleLine, text ?? 'Elevation needs a downloaded region');
+    })
+    .catch((err: Error) => fillReadout(eleLine, `Could not read elevation: ${err.message}`));
 
   body.querySelector('.sheet-copy')!.addEventListener('click', () => {
     navigator.clipboard
@@ -116,7 +133,12 @@ export function renderCoordsSheet(
   });
 
   body.querySelector('.sheet-save')!.addEventListener('click', () => {
-    void savePlace({ name: coordsText, lng: lngLat.lng, lat: lngLat.lat })
+    void savePlace({
+      name: coordsText,
+      lng: lngLat.lng,
+      lat: lngLat.lat,
+      ...(ele === undefined ? {} : { ele }),
+    })
       .then(() => status.toast(`Saved “${coordsText}”`))
       .catch((err: Error) =>
         status.toast(`Could not save “${coordsText}”: ${err.message}`, { kind: 'error' }),

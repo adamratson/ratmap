@@ -100,21 +100,35 @@ jobs:
             -e PLACES_SOURCE_URLS=https://download.geofabrik.de/europe/isle-of-man-latest.osm.pbf \
             -v "${{ github.workspace }}/ci-dist:/opt/ratmap/infra/dist" \
             ${{ steps.ref.outputs.image }}:${{ github.sha }} build-places.sh
-          # The container writes as root, so the artifact lands root-owned on a Linux
+          # The container writes as root, so the artifacts land root-owned on a Linux
           # runner. Copied to a runner-owned path before querying: sqlite wants a
           # writable file and directory for anything beyond a bare read, and debugging
           # that as a permissions error in CI is a waste of a morning.
-          sudo cp "${{ github.workspace }}/ci-dist/places.sqlite" "${RUNNER_TEMP}/places.sqlite"
-          sudo chown "$(id -u):$(id -g)" "${RUNNER_TEMP}/places.sqlite"
-          db="${RUNNER_TEMP}/places.sqlite"
-          [ -s "$db" ] || { echo "::error::places.sqlite was not produced"; exit 1; }
-          rows="$(sqlite3 "$db" 'SELECT COUNT(*) FROM places;')"
-          echo "places.sqlite rows: $rows"
-          [ "$rows" -gt 50 ] || { echo "::error::only $rows rows — the extract or the filter is wrong"; exit 1; }
-          # Proves the FTS5 index was populated and is queryable, not merely that the
-          # table exists — C9's search is the whole point of this artifact.
-          hits="$(sqlite3 "$db" "SELECT COUNT(*) FROM places_fts WHERE places_fts MATCH 'douglas';")"
-          [ "$hits" -ge 1 ] || { echo "::error::FTS5 lookup for a known Manx place returned nothing"; exit 1; }
+          #
+          # Two outputs (infra/README.md, "Search indexes"): the region's own index, which
+          # holds every place in it, and places.sqlite, the app's fallback — cities, towns
+          # and notable summits only, so a handful of rows for the Isle of Man.
+          region="${RUNNER_TEMP}/isle-of-man-places-1.sqlite"
+          fallback="${RUNNER_TEMP}/places.sqlite"
+          for pair in "regions/isle-of-man/isle-of-man-places-1.sqlite:$region" "places.sqlite:$fallback"; do
+            src="${{ github.workspace }}/ci-dist/${pair%%:*}"
+            [ -s "$src" ] || { echo "::error::${pair%%:*} was not produced"; exit 1; }
+            sudo cp "$src" "${pair#*:}"
+            sudo chown "$(id -u):$(id -g)" "${pair#*:}"
+          done
+          rows="$(sqlite3 "$region" 'SELECT COUNT(*) FROM places;')"
+          fallback_rows="$(sqlite3 "$fallback" 'SELECT COUNT(*) FROM places;')"
+          echo "region index rows: $rows, fallback rows: $fallback_rows"
+          [ "$rows" -gt 50 ] || { echo "::error::only $rows rows in the region index — the extract or the filter is wrong"; exit 1; }
+          [ "$fallback_rows" -ge 1 ] && [ "$fallback_rows" -lt "$rows" ] \
+            || { echo "::error::the fallback holds $fallback_rows rows against the region's $rows — it should be a small subset"; exit 1; }
+          # Proves each FTS5 index was populated and is queryable, not merely that the
+          # table exists — C9's search is the whole point of these artifacts. Douglas is a
+          # town, so it belongs in both.
+          for db in "$region" "$fallback"; do
+            hits="$(sqlite3 "$db" "SELECT COUNT(*) FROM places_fts WHERE places_fts MATCH 'douglas';")"
+            [ "$hits" -ge 1 ] || { echo "::error::FTS5 lookup for a known Manx place returned nothing in $(basename "$db")"; exit 1; }
+          done
 
       - name: Log in to GHCR
         uses: docker/login-action@v3

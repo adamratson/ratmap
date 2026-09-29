@@ -60,7 +60,9 @@ test.describe('search', () => {
 
   test('says so when nothing matches, rather than showing an empty list', async ({ page }) => {
     await searchFor(page, 'qqzzxx');
-    await expect(page.locator('#search-results .search-empty')).toHaveText('No matches');
+    // With no region downloaded it goes on to say where villages come from; see
+    // region-search.spec.ts for both wordings.
+    await expect(page.locator('#search-results .search-empty')).toHaveText(/^No matches/);
   });
 
   test('abandons a search on Escape without closing the sheet', async ({ page }) => {

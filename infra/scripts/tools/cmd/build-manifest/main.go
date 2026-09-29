@@ -80,6 +80,10 @@ var artifactKinds = []struct{ suffix, kind string }{
 	{"-avalanche-1.pmtiles", "avalanche"},
 	// Versioned for the same reason; bump together with build-region.sh.
 	{"-peaks-1.pmtiles", "peaks"},
+	// The region's search index (tools/cmd/build-places-db/cut.go), a SQLite file rather
+	// than an archive: the app searches it and draws nothing from it. Versioned for the
+	// same reason again; bump together with build-places-db's regionIndexName.
+	{"-places-1.sqlite", "places"},
 }
 
 func artifactKind(name string) string {
@@ -264,6 +268,42 @@ func zoomRange(path string) (int, int, error) {
 
 // artifact is one archive's manifest entry, its fields in the order the app has always
 // seen them.
+// checkSQLite refuses a search index that is not a whole SQLite database, for the same
+// reason zoomRange refuses a broken archive: an interrupted copy is a plausible size and
+// fails only on the phone. The header's page size times its page count is the file's
+// size, when the count is current (the change counter matches its version-valid-for).
+func checkSQLite(path string) error {
+	fail := func(why string) error {
+		return failure(fmt.Sprintf("FAIL: %s is not a readable SQLite database (%s).\n      Rebuild it; do not publish this manifest.",
+			filepath.Base(path), why))
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return fail(err.Error())
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return fail(err.Error())
+	}
+	header := make([]byte, 100)
+	if n, _ := io.ReadFull(f, header); n < len(header) || string(header[:16]) != "SQLite format 3\x00" {
+		return fail("no SQLite header")
+	}
+	pageSize := int64(binary.BigEndian.Uint16(header[16:]))
+	if pageSize == 1 {
+		pageSize = 65536
+	}
+	pages := int64(binary.BigEndian.Uint32(header[28:]))
+	if binary.BigEndian.Uint32(header[24:]) != binary.BigEndian.Uint32(header[92:]) || pages == 0 {
+		return fail("its header does not record its size")
+	}
+	if pageSize*pages != st.Size() {
+		return fail(fmt.Sprintf("%d bytes, where its header says %d", st.Size(), pageSize*pages))
+	}
+	return nil
+}
+
 type artifact struct {
 	Kind string `json:"kind"`
 	// C3: the filename is also the OPFS/TileSourceRegistry key, so it must stay globally
@@ -271,8 +311,9 @@ type artifact struct {
 	Filename string `json:"filename"`
 	Path     string `json:"path"`
 	Bytes    int64  `json:"bytes"`
-	MinZoom  int    `json:"minzoom"`
-	MaxZoom  int    `json:"maxzoom"`
+	// Absent for an artifact that is not tiles (a search index).
+	MinZoom *int `json:"minzoom,omitempty"`
+	MaxZoom *int `json:"maxzoom,omitempty"`
 	// Filled in once every archive has passed the header check: lets a resumed or
 	// re-downloaded artifact be checked for integrity.
 	SHA256 string `json:"sha256,omitempty"`
@@ -613,6 +654,8 @@ func buildLocalRegions(distDir string, defined map[string]definition, only *rege
 		// Glob matches dotfiles too: a leftover ".x-contours.building.pmtiles" is found
 		// and skipped as an unrecognised suffix.
 		files, _ := filepath.Glob(filepath.Join(regionDir, "*.pmtiles"))
+		indexes, _ := filepath.Glob(filepath.Join(regionDir, "*.sqlite"))
+		files = append(files, indexes...)
 		var total int64
 		for _, path := range files {
 			name := filepath.Base(path)
@@ -621,16 +664,23 @@ func buildLocalRegions(distDir string, defined map[string]definition, only *rege
 				fmt.Fprintf(os.Stderr, "  ! skipping %s: unrecognised artifact suffix\n", name)
 				continue
 			}
-			minZ, maxZ, err := zoomRange(path)
-			if err != nil {
-				return nil, nil, err
+			a := &artifact{Kind: kind, Filename: name, Path: "regions/" + id + "/" + name, file: path}
+			if strings.HasSuffix(name, ".sqlite") {
+				if err := checkSQLite(path); err != nil {
+					return nil, nil, err
+				}
+			} else {
+				minZ, maxZ, err := zoomRange(path)
+				if err != nil {
+					return nil, nil, err
+				}
+				a.MinZoom, a.MaxZoom = &minZ, &maxZ
 			}
 			st, err := os.Stat(path)
 			if err != nil {
 				return nil, nil, err
 			}
-			a := &artifact{Kind: kind, Filename: name, Path: "regions/" + id + "/" + name,
-				Bytes: st.Size(), MinZoom: minZ, MaxZoom: maxZ, file: path}
+			a.Bytes = st.Size()
 			arts[id] = append(arts[id], a)
 			total += st.Size()
 			pending = append(pending, a)

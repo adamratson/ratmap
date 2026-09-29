@@ -1,10 +1,14 @@
-// Command build-places-db builds places.sqlite, the offline search index (C9: no
-// geocoding API, ever).
+// Command build-places-db builds the offline search indexes (C9: no geocoding API, ever).
 //
 //	build-places-db SOURCE.geojsonl... DEST.sqlite
+//	build-places-db --regions REGIONS_JSON --regions-out DIST_DIR --fallback PLACES.sqlite \
+//	    SOURCE.geojsonl... FULL.sqlite
 //
 // Input: one or more line-delimited GeoJSON files of point features (places and peaks), as
-// produced by normalize-peaks. Output: a SQLite DB with an FTS5 index over names.
+// produced by normalize-peaks. Output: a SQLite DB with an FTS5 index over names — every
+// place and summit in the sources. With --regions, that full index is the working copy the
+// shipped ones are cut from (see cut.go): one per catalogue region, downloaded with it, and
+// a small global fallback that ships with the app.
 //
 // SQLite is modernc.org/sqlite: SQLite's C translated to Go, so no C compiler and no
 // system library, and FTS5 with the unicode61 tokenizer's diacritic folding built in —
@@ -23,6 +27,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -30,6 +35,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"ratmap/infra/tools/internal/cli"
 	"ratmap/infra/tools/internal/num"
 	"ratmap/infra/tools/internal/rawjson"
 )
@@ -53,14 +59,38 @@ var kindRank = map[string]int64{
 	"mountain_pass": 12,
 }
 
+const usage = `usage: build-places-db [--regions REGIONS_JSON --regions-out DIST_DIR] [--fallback PLACES.sqlite] SOURCE.geojsonl... DEST.sqlite`
+
 func main() {
-	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: build-places-db SOURCE.geojsonl... DEST.sqlite")
-		os.Exit(2)
+	fs := flag.NewFlagSet("build-places-db", flag.ExitOnError)
+	regionsJSON := fs.String("regions", "", "catalogue to cut one index per region from")
+	regionsOut := fs.String("regions-out", "", "dist/ directory the region indexes go under (regions/<id>/)")
+	fallback := fs.String("fallback", "", "write the global fallback index the app ships here")
+	fallbackPlaces := fs.Int("fallback-places", defaultFallbackPlaces, "cities and towns in the fallback, largest first")
+	fallbackSummits := fs.Int("fallback-summits", defaultFallbackSummits, "summits in the fallback, highest notable ones first")
+	args := cli.Parse(fs, usage, os.Args[1:])
+	if len(args) < 2 {
+		cli.Fail(fs, "give at least one SOURCE and a DEST")
 	}
-	if err := run(os.Args[1:len(os.Args)-1], os.Args[len(os.Args)-1], os.Stdout); err != nil {
+	if (*regionsJSON == "") != (*regionsOut == "") {
+		cli.Fail(fs, "--regions and --regions-out go together")
+	}
+	dest := args[len(args)-1]
+	if err := run(args[:len(args)-1], dest, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "build-places-db:", err)
 		os.Exit(1)
+	}
+	if *regionsJSON != "" {
+		if err := cutRegions(dest, *regionsJSON, *regionsOut, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "build-places-db:", err)
+			os.Exit(1)
+		}
+	}
+	if *fallback != "" {
+		if err := cutFallback(dest, *fallback, *fallbackPlaces, *fallbackSummits, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "build-places-db:", err)
+			os.Exit(1)
+		}
 	}
 }
 
@@ -96,7 +126,8 @@ func build(sources []string, dest string, out io.Writer) error {
             lon        REAL NOT NULL,
             ele        REAL,
             population INTEGER,
-            rank       INTEGER NOT NULL
+            rank       INTEGER NOT NULL,
+            notable    INTEGER NOT NULL DEFAULT 0
         )`,
 	); err != nil {
 		return err
@@ -109,8 +140,8 @@ func build(sources []string, dest string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	insert, err := tx.Prepare(`INSERT INTO places (name, kind, lat, lon, ele, population, rank)` +
-		` VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	insert, err := tx.Prepare(`INSERT INTO places (name, kind, lat, lon, ele, population, rank, notable)` +
+		` VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -128,7 +159,7 @@ func build(sources []string, dest string, out io.Writer) error {
 				return nil
 			}
 			seen[k] = struct{}{}
-			_, err = insert.Exec(r.name, r.kind, r.lat, r.lon, r.ele, r.population, r.rank)
+			_, err = insert.Exec(r.name, r.kind, r.lat, r.lon, r.ele, r.population, r.rank, r.notable)
 			return err
 		})
 		if err != nil {
@@ -140,20 +171,7 @@ func build(sources []string, dest string, out io.Writer) error {
 		return err
 	}
 
-	if err := execAll(db,
-		`DROP TABLE IF EXISTS places_fts`,
-		`CREATE VIRTUAL TABLE places_fts USING fts5(
-            name,
-            content='places',
-            content_rowid='id',
-            tokenize="unicode61 remove_diacritics 2"
-        )`,
-		`INSERT INTO places_fts (rowid, name) SELECT id, name FROM places`,
-		// Distance ranking is done in the client against the live viewport, so the only
-		// index worth carrying is the one FTS5 needs plus a rank index for tie-breaks.
-		`CREATE INDEX idx_places_rank ON places(rank DESC)`,
-		`VACUUM`,
-	); err != nil {
+	if err := finishIndex(db); err != nil {
 		return err
 	}
 	return report(db, out)
@@ -236,6 +254,9 @@ type place struct {
 	ele        any // float64, or nil for NULL
 	population any // int64, or nil for NULL
 	rank       int64
+	// 1 for a feature with a Wikidata item: the one notability signal every summit can
+	// carry, used to choose which summits the global fallback index holds (cut.go).
+	notable int64
 }
 
 // placeRow turns one feature into a row, ok=false to skip it. A line that is not a
@@ -284,6 +305,9 @@ func placeRow(line []byte) (place, bool, error) {
 		r.population = pop
 	}
 	r.rank = kindRank[kind] + min(pop/1000, 40)
+	if wd, ok := rawjson.String(props["wikidata"]); ok && wd != "" {
+		r.notable = 1
+	}
 	return r, true, nil
 }
 

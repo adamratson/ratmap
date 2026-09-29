@@ -695,13 +695,19 @@ stage_terrain-features() {
 }
 
 stage_places() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/places.sqlite" ]; then
+  # Built means both outputs: a places.sqlite from before the region indexes existed is
+  # not a finished stage, and skipping it would leave every region without its index.
+  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/places.sqlite" ] \
+     && compgen -G "$DIST_DIR/regions/*/*-places-1.sqlite" >/dev/null; then
     log "places: already built — --force to redo"
     return 0
   fi
   PLACES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-places.sh"
-  log "places.sqlite is app-shell, not a bucket artifact — copy it into public/data/"
-  log "  (upload.sh deliberately skips it; see infra/README.md)"
+  # Two kinds of output. The region indexes (regions/<id>/<id>-places-1.sqlite) are
+  # bucket artifacts like the archives beside them: the manifest stage lists them and
+  # upload.sh publishes them. places.sqlite, the global fallback, is app shell.
+  log "places: region indexes are under dist/regions/ and publish with the manifest;"
+  log "  places.sqlite is the app's fallback — copy it into public/data/ (upload.sh skips it)"
 }
 
 # Region ids from the catalogue. With an argument, only those opting into that key —

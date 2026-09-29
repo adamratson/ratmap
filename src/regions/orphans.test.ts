@@ -31,6 +31,18 @@ describe('regionIdOf', () => {
     expect(regionIdOf('us-alaska-e-terrain.pmtiles')).toBe('us-alaska-e');
   });
 
+  it('reads versioned kinds and search indexes as their region', () => {
+    // A trailing number is the kind's version, not the kind: these were once read as
+    // regions called "aragon-avalanche" and "x-peaks".
+    expect(regionIdOf('aragon-avalanche-1.pmtiles')).toBe('aragon');
+    expect(regionIdOf('scotland-peaks-1.pmtiles')).toBe('scotland');
+    expect(regionIdOf('morocco-places-1.sqlite')).toBe('morocco');
+    expect(regionIdOf('morocco-places-1.sqlite.part')).toBe('morocco');
+    // …while a number that belongs to the id stays with it.
+    expect(regionIdOf('alaska-e-2-basemap.pmtiles')).toBe('alaska-e-2');
+    expect(regionIdOf('alaska-e-2-places-1.sqlite')).toBe('alaska-e-2');
+  });
+
   it('reads a partial download as its region', () => {
     expect(regionIdOf('scotland-terrain.pmtiles.part')).toBe('scotland');
   });

@@ -67,6 +67,26 @@ beforeEach(() => {
 });
 
 describe('addRegionToMap', () => {
+  it('leaves a search index to search, not to the map', async () => {
+    const map = fakeMap();
+    const withIndex: Region = {
+      ...region,
+      artifacts: [
+        ...region.artifacts,
+        { kind: 'places', filename: 'lochaber-places-1.sqlite', path: 'p4', bytes: 1 },
+      ],
+    };
+
+    await addRegionToMap(map as unknown as MLMap, registry, withIndex, 'light');
+
+    // Registered as an archive, a SQLite file would be read as a broken PMTiles header
+    // the moment anything asked it for tiles.
+    const registered = vi.mocked(registry.addLocal).mock.calls.map(([file]) => (file as File).name);
+    expect(registered).not.toContain('lochaber-places-1.sqlite');
+    expect(registered).toContain('lochaber-basemap.pmtiles');
+    expect([...map.sources].some((id) => id.includes('places'))).toBe(false);
+  });
+
   it('never adds a background layer for a region', async () => {
     const map = fakeMap();
 

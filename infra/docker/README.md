@@ -147,7 +147,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `sac` | `build-sac.sh` over all 8 continents → `sac-global.pmtiles` (SAC hiking grades) | minutes: its `tags-filter` reads the shared subset, about a tenth of the 85 GB source. The tiling itself is minutes too (~921 k ways planet-wide, ~400 MB out) |
 | `paths` | `build-paths.sh` — tiles each continent separately, caches the tilesets under `/work/cache/paths-tiles`, `tile-join`s them → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | hours. 82 M ways planet-wide; the filter pass alone was 29 min on 12 cpus against the full source, which it now reads from the shared subset instead. **Resumable**: a re-run skips continents already tiled, so an interrupted stage costs one continent, not the planet. `RATMAP_PATHS_PARALLEL` tiles several at once, up to 3, sized to the host |
 | `terrain-features` | `build-terrain-features.sh` over all 8 continents → `terrain-features-global.pmtiles` (scree, shingle, rock, boulders — `natural=` values Protomaps' OSM ingestion drops) | like `sac`, a `tags-filter` over the shared subset; tiling is minutes (~826 k features planet-wide by taginfo's count, ~5 MB out for Scotland+Montenegro alone in local testing) |
-| `places` | `build-places.sh` over all 8 continents → `places.sqlite` | hours, the memory-hungry one |
+| `places` | `build-places.sh` over all 8 continents → a search index per region under `regions/<id>/`, and `places.sqlite`, the app's fallback | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue. 16 range requests per extract (`REGION_DOWNLOAD_THREADS`), terrain downloading alongside the basemap. `RATMAP_REGIONS_PARALLEL` builds several regions at once, up to 4, sized to the host |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true` — each region traced in 1° cells at ~1 GB a cell, whatever its size; two regions at a time, the box's cells split between them (`RATMAP_CONTOURS_PARALLEL`, `RATMAP_CONTOURS_CELL_WORKERS`) | the slowest by far. Its 30 m DEMs are fetched ahead of the builds (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2) and cached, and `avalanche` reuses them for every region that has both |
 | `manifest` | `build-manifest.sh` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | seconds when little changed: sha256s are cached by size, mtime and inode in `dist/.manifest-sha256-cache.json`, so only new or rebuilt archives are hashed. A first run hashes everything, 2 threads (`MANIFEST_HASH_WORKERS`, 1 for a spinning disk) |
@@ -554,8 +554,9 @@ docker compose run --rm infra upload.sh
 `.dockerignore` keeps `.env` and `dist/` out of the image; credentials never go into a
 layer.
 
-Remember `places.sqlite` is app-shell, not a bucket artifact — `upload.sh` skips it by
-design. Copy it into the app yourself:
+Remember `places.sqlite`, the search fallback, is app-shell, not a bucket artifact —
+`upload.sh` skips it by design (the per-region indexes beside the archives it does
+publish). Copy it into the app yourself:
 
 ```sh
 cp ../dist/places.sqlite ../../public/data/places.sqlite

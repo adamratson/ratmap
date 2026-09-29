@@ -3,7 +3,7 @@ import { formatElevation } from '../overlays/peaks';
 import { compassBearing, distanceMetres, formatDistance } from '../routes/geo';
 import type { StatusCentre } from '../ui/status';
 import { parseLatLng } from './coords';
-import { PlacesSearch, type SearchResult } from './search';
+import { PlacesSearch, type RegionIndex, type SearchResult } from './search';
 
 // The search box in the sheet's peek row (C9: local FTS5, no geocoding API).
 
@@ -16,6 +16,11 @@ export interface SearchBoxOptions {
   status: Pick<StatusCentre, 'toast'>;
   /** A typed-in coordinate pair was chosen. */
   onCoordinates: (coords: { lat: number; lng: number }) => void;
+  /**
+   * The search indexes of the regions on this device (regionSearchIndexes). Asked before
+   * every search, so a region downloaded or deleted since is searched, or not, at once.
+   */
+  regionIndexes?: () => RegionIndex[];
 }
 
 export class SearchBox {
@@ -24,6 +29,7 @@ export class SearchBox {
   private readonly map: MLMap;
   private readonly status: Pick<StatusCentre, 'toast'>;
   private readonly onCoordinates: (coords: { lat: number; lng: number }) => void;
+  private readonly regionIndexes: () => RegionIndex[];
   private readonly search = new PlacesSearch();
   private seq = 0;
 
@@ -43,6 +49,7 @@ export class SearchBox {
     this.map = options.map;
     this.status = options.status;
     this.onCoordinates = options.onCoordinates;
+    this.regionIndexes = options.regionIndexes ?? (() => []);
 
     this.input.addEventListener('input', () => {
       void this.run(this.input.value);
@@ -163,6 +170,11 @@ export class SearchBox {
       this.status.toast(`Search is unavailable: ${(err as Error).message}`, { kind: 'warn' });
       return;
     }
+    // Never fatal: an index that will not open is logged and skipped inside, and the rest
+    // still answer.
+    await this.search.syncRegions(this.regionIndexes()).catch((err: Error) => {
+      console.error('Could not open the downloaded regions’ search indexes', err);
+    });
 
     // A slower earlier keystroke must not overwrite a newer result set.
     if (seq !== this.seq) return;
@@ -236,7 +248,12 @@ export class SearchBox {
     if (results.length === 0) {
       const empty = document.createElement('li');
       empty.className = 'search-empty';
-      empty.textContent = 'No matches';
+      // Without a downloaded region, only the fallback is searched: cities, towns and the
+      // best-known summits. Saying so turns "search is broken" into what to do about it.
+      empty.textContent =
+        this.search.regionCount() === 0
+          ? 'No matches. Villages and smaller summits come with a downloaded region.'
+          : 'No matches';
       this.results.append(empty);
       this.showResults();
       return;

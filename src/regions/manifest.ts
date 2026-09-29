@@ -60,6 +60,16 @@ export interface RegionManifest {
   regions: Region[];
 }
 
+/**
+ * Whether an artifact is a tile archive the map draws from. The one kind that is not is a
+ * region's search index (`places`, a SQLite file), which search reads and the map must
+ * never register as an archive. Decided by the file, not by a list of kinds, so a kind
+ * added later is drawn or not according to what it actually is.
+ */
+export function isTileArchive(artifact: RegionArtifact): boolean {
+  return artifact.filename.endsWith('.pmtiles');
+}
+
 export function artifactUrl(artifact: RegionArtifact): string {
   return `${TILES_BASE_URL}/${artifact.path}`;
 }

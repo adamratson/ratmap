@@ -33,7 +33,7 @@ changed.
 ./scripts/build-peaks.sh           # natural=peak|volcano|saddle + mountain_pass=yes
 ./scripts/build-sac.sh             # sac-global.pmtiles — SAC hiking grades T1-T6
 ./scripts/build-paths.sh           # paths-global.pmtiles — the walkable network at z12-13
-./scripts/build-places.sh          # places.sqlite — offline FTS5 search index (C9)
+./scripts/build-places.sh          # search indexes (C9): one per region, and the app's fallback
 ```
 
 All were run for real (2026-08-21) against small/coarse inputs to verify the commands are
@@ -188,18 +188,25 @@ the extract size, the reduce step 17 MB, tippecanoe 172 MB at 259 k features and
 so if it lowers the number — including when you asked for more, since the host is what it
 is. On a 4 GB box that means 1, which is what this stage used to be everywhere.
 
-### Search index is app-shell, not a bucket artifact
+### Search indexes: one per region, and the app's fallback
 
-`places.sqlite` lands in `dist/` like everything else, but it does **not** get uploaded to
-the bucket — copy it into the app instead, where the service worker precaches it so search
-works on a cold offline start:
+`build-places.sh` builds the planet's full index in its work directory — a few hundred MB,
+too big to ship — and writes two kinds of cut from it (`tools/cmd/build-places-db/cut.go`):
+
+- `dist/regions/<id>/<id>-places-1.sqlite`, every place and summit in the region. A region
+  artifact like its archives: `build-manifest.sh` lists it as kind `places`, `upload.sh`
+  publishes it, and the app downloads it with the region and searches it from OPFS.
+- `dist/places.sqlite`, the global fallback for search before any region is downloaded:
+  the largest cities and towns, and the highest summits with a Wikidata item. It does
+  **not** get uploaded — copy it into the app, where the service worker precaches it so
+  search works on a cold offline start:
 
 ```sh
 cp dist/places.sqlite ../public/data/places.sqlite
 ```
 
-§3 puts the places index in OPFS long-term; Phase 4 should move it there per region and
-keep this copy as the "no region downloaded yet" fallback.
+`build-places.sh` refuses a fallback over the 6 MiB the service worker precaches a file
+up to; `build-places-db --fallback-places / --fallback-summits` set its size.
 
 ```sh
 ./scripts/vendor-assets.sh         # C7: glyphs + sprites -> ../public, not dist/

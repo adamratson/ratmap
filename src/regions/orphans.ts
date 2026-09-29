@@ -14,7 +14,8 @@ import { deleteArtifact, getArtifactFile, listArtifactNames, partialName } from 
 // finer subdivision, or dropped when a catalogue is regenerated. The app has to be able to
 // clean up after that.
 
-const ARCHIVE_SUFFIX = '.pmtiles';
+/** Every kind of file a region downloads: its tile archives, and its search index. */
+const ARTIFACT_SUFFIXES = ['.pmtiles', '.sqlite'];
 
 export interface OrphanRegion {
   /** Region id recovered from the filename — there is no display name to recover. */
@@ -27,19 +28,23 @@ export interface OrphanRegion {
 /**
  * The region id a downloaded artifact belongs to, or null if the name isn't ours.
  *
- * Filenames are `<region-id>-<kind>.pmtiles` (C3), and ids themselves contain hyphens —
- * `far-eastern-fed-district-n40e110-basemap.pmtiles`. The kind is the part after the last
- * hyphen, which holds for every kind the pipeline emits and any future one that is a
- * single word.
+ * Filenames are `<region-id>-<kind>.pmtiles`, or `<region-id>-<kind>-<version>` before the
+ * extension for the kinds that carry one (`-peaks-1.pmtiles`, `-places-1.sqlite`) — C3.
+ * Ids themselves contain hyphens — `far-eastern-fed-district-n40e110-basemap.pmtiles`,
+ * `alaska-e-2-basemap.pmtiles` — so the kind is the last word that is not a version
+ * number, and the id is everything before it.
  *
  * Anything unrecognised returns null and is left strictly alone. This code deletes files;
  * guessing at names it does not understand is how it would delete something else's.
  */
 export function regionIdOf(filename: string): string | null {
   const name = filename.endsWith('.part') ? filename.slice(0, -'.part'.length) : filename;
-  if (!name.endsWith(ARCHIVE_SUFFIX)) return null;
+  const suffix = ARTIFACT_SUFFIXES.find((candidate) => name.endsWith(candidate));
+  if (!suffix) return null;
 
-  const stem = name.slice(0, -ARCHIVE_SUFFIX.length);
+  let stem = name.slice(0, -suffix.length);
+  const version = /-\d+$/.exec(stem);
+  if (version) stem = stem.slice(0, version.index);
   const split = stem.lastIndexOf('-');
   if (split <= 0 || split === stem.length - 1) return null;
 

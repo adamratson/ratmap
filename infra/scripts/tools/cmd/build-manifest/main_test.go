@@ -1,11 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/binary"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 // testdata/valid.pmtiles is a real archive (Liechtenstein's avalanche layer). The checks
@@ -58,6 +61,9 @@ func TestArtifactKind(t *testing.T) {
 		"x-peaks-1.pmtiles":                   "peaks",
 		".scotland-contours.building.pmtiles": "",
 		"scotland-contours.pmtiles":           "contours",
+		"scotland-places-1.sqlite":            "places",
+		"scotland-places.sqlite":              "",
+		"scotland-places-1.sqlite.building":   "",
 	} {
 		if got := artifactKind(name); got != want {
 			t.Errorf("%s: %q, want %q", name, got, want)
@@ -102,5 +108,36 @@ func TestCacheSkipsAFileThatChangedWhileHashed(t *testing.T) {
 	back := loadHashCache(dir)
 	if e, ok := back.entries["regions/x/x-basemap.pmtiles"]; !ok || e.SHA256 != "digest-of-one" || e != c.entries["regions/x/x-basemap.pmtiles"] {
 		t.Fatalf("read back %+v", back.entries)
+	}
+}
+
+// A real database passes; a truncated or padded copy, a zeroed one and a non-database do
+// not — the ways an interrupted copy of a search index looks.
+func TestCheckSQLite(t *testing.T) {
+	dir := t.TempDir()
+	good := filepath.Join(dir, "good.sqlite")
+	db, err := sql.Open("sqlite", good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE places (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO places (name) VALUES ('Ben Nevis')`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if err := checkSQLite(good); err != nil {
+		t.Fatalf("a real database: %v", err)
+	}
+	data, _ := os.ReadFile(good)
+	for name, bad := range map[string][]byte{
+		"truncated": data[:len(data)-1],
+		"padded":    append(append([]byte(nil), data...), 0),
+		"zeroed":    make([]byte, len(data)),
+		"text":      []byte("<html>not found</html>"),
+	} {
+		path := filepath.Join(dir, name+".sqlite")
+		os.WriteFile(path, bad, 0o644)
+		if err := checkSQLite(path); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

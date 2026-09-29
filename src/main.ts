@@ -39,6 +39,7 @@ import { addRouteLayers } from './routes/route-layers';
 import { RoutePlanner, type RouteSummary } from './routes/route-planner';
 import { renderRoutePanel, renderRoutesSheet, type RoutesUiDeps } from './routes/routes-ui';
 import { renderPlacesSheet } from './search/places-view';
+import { regionSearchIndexes } from './search/region-indexes';
 import { SearchBox } from './search/search-view';
 import { setUpCompass } from './ui/compass';
 import { renderLayersView } from './ui/layers-view';
@@ -476,6 +477,8 @@ const searchBox = new SearchBox({
   // came from has nothing more to offer.
   onCoordinates: (coords) =>
     showCoordsSheet(new maplibregl.LngLat(coords.lng, coords.lat), { focus: true }),
+  // Every downloaded region's own index, beside the global fallback — see search.ts.
+  regionIndexes: () => regionSearchIndexes(coverage.downloadedRegions()),
 });
 
 // --- Location ----------------------------------------------------------------------

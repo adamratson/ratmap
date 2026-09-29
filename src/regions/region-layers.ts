@@ -2,7 +2,7 @@ import type { FilterSpecification, Map as MLMap, VectorTileSource } from 'maplib
 import { MAP_FONTS, mapInk, ratmapFlavor, type MapInk } from '../map/flavor';
 import type { Theme } from '../ui/theme';
 import { basemapLayersWithBareRock, TOWN_LABEL_LAYER_ID } from '../map/landuse';
-import type { Region } from './manifest';
+import { isTileArchive, type Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 import {
@@ -232,6 +232,8 @@ export async function addRegionToMap(
   const basemapPathsMin = Math.max(hasLowZoomPaths ? BASEMAP_PATHS_MIN_ZOOM : 12, minzoom);
 
   for (const artifact of region.artifacts) {
+    // A search index is read by search, not drawn (src/search/search.ts).
+    if (!isTileArchive(artifact)) continue;
     const file = await getArtifactFile(artifact.filename);
     if (!file) continue;
 

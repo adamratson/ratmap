@@ -37,10 +37,11 @@ s3_head_size() {
 shopt -s nullglob globstar
 
 # Keys mirror the path under dist/, so region artifacts land at
-# regions/<id>/<id>-<kind>.pmtiles — matching the `path` recorded in manifest.json.
-# places.sqlite is deliberately excluded: it ships inside the app bundle and is
-# service-worker precached, not fetched from the bucket (see infra/README.md).
-mapfile -t files < <(cd "$DIST_DIR" && ls -1 **/*.pmtiles *.pmtiles 2>/dev/null | sort -u)
+# regions/<id>/<id>-<kind>.pmtiles, and a region's search index at
+# regions/<id>/<id>-places-1.sqlite — matching the `path` recorded in manifest.json. The
+# top-level places.sqlite is deliberately excluded: it is the global fallback, which ships
+# inside the app bundle and is service-worker precached, not fetched from the bucket.
+mapfile -t files < <(cd "$DIST_DIR" && ls -1 **/*.pmtiles *.pmtiles regions/*/*-places-*.sqlite 2>/dev/null | sort -u)
 
 if [ "${#files[@]}" -eq 0 ]; then
   echo "Nothing in $DIST_DIR to upload — run the build-*.sh scripts first" >&2

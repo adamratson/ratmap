@@ -55,11 +55,10 @@ export const COPERNICUS_ATTRIBUTION =
 export const TERRAIN_ATTRIBUTION =
   '<a href="https://mapterhorn.com/attribution" target="_blank" rel="noreferrer">© Mapterhorn</a>';
 
-// The FTS5 search index (C9). Shipped in public/ and precached by the service worker
-// rather than fetched from the bucket, because Phase 2's acceptance test requires search
-// to work on a cold offline start — a bucket fetch would need its own download+cache flow
-// to survive that. §3 puts the places index in OPFS long-term; Phase 4 moves it there
-// per-region, at which point this becomes the fallback for "no region downloaded yet".
+// The global fallback search index (C9): the largest cities and towns and the best-known
+// summits, for search before any region is downloaded. Shipped in public/ and precached
+// by the service worker, so search works on a cold offline start. Each downloaded region
+// brings its own full index, kept in OPFS beside its archives (src/search/search.ts).
 // Refresh with: infra/scripts/build-places.sh && cp infra/dist/places.sqlite public/data/
 export const PLACES_DB_URL = `${window.location.origin}${import.meta.env.BASE_URL}data/places.sqlite`;
 

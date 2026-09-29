@@ -246,8 +246,10 @@ checked in a real browser (headless Chromium against the production build). Note
   needs COOP/COEP headers, which GitHub Pages cannot set.
 - **`places.sqlite` ships in `public/`** and is service-worker precached, rather than
   living in OPFS as §3 describes. That is what makes search work on a cold offline start
-  *before* any region download exists. Phase 3 should move it to OPFS per region and leave
-  this as the no-region-yet fallback.
+  *before* any region download exists. (Since 2026-09-28 each region carries its own
+  index, `<id>-places-1.sqlite`, downloaded with it into OPFS, and this copy is the
+  no-region-yet fallback: cities, towns and notable summits only. See
+  `infra/README.md`, "Search indexes".)
 - **Offline tile rendering is not durably solved yet, and cannot be until Phase 3.** In the
   offline cold-start test the basemap did render labelled tiles — but from the browser's
   ordinary HTTP cache, which is evictable and not a guarantee. Hillshade and peaks did not

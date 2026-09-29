@@ -6,13 +6,19 @@ import type { StatusCentre } from '../ui/status';
 // is covered by search.test.ts. Here only what the box does with a result matters.
 const searchImpl = vi.hoisted(() => ({
   fail: null as Error | null,
+  empty: false,
+  regions: 0,
+  synced: [] as unknown[],
 }));
 
 vi.mock('./search', () => ({
   PlacesSearch: class {
     load = vi.fn(async () => {});
+    syncRegions = vi.fn(async (indexes: unknown[]) => void searchImpl.synced.push(indexes));
+    regionCount = () => searchImpl.regions;
     search = vi.fn(() => {
       if (searchImpl.fail) throw searchImpl.fail;
+      if (searchImpl.empty) return [];
       return [{ name: 'Ben Nevis', kind: 'peak', ele: 1345, lat: 56.797, lon: -5.004 }];
     });
   },
@@ -47,7 +53,18 @@ describe('SearchBox focus after choosing a result', () => {
     } as unknown as MLMap;
     toast = vi.fn();
     searchImpl.fail = null;
-    new SearchBox({ container, input, results, map, status: { toast }, onCoordinates });
+    searchImpl.empty = false;
+    searchImpl.regions = 0;
+    searchImpl.synced = [];
+    new SearchBox({
+      container,
+      input,
+      results,
+      map,
+      status: { toast },
+      onCoordinates,
+      regionIndexes: () => [{ filename: 'lochaber-places-1.sqlite', read: async () => null }],
+    });
   });
 
   afterEach(() => {
@@ -100,5 +117,26 @@ describe('SearchBox focus after choosing a result', () => {
 
     expect(toast).toHaveBeenCalledWith('Search failed: SQLITE_ERROR: fts5 syntax error', { kind: 'warn' });
     expect(results.hidden).toBe(true);
+  });
+
+  it('searches the downloaded regions’ indexes, asked for afresh each time', async () => {
+    await typeAndWaitForResults('ben');
+    input.value = 'ben n';
+    input.dispatchEvent(new Event('input'));
+    await vi.waitFor(() => expect(searchImpl.synced).toHaveLength(2));
+    expect(searchImpl.synced[1]).toEqual([expect.objectContaining({ filename: 'lochaber-places-1.sqlite' })]);
+  });
+
+  it('says where villages come from when nothing matches and no region is downloaded', async () => {
+    searchImpl.empty = true;
+    await typeAndWaitForResults('imlil');
+    expect(results.textContent).toBe('No matches. Villages and smaller summits come with a downloaded region.');
+  });
+
+  it('says only "No matches" once regions are being searched', async () => {
+    searchImpl.empty = true;
+    searchImpl.regions = 1;
+    await typeAndWaitForResults('zzz');
+    expect(results.textContent).toBe('No matches');
   });
 });

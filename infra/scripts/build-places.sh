@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# Builds places.sqlite — the offline search index (C9: local FTS5, no geocoding API,
-# no key or quota, queries never leave the device).
+# Builds the offline search indexes (C9: local FTS5, no geocoding API, no key or quota,
+# queries never leave the device):
+#
+#   dist/regions/<id>/<id>-places-1.sqlite   one per catalogue region, published beside its
+#                                            archives and downloaded with them
+#   dist/places.sqlite                       the global fallback the app ships (public/data/)
 #
 # Same OSM sources as the peaks build; this extracts settlements *and* summits so one
-# search box covers both ("Fort William" and "Ben Nevis").
+# search box covers both ("Fort William" and "Ben Nevis"). The planet's full index is a few
+# hundred MB — too big to ship or to hold in a phone's memory — so it stays in WORK_DIR and
+# only the cuts from it leave (tools/cmd/build-places-db/cut.go).
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_cmd osmium
 require_cmd go
@@ -49,15 +55,26 @@ for f in "${geojsons[@]}"; do
   normalized+=("$f.norm")
 done
 
-# Go (tools/cmd/build-places-db), the port of build-places-db.py: the same database, and
-# it streams rows into SQLite rather than holding them all first. Built from this checkout
-# (lib.sh).
+# Go (tools/cmd/build-places-db); it streams rows into SQLite rather than holding them all
+# first. Built from this checkout (lib.sh).
 echo "==> building build-places-db"
 PLACES_DB_BIN="$(go_tool build-places-db "$WORK_DIR")"
 
-OUT="$DIST_DIR/places.sqlite"
-rm -f "$OUT"
-"$PLACES_DB_BIN" "${normalized[@]}" "$OUT"
+FALLBACK="$DIST_DIR/places.sqlite"
+rm -f "$FALLBACK"
+"$PLACES_DB_BIN" --regions "$INFRA_DIR/regions.json" --regions-out "$DIST_DIR" --fallback "$FALLBACK" \
+  "${normalized[@]}" "$WORK_DIR/places-full.sqlite"
 
-ls -lh "$OUT"
-echo "Built $OUT"
+# The service worker precaches files up to 6 MiB (vite.config.ts,
+# maximumFileSizeToCacheInBytes) and silently leaves out anything bigger — which would
+# make search fail on an offline start with nothing said. Refused here instead.
+PRECACHE_LIMIT=$((6 * 1024 * 1024))
+FALLBACK_BYTES="$(wc -c < "$FALLBACK" | tr -d ' ')"
+if [ "$FALLBACK_BYTES" -gt "$PRECACHE_LIMIT" ]; then
+  echo "FAIL: $FALLBACK is $FALLBACK_BYTES bytes, over the app shell's $PRECACHE_LIMIT-byte precache" >&2
+  echo "      limit. Lower build-places-db's --fallback-places / --fallback-summits." >&2
+  exit 1
+fi
+
+ls -lh "$FALLBACK"
+echo "Built $FALLBACK (copy into public/data/) and the region indexes under $DIST_DIR/regions/"

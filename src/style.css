@@ -1094,8 +1094,8 @@ textarea {
 }
 
 /* The planning chip is a mode, not a destination — coloured to say so, and to make the
-   mode visible even when the sheet is at rest. */
-.chip.chip-mode.active {
+   mode visible even when the sheet is at rest, or showing another view. */
+.chip.chip-mode {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-text);

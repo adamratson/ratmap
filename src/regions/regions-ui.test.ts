@@ -274,17 +274,38 @@ describe('a catalogue that covers the globe', () => {
     expect(names(container)).toEqual(['Polynésie française']);
   });
 
-  it('does not redraw over a running download', async () => {
-    // The redraw would replace the Cancel button and progress bar of a row that is still
-    // working with a Download button that starts the whole thing again.
-    downloadsInFlightMock.mockReturnValue(1);
+  it('keeps a running download in the list, Cancel and all, as the map moves', async () => {
+    // The list used to stop following the map for the whole of a download instead:
+    // redrawing it threw away the row's Cancel and progress bar and left a button that
+    // started the download a second time.
+    const { downloadRegion, DownloadCancelled } = await import('./downloader');
+    vi.mocked(downloadRegion).mockImplementation(
+      (_region, options) =>
+        new Promise((_resolve, reject) =>
+          options.signal.addEventListener('abort', () => reject(new DownloadCancelled())),
+        ),
+    );
+    const onStatus = vi.fn();
     const gps = pannable(-4.5, 56.8);
-    const container = await openSheet(gps.map);
+    const container = await openSheet(gps.map, onStatus);
+    const action = (): HTMLButtonElement =>
+      container.querySelector<HTMLButtonElement>('.region-row .region-action')!;
+    action().click();
+    await vi.waitFor(() => expect(action().textContent).toBe('Cancel'));
 
     gps.panTo(43, 42);
 
-    expect(names(container)[0]).toBe('Scotland');
-    downloadsInFlightMock.mockReturnValue(0);
+    // Georgia is what the map is over now, but Scotland stays: its row holds the Cancel.
+    expect(names(container).slice(0, 2)).toEqual(['Scotland', 'Georgia']);
+    expect(action().textContent).toBe('Cancel');
+
+    action().click();
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/^Paused Scotland/), 'warn'),
+    );
+    expect(downloadRegion).toHaveBeenCalledTimes(1);
+    vi.mocked(downloadRegion).mockReset();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
   it('stops listening once the sheet is gone', async () => {
@@ -599,6 +620,177 @@ describe('download progress', () => {
     expect(bar.getAttribute('aria-valuetext')).toBe(
       container.querySelector('.region-progress-label')!.textContent,
     );
+  });
+});
+
+describe('a download outliving the sheet that started it', () => {
+  // The sheet is redrawn on every search keystroke, every reopening and every pan. A
+  // download held only by the row that started it outlived that row: the new one read
+  // Resume, with no progress and no Cancel, while the download ran on unseen.
+  //
+  // Its own region: the progressbar test above leaves Lochaber downloading for good.
+  const ARRAN: Region = {
+    id: 'arran',
+    name: 'Arran',
+    bbox: [-5.4, 55.4, -5.0, 55.8],
+    totalBytes: 60_000_000,
+    artifacts: [{ kind: 'basemap', filename: 'arran-basemap.pmtiles', bytes: 60_000_000 }],
+  } as unknown as Region;
+
+  const action = (container: HTMLElement): HTMLButtonElement =>
+    container.querySelector<HTMLButtonElement>('.region-action')!;
+
+  beforeEach(() => {
+    findOrphansMock.mockResolvedValue([]);
+    fetchManifestMock.mockResolvedValue({ regions: [ARRAN] });
+    regionStatusesMock.mockResolvedValue(new Map());
+    readStorageMock.mockResolvedValue({ persisted: true, availableBytes: 1e12 });
+  });
+
+  afterEach(async () => {
+    const { downloadRegion } = await import('./downloader');
+    vi.mocked(downloadRegion).mockReset();
+    // Let the redraw a finished download starts run out before the next test's sheet.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    document.body.innerHTML = '';
+    vi.clearAllMocks();
+  });
+
+  /** Start Arran downloading: halfway there, and running until it is cancelled. */
+  async function startArran(onStatus = vi.fn()) {
+    const { downloadRegion, DownloadCancelled } = await import('./downloader');
+    vi.mocked(downloadRegion).mockImplementation(
+      (_region, options) =>
+        new Promise((_resolve, reject) => {
+          options.onProgress?.({
+            regionId: ARRAN.id,
+            receivedBytes: 30_000_000,
+            totalBytes: 60_000_000,
+            currentArtifact: 'basemap',
+            done: false,
+            bytesPerSecond: null,
+            etaSeconds: null,
+          });
+          options.signal.addEventListener('abort', () => reject(new DownloadCancelled()));
+        }),
+    );
+    const container = await openSheet({}, onStatus);
+    action(container).click();
+    await vi.waitFor(() => expect(action(container).textContent).toBe('Cancel'));
+    return { container, onStatus, downloadRegion };
+  }
+
+  it('is shown as it stands, Cancel and all, when the sheet is opened again', async () => {
+    const { onStatus, downloadRegion } = await startArran();
+
+    // Closing the sheet and opening it again draws every row afresh.
+    const reopened = await openSheet({}, onStatus);
+
+    expect(action(reopened).textContent).toBe('Cancel');
+    expect(reopened.querySelector<HTMLElement>('.region-progress')!.hidden).toBe(false);
+    expect(reopened.querySelector('.region-progress-label')!.textContent).toBe('30.0 MB of 60.0 MB');
+
+    action(reopened).click();
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/^Paused Arran/), 'warn'),
+    );
+    // Cancelled — not started a second time from a stale Resume.
+    expect(downloadRegion).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps its Cancel through a search of the list', async () => {
+    const { container, onStatus } = await startArran();
+    const search = container.querySelector<HTMLInputElement>('.regions-search')!;
+    search.value = 'arr';
+    search.dispatchEvent(new Event('input'));
+
+    expect(action(container).textContent).toBe('Cancel');
+
+    action(container).click();
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/^Paused Arran/), 'warn'),
+    );
+  });
+
+  it('starts once, however fast the button is tapped', async () => {
+    const { downloadRegion, DownloadCancelled } = await import('./downloader');
+    vi.mocked(downloadRegion).mockImplementation(
+      (_region, options) =>
+        new Promise((_resolve, reject) =>
+          options.signal.addEventListener('abort', () => reject(new DownloadCancelled())),
+        ),
+    );
+    let storageChecked!: (snapshot: unknown) => void;
+    readStorageMock.mockReturnValue(new Promise((resolve) => (storageChecked = resolve)));
+    const container = await openSheet();
+
+    // Both taps land while the storage check is still out.
+    action(container).click();
+    action(container).click();
+    storageChecked({ persisted: true, availableBytes: 1e12 });
+
+    await vi.waitFor(() => expect(downloadRegion).toHaveBeenCalled());
+    expect(downloadRegion).toHaveBeenCalledTimes(1);
+    // Leave nothing running for the tests after this one.
+    action(container).click();
+  });
+
+  it('shows up in the row drawn while its storage check was still out', async () => {
+    // A keystroke or a pan between the tap and the start redraws the list. The download
+    // must report to the row now on screen, or that row reads Download — and a tap on it
+    // cancels.
+    const { downloadRegion, DownloadCancelled } = await import('./downloader');
+    vi.mocked(downloadRegion).mockImplementation(
+      (_region, options) =>
+        new Promise((_resolve, reject) =>
+          options.signal.addEventListener('abort', () => reject(new DownloadCancelled())),
+        ),
+    );
+    let storageChecked!: (snapshot: unknown) => void;
+    readStorageMock.mockReturnValue(new Promise((resolve) => (storageChecked = resolve)));
+    const onStatus = vi.fn();
+    const container = await openSheet({}, onStatus);
+
+    action(container).click();
+    const search = container.querySelector<HTMLInputElement>('.regions-search')!;
+    search.value = 'arr';
+    search.dispatchEvent(new Event('input'));
+    storageChecked({ persisted: true, availableBytes: 1e12 });
+
+    await vi.waitFor(() => expect(action(container).textContent).toBe('Cancel'));
+    action(container).click();
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/^Paused Arran/), 'warn'),
+    );
+  });
+
+  it('does not draw the list over another view when it finishes', async () => {
+    const { downloadRegion } = await import('./downloader');
+    let finish!: () => void;
+    vi.mocked(downloadRegion).mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    const onRegionsChanged = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+    await renderRegionsSheet({
+      map: {} as MLMap,
+      registry: {} as never,
+      theme: () => 'light',
+      container,
+      onStatus: vi.fn(),
+      onRegionsChanged,
+    });
+    action(container).click();
+    await vi.waitFor(() => expect(action(container).textContent).toBe('Cancel'));
+
+    // Someone opens a summit card while it runs: the same sheet body, another view.
+    container.innerHTML = '<h2>Ben Nevis</h2>';
+    fetchManifestMock.mockClear();
+    finish();
+
+    await vi.waitFor(() => expect(onRegionsChanged).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(container.innerHTML).toBe('<h2>Ben Nevis</h2>');
+    expect(fetchManifestMock).not.toHaveBeenCalled();
   });
 });
 

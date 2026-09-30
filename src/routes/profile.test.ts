@@ -27,6 +27,29 @@ describe('profileSampleCoords', () => {
     expect(pathLengthMetres(coords)).toBeCloseTo(pathLengthMetres(long), -1);
   });
 
+  // Both of these used to spin forever, synchronously, and a timeout cannot interrupt that:
+  // if they regress, the run hangs rather than fails.
+  it('samples a recorded track that already has more points than the cap', () => {
+    // A GPX track: 3000 points, one every ~3 m, ~9 km.
+    const track: LngLat[] = Array.from({ length: 3000 }, (_, i) => [-5 + i * 0.00005, 56.8]);
+    const coords = profileSampleCoords(track);
+
+    // Back at the DEM's own spacing, not every wiggle of the GPS trace.
+    expect(coords.length).toBe(Math.ceil(pathLengthMetres(track) / SAMPLE_SPACING_M) + 1);
+    expect(coords[0]).toEqual(track[0]);
+    expect(coords[coords.length - 1]).toEqual(track[track.length - 1]);
+    expect(pathLengthMetres(coords)).toBeCloseTo(pathLengthMetres(track), -1);
+  });
+
+  it('holds a long, dense track to the cap', () => {
+    // 10,000 points over ~140 km: past the cap on vertices and on length.
+    const track: LngLat[] = Array.from({ length: 10_000 }, (_, i) => [-5, 56 + i * 0.000126]);
+    const coords = profileSampleCoords(track);
+
+    expect(coords).toHaveLength(2500);
+    expect(coords[coords.length - 1]).toEqual(track[track.length - 1]);
+  });
+
   it('handles a single point and an empty route', () => {
     expect(profileSampleCoords([START])).toEqual([START]);
     expect(profileSampleCoords([])).toEqual([]);

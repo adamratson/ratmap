@@ -1,4 +1,4 @@
-import { densify, distanceMetres, type LngLat } from './geo';
+import { densify, distanceMetres, pathLengthMetres, resamplePath, type LngLat } from './geo';
 
 // Elevation profile maths. Pure: takes coordinates and their sampled heights, returns the
 // profile and the ascent/descent totals. No DEM reading, no map — see terrain-sampler.ts
@@ -65,6 +65,16 @@ const ASCENT_THRESHOLD_M = 5;
 export function profileSampleCoords(coords: readonly LngLat[]): LngLat[] {
   if (coords.length === 0) return [];
   if (coords.length === 1) return [coords[0]];
+
+  // Already past the cap on vertices alone — a recorded GPX track, one point every few
+  // metres, or a long planned route. Widening below cannot help: densify never drops a
+  // vertex, so that loop only ends once the count is down to the route's own, and for this
+  // route that is never. It spun forever and froze the app on import. Resample at even
+  // steps instead: still the whole route, at the DEM's spacing where the cap allows it.
+  if (coords.length > MAX_SAMPLES) {
+    const steps = Math.ceil(pathLengthMetres(coords) / SAMPLE_SPACING_M);
+    return resamplePath(coords, Math.min(MAX_SAMPLES - 1, Math.max(1, steps)));
+  }
 
   let spacing = SAMPLE_SPACING_M;
   let sampled = densify(coords, spacing);

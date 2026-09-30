@@ -9,6 +9,7 @@ import {
   nearestPointOnPath,
   pathLengthMetres,
   pointAlongPath,
+  resamplePath,
   type LngLat,
 } from './geo';
 
@@ -156,6 +157,51 @@ describe('densify', () => {
       [0.0001, 0],
     ];
     expect(densify(short, 1000)).toEqual(short);
+  });
+});
+
+describe('resamplePath', () => {
+  /** An L: 1 km east along the equator, then 1 km north. */
+  const bend: LngLat[] = [
+    [0, 0],
+    [0.009, 0],
+    [0.009, 0.009],
+  ];
+
+  it('returns exactly segments + 1 points, however many vertices went in', () => {
+    const dense: LngLat[] = Array.from({ length: 5000 }, (_, i) => [i * 0.00001, 0]);
+    expect(resamplePath(dense, 99)).toHaveLength(100);
+    expect(resamplePath(bend, 4)).toHaveLength(5);
+  });
+
+  it('keeps the original endpoints exactly', () => {
+    const out = resamplePath(bend, 7);
+    expect(out[0]).toEqual(bend[0]);
+    expect(out[out.length - 1]).toEqual(bend[2]);
+  });
+
+  it('steps evenly along the line, round a corner included', () => {
+    // Four steps of 500 m: the middle one lands on the corner rather than cutting across it.
+    const out = resamplePath(bend, 4);
+    expect(out[2][0]).toBeCloseTo(0.009, 6);
+    expect(out[2][1]).toBeCloseTo(0, 6);
+    for (let i = 1; i < out.length; i++) {
+      expect(distanceMetres(out[i - 1], out[i])).toBeCloseTo(pathLengthMetres(bend) / 4, 0);
+    }
+  });
+
+  it('survives a line with no length', () => {
+    const still: LngLat[] = [
+      [1, 1],
+      [1, 1],
+      [1, 1],
+    ];
+    expect(resamplePath(still, 3)).toEqual([
+      [1, 1],
+      [1, 1],
+      [1, 1],
+      [1, 1],
+    ]);
   });
 });
 

@@ -44,6 +44,13 @@ export interface Destination {
   open: () => void;
 }
 
+/** The route mode's chip: which mode is on, and the way back to its panel. */
+export interface PlanChip {
+  mode: 'Planning' | 'Following';
+  /** Show the route panel again, from whatever the sheet is showing instead. */
+  open: () => void;
+}
+
 export class SheetViews {
   private readonly sheet: BottomSheet;
   private readonly chipsHost: HTMLElement;
@@ -53,13 +60,13 @@ export class SheetViews {
   private current: View | null = null;
 
   /**
-   * Whether the `plan` view is planning or following.
+   * Whether a route is being planned or followed, and which — null when neither.
    *
    * They are different modes with different rules — one takes map taps as waypoints, the
    * other does not — so the peek row has to name which one is on, or the mode is invisible
    * whenever the sheet is at rest.
    */
-  private planMode: 'Planning' | 'Following' = 'Planning';
+  private plan: PlanChip | null = null;
 
   constructor(options: {
     sheet: BottomSheet;
@@ -84,8 +91,10 @@ export class SheetViews {
     this.renderChips();
   }
 
-  setPlanMode(mode: 'Planning' | 'Following'): void {
-    this.planMode = mode;
+  setPlan(plan: PlanChip | null): void {
+    const changed = plan?.mode !== this.plan?.mode;
+    this.plan = plan;
+    if (changed) this.renderChips();
   }
 
   /**
@@ -157,10 +166,18 @@ export class SheetViews {
     // Planning is a mode, not a destination: it is entered from the routes list and left
     // with Done, so its chip only exists while it is on. Without it the mode is invisible
     // at peek, and a tap on the map silently means something different.
-    if (this.current === 'plan') {
-      const chip = chipEl('plan', this.planMode, true, () =>
-        this.sheet.detent() === 'peek' ? this.sheet.open('content') : this.sheet.collapse(),
-      );
+    //
+    // It stays while another view is open, too, and brings the panel back. It used to go
+    // with the panel, and the only way back was the GPS dragging the panel over whatever
+    // was showing — on every fix.
+    if (this.plan) {
+      const plan = this.plan;
+      const showing = this.current === 'plan';
+      const chip = chipEl('plan', plan.mode, showing, () => {
+        if (!showing) plan.open();
+        else if (this.sheet.detent() === 'peek') this.sheet.open('content');
+        else this.sheet.collapse();
+      });
       chip.classList.add('chip-mode');
       this.chipsHost.append(chip);
     }

@@ -310,20 +310,35 @@ const planner = new RoutePlanner({
     };
   },
   onChange: (summary: RouteSummary) => {
+    const starting = !routeInProgress;
     routeInProgress = summary.active || summary.following;
-    views.setPlanMode(summary.following ? 'Following' : 'Planning');
+    views.setPlan(
+      routeInProgress
+        ? { mode: summary.following ? 'Following' : 'Planning', open: openPlanView }
+        : null,
+    );
 
-    if (routeInProgress) {
+    if (!routeInProgress) {
+      if (views.view() === 'plan') views.close();
+    } else if (starting || views.view() === 'plan') {
+      // Redrawn where it is, but only brought back over another view when a route starts.
+      // This fires on every GPS fix, and re-opening the panel each time meant a summit
+      // card, Layers, anything opened while planning or following was replaced within a
+      // second. The mode chip is the way back to the panel now.
+      //
       // views.open only moves the sheet when the view *changes*, so the re-render fired by
       // every waypoint drag redraws the panel without hauling the sheet back over a map
       // the user has just dragged it off.
       views.open('plan', (body) => renderRoutePanel(summary, routesUi(body)));
-    } else if (views.view() === 'plan') {
-      views.close();
     }
   },
   onStatus: (message, kind) => status.toast(message, { kind }),
 });
+
+/** Show the route panel — from the routes list, the mode chip, or a tap that edits the route. */
+function openPlanView(): void {
+  views.open('plan', (body) => renderRoutePanel(planner.summary(), routesUi(body)));
+}
 
 /**
  * The routes UI's dependencies, bound to wherever it is being asked to draw.
@@ -335,7 +350,7 @@ function routesUi(container: HTMLElement = sheet.body): RoutesUiDeps {
   return {
     planner,
     container,
-    onPlanStarted: () => views.open('plan', (body) => renderRoutePanel(planner.summary(), routesUi(body))),
+    onPlanStarted: openPlanView,
     onPlanFinished: () => planner.deactivate(),
     onStatus: (message, kind) => status.toast(message, { kind }),
     onUndoableStatus: (message, action) => status.toast(message, { action }),
@@ -355,8 +370,12 @@ map.on('click', (e) => {
   peakTooltip.hide();
 
   // While planning, a tap places a waypoint instead of opening a summit — including a tap
-  // on a summit, which becomes a named waypoint rather than a detail sheet.
-  if (planner.handleMapClick(e)) return;
+  // on a summit, which becomes a named waypoint rather than a detail sheet. It brings the
+  // panel back if another view is up, so the edit is seen.
+  if (planner.handleMapClick(e)) {
+    if (views.view() !== 'plan') openPlanView();
+    return;
+  }
 
   const hit = peakAt(map, e.point);
   if (hit) {
@@ -393,21 +412,21 @@ function showCoordsSheet(lngLat: maplibregl.LngLat, { focus = false } = {}): voi
 // wired the same way route-planner.ts wires waypoint removal.
 map.on('contextmenu', (e) => {
   e.preventDefault();
-  if (planner.isActive()) return;
+  if (planner.isEditing()) return;
   showCoordsSheet(e.lngLat);
 });
 
 onPressHold(map.getCanvasContainer(), {
   onHold: (point) => {
-    if (planner.isActive()) return;
+    if (planner.isEditing()) return;
     const rect = map.getCanvasContainer().getBoundingClientRect();
     showCoordsSheet(map.unproject([point.x - rect.left, point.y - rect.top]));
   },
 });
 
 map.on('mousemove', (e) => {
-  // Planning mode owns the cursor (crosshair); don't fight it over summits.
-  if (planner.isActive()) return;
+  // Editing a route owns the cursor (crosshair); don't fight it over summits.
+  if (planner.isEditing()) return;
 
   const hit = peakAt(map, e.point);
   map.getCanvas().style.cursor = hit || sacPathAt(map, e.point) ? 'pointer' : '';

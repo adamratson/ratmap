@@ -39,12 +39,48 @@ export interface RoutesUiDeps {
 export function renderRoutePanel(summary: RouteSummary, deps: RoutesUiDeps): void {
   const { container, planner, onStatus } = deps;
 
+  // Redrawn on every GPS fix while a route is open, not only on edits — so whatever the
+  // user is in the middle of has to survive it: a name half-typed into the save form, and
+  // which control has keyboard focus. Both were thrown away within a second, so a route
+  // could not be saved with the location dot on.
+  const carried = carryOver(container);
+
   container.innerHTML = '';
   container.append(
     summary.following
       ? followSection(summary, planner)
-      : planSection(summary, planner, deps, onStatus),
+      : planSection(summary, planner, deps, onStatus, carried.save),
   );
+
+  if (carried.focusKey) {
+    const target = container.querySelector<HTMLElement>(`[data-focus-key="${carried.focusKey}"]`);
+    target?.focus({ preventScroll: true });
+    if (target instanceof HTMLInputElement && carried.save) {
+      target.setSelectionRange(carried.save.selectionStart, carried.save.selectionEnd);
+    }
+  }
+}
+
+/** What the save form held when the panel was last drawn. */
+interface SaveFormState {
+  value: string;
+  selectionStart: number | null;
+  selectionEnd: number | null;
+}
+
+/** Read off the panel about to be replaced — see renderRoutePanel. */
+function carryOver(container: HTMLElement): { save: SaveFormState | null; focusKey: string | null } {
+  const input = container.querySelector<HTMLInputElement>('.route-save-form input');
+  const focused = document.activeElement;
+  return {
+    save: input
+      ? { value: input.value, selectionStart: input.selectionStart, selectionEnd: input.selectionEnd }
+      : null,
+    focusKey:
+      focused instanceof HTMLElement && container.contains(focused)
+        ? (focused.dataset.focusKey ?? null)
+        : null,
+  };
 }
 
 function planSection(
@@ -52,6 +88,7 @@ function planSection(
   planner: RoutePlanner,
   deps: RoutesUiDeps,
   onStatus: RoutesUiDeps['onStatus'],
+  carriedSave: SaveFormState | null,
 ): HTMLElement {
   const section = el('div', 'route-panel-body');
 
@@ -144,6 +181,11 @@ function planSection(
   actions.append(clear);
 
   section.append(actions);
+
+  // Carried over from the panel this one replaces. Only while the route can still be
+  // saved: an edit that left a leg pending would otherwise let the form save a route with
+  // a hole in it, which is why an edit has always closed the form.
+  if (carriedSave && ready) openSaveForm(section, planner, deps, onStatus, carriedSave);
 
   return section;
 }
@@ -332,11 +374,16 @@ function followFigure(label: string, value: string): HTMLDivElement {
   return group;
 }
 
+/**
+ * @param carried what the form held before a redraw replaced it. Focus and selection are
+ *   put back by renderRoutePanel, once the section is in the document to take them.
+ */
 function openSaveForm(
   section: HTMLElement,
   planner: RoutePlanner,
   deps: RoutesUiDeps,
   onStatus: RoutesUiDeps['onStatus'],
+  carried?: SaveFormState,
 ): void {
   if (section.querySelector('.route-save-form')) return;
 
@@ -345,8 +392,9 @@ function openSaveForm(
 
   const input = document.createElement('input');
   input.type = 'text';
-  input.value = planner.getName();
+  input.value = carried ? carried.value : planner.getName();
   input.setAttribute('aria-label', 'Route name');
+  input.dataset.focusKey = 'route-name';
   form.append(input);
 
   const confirm = document.createElement('button');
@@ -364,6 +412,7 @@ function openSaveForm(
   });
 
   section.append(form);
+  if (carried) return;
   input.focus();
   input.select();
 }
@@ -618,6 +667,8 @@ function buttonEl(label: string, onClick: () => void): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = label;
+  // Lets focus follow a button to its replacement when the panel is redrawn under it.
+  button.dataset.focusKey = label;
   button.addEventListener('click', onClick);
   return button;
 }

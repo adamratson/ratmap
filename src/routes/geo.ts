@@ -173,6 +173,43 @@ export function densify(coords: readonly LngLat[], spacingM: number): LngLat[] {
   return out;
 }
 
+/**
+ * `segments + 1` points at even steps along a polyline, both ends included.
+ *
+ * The counterpart to {@link densify} for a line with too many vertices rather than too few:
+ * densify keeps every vertex it is given, so it can add points but never shed them, and a
+ * recorded GPS track carries one every few metres. This bounds the count exactly, whatever
+ * the input — the steps are measured along the line, so the whole of it is covered.
+ */
+export function resamplePath(coords: readonly LngLat[], segments: number): LngLat[] {
+  const steps = Math.floor(segments);
+  if (coords.length < 2 || !(steps >= 1)) return [...coords];
+
+  const lengths: number[] = [];
+  for (let i = 1; i < coords.length; i++) lengths.push(distanceMetres(coords[i - 1], coords[i]));
+  const step = lengths.reduce((total, length) => total + length, 0) / steps;
+
+  const out: LngLat[] = [coords[0]];
+  // `segment` is the index of the vertex ending the segment being walked, and `walked` the
+  // distance along the line to the vertex that starts it.
+  let segment = 1;
+  let walked = 0;
+  for (let k = 1; k < steps; k++) {
+    const target = k * step;
+    while (segment < coords.length - 1 && walked + lengths[segment - 1] < target) {
+      walked += lengths[segment - 1];
+      segment += 1;
+    }
+    const length = lengths[segment - 1];
+    const t = length === 0 ? 0 : clamp((target - walked) / length, 0, 1);
+    const a = coords[segment - 1];
+    const b = coords[segment];
+    out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+  }
+  out.push(coords[coords.length - 1]);
+  return out;
+}
+
 export type Bbox = [number, number, number, number];
 
 /** Bounding box of a set of points, as [west, south, east, north]. */

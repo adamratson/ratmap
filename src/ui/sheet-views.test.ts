@@ -73,6 +73,28 @@ describe('SheetViews', () => {
     expect(sheet.body.getAttribute('aria-label')).toBe('Add to Home Screen');
   });
 
+  it('keeps the route mode chip while another view is open, as the way back to the panel', () => {
+    const openPlan = vi.fn();
+    views.setPlan({ mode: 'Planning', open: openPlan });
+    views.open('layers', () => {});
+
+    const chip = chipsHost.querySelector<HTMLButtonElement>('[data-chip="plan"]')!;
+    expect(chip.textContent).toBe('Planning');
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+
+    chip.click();
+    expect(openPlan).toHaveBeenCalledOnce();
+  });
+
+  it('names the mode as it changes, and drops the chip when it ends', () => {
+    views.setPlan({ mode: 'Planning', open: () => {} });
+    views.setPlan({ mode: 'Following', open: () => {} });
+    expect(chipsHost.querySelector('[data-chip="plan"]')!.textContent).toBe('Following');
+
+    views.setPlan(null);
+    expect(chipsHost.querySelector('[data-chip="plan"]')).toBeNull();
+  });
+
   it('still honours a detent passed alongside focus', () => {
     views.open('legend', () => {}, { detent: 'full', focus: true });
 

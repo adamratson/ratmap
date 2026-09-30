@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderRoutePanel } from './routes-ui';
 import type { RoutePlanner, RouteSummary } from './route-planner';
 
@@ -143,6 +143,67 @@ describe('the planning panel', () => {
 
       expect(planner.undo).toHaveBeenCalledOnce();
     });
+  });
+});
+
+describe('redrawing the panel under someone using it', () => {
+  // The panel is redrawn on every GPS fix while a route is open, not only on edits. With
+  // the location dot on, the save form — and whatever had been typed into it — was gone
+  // within a second, so a route could not be saved at all.
+  function mount() {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const panelDeps = {
+      ...deps(container),
+      planner: { getName: () => '8.20 km route' } as unknown as RoutePlanner,
+    };
+    const draw = (summary: Partial<RouteSummary> = {}) =>
+      renderRoutePanel({ ...BASE, ...summary }, panelDeps);
+    draw();
+    return { container, draw };
+  }
+
+  const nameInput = (container: HTMLElement) =>
+    container.querySelector<HTMLInputElement>('.route-save-form input');
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('keeps a half-typed name, where the cursor was, through a redraw', () => {
+    const { container, draw } = mount();
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Save')!.click();
+    nameInput(container)!.value = 'Ben Nevis by the arête';
+    nameInput(container)!.setSelectionRange(4, 4);
+
+    draw({ currentDistanceM: 1200 }); // a GPS fix
+
+    const input = nameInput(container);
+    expect(input?.value).toBe('Ben Nevis by the arête');
+    expect(document.activeElement).toBe(input);
+    expect(input?.selectionStart).toBe(4);
+  });
+
+  it('closes the form once the route no longer stands to be saved', () => {
+    // An edit leaves a leg pending; saving then would store a route with a hole in it.
+    const { container, draw } = mount();
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Save')!.click();
+
+    draw({ pendingLegs: 1 });
+
+    expect(nameInput(container)).toBeNull();
+  });
+
+  it('keeps keyboard focus on the button it was on', () => {
+    const { container, draw } = mount();
+    [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((b) => b.textContent === 'Undo')!
+      .focus();
+
+    draw({ currentDistanceM: 1200 });
+
+    expect((document.activeElement as HTMLElement).textContent).toBe('Undo');
+    expect(container.contains(document.activeElement)).toBe(true);
   });
 });
 

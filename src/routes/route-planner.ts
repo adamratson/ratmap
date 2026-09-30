@@ -175,6 +175,19 @@ export class RoutePlanner {
     return this.follower !== null;
   }
 
+  /**
+   * Whether taps and drags on the map edit the route: planning, and not following it.
+   *
+   * Following is the screen used one-handed and glanced at, and the follower tracks the
+   * route as it stood when following began. Left editable, a stray tap added a waypoint —
+   * redrawing the route while the follower kept to the old one, on a screen with no Undo —
+   * and a tap on the line of an imported GPX split it and re-routed both halves, replacing
+   * the track itself.
+   */
+  isEditing(): boolean {
+    return this.active && this.follower === null;
+  }
+
   getDraft(): RouteDraft {
     return this.draft;
   }
@@ -195,19 +208,24 @@ export class RoutePlanner {
     if (this.active) return;
     addRouteLayers(this.map, this.theme());
     this.active = true;
-    this.map.getCanvas().style.cursor = 'crosshair';
-    // Markers are built with `draggable` fixed at creation time, so leaving them alone
-    // here would give a just-opened planner a route whose waypoints refuse to move.
-    this.renderMarkers();
+    this.syncEditing();
     this.emit();
   }
 
   deactivate(): void {
     if (!this.active) return;
     this.active = false;
-    this.map.getCanvas().style.cursor = '';
-    this.renderMarkers();
+    this.syncEditing();
     this.emit();
+  }
+
+  /** Bring the cursor and the markers into line with {@link isEditing}. */
+  private syncEditing(): void {
+    this.map.getCanvas().style.cursor = this.isEditing() ? 'crosshair' : '';
+    // Markers are built with `draggable` fixed at creation time, so leaving them alone
+    // here would give a just-opened planner a route whose waypoints refuse to move — or a
+    // followed one whose waypoints still do.
+    this.renderMarkers();
   }
 
   /**
@@ -233,7 +251,7 @@ export class RoutePlanner {
    * must not require a successful snap, or editing with no usable network is impossible.
    */
   handleMapClick(event: MapMouseEvent): boolean {
-    if (!this.active) return false;
+    if (!this.isEditing()) return false;
 
     // A tap that landed on an existing waypoint is about that waypoint, not about adding
     // another one on top of it. Both checks are needed: the target guard covers a plain
@@ -290,6 +308,9 @@ export class RoutePlanner {
 
   /** Replace the draft with a saved or imported route. */
   load(route: LoadableRoute): void {
+    // The follower holds the route it started on; it must not go on tracking that one
+    // under a different route drawn on the map.
+    this.stopFollowing();
     this.inflight?.abort();
     this.inflight = null;
     this.loadedRouteId = route.id ?? null;
@@ -364,6 +385,7 @@ export class RoutePlanner {
     this.follower = new RouteFollower(coords);
     this.followState = null;
     void this.wakeLock.acquire();
+    this.syncEditing();
     this.emit();
   }
 
@@ -373,6 +395,7 @@ export class RoutePlanner {
     this.followState = null;
     void this.wakeLock.release();
     setOffRouteLine(this.map, null, null);
+    this.syncEditing();
     this.emit();
   }
 
@@ -673,7 +696,7 @@ export class RoutePlanner {
       pin.textContent = String(index + 1);
       element.append(pin);
 
-      const marker = new maplibregl.Marker({ element, draggable: this.active })
+      const marker = new maplibregl.Marker({ element, draggable: this.isEditing() })
         .setLngLat([waypoint.lng, waypoint.lat])
         .addTo(this.map);
 
@@ -687,7 +710,7 @@ export class RoutePlanner {
       // interface. Right-click is the desktop convention and still works...
       element.addEventListener('contextmenu', (event) => {
         event.preventDefault();
-        if (!this.active) return;
+        if (!this.isEditing()) return;
         this.removeWaypoint(waypoint.id);
       });
 
@@ -701,7 +724,7 @@ export class RoutePlanner {
           onCancel: () => element.classList.remove('holding'),
           onHold: () => {
             element.classList.remove('holding');
-            if (!this.active) return;
+            if (!this.isEditing()) return;
             this.suppressClickUntil = Date.now() + CLICK_SUPPRESSION_MS;
             this.removeWaypoint(waypoint.id);
           },

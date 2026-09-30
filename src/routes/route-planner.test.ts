@@ -454,6 +454,43 @@ describe('following a route', () => {
     expect(planner.isFollowing()).toBe(false);
     expect(fakes.wakeLock.release).toHaveBeenCalled();
   });
+
+  it('takes a tap on the map as a tap, not a waypoint, while following', () => {
+    // A stray tap used to add a waypoint: the route on the map changed under the follower,
+    // which kept tracking the old one, on a screen with no Undo.
+    planner.load({ name: 'x', coords });
+    planner.activate();
+    planner.startFollowing();
+
+    expect(planner.handleMapClick(click(CIC_HUT))).toBe(false);
+    expect(planner.getDraft().waypointCount).toBe(2);
+
+    planner.stopFollowing();
+    expect(planner.handleMapClick(click(CIC_HUT))).toBe(true);
+  });
+
+  it('pins the waypoints while following, and frees them after', () => {
+    planner.load({ name: 'x', coords });
+    planner.activate();
+    const draggable = () => fakes.markers.slice(-2).map((marker) => marker.options.draggable);
+    expect(draggable()).toEqual([true, true]);
+
+    planner.startFollowing();
+    expect(draggable()).toEqual([false, false]);
+
+    planner.stopFollowing();
+    expect(draggable()).toEqual([true, true]);
+  });
+
+  it('stops following when a different route is opened', () => {
+    planner.load({ name: 'x', coords });
+    planner.startFollowing();
+
+    planner.load({ name: 'y', coords: [SUMMIT, CIC_HUT] });
+
+    expect(planner.isFollowing()).toBe(false);
+    expect(fakes.wakeLock.release).toHaveBeenCalled();
+  });
 });
 
 describe('suggested names', () => {

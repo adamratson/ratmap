@@ -11,10 +11,10 @@ import {
 import {
   deleteRegion,
   downloadRegion,
-  downloadsInFlight,
   regionStatuses,
   DownloadCancelled,
   DownloadStalled,
+  type DownloadProgress,
   type RegionDiskState,
 } from './downloader';
 import { addRegionToMap, removeRegionFromMap } from './region-layers';
@@ -47,6 +47,61 @@ const MAX_RESULTS = 40;
  * list on every pan.
  */
 let stopFollowingMap: (() => void) | null = null;
+
+/** The parts of a region's row that show a download. */
+interface RowParts {
+  action: HTMLButtonElement;
+  progress: HTMLElement;
+  bar: HTMLElement;
+  label: HTMLElement;
+}
+
+/** A download under way, held apart from any one drawing of the sheet. */
+interface RunningDownload {
+  controller: AbortController;
+  /** The latest report, so a row drawn part-way through starts from where it has got to. */
+  progress: DownloadProgress | null;
+}
+
+/**
+ * Downloads in progress, by region id.
+ *
+ * Kept here rather than in the row that started one. The sheet is redrawn on every search
+ * keystroke, every time it is reopened and as the map pans, and a download held only by
+ * its row's own closures outlived the row: the new row read Resume, with no progress and
+ * no Cancel, while the download ran on unseen — holding the screen awake and the app
+ * update back — and a tap on that Resume started a second download of the same files.
+ */
+const running = new Map<string, RunningDownload>();
+
+/** Regions whose storage checks are under way, so a second tap cannot start a second. */
+const starting = new Set<string>();
+
+/**
+ * The row drawn most recently for each region, which is where its download reports —
+ * whichever drawing of the sheet the download was started from.
+ */
+const rows = new Map<string, RowParts>();
+
+interface DrawnSheet {
+  container: HTMLElement;
+  list: HTMLUListElement;
+  deps: RegionsUiDeps;
+}
+
+/**
+ * The sheet as last drawn, for a download or delete finishing to redraw.
+ *
+ * Only while it is still showing: every view draws into the same sheet body, and a
+ * download that finished while someone was reading a summit card, or planning a route,
+ * drew the regions list straight over it.
+ */
+let currentSheet: DrawnSheet | null = null;
+
+function refreshSheet(): void {
+  if (!currentSheet?.container.contains(currentSheet.list)) return;
+  void renderRegionsSheet(currentSheet.deps);
+}
 
 export interface RegionsUiDeps {
   map: MLMap;
@@ -190,10 +245,16 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   const notice = container.querySelector<HTMLParagraphElement>('.regions-notice')!;
   const search = container.querySelector<HTMLInputElement>('.regions-search')!;
   const list = container.querySelector<HTMLUListElement>('.regions-list')!;
+  currentSheet = { container, list, deps };
+
+  // After every wait below: has another view, or a later drawing of this one, taken the
+  // sheet body over in the meantime? Then there is nothing here left to draw into.
+  const replaced = (): boolean => !container.contains(list);
 
   // Up to MANIFEST_TIMEOUT_MS on a weak connection: say something meanwhile.
   hint.textContent = 'Loading regions…';
   const catalogue = await loadCatalogue();
+  if (replaced()) return;
   hint.textContent = '';
   if (catalogue.notice) {
     notice.textContent = catalogue.notice;
@@ -215,7 +276,7 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   }
 
   const statuses = await regionStatuses(manifest.regions);
-  const refresh = (): void => void renderRegionsSheet(deps);
+  if (replaced()) return;
 
   // What the list is currently showing. Panning across a region's interior produces the
   // same answer over and over, and rebuilding the rows each time would fight the thumb
@@ -234,9 +295,7 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
 
     hint.textContent = describe(shown.length, matches?.total ?? null);
     list.replaceChildren(
-      ...shown.map((region) =>
-        renderRegionRow(region, statuses.get(region.id) ?? ABSENT, deps, refresh),
-      ),
+      ...shown.map((region) => renderRegionRow(region, statuses.get(region.id) ?? ABSENT, deps)),
     );
   };
 
@@ -249,7 +308,10 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   // Deliberately outside `draw`, and never filtered by the search box. An orphan is
   // something the user cannot find by name — it is not in the catalogue to be searched —
   // so hiding it behind a query would leave it exactly as unreachable as before.
-  await renderOrphans(container, manifest.regions, deps, refresh);
+  await renderOrphans(container, manifest.regions, deps);
+  // Checked before touching the listener below, which belongs to whichever drawing is
+  // current: a stale one taking it over would leave the live list deaf to the map.
+  if (replaced()) return;
 
   // The nearby list answers "what covers the ground I am looking at", so it has to follow
   // the map. Otherwise it keeps answering for wherever the map happened to be when the
@@ -262,10 +324,9 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
       map.off?.('moveend', onMoveEnd);
       return;
     }
-    // A search answers by name, not by where you are. And a redraw mid-download would
-    // throw away the progress bar and the Cancel button of a row that is still working,
-    // leaving a Download button that starts the whole thing a second time.
-    if (search.value.trim() || downloadsInFlight() > 0) return;
+    // A search answers by name, not by where you are. A running download needs no
+    // holding back for: its row is redrawn with it, Cancel and all (see `running`).
+    if (search.value.trim()) return;
     draw('');
   };
   map.on?.('moveend', onMoveEnd);
@@ -276,19 +337,22 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
 }
 
 /**
- * What to show before anything is typed: everything already on the device, then the
- * regions covering where the map is pointed.
+ * What to show before anything is typed: everything already on the device, or on its way
+ * there, then the regions covering where the map is pointed.
  *
  * A downloaded region belongs at the top wherever it is in the world — it is the one row
  * whose button does something destructive, and hunting for it through a search box to
- * free up space would be absurd.
+ * free up space would be absurd. A downloading one likewise: its row holds the Cancel.
  */
 function nearbySelection(
   regions: Region[],
   statuses: Map<string, RegionDiskState>,
   centre: [number, number] | null,
 ): Region[] {
-  const held = regions.filter((region) => (statuses.get(region.id)?.state ?? 'absent') !== 'absent');
+  const held = regions.filter(
+    (region) =>
+      (statuses.get(region.id)?.state ?? 'absent') !== 'absent' || running.has(region.id),
+  );
   const heldIds = new Set(held.map((region) => region.id));
   const rest = regions.filter((region) => !heldIds.has(region.id));
 
@@ -389,7 +453,6 @@ async function renderOrphans(
   container: HTMLElement,
   regions: Region[],
   deps: RegionsUiDeps,
-  refresh: () => void,
 ): Promise<void> {
   const section = container.querySelector<HTMLDivElement>('.regions-orphans')!;
   const note = container.querySelector<HTMLParagraphElement>('.regions-orphans-note')!;
@@ -402,15 +465,11 @@ async function renderOrphans(
   note.textContent =
     `${formatBytes(total)} downloaded for ${orphans.length === 1 ? 'a region' : 'regions'} ` +
     'the catalogue no longer offers. The map does not use them.';
-  list.replaceChildren(...orphans.map((orphan) => renderOrphanRow(orphan, deps, refresh)));
+  list.replaceChildren(...orphans.map((orphan) => renderOrphanRow(orphan, deps)));
   section.hidden = false;
 }
 
-function renderOrphanRow(
-  orphan: OrphanRegion,
-  deps: RegionsUiDeps,
-  refresh: () => void,
-): HTMLLIElement {
+function renderOrphanRow(orphan: OrphanRegion, deps: RegionsUiDeps): HTMLLIElement {
   const item = document.createElement('li');
   item.className = 'region-row';
 
@@ -462,7 +521,7 @@ function renderOrphanRow(
         deps.onStatus(`Could not delete ${orphan.id}: ${(err as Error).message}`, 'error');
       }
       // Either way, redraw from what is actually on disk now.
-      refresh();
+      refreshSheet();
     })();
   });
 
@@ -473,12 +532,7 @@ function renderOrphanRow(
 /** A region with nothing of it on this device. */
 const ABSENT: RegionDiskState = { state: 'absent', present: [], missingBytes: 0 };
 
-function renderRegionRow(
-  region: Region,
-  disk: RegionDiskState,
-  deps: RegionsUiDeps,
-  refresh: () => void,
-): HTMLLIElement {
+function renderRegionRow(region: Region, disk: RegionDiskState, deps: RegionsUiDeps): HTMLLIElement {
   const status = disk.state;
   const item = document.createElement('li');
   item.className = 'region-row';
@@ -573,7 +627,7 @@ function renderRegionRow(
           deps.onStatus(`Could not delete all of ${region.name}: ${(err as Error).message}`, 'error');
         }
         deps.onRegionsChanged?.();
-        refresh();
+        refreshSheet();
       })();
     });
   } else {
@@ -581,18 +635,20 @@ function renderRegionRow(
     // region that gained an artifact updates, and everything else downloads.
     action.textContent =
       status === 'partial' ? 'Resume' : status === 'update' ? 'Update' : 'Download';
-    // The running download turns this same button into Cancel and installs its own
-    // listener for it — so this one has to stand down while that is in play, or a tap on
-    // Cancel would abort the download *and* immediately start a second one.
-    let running = false;
+    const row: RowParts = { action, progress, bar, label: progressLabel };
+    rows.set(region.id, row);
+
+    // Already downloading — started from an earlier drawing of this sheet. Shown as it
+    // is, Cancel and all, rather than as a Resume that would start it a second time.
+    const download = running.get(region.id);
+    if (download) showDownload(row, download.progress);
+
+    // One listener for both states, deciding at the moment of the tap: the row it was
+    // drawn for may have been replaced several times over since.
     action.addEventListener('click', () => {
-      if (running) return;
-      running = true;
-      void startDownload(region, deps, action, progress, bar, progressLabel, refresh).finally(
-        () => {
-          running = false;
-        },
-      );
+      const current = running.get(region.id);
+      if (current) current.controller.abort();
+      else void startDownload(region, deps);
     });
   }
 
@@ -600,15 +656,32 @@ function renderRegionRow(
   return item;
 }
 
-async function startDownload(
-  region: Region,
-  deps: RegionsUiDeps,
-  action: HTMLButtonElement,
-  progress: HTMLElement,
-  bar: HTMLElement,
-  progressLabel: HTMLElement,
-  refresh: () => void,
-): Promise<void> {
+/** Turn `row` into a running download's: Cancel, and progress from wherever it has got to. */
+function showDownload(row: RowParts, progress: DownloadProgress | null): void {
+  row.action.textContent = 'Cancel';
+  row.action.classList.add('danger');
+  row.progress.hidden = false;
+  row.label.hidden = false;
+  if (progress) showProgress(row, progress);
+  else row.label.textContent = 'Starting…';
+}
+
+function showProgress({ action, progress, bar, label }: RowParts, p: DownloadProgress): void {
+  const pct = p.totalBytes > 0 ? Math.min((p.receivedBytes / p.totalBytes) * 100, 100) : 0;
+  bar.style.width = `${pct.toFixed(1)}%`;
+  progress.setAttribute('aria-valuenow', String(Math.round(pct)));
+
+  const transferred = `${formatBytes(p.receivedBytes)} of ${formatBytes(p.totalBytes)}`;
+  // No ETA until the estimator has settled — before that it says nothing rather than
+  // quoting a number that would visibly halve on the next tick.
+  const remaining = p.etaSeconds === null ? '' : ` · ${formatDuration(p.etaSeconds)} left`;
+  label.textContent = `${transferred}${remaining}`;
+  progress.setAttribute('aria-valuetext', `${transferred}${remaining}`);
+  action.title = `${transferred}${remaining}`;
+}
+
+/** The checks a download has to pass before it starts. Says why when one refuses. */
+async function mayDownload(region: Region, deps: RegionsUiDeps): Promise<boolean> {
   // C1: both gates checked immediately before starting, not at page load — persistence
   // and free space can both change while the app is open.
   //
@@ -623,11 +696,11 @@ async function startDownload(
       `Couldn’t check storage before downloading ${region.name}: ${(err as Error).message}. Nothing was downloaded.`,
       'error',
     );
-    return;
+    return false;
   }
   if (!gate.allowed) {
     deps.onStatus(gate.message, 'warn');
-    return;
+    return false;
   }
 
   // The same principle as the C1 gate above, one level up: a region on the phone is no use
@@ -638,34 +711,35 @@ async function startDownload(
       `Not downloading ${region.name}: ratmap itself isn’t set up to open without signal yet, so the map would be on your phone but you couldn’t open it offline. Reopen ratmap with a connection, then try again.`,
       'warn',
     );
-    return;
+    return false;
   }
 
-  const controller = new AbortController();
-  action.textContent = 'Cancel';
-  action.classList.add('danger');
-  progress.hidden = false;
-  progressLabel.hidden = false;
-  progressLabel.textContent = 'Starting…';
+  return true;
+}
 
-  const onCancel = () => controller.abort();
-  action.addEventListener('click', onCancel);
+async function startDownload(region: Region, deps: RegionsUiDeps): Promise<void> {
+  if (starting.has(region.id) || running.has(region.id)) return;
+  starting.add(region.id);
+  try {
+    if (!(await mayDownload(region, deps))) return;
+  } finally {
+    starting.delete(region.id);
+  }
+
+  const download: RunningDownload = { controller: new AbortController(), progress: null };
+  running.set(region.id, download);
+  // The latest row, not necessarily the one tapped: a keystroke or a pan during the checks
+  // above redraws the list, and the tapped row is gone.
+  const shownIn = rows.get(region.id);
+  if (shownIn) showDownload(shownIn, null);
 
   try {
     await downloadRegion(region, {
-      signal: controller.signal,
+      signal: download.controller.signal,
       onProgress: (p) => {
-        const pct = p.totalBytes > 0 ? Math.min((p.receivedBytes / p.totalBytes) * 100, 100) : 0;
-        bar.style.width = `${pct.toFixed(1)}%`;
-        progress.setAttribute('aria-valuenow', String(Math.round(pct)));
-
-        const transferred = `${formatBytes(p.receivedBytes)} of ${formatBytes(p.totalBytes)}`;
-        // No ETA until the estimator has settled — before that it says nothing rather than
-        // quoting a number that would visibly halve on the next tick.
-        const remaining = p.etaSeconds === null ? '' : ` · ${formatDuration(p.etaSeconds)} left`;
-        progressLabel.textContent = `${transferred}${remaining}`;
-        progress.setAttribute('aria-valuetext', `${transferred}${remaining}`);
-        action.title = `${transferred}${remaining}`;
+        download.progress = p;
+        const row = rows.get(region.id);
+        if (row) showProgress(row, p);
       },
     });
 
@@ -705,8 +779,8 @@ async function startDownload(
       deps.onStatus(`Download failed: ${(err as Error).message}`, 'error');
     }
   } finally {
-    action.removeEventListener('click', onCancel);
+    running.delete(region.id);
     deps.onRegionsChanged?.();
-    refresh();
+    refreshSheet();
   }
 }

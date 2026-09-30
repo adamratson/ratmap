@@ -403,6 +403,34 @@ describe('app bootstrap', () => {
     expect(sheet.classList.contains('at-peek')).toBe(true);
   });
 
+  it('leaves another view up when a GPS fix arrives mid-route, with the mode chip as the way back', async () => {
+    // Every fix used to re-open the route panel: a summit card, Layers, anything opened
+    // while planning or following was replaced within a second.
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+    const planner = (
+      window as unknown as {
+        __ratmapPlanner: { activate(): void; updatePosition(position: [number, number]): void };
+      }
+    ).__ratmapPlanner;
+    const body = document.querySelector<HTMLElement>('.sheet-body')!;
+
+    planner.activate();
+    expect(body.getAttribute('aria-label')).toBe('Route planner');
+
+    [...document.querySelectorAll<HTMLButtonElement>('#chips .chip')]
+      .find((chip) => chip.textContent === 'Layers')!
+      .click();
+    planner.updatePosition([-4.5, 56.8]); // what every watchPosition fix does
+
+    expect(body.getAttribute('aria-label')).toBe('Map layers');
+    const modeChip = document.querySelector<HTMLButtonElement>('#chips [data-chip="plan"]')!;
+    expect(modeChip.textContent).toBe('Planning');
+
+    modeChip.click();
+    expect(body.getAttribute('aria-label')).toBe('Route planner');
+  });
+
   it('names the sheet contents, so it is not announced as an unlabelled region', async () => {
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
     await loadMainQuietly();

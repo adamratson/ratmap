@@ -279,7 +279,7 @@ export async function addRegionToMap(
             // it becomes unreliable and let contours carry the elevation story, which is
             // what a paper hill map does anyway.
             //
-            // Both stops dialled down 10% (0.5→0.45, 0.15→0.135) — the relief was
+            // Both stops dialled down 40% (0.5→0.3, 0.15→0.09) — the relief was
             // competing with the contour lines even before the smearing kicks in.
             //
             // Styling call, not a settled decision — §8.3 is still open.
@@ -288,9 +288,9 @@ export async function addRegionToMap(
               ['linear'],
               ['zoom'],
               10,
-              0.45,
+              0.3,
               14,
-              0.135,
+              0.09,
             ],
             'hillshade-highlight-color': ink.hillshadeHighlight,
             'hillshade-shadow-color': ink.hillshadeShadow,

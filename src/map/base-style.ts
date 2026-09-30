@@ -66,10 +66,10 @@ export function buildBaseStyle(theme: Theme, registry: TileSourceRegistry): Styl
         id: 'hillshade',
         type: 'hillshade',
         source: 'terrain',
-        // Style-spec default is 0.5; dialled down 10% to match the region hillshade's own
+        // Style-spec default is 0.5; dialled down 40% to match the region hillshade's own
         // reduction in region-layers.ts.
         paint: {
-          'hillshade-exaggeration': 0.45,
+          'hillshade-exaggeration': 0.3,
           'hillshade-highlight-color': mapInk(theme).hillshadeHighlight,
           'hillshade-shadow-color': mapInk(theme).hillshadeShadow,
         },

@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RoutePlanner } from './route-planner';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { toGpx } from './gpx';
+import type { LoadableRoute, RoutePlanner } from './route-planner';
 import type { SavedRoute } from './route-store';
 
 // The saved-routes list (renderRoutesSheet), with the IndexedDB-backed store stood in for.
@@ -123,5 +124,97 @@ describe('the saved routes list', () => {
     await render();
 
     expect(onStatus).toHaveBeenCalledWith('Could not read saved routes: IndexedDB unavailable', 'error');
+  });
+});
+
+describe('opening a route over the one being planned', () => {
+  // Opening used to discard whatever was being planned, with no way back.
+  let load: Mock<(route: LoadableRoute) => (() => boolean) | null>;
+
+  async function renderWith(putBack: (() => boolean) | null): Promise<void> {
+    load = vi.fn(() => putBack);
+    await renderRoutesSheet({
+      planner: { load, activate: vi.fn() } as unknown as RoutePlanner,
+      container,
+      onPlanStarted: vi.fn(),
+      onPlanFinished: vi.fn(),
+      onStatus,
+      onUndoableStatus,
+    });
+  }
+
+  async function importFile(text: string, name: string): Promise<void> {
+    const input = container.querySelector<HTMLInputElement>('.route-import input')!;
+    Object.defineProperty(input, 'files', { value: [new File([text], name)], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(load).toHaveBeenCalled());
+    await flush();
+  }
+
+  it('offers the replaced plan back when a saved route is opened', async () => {
+    const putBack = vi.fn(() => true);
+    await renderWith(putBack);
+
+    container.querySelector<HTMLButtonElement>('.route-open')!.click();
+
+    const [message, action] = onUndoableStatus.mock.calls[0];
+    expect(message).toBe('Opened “Ben Nevis”');
+    action.onSelect();
+    expect(putBack).toHaveBeenCalled();
+  });
+
+  it('says nothing when there was no plan to replace', async () => {
+    await renderWith(null);
+
+    container.querySelector<HTMLButtonElement>('.route-open')!.click();
+
+    expect(onUndoableStatus).not.toHaveBeenCalled();
+    expect(onStatus).not.toHaveBeenCalled();
+  });
+
+  it('says so when the Undo is declined, rather than looking as if it worked', async () => {
+    await renderWith(() => false);
+
+    container.querySelector<HTMLButtonElement>('.route-open')!.click();
+    onUndoableStatus.mock.calls[0][1].onSelect();
+
+    expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/^Can’t undo/), 'warn');
+  });
+
+  it('opens a file ratmap wrote as the legs it was planned as, with the replaced plan on Undo', async () => {
+    const coords: Array<[number, number]> = [
+      [-5.076, 56.8094],
+      [-5.04, 56.803],
+      [-5.0037, 56.7969],
+    ];
+    const gpx = toGpx({
+      name: 'Round',
+      coords,
+      legs: [
+        { coords: [coords[0], coords[1]], distanceM: 2400, kind: 'snapped', wayNames: [] },
+        { coords: [coords[1], coords[2]], distanceM: 2600, kind: 'straight', wayNames: [] },
+      ],
+    });
+    await renderWith(vi.fn(() => true));
+
+    await importFile(gpx, 'round.gpx');
+
+    const opened = load.mock.calls[0][0];
+    expect(opened.legs?.map((leg) => leg?.kind)).toEqual(['snapped', 'straight']);
+    expect(opened.waypoints).toHaveLength(3);
+    expect(onUndoableStatus).toHaveBeenCalledWith('Opened “Round”', expect.anything());
+  });
+
+  it('says plainly when an import with nothing to replace opens', async () => {
+    await renderWith(null);
+
+    await importFile(
+      '<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>' +
+        '<trkpt lat="56.8" lon="-5.07" /><trkpt lat="56.79" lon="-5.0" /></trkseg></trk></gpx>',
+      'walk.gpx',
+    );
+
+    expect(onStatus).toHaveBeenCalledWith('Opened “walk”', 'ok');
+    expect(onUndoableStatus).not.toHaveBeenCalled();
   });
 });

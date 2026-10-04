@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseGeoJson, parseGpx, parseRouteFile, toGeoJson, toGpx } from './gpx';
-import type { LngLat } from './geo';
+import { legSpans, parseGeoJson, parseGpx, parseRouteFile, RATMAP_GPX_NS, toGeoJson, toGpx } from './gpx';
+import { pathLengthMetres, type LngLat } from './geo';
 import type { Waypoint } from './route-model';
+import type { ComputedLeg } from './router';
 
 const COORDS: LngLat[] = [
   [-5.076, 56.8094],
@@ -52,6 +53,109 @@ describe('toGpx', () => {
     expect(parsed.coords[2][0]).toBeCloseTo(-5.0037, 6);
     expect(parsed.waypoints.map((w) => w.name)).toEqual(['Achintee', 'Ben Nevis']);
     expect(parsed.waypoints[1].ele).toBe(1345);
+  });
+
+  it('writes a waypoint’s height before its name, the order GPX 1.1 gives them', () => {
+    const gpx = toGpx({ name: 'Ben Nevis', coords: COORDS, waypoints: WAYPOINTS });
+    expect(gpx).toMatch(/<ele>1345\.0<\/ele>\s*<name>Ben Nevis<\/name>/);
+  });
+});
+
+describe('the legs a route was planned as', () => {
+  // Achintee → a waypoint on the path → Ben Nevis, the second leg a straight line because
+  // no route was found for it (C11). LINE is the two joined as RouteDraft.coordinates()
+  // joins them, sharing the vertex where they meet.
+  const A: LngLat = [-5.076, 56.8094];
+  const M: LngLat = [-5.06, 56.806];
+  const B: LngLat = [-5.04, 56.803];
+  const C: LngLat = [-5.0037, 56.7969];
+  const LINE: LngLat[] = [A, M, B, C];
+  const LEGS: ComputedLeg[] = [
+    { coords: [A, M, B], distanceM: pathLengthMetres([A, M, B]), kind: 'snapped', wayNames: ['Mountain Track'] },
+    { coords: [B, C], distanceM: pathLengthMetres([B, C]), kind: 'straight', wayNames: [] },
+  ];
+  const PLANNED: Waypoint[] = [
+    { id: 'a', lng: A[0], lat: A[1], name: 'Achintee' },
+    { id: 'b', lng: B[0], lat: B[1] },
+    { id: 'c', lng: C[0], lat: C[1], name: 'Ben Nevis', ele: 1345 },
+  ];
+
+  it('finds each leg in the line, the vertex two legs share counted once', () => {
+    expect(legSpans(LINE, LEGS)).toEqual([
+      { kind: 'snapped', start: 0, end: 2 },
+      { kind: 'straight', start: 2, end: 3 },
+    ]);
+  });
+
+  it('says nothing about legs that do not match the line — the line is what was saved (C10)', () => {
+    expect(legSpans([A, B, C], LEGS)).toBeNull();
+    expect(legSpans(LINE, [LEGS[0], null])).toBeNull();
+  });
+
+  it('writes them into the track, and keeps the track one segment', () => {
+    const gpx = toGpx({ name: 'Ben Nevis', coords: LINE, waypoints: PLANNED, legs: LEGS });
+
+    expect(gpx).toContain(`xmlns:ratmap="${RATMAP_GPX_NS}"`);
+    expect(gpx).toContain('<ratmap:leg kind="straight" start="2" end="3" />');
+    // A second segment would read as "signal lost here" to every other tool.
+    expect(gpx.match(/<trkseg>/g)).toHaveLength(1);
+    expect(gpx.match(/<trkpt /g)).toHaveLength(4);
+  });
+
+  it('come back from GPX as the same legs and waypoints, the straight one still straight (C11)', () => {
+    const parsed = parseGpx(toGpx({ name: 'Ben Nevis', coords: LINE, waypoints: PLANNED, legs: LEGS }));
+
+    expect(parsed.legs?.map((leg) => leg.kind)).toEqual(['snapped', 'straight']);
+    expect(parsed.legs?.map((leg) => leg.coords)).toEqual([
+      [A, M, B],
+      [B, C],
+    ]);
+    expect(parsed.waypoints.map((w) => [w.lng, w.lat])).toEqual([A, B, C]);
+    expect(parsed.waypoints.map((w) => w.name)).toEqual(['Achintee', undefined, 'Ben Nevis']);
+    expect(parsed.waypoints[2].ele).toBe(1345);
+    expect(parsed.note).toBeUndefined();
+  });
+
+  it('opens a file whose legs no longer fit its track as one track, and says why', () => {
+    // Something that knows nothing of the extension dropped a point and kept the rest.
+    const gpx = toGpx({ name: 'Ben Nevis', coords: LINE, legs: LEGS });
+    const edited = gpx.replace(/\s*<trkpt lat="56\.8060000"[^>]*\/>/, '');
+    expect(edited).not.toBe(gpx);
+
+    const parsed = parseGpx(edited);
+
+    expect(parsed.legs).toBeUndefined();
+    expect(parsed.coords).toHaveLength(3);
+    expect(parsed.note).toMatch(/straight-line sections in it aren’t marked/);
+  });
+
+  it('leaves a file without them exactly as it was read', () => {
+    const parsed = parseGpx(toGpx({ name: 'Ben Nevis', coords: LINE }));
+
+    expect(parsed.legs).toBeUndefined();
+    expect(parsed.note).toBeUndefined();
+  });
+
+  it('come back from GeoJSON the same way, without names the export made up', () => {
+    const collection = toGeoJson({ name: 'Ben Nevis', coords: LINE, waypoints: PLANNED, legs: LEGS });
+    // For the tools that list them, the unnamed middle waypoint goes out as "Waypoint 2".
+    expect(collection.features[2].properties?.name).toBe('Waypoint 2');
+
+    const parsed = parseGeoJson(JSON.stringify(collection));
+
+    expect(parsed.legs?.map((leg) => leg.kind)).toEqual(['snapped', 'straight']);
+    expect(parsed.waypoints.map((w) => w.name)).toEqual(['Achintee', undefined, 'Ben Nevis']);
+    expect(parsed.waypoints[2].ele).toBe(1345);
+  });
+
+  it('will not read legs from a GeoJSON version it does not know', () => {
+    const collection = toGeoJson({ name: 'Ben Nevis', coords: LINE, legs: LEGS });
+    collection.features[0].properties!.ratmap.version = 2;
+
+    const parsed = parseGeoJson(JSON.stringify(collection));
+
+    expect(parsed.legs).toBeUndefined();
+    expect(parsed.note).toBeDefined();
   });
 });
 

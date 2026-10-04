@@ -125,6 +125,40 @@ test.describe('route planning', () => {
     await expect(page.locator('svg.profile-chart')).toBeVisible();
   });
 
+  test('measures a route opened before the downloaded regions are restored', async ({ page }) => {
+    // At startup the regions on disk are read back a moment after the map can take a route.
+    // A route opened in that moment was measured against no region at all — "Elevation
+    // profile needs a downloaded region" — and nothing ever told it otherwise.
+    await openRegionsSheet(page);
+    await downloadTestRegion(page);
+
+    await page.addInitScript(
+      ([start, end]) => {
+        let map: { once(event: string, handler: () => void): void } | undefined;
+        Object.defineProperty(window, '__ratmapMap', {
+          configurable: true,
+          get: () => map,
+          set: (value) => {
+            map = value;
+            // Registered ahead of main.ts's own `styledata` handler, so this runs first: the
+            // route is open, and measured, before the restore that handler starts.
+            value.once('styledata', () => {
+              const planner = (window as unknown as { __ratmapPlanner: { load(route: unknown): void } })
+                .__ratmapPlanner;
+              planner.load({ name: 'Opened early', coords: [start, end] });
+            });
+          },
+        });
+      },
+      [TRAILHEAD, RIDGE] as const,
+    );
+    await page.reload();
+
+    await expect
+      .poll(async () => (await plannerState(page)).ascentM, { timeout: 45_000 })
+      .toBeGreaterThan(0);
+  });
+
   test('undoes an edit', async ({ page }) => {
     await showArea(page, TEST_AREA);
     await startNewRoute(page);

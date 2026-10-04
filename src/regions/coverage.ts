@@ -33,6 +33,13 @@ export interface RegionCoverageOptions {
    * until something changes it.
    */
   onRestoreProblem?: (message: string | null) => void;
+  /**
+   * The regions on this device have changed: read off disk at startup, or after a download
+   * or a delete. Anything worked out from the old set has to be worked out again. At
+   * startup nothing else says so, and a route opened in the first moments went on reading
+   * "Elevation profile needs a downloaded region" over one that had been there all along.
+   */
+  onDownloadedChange?: () => void;
 }
 
 export class RegionCoverage {
@@ -41,6 +48,7 @@ export class RegionCoverage {
   private readonly theme: () => Theme;
   private readonly notice: HTMLButtonElement;
   private readonly onRestoreProblem?: (message: string | null) => void;
+  private readonly onDownloadedChange?: () => void;
 
   /**
    * Regions whose archives are actually present in OPFS.
@@ -95,6 +103,7 @@ export class RegionCoverage {
     this.theme = options.theme;
     this.notice = options.notice;
     this.onRestoreProblem = options.onRestoreProblem;
+    this.onDownloadedChange = options.onDownloadedChange;
 
     // `move`, not `zoom`: the notice names whichever region covers the map's *centre*
     // (`covering` below), so it has to be re-evaluated on a pure pan too, not only when the
@@ -181,6 +190,9 @@ export class RegionCoverage {
       return;
     }
 
+    // Compared rather than announced on every draw: a theme change redraws everything, and
+    // the cached catalogue and the fresh one usually describe the same regions.
+    const changed = downloadedKey(restored) !== downloadedKey(this.downloaded);
     this.downloaded = restored;
     this.catalogue = regions;
     this.applyAvailableDetail(restored);
@@ -190,6 +202,7 @@ export class RegionCoverage {
         ? `Couldn’t draw ${failed.join(', ')} from storage. The rest of the map is unaffected; deleting and downloading ${failed.length === 1 ? 'it' : 'them'} again should fix it.`
         : null,
     );
+    if (changed) this.onDownloadedChange?.();
   }
 
   /**
@@ -269,4 +282,16 @@ export class RegionCoverage {
       this.drawFootprints();
     }
   };
+}
+
+/**
+ * What a set of downloaded regions is, for telling whether it changed: which regions, and
+ * which archives each one has — gaining an artifact (an Update) changes what can be read.
+ * Sorted, so two catalogues listing the same things in another order compare equal.
+ */
+function downloadedKey(regions: readonly Region[]): string {
+  return regions
+    .map((region) => `${region.id}:${region.artifacts.map((artifact) => artifact.filename).sort().join(',')}`)
+    .sort()
+    .join('|');
 }

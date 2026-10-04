@@ -510,7 +510,7 @@ function routeRow(route: SavedRoute, deps: RoutesUiDeps): HTMLLIElement {
   open.append(el('span', 'route-meta', parts.join(' · ')));
 
   open.addEventListener('click', () => {
-    planner.load({
+    const putBack = planner.load({
       id: route.id,
       name: route.name,
       coords: route.coords,
@@ -519,6 +519,7 @@ function routeRow(route: SavedRoute, deps: RoutesUiDeps): HTMLLIElement {
     });
     planner.activate();
     deps.onPlanStarted();
+    offerPlanBack(putBack, `Opened “${route.name}”`, deps);
   });
   item.append(open);
 
@@ -572,14 +573,18 @@ function importControl(deps: RoutesUiDeps): HTMLElement {
       .text()
       .then((text) => {
         const imported = parseRouteFile(text, file.name);
-        deps.planner.load({
+        const putBack = deps.planner.load({
           name: imported.name,
           coords: imported.coords,
           waypoints: imported.waypoints,
+          legs: imported.legs,
         });
         deps.planner.activate();
         deps.onPlanStarted();
-        deps.onStatus(`Opened “${imported.name}”`, 'ok');
+        const message = imported.note
+          ? `Opened “${imported.name}”. ${imported.note}`
+          : `Opened “${imported.name}”`;
+        if (!offerPlanBack(putBack, message, deps)) deps.onStatus(message, imported.note ? 'warn' : 'ok');
       })
       .catch((err: Error) => deps.onStatus(`Could not import: ${err.message}`, 'error'))
       .finally(() => {
@@ -590,6 +595,24 @@ function importControl(deps: RoutesUiDeps): HTMLElement {
 
   label.append(input);
   return label;
+}
+
+/**
+ * Offer back the plan that opening a route replaced, the way Clear and delete offer theirs.
+ *
+ * False when there was nothing to offer, so the caller can still say what it did.
+ */
+function offerPlanBack(putBack: (() => boolean) | null, message: string, deps: RoutesUiDeps): boolean {
+  if (!putBack || !deps.onUndoableStatus) return false;
+  deps.onUndoableStatus(message, {
+    label: 'Undo',
+    onSelect: () => {
+      // The planner declines once the route opened here has been edited: going back would
+      // throw that edit away. Saying nothing would look like the Undo had worked.
+      if (!putBack()) deps.onStatus('Can’t undo: the route has been changed since it was opened.', 'warn');
+    },
+  });
+  return true;
 }
 
 /**
@@ -609,6 +632,8 @@ async function shareOrDownload(
     name: route.name,
     coords: route.coords as LngLat[],
     waypoints: route.waypoints,
+    // So ratmap can open the file as the route it was planned as (gpx.ts, legSpans).
+    legs: route.legs,
     createdAt: route.createdAt,
   };
 

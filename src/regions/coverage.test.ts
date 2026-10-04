@@ -198,6 +198,80 @@ describe('restoring downloaded regions', () => {
   });
 });
 
+describe('saying when the regions on the device change', () => {
+  // The planner measures routes against what is downloaded. A route opened before the
+  // startup restore finished was measured against nothing, and nothing told it otherwise.
+  let onDownloadedChange: Mock<() => void>;
+
+  beforeEach(() => {
+    onDownloadedChange = vi.fn();
+    coverage = new RegionCoverage({
+      map: map as unknown as MLMap,
+      registry: {} as TileSourceRegistry,
+      theme: () => 'dark',
+      notice,
+      onOpenRegions,
+      onRestoreProblem,
+      onDownloadedChange,
+    });
+    coverage.setStyleReady(true);
+  });
+
+  it('says so once the startup restore has read them off disk', async () => {
+    deps.restoreDownloadedRegions.mockResolvedValue([LOCHABER]);
+
+    await coverage.restore();
+
+    expect(onDownloadedChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so as soon as what is on disk is drawn, not after the network has answered', async () => {
+    deps.loadCachedManifest.mockResolvedValue(MANIFEST);
+    deps.fetchManifest.mockReturnValue(new Promise(() => {})); // never answers
+    deps.restoreDownloadedRegions.mockResolvedValue([LOCHABER]);
+
+    void coverage.restore();
+
+    await vi.waitFor(() => expect(onDownloadedChange).toHaveBeenCalledTimes(1));
+  });
+
+  it('stays quiet when a restore finds what was already there — a theme change redraws it all', async () => {
+    deps.restoreDownloadedRegions.mockResolvedValue([LOCHABER]);
+
+    await coverage.restore();
+    await coverage.restore();
+
+    expect(onDownloadedChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays quiet with nothing downloaded', async () => {
+    await coverage.restore();
+    expect(onDownloadedChange).not.toHaveBeenCalled();
+  });
+
+  it('says so again when a region is deleted', async () => {
+    deps.restoreDownloadedRegions.mockResolvedValueOnce([LOCHABER, CAIRNGORMS]).mockResolvedValue([LOCHABER]);
+
+    await coverage.restore();
+    await coverage.restore();
+
+    expect(onDownloadedChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('says so when a region gains an archive, as an Update gives it', async () => {
+    const updated = {
+      ...LOCHABER,
+      artifacts: [...LOCHABER.artifacts, { kind: 'sac', filename: 'lochaber-sac.pmtiles', path: 'x', bytes: 1 }],
+    };
+    deps.restoreDownloadedRegions.mockResolvedValueOnce([LOCHABER]).mockResolvedValue([updated]);
+
+    await coverage.restore();
+    await coverage.restore();
+
+    expect(onDownloadedChange).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('drawing the coverage outlines', () => {
   it('waits for a style that will accept them, then draws', async () => {
     // A restore can finish before the style exists; addSource would throw.

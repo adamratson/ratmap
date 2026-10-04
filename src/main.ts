@@ -271,6 +271,9 @@ const coverage = new RegionCoverage({
   onOpenRegions: () => openRegionsView(),
   onRestoreProblem: (message) =>
     status.setCondition('regions-restore', message ? { message, kind: 'error' } : null),
+  // Startup included: a route can be open before the regions on disk have been read back,
+  // and it was measured against none of them.
+  onDownloadedChange: () => planner.invalidateRegions(),
 });
 
 // --- Route planning (Phase 4) --------------------------------------------------------

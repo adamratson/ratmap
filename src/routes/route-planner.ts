@@ -1,6 +1,6 @@
 import maplibregl, { type Map as MLMap, type MapMouseEvent } from 'maplibre-gl';
 import type { LngLat } from './geo';
-import { boundsOf, formatDistance, nearestPointOnPath, pathLengthMetres } from './geo';
+import { boundsOf, distanceMetres, formatDistance, nearestPointOnPath, pathLengthMetres } from './geo';
 import { OfflineRouter } from './router';
 import { RouteDraft, type LegSlot, type Waypoint } from './route-model';
 import {
@@ -107,6 +107,49 @@ const CLICK_SUPPRESSION_MS = 400;
  * all, which is what an unbounded "nearest point" would otherwise draw.
  */
 const NEARBY_ROUTE_M = 250;
+
+/**
+ * How near one of a file's own waypoints has to be to an end of its track to give that end
+ * its name. ratmap's own exports put them exactly on the ends; another tool's trailhead or
+ * summit marker should sit within a few metres of where its track starts or finishes.
+ */
+const END_NAME_RADIUS_M = 25;
+
+/**
+ * The plan an open replaced, kept so it can be put back: the draft itself, so its undo
+ * history comes back with it, and which saved route it was.
+ */
+interface ReplacedPlan {
+  draft: RouteDraft;
+  id: string | null;
+  name: string | null;
+}
+
+/** Whether two lines are the same, vertex for vertex. */
+function sameLine(a: readonly LngLat[], b: readonly LngLat[]): boolean {
+  return a.length === b.length && a.every(([lng, lat], i) => lng === b[i][0] && lat === b[i][1]);
+}
+
+/** A route end at `at`, named after whichever of `candidates` sits on it, if any does. */
+function endOfTrack(id: string, at: LngLat, candidates: readonly Waypoint[] = []): Waypoint {
+  let nearest: Waypoint | null = null;
+  let nearestM = END_NAME_RADIUS_M;
+  for (const candidate of candidates) {
+    const metres = distanceMetres([candidate.lng, candidate.lat], at);
+    if (metres <= nearestM) {
+      nearest = candidate;
+      nearestM = metres;
+    }
+  }
+
+  return {
+    id,
+    lng: at[0],
+    lat: at[1],
+    ...(nearest?.name ? { name: nearest.name } : {}),
+    ...(typeof nearest?.ele === 'number' ? { ele: nearest.ele } : {}),
+  };
+}
 
 export class RoutePlanner {
   private readonly map: MLMap;
@@ -306,8 +349,19 @@ export class RoutePlanner {
     this.afterEdit();
   }
 
-  /** Replace the draft with a saved or imported route. */
-  load(route: LoadableRoute): void {
+  /**
+   * Replace the draft with a saved or imported route.
+   *
+   * Returns a way to put back the plan this replaced, or null when there was nothing to
+   * lose. Opening a route used to throw away whatever was being planned, with no undo: the
+   * undo history belongs to the draft, and the draft was simply replaced. The way back only
+   * works while the route opened here is still on screen untouched — after an edit, going
+   * back would throw that edit away instead, so it declines and returns false.
+   */
+  load(route: LoadableRoute): (() => boolean) | null {
+    const replaced = this.replaceablePlan(route);
+    const previousLine = this.draft.coordinates();
+
     // The follower holds the route it started on; it must not go on tracking that one
     // under a different route drawn on the map.
     this.stopFollowing();
@@ -327,20 +381,16 @@ export class RoutePlanner {
       // No editing state — an import, or a record written before legs were stored. The
       // geometry is authoritative (C10), so present it as a single already-computed leg
       // rather than re-routing it, which would silently change someone's saved route.
-      const ends: Waypoint[] =
-        route.waypoints && route.waypoints.length >= 2
-          ? route.waypoints
-          : [
-              { id: 'start', lng: route.coords[0][0], lat: route.coords[0][1] },
-              {
-                id: 'end',
-                lng: route.coords[route.coords.length - 1][0],
-                lat: route.coords[route.coords.length - 1][1],
-              },
-            ];
+      //
+      // Its ends are the geometry's own. A file's <wpt>s are whatever its author marked —
+      // often points of interest partway along — and making the first and last of them the
+      // route's ends left the markers off the line, so dragging one re-routed the whole
+      // import between two of them. A waypoint that does sit on an end still names it.
+      const start = route.coords[0];
+      const end = route.coords[route.coords.length - 1];
 
       this.draft = new RouteDraft({
-        waypoints: [ends[0], ends[ends.length - 1]],
+        waypoints: [endOfTrack('start', start, route.waypoints), endOfTrack('end', end, route.waypoints)],
         legs: [
           {
             coords: route.coords,
@@ -354,11 +404,56 @@ export class RoutePlanner {
       });
     }
 
+    this.showDraft(previousLine);
+
+    const opened = this.draft;
+    return replaced ? () => this.reinstate(replaced, opened) : null;
+  }
+
+  /** What opening `route` would throw away — null when the answer is nothing. */
+  private replaceablePlan(route: LoadableRoute): ReplacedPlan | null {
+    if (this.draft.waypointCount === 0) return null;
+    // Opening the saved route that is already open, unedited, loses nothing.
+    if (route.id !== undefined && route.id === this.loadedRouteId && !this.draft.canUndo) return null;
+    return { draft: this.draft, id: this.loadedRouteId, name: this.loadedName };
+  }
+
+  /** Put back the plan an open replaced — see {@link load}. */
+  private reinstate(previous: ReplacedPlan, opened: RouteDraft): boolean {
+    if (this.draft !== opened || opened.canUndo) return false;
+
+    const previousLine = this.draft.coordinates();
+    this.stopFollowing();
+    this.inflight?.abort();
+    this.inflight = null;
+    this.draft = previous.draft;
+    this.loadedRouteId = previous.id;
+    this.loadedName = previous.name;
+    this.showDraft(previousLine);
+    return true;
+  }
+
+  /**
+   * Put a draft that has just been swapped in on screen, and bring its figures up to date.
+   *
+   * The profile and grades describe the line they were measured on. For a different line
+   * they are cleared rather than shown against it until its own arrive; the same line
+   * keeps them — Save reopens the route it has just stored, and clearing them blanked the
+   * chart on every save. `recompute` then measures, after first filling in any leg the
+   * draft arrived without, which nothing else would.
+   */
+  private showDraft(previousLine: readonly LngLat[]): void {
+    if (!sameLine(previousLine, this.draft.coordinates())) {
+      this.profile = null;
+      this.profileNote = null;
+      this.sac = null;
+      this.sacNote = null;
+    }
     this.renderGeometry();
     this.renderMarkers();
     this.fitToRoute();
-    void this.refreshProfile();
     this.emit();
+    void this.recompute();
   }
 
   fitToRoute(): void {

@@ -108,6 +108,43 @@ test.describe('saved routes', () => {
     expect(track!.geometry.coordinates.length).toBe((await plannerState(page)).coordCount);
   });
 
+  test('opens its own export as the route it was planned as', async ({ page }) => {
+    // Export then import is the only way from one copy of ratmap to another. It used to
+    // come back as one leg between its two ends: the waypoint between them gone, and the
+    // straight lines drawn as if they were paths (C11).
+    await showArea(page, TEST_AREA);
+    await startNewRoute(page);
+    await clickMapAt(page, ...TRAILHEAD);
+    await clickMapAt(page, 1.71, 42.56);
+    await clickMapAt(page, ...RIDGE);
+    await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
+    // No region here, so both legs are straight lines.
+    expect((await plannerState(page)).legKinds).toEqual(['straight', 'straight']);
+
+    await page.locator('.route-actions button', { hasText: 'Save' }).click();
+    await page.locator('.route-save-form input').fill('Round trip');
+    await page.locator('.route-save-form button').click();
+    await expect(page.locator('.toast.ok', { hasText: 'Saved “Round trip”' })).toBeVisible();
+
+    await openChip(page, 'Routes');
+    const download = page.waitForEvent('download');
+    await page.locator('.route-row-actions button', { hasText: 'GPX' }).click();
+    const gpx = (await (await (await download).createReadStream()).toArray()).join('');
+
+    await page.locator('.route-import input[type=file]').setInputFiles({
+      name: 'round-trip.gpx',
+      mimeType: 'application/gpx+xml',
+      buffer: Buffer.from(gpx),
+    });
+
+    await expect.poll(async () => (await plannerState(page)).waypoints).toBe(3);
+    expect((await plannerState(page)).legKinds).toEqual(['straight', 'straight']);
+    // The route it replaced on screen is offered back, as Clear and delete offer theirs.
+    await expect(
+      page.locator('.toast', { hasText: 'Opened “Round trip”' }).locator('.toast-action'),
+    ).toHaveText('Undo');
+  });
+
   test('shows what a saved route is, without opening it', async ({ page }) => {
     await planAndSave(page, 'Straight test');
     await openChip(page, 'Routes');

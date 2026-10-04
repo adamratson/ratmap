@@ -318,6 +318,101 @@ describe('opening a saved or imported route', () => {
     expect(planner.getLoadedRouteId()).toBeNull();
     expect(planner.getName()).toBe('Untitled route');
   });
+
+  it('puts an import’s ends on its own track, not on the first and last of its waypoints', () => {
+    // A file's <wpt>s are whatever its author marked. Made the route's ends, two points of
+    // interest partway along left the markers off the line, and dragging one re-routed the
+    // whole import between them.
+    const pointsOfInterest = [
+      { id: 'p1', lng: CIC_HUT[0], lat: CIC_HUT[1], name: 'CIC hut' },
+      { id: 'p2', lng: -5.03, lat: 56.8, name: 'Lochan' },
+    ];
+
+    planner.load({ name: 'Imported', coords, waypoints: pointsOfInterest });
+
+    const ends = planner.getDraft().getWaypoints();
+    expect(ends.map((w) => [w.lng, w.lat])).toEqual([ACHINTEE, SUMMIT]);
+    expect(ends.map((w) => w.name)).toEqual([undefined, undefined]);
+    expect(planner.getDraft().coordinates()).toEqual(coords);
+  });
+
+  it('still names an end after a waypoint the file put on it', () => {
+    const waypoints = [
+      { id: 'a', lng: ACHINTEE[0], lat: ACHINTEE[1], name: 'Achintee' },
+      { id: 'b', lng: SUMMIT[0], lat: SUMMIT[1], name: 'Ben Nevis', ele: 1345 },
+    ];
+
+    planner.load({ name: 'Imported', coords, waypoints });
+
+    expect(planner.getDraft().getWaypoints()).toMatchObject([
+      { lng: ACHINTEE[0], lat: ACHINTEE[1], name: 'Achintee' },
+      { lng: SUMMIT[0], lat: SUMMIT[1], name: 'Ben Nevis', ele: 1345 },
+    ]);
+  });
+
+  it('routes a leg the route arrived without, rather than leaving it pending for good', async () => {
+    // Nothing else would ever compute it: legs are routed after an edit, and opening a
+    // route is not one.
+    const waypoints = [
+      { id: 'a', lng: ACHINTEE[0], lat: ACHINTEE[1] },
+      { id: 'b', lng: SUMMIT[0], lat: SUMMIT[1] },
+    ];
+
+    planner.load({ name: 'Waypoints only', coords: [], waypoints, legs: [null] });
+    await settle();
+
+    expect(fakes.computeLeg).toHaveBeenCalledWith(ACHINTEE, SUMMIT, expect.anything());
+    expect(last().pendingLegs).toBe(0);
+  });
+
+  describe('putting back the plan it replaced', () => {
+    function planAchinteeToCicHut(): void {
+      planner.activate();
+      planner.handleMapClick(click(ACHINTEE));
+      planner.handleMapClick(click(CIC_HUT));
+    }
+
+    it('brings the plan back, with its own undo history', async () => {
+      planAchinteeToCicHut();
+      await settle();
+
+      const putBack = planner.load({ id: 'r1', name: 'Pony track', coords });
+      expect(putBack?.()).toBe(true);
+
+      expect(planner.getDraft().getWaypoints().map((w) => [w.lng, w.lat])).toEqual([ACHINTEE, CIC_HUT]);
+      expect(planner.getLoadedRouteId()).toBeNull();
+      planner.undo();
+      expect(planner.getDraft().waypointCount).toBe(1);
+    });
+
+    it('brings back which saved route it was, so Save still updates it', () => {
+      planner.load({ id: 'r1', name: 'Pony track', coords });
+      const putBack = planner.load({ id: 'r2', name: 'Other way', coords: [SUMMIT, CIC_HUT] });
+
+      expect(putBack?.()).toBe(true);
+      expect(planner.getLoadedRouteId()).toBe('r1');
+      expect(planner.getName()).toBe('Pony track');
+    });
+
+    it('has nothing to offer when nothing was being planned', () => {
+      expect(planner.load({ name: 'Pony track', coords })).toBeNull();
+    });
+
+    it('has nothing to offer when the same saved route is reopened unedited', () => {
+      planner.load({ id: 'r1', name: 'Pony track', coords });
+      expect(planner.load({ id: 'r1', name: 'Pony track', coords })).toBeNull();
+    });
+
+    it('declines once the route it opened has been edited — going back would lose that', () => {
+      planAchinteeToCicHut();
+      const putBack = planner.load({ id: 'r1', name: 'Pony track', coords });
+      planner.handleMapClick(click(SUMMIT));
+
+      expect(putBack?.()).toBe(false);
+      expect(planner.getLoadedRouteId()).toBe('r1');
+      expect(planner.getDraft().waypointCount).toBe(3);
+    });
+  });
 });
 
 describe('the elevation profile', () => {
@@ -352,6 +447,46 @@ describe('the elevation profile', () => {
     expect(last().profile).not.toBeNull();
     expect(last().profile!.ascentM).toBeGreaterThan(0);
     expect(last().profileNote).toBeNull();
+  });
+
+  describe('when a route is opened over one already measured', () => {
+    beforeEach(() => {
+      regions = [
+        {
+          id: 'lochaber',
+          name: 'Lochaber',
+          bbox: [-5.6, 56.5, -4.6, 57.1],
+          totalBytes: 1,
+          artifacts: [{ kind: 'terrain', filename: 'lochaber-terrain.pmtiles', path: 'x', bytes: 1, maxzoom: 11 }],
+        },
+      ];
+      registry.get.mockReturnValue({});
+      fakes.terrainSample.mockImplementation(async (samples: LngLat[]) => samples.map((_, i) => 50 + i * 5));
+    });
+
+    it('keeps the profile up when it is the same route — Save reopens what it stored', async () => {
+      planner.load({ id: 'r1', name: 'Pony track', coords });
+      await settle();
+      expect(last().profile).not.toBeNull();
+
+      const before = summaries.length;
+      planner.load({ id: 'r1', name: 'Pony track', coords });
+
+      // Every summary since, not only the last: no moment with the chart blanked.
+      expect(summaries.length).toBeGreaterThan(before);
+      expect(summaries.slice(before).every((summary) => summary.profile !== null)).toBe(true);
+    });
+
+    it('does not show the old route’s profile against a new one while that is measured', async () => {
+      planner.load({ name: 'Pony track', coords });
+      await settle();
+
+      planner.load({ name: 'Somewhere else', coords: [ACHINTEE, CIC_HUT] });
+
+      expect(last().profile).toBeNull();
+      await settle();
+      expect(last().profile).not.toBeNull();
+    });
   });
 
   it('will not measure a route that runs out of the region — it would understate the climb', async () => {

@@ -1,5 +1,8 @@
 import type { LayerSpecification } from 'maplibre-gl';
 import { layers as basemapLayers, type Flavor } from '@protomaps/basemaps';
+import type { Theme } from '../ui/theme';
+import { ratmapFlavor } from './flavor';
+import { parkingLayer } from './parking';
 
 /**
  * @protomaps/basemaps' own id for the settlement layer (city/town/village/hamlet, styled
@@ -37,17 +40,24 @@ function bareRockLayer(source: string, flavor: Flavor): LayerSpecification {
 }
 
 /**
- * Protomaps' generated basemap layers, with the bare-rock fill spliced in right after
- * `landuse_park` — same source-layer, same z-order as the rest of the landuse fills,
- * under roads and labels. Drop-in replacement for `@protomaps/basemaps`' own `layers()`.
+ * Protomaps' generated basemap layers, in ratmap's flavour, with what upstream leaves
+ * unpainted spliced back in: the bare-rock fill right after `landuse_park` (same
+ * source-layer, same z-order as the rest of the landuse fills, under roads and labels),
+ * and car parks right after upstream's `pois` (see parking.ts). Drop-in replacement for
+ * `@protomaps/basemaps`' own `layers()`.
  */
-export function basemapLayersWithBareRock(
+export function ratmapBasemapLayers(
   source: string,
-  flavor: Flavor,
+  theme: Theme,
   options?: { labelsOnly?: boolean; lang?: string },
 ): LayerSpecification[] {
+  const flavor = ratmapFlavor(theme);
   const generated = basemapLayers(source, flavor, options);
   const parkIndex = generated.findIndex((layer) => layer.id === 'landuse_park');
   generated.splice(parkIndex + 1, 0, bareRockLayer(source, flavor));
+  // Above the other POIs, so a car park places before a bench or a cafe claims its spot;
+  // still below the town labels, which place first of all.
+  const poisIndex = generated.findIndex((layer) => layer.id === 'pois');
+  generated.splice(poisIndex + 1, 0, parkingLayer(source, theme));
   return generated;
 }

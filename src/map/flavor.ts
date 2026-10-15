@@ -226,6 +226,14 @@ export interface MapInk {
    */
   hillshadeHighlight: string;
   hillshadeShadow: string;
+  /**
+   * Car parks (src/map/parking.ts): the road-sign white P on blue, so it reads as parking
+   * before it reads as anything else. The rim is the halo colour, as the summit dot's is.
+   */
+  parkingFill: string;
+  parkingGlyph: string;
+  parkingRim: string;
+  parkingText: string;
 }
 
 const DAY_INK: MapInk = {
@@ -248,6 +256,10 @@ const DAY_INK: MapInk = {
   terrainRock: '#6b5d4f',
   hillshadeHighlight: '#ffffff',
   hillshadeShadow: '#000000',
+  parkingFill: '#1f5ca8',
+  parkingGlyph: '#ffffff',
+  parkingRim: '#ffffff',
+  parkingText: '#1d4a80',
 };
 
 // Contrast against night earth (#161a1f): path 6.3:1, contour label 6.5:1, route 5.8:1,
@@ -272,6 +284,11 @@ const NIGHT_INK: MapInk = {
   terrainRock: '#a89a86',
   hillshadeHighlight: 'rgba(154,163,173,0.45)',
   hillshadeShadow: '#000000',
+  // Lifted a step so the sign holds against graphite; the rim goes dark, like the dots'.
+  parkingFill: '#2f6fbf',
+  parkingGlyph: '#ffffff',
+  parkingRim: '#0e1114',
+  parkingText: '#8db4e2',
 };
 
 export function mapInk(theme: Theme): MapInk {

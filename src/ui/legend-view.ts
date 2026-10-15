@@ -68,6 +68,11 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
         'Track',
         'Solid and heavier than a footpath — vehicle-width.',
       )}
+      ${legendRow(
+        `<svg viewBox="0 0 40 24"><rect x="13" y="5" width="14" height="14" rx="3" fill="${ink.parkingFill}" stroke="${ink.parkingRim}" stroke-width="1.5"/><text x="20" y="16.2" font-size="10" font-weight="600" fill="${ink.parkingGlyph}" text-anchor="middle">P</text></svg>`,
+        'Car park',
+        'From zoom 13 in a downloaded region, named from 15. Unnamed laybys and trailhead parking appear at 15.',
+      )}
     </div>
 
     <div class="legend-section">

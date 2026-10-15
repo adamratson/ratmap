@@ -99,9 +99,9 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function parseHex(color: string): [number, number, number] {
+export function parseHex(color: string): [number, number, number] {
   const match = /^#([0-9a-f]{6})$/i.exec(color);
-  if (!match) throw new Error(`stipple colour must be #rrggbb, got ${color}`);
+  if (!match) throw new Error(`map image colour must be #rrggbb, got ${color}`);
   const value = parseInt(match[1], 16);
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 }

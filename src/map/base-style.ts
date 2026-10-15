@@ -12,8 +12,8 @@ import {
   USE_FALLBACK_TERRAIN,
 } from '../app/config';
 import type { Theme } from '../ui/theme';
-import { mapInk, ratmapFlavor } from './flavor';
-import { basemapLayersWithBareRock } from './landuse';
+import { mapInk } from './flavor';
+import { ratmapBasemapLayers } from './landuse';
 import type { TileSourceRegistry } from './tile-source-registry';
 
 function terrainSource(registry: TileSourceRegistry): SourceSpecification {
@@ -61,7 +61,7 @@ export function buildBaseStyle(theme: Theme, registry: TileSourceRegistry): Styl
       terrain: terrainSource(registry),
     },
     layers: [
-      ...basemapLayersWithBareRock('basemap', ratmapFlavor(theme), { lang: 'en' }),
+      ...ratmapBasemapLayers('basemap', theme, { lang: 'en' }),
       {
         id: 'hillshade',
         type: 'hillshade',

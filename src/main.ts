@@ -21,6 +21,7 @@ import { buildBaseStyle } from './map/base-style';
 import { mapInk } from './map/flavor';
 import { applyAllStoredVisibility } from './map/layers';
 import { watchMapHealth } from './map/network-status';
+import { supplyParkingIcons } from './map/parking';
 import { TileSourceRegistry } from './map/tile-source-registry';
 import {
   PeakTooltip,
@@ -229,6 +230,8 @@ setUpCompass(map, document.querySelector<HTMLButtonElement>('#compass-btn')!);
 (window as unknown as { __ratmapMap: maplibregl.Map }).__ratmapMap = map;
 
 watchMapHealth(map, status);
+// Before any tile places a car park, and for every style the theme swaps in after it.
+supplyParkingIcons(map);
 
 /**
  * Everything the app puts on top of the base style.

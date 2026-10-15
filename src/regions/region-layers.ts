@@ -1,7 +1,7 @@
 import type { FilterSpecification, Map as MLMap, VectorTileSource } from 'maplibre-gl';
-import { MAP_FONTS, mapInk, ratmapFlavor, type MapInk } from '../map/flavor';
+import { MAP_FONTS, mapInk, type MapInk } from '../map/flavor';
 import type { Theme } from '../ui/theme';
-import { basemapLayersWithBareRock, TOWN_LABEL_LAYER_ID } from '../map/landuse';
+import { ratmapBasemapLayers, TOWN_LABEL_LAYER_ID } from '../map/landuse';
 import { isTileArchive, type Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
@@ -310,7 +310,7 @@ export async function addRegionToMap(
       // #cccccc over the entire global map, leaving only the area with region tiles
       // visible. A style needs exactly one background, and the global basemap already
       // supplies it.
-      const generated = basemapLayersWithBareRock(sourceId, ratmapFlavor(theme), { lang: 'en' });
+      const generated = ratmapBasemapLayers(sourceId, theme, { lang: 'en' });
       const beforePeaks = map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined;
       // The region's own town/city labels need the same collision priority over peaks as
       // the global catalog's do (see peaks.ts) — otherwise a downloaded region's real

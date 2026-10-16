@@ -279,6 +279,43 @@ describe('addRegionToMap', () => {
     expect(ids.indexOf(String(casing!.id))).toBeLessThan(ids.indexOf(String(paths!.id)));
   });
 
+  it('draws paths over the roads but under every label and POI, car parks included', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
+
+    const ids = map.layers.map((l) => String(l.id));
+    const generated = map.layers.filter(
+      (l) => l.source === 'region-lochaber-basemap' && !String(l.id).includes('-paths'),
+    );
+    const lastLine = ids.indexOf(String(generated.filter((l) => l.type === 'line').at(-1)!.id));
+    const firstSymbol = ids.indexOf(String(generated.find((l) => l.type === 'symbol')!.id));
+    const casing = ids.indexOf('region-lochaber-basemap-paths-casing');
+    const paths = ids.indexOf('region-lochaber-basemap-paths');
+
+    expect(casing).toBeGreaterThan(lastLine);
+    expect(paths).toBe(casing + 1);
+    expect(paths).toBeLessThan(firstSymbol);
+    expect(paths).toBeLessThan(ids.indexOf('region-lochaber-basemap-pois_parking'));
+  });
+
+  it('keeps relief and contours under the paths', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
+
+    const ids = map.layers.map((l) => String(l.id));
+    const casing = ids.indexOf('region-lochaber-basemap-paths-casing');
+    for (const id of [
+      'region-lochaber-terrain-hillshade',
+      'region-lochaber-contours-lines-index',
+      'region-lochaber-contours-lines',
+    ]) {
+      expect(ids.indexOf(id)).toBeGreaterThan(-1);
+      expect(ids.indexOf(id)).toBeLessThan(casing);
+    }
+  });
+
   it('filters paths on the attribute the Protomaps schema actually uses', async () => {
     const map = fakeMap();
 
@@ -425,6 +462,20 @@ describe('the low-zoom path network', () => {
   // below it. Decoded from the real archive over Ben Nevis (2026-09-08): 2 path features
   // at z14, 1 at z13, none at z12 — so at the zoom where the SAC bands were already
   // drawing, there was no path under them.
+  it('sits with the basemap paths, under the contour heights added before it', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, withPaths, 'light');
+
+    const ids = map.layers.map((l) => String(l.id));
+    expect(ids.indexOf('region-lochaber-paths-paths-casing')).toBeGreaterThan(
+      ids.indexOf('region-lochaber-basemap-paths'),
+    );
+    expect(ids.indexOf('region-lochaber-paths-paths')).toBeLessThan(
+      ids.indexOf('region-lochaber-contours-labels'),
+    );
+  });
+
   it('draws the same path styling from its own source', async () => {
     const map = fakeMap();
 

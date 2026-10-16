@@ -12,7 +12,7 @@ import {
   TERRAIN_ATTRIBUTION,
 } from '../app/config';
 import { PEAKS_LAYER_ID, PEAKS_SOURCE_ID } from '../overlays/peaks';
-import { addSacLayers } from '../overlays/sac';
+import { addSacLayers, sacBandLayerId } from '../overlays/sac';
 import { addAvalancheLayer, avalancheSourceSpec } from '../overlays/avalanche';
 import { addTerrainFeatureLayers } from '../overlays/terrain-features';
 import { applyAllStoredVisibility } from '../map/layers';
@@ -59,6 +59,46 @@ function beneathLabels(map: MLMap, region: Region): string | undefined {
 }
 
 /**
+ * Where a region's paths belong: over every line the basemap draws — roads, rail,
+ * bridges — and under every symbol it draws, car parks and other POIs included.
+ *
+ * Paths used to go in under the peaks, which put them on top of the whole basemap, so a
+ * path crossing a car park struck straight through its P sign and the name beside it.
+ *
+ * The first symbol *above the basemap's last line* rather than beneathLabels(): artifacts
+ * arrive independently (C16), and a region whose contours were added before its basemap
+ * has the contour labels as its first symbol — below the basemap's opaque fills, where
+ * paths would vanish. Nor simply the basemap's own first symbol: the low-zoom paths
+ * artifact is added after the contour and grade labels, and would draw across them.
+ */
+function beneathBasemapLabels(map: MLMap, region: Region): string | undefined {
+  const basemap = regionSourceId(region.id, 'basemap');
+  const ids = regionLayerIds(map, region);
+  const type = (id: string) => map.getLayer(id)?.type;
+  const lastLine = ids.findLastIndex(
+    (id) => (map.getLayer(id) as { source?: unknown }).source === basemap && type(id) !== 'symbol',
+  );
+  if (lastLine < 0) return beneathLabels(map, region);
+  const label = ids.slice(lastLine + 1).find((id) => type(id) === 'symbol');
+  return label ?? (map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined);
+}
+
+/**
+ * Where a region's ground shading belongs — relief, contours, slope and scree: under its
+ * paths (and the grade band that haloes them), so none of it draws across the network.
+ * With the paths now beneath the labels too, beneathLabels() alone would land each of
+ * these between the two.
+ */
+function beneathPaths(map: MLMap, region: Region): string | undefined {
+  const anchors = new Set([
+    `${regionSourceId(region.id, 'basemap')}-paths-casing`,
+    `${regionSourceId(region.id, 'paths')}-paths-casing`,
+    sacBandLayerId(regionSourceId(region.id, 'sac')),
+  ]);
+  return regionLayerIds(map, region).find((id) => anchors.has(id)) ?? beneathLabels(map, region);
+}
+
+/**
  * Draw paths and tracks the way a hill map does, on top of Protomaps' own road layers.
  *
  * The generated `light` flavour renders paths as a 0.5 px `#ebebeb` line at z14 — a
@@ -88,15 +128,16 @@ function addPathLayers(
     minzoom,
     maxzoom,
     ink,
+    before,
   }: {
     sourceLayer: string;
     filter?: FilterSpecification;
     minzoom: number;
     maxzoom?: number;
     ink: MapInk;
+    before?: string;
   },
 ): void {
-  const before = map.getLayer(PEAKS_LAYER_ID) ? PEAKS_LAYER_ID : undefined;
   const zooms = { minzoom, ...(maxzoom === undefined ? {} : { maxzoom }) };
 
   // Casing first, so the line above sits in its own channel and stays legible against
@@ -296,8 +337,9 @@ export async function addRegionToMap(
             'hillshade-shadow-color': ink.hillshadeShadow,
           },
         },
-        // Under every label, not just under the peaks — see beneathLabels().
-        beneathLabels(map, region),
+        // Under every label, not just under the peaks — see beneathLabels() — and under
+        // the paths, see beneathPaths().
+        beneathPaths(map, region),
       );
     } else if (artifact.kind === 'basemap') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
@@ -341,6 +383,7 @@ export async function addRegionToMap(
         // not invisible. Without it, 12: a region downloaded before that artifact existed
         // keeps drawing whatever few paths its z12-13 tiles do carry.
         minzoom: basemapPathsMin,
+        before: beneathBasemapLabels(map, region),
       });
     } else if (artifact.kind === 'contours') {
       // Copernicus, not OSM. These lines are traced from Copernicus GLO-30 by
@@ -371,7 +414,7 @@ export async function addRegionToMap(
             'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.8, 13, 1.4],
           },
         },
-        beneathLabels(map, region),
+        beneathPaths(map, region),
       );
 
       map.addLayer(
@@ -395,8 +438,8 @@ export async function addRegionToMap(
           },
         },
         // Contour lines drawn over place names would be just as unreadable as relief
-        // over them, so these go under the labels too.
-        beneathLabels(map, region),
+        // over them, so these go under the labels too — and under the paths.
+        beneathPaths(map, region),
       );
 
       addContourLabels(map, sourceId, region, minzoom, ink);
@@ -418,6 +461,7 @@ export async function addRegionToMap(
           sourceLayer: PATHS_SOURCE_LAYER,
           minzoom: lowZoomMin,
           maxzoom: BASEMAP_PATHS_MIN_ZOOM,
+          before: beneathBasemapLabels(map, region),
         });
       }
     } else if (artifact.kind === 'avalanche') {
@@ -434,7 +478,7 @@ export async function addRegionToMap(
         maxzoom: artifact.maxzoom ?? 11,
         // Beneath the labels like the relief and contours — this shades the ground, so
         // painting it over the place names would be the same mistake the hillshade made.
-        before: beneathLabels(map, region),
+        before: beneathPaths(map, region),
       });
     } else if (artifact.kind === 'sac') {
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
@@ -458,12 +502,12 @@ export async function addRegionToMap(
       // Scree, shingle, rock and boulders — OSM ground-surface detail Protomaps does not
       // carry (see src/overlays/terrain-features.ts). Same attribution and z-order slot as the
       // rest of the region's ground-surface overlays (contours, avalanche terrain):
-      // beneath the region's own labels, so text stays legible over the scree stipple.
+      // beneath the region's own paths and labels, so neither is lost under the scree stipple.
       map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
       addTerrainFeatureLayers(map, sourceId, {
         ink,
         minzoom: Math.max(artifact.minzoom ?? minzoom, minzoom),
-        before: beneathLabels(map, region),
+        before: beneathPaths(map, region),
       });
     }
   }

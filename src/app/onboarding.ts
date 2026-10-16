@@ -1,5 +1,5 @@
 import type { StatusCentre } from '../ui/status';
-import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS } from './install';
+import { createInstallWatcher, INSTALL_RATIONALE, IOS_INSTALL_STEPS, isIos } from './install';
 import { bootstrapStorage, isStandalone } from './storage';
 
 // Storage + install onboarding (C1, C2): say why downloads are off, and what fixes it.
@@ -80,7 +80,9 @@ export function startStorageOnboarding({
 
     status.setCondition('storage', {
       message: isStandalone()
-        ? 'Your browser hasn’t granted ratmap permanent storage yet, so downloads are off.'
+        ? isIos()
+          ? IOS_STANDALONE_NOT_PERSISTED
+          : 'Your browser hasn’t granted ratmap permanent storage yet, so downloads are off.'
         : promptFailure
           ? `The install prompt didn’t open (${promptFailure}). Install ratmap from your browser’s menu to download maps.`
           : 'Downloads are off until ratmap is installed — a browser tab can’t keep maps safely.',
@@ -88,6 +90,23 @@ export function startStorageOnboarding({
     });
   }
 }
+
+/**
+ * An installed iOS app that still isn't persisted. Two causes, both seen on real iPhones:
+ *
+ *   - First launch after Add to Home Screen. WebKit grants persist() only to domains on its
+ *     tracking-prevention exemption list (a Home Screen app's own domain is on it), but it
+ *     fetches that list once and caches it for the life of the process — and on first
+ *     launch the cached copy can lack the app. Asking again changes nothing; a relaunch does.
+ *   - Safari's "Prevent Cross-Site Tracking" turned off. That drops the exemption list
+ *     entirely, so persist() is refused for every site (iOS 26.1).
+ *
+ * The relaunch comes first because it's the common case and costs nothing to try.
+ */
+const IOS_STANDALONE_NOT_PERSISTED =
+  'iOS hasn’t granted ratmap permanent storage yet, so downloads are off. Close ratmap ' +
+  'fully and reopen it. If this keeps showing, turn on “Prevent Cross-Site Tracking” in ' +
+  'Settings → Apps → Safari.';
 
 /** The iOS Share → Add to Home Screen walkthrough (C2: iOS has no install prompt). */
 export function renderInstallSheet(body: HTMLElement): void {

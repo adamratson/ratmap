@@ -5,6 +5,7 @@ import type { Condition, StatusCentre } from '../ui/status';
 const env = vi.hoisted(() => ({
   storage: { supported: true, persisted: false } as { supported: boolean; persisted?: boolean },
   standalone: false,
+  ios: false,
   capability: { kind: 'none', reason: 'unsupported' } as InstallCapability,
   listeners: [] as Array<() => void>,
 }));
@@ -16,6 +17,7 @@ vi.mock('./storage', () => ({
 
 vi.mock('./install', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./install')>()),
+  isIos: () => env.ios,
   createInstallWatcher: () => ({
     capability: () => env.capability,
     onChange: (listener: () => void) => void env.listeners.push(listener),
@@ -44,6 +46,7 @@ function banner(): Condition & { action: NonNullable<Condition['action']> } {
 beforeEach(() => {
   env.storage = { supported: true, persisted: false };
   env.standalone = false;
+  env.ios = false;
   env.capability = { kind: 'none', reason: 'unsupported' };
   env.listeners = [];
   status = { setCondition: vi.fn() };
@@ -127,6 +130,16 @@ describe('storage onboarding (C1, C2)', () => {
     env.standalone = false;
     await start();
     expect(banner().message).toMatch(/until ratmap is installed/);
+  });
+
+  it('tells an installed iOS app to relaunch, then to check the Safari tracking setting', async () => {
+    // WebKit caches its persist() exemption list per process, so a first launch can be
+    // refused until a relaunch; "Prevent Cross-Site Tracking" off refuses it every time.
+    env.standalone = true;
+    env.ios = true;
+    await start();
+    expect(banner().message).toMatch(/reopen it/);
+    expect(banner().message).toMatch(/Prevent Cross-Site Tracking/);
   });
 
   it('re-checks when the install situation changes', async () => {

@@ -41,4 +41,11 @@ describe('describeDetailLimit', () => {
     expect(describeDetailLimit(12, 5).detail).toContain('zoom 5');
     expect(describeDetailLimit(15, 13).detail).toContain('zoom 13');
   });
+
+  it('does not send the user off to download more past a downloaded region’s own ceiling', () => {
+    const state = describeDetailLimit(18, 15, { fromRegion: true });
+    expect(state.overzoomed).toBe(true);
+    expect(state.detail).toContain('zoom 15');
+    expect(state.detail).not.toMatch(/offline region/i);
+  });
 });

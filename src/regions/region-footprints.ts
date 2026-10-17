@@ -37,7 +37,7 @@ export function regionAt(
   return candidates[0]?.region ?? null;
 }
 
-function contains(bbox: Region['bbox'], [lng, lat]: [number, number]): boolean {
+export function contains(bbox: Region['bbox'], [lng, lat]: [number, number]): boolean {
   return lng >= bbox[0] && lng <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
 }
 

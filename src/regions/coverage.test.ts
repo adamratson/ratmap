@@ -338,6 +338,61 @@ describe('the detail notice', () => {
     expect(notice.hidden).toBe(false);
   });
 
+  describe('where a downloaded region overlaps one that is not', () => {
+    // The real boxes: North West England's north-east corner lies inside North East
+    // England's south-west corner.
+    const NORTH_EAST = region('england-north-east', 'North East England', [-2.6907, 54.4502, -1.1016, 55.8487]);
+    const NORTH_WEST = region('england-north-west', 'North West England', [-3.9075, 52.9455, -1.908, 55.1886]);
+    const OVERLAP: [number, number] = [-2.3, 54.8];
+
+    beforeEach(() => {
+      deps.fetchManifest.mockResolvedValue({ ...MANIFEST, regions: [NORTH_EAST, NORTH_WEST] });
+      deps.restoreDownloadedRegions.mockResolvedValue([NORTH_EAST]);
+    });
+
+    it('does not offer the other region, even past the downloaded one’s ceiling', async () => {
+      await coverage.restore();
+      map.move(18, ...OVERLAP);
+
+      expect(notice.textContent).not.toContain('North West England');
+      expect(notice.title).toContain('downloaded region');
+      expect(drawnIds()).toEqual(['england-north-east']);
+    });
+
+    it('stays hidden there at hiking zoom', async () => {
+      await coverage.restore();
+      map.move(14, ...OVERLAP);
+
+      expect(notice.hidden).toBe(true);
+    });
+
+    it('still offers it just outside the downloaded box', async () => {
+      await coverage.restore();
+      map.move(12, -3.0, 54.5);
+
+      expect(notice.hidden).toBe(false);
+      expect(notice.textContent).toBe('Limited detail here — get North West England');
+    });
+  });
+
+  it('warns over undownloaded country even with a region downloaded elsewhere', async () => {
+    deps.restoreDownloadedRegions.mockResolvedValue([LOCHABER]);
+    await coverage.restore();
+    map.move(12, -3.7, 57.05);
+
+    expect(notice.textContent).toBe('Limited detail here — get Cairngorms');
+  });
+
+  it('stops outlining the offer once zoomed back out', async () => {
+    await coverage.restore();
+    map.move(12, -5.0, 56.8);
+    expect(drawnIds()).toEqual(['lochaber']);
+
+    map.move(6);
+    expect(notice.hidden).toBe(true);
+    expect(drawnIds()).toEqual([]);
+  });
+
   it('redraws the outlines only when the offered region changes, not on every frame', async () => {
     await coverage.restore();
     deps.renderFootprints.mockClear();

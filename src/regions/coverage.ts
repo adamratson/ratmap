@@ -12,7 +12,7 @@ import {
   type RegionManifest,
 } from './manifest';
 import { listArtifactNames } from './opfs-store';
-import { regionAt, renderFootprints, visibleFootprints, type Footprint } from './region-footprints';
+import { contains, regionAt, renderFootprints, visibleFootprints, type Footprint } from './region-footprints';
 import { restoreDownloadedRegions } from './regions-ui';
 
 // What detail the map has, and where more could come from: the downloaded regions restored
@@ -74,15 +74,6 @@ export class RegionCoverage {
    * the notice names a place without showing how much of the screen it would cover.
    */
   private offeredRegionId: string | null = null;
-
-  // Raised once a downloaded region is loaded: the notice must reflect the best data
-  // actually available, not the global catalogue's ceiling, or it would keep claiming
-  // "limited detail" over a region the user has just downloaded.
-  //
-  // Derived from the artifacts' real PMTiles zoom ranges rather than a constant — a
-  // hardcoded guess drifts from whatever the pipeline last built and made the notice fire
-  // over a fully-downloaded region.
-  private maxDataZoom = BASEMAP_MAX_ZOOM;
 
   /**
    * Whether the style is installed, i.e. whether it will accept sources and layers.
@@ -195,7 +186,8 @@ export class RegionCoverage {
     const changed = downloadedKey(restored) !== downloadedKey(this.downloaded);
     this.downloaded = restored;
     this.catalogue = regions;
-    this.applyAvailableDetail(restored);
+    // Deleting a region has to bring the notice back, as much as downloading one hides it.
+    this.renderDetailLimit();
     this.drawFootprints();
     this.onRestoreProblem?.(
       failed.length > 0
@@ -227,14 +219,23 @@ export class RegionCoverage {
   }
 
   /**
-   * Set the detail ceiling from whatever regions are actually present.
+   * How far the data under `point` actually reaches: the best of the downloaded regions
+   * covering it, or the worldwide map's ceiling where none does.
    *
-   * Assigned unconditionally rather than only raised: deleting a region has to lower it
-   * again, or the app would keep claiming detail it no longer has.
+   * Per place, not one figure for the whole device. A single ceiling taken from every
+   * download hid the notice over undownloaded country the moment anything was downloaded,
+   * and past that ceiling it fired inside a downloaded region and offered the neighbouring
+   * one — "get North West England" over a corner North East England already covers.
+   *
+   * Read from the artifacts' real PMTiles zoom ranges rather than a constant — a hardcoded
+   * guess drifts from whatever the pipeline last built and made the notice fire over a
+   * fully-downloaded region.
    */
-  private applyAvailableDetail(regions: Region[]): void {
-    this.maxDataZoom = bestAvailableZoom(regions, BASEMAP_MAX_ZOOM);
-    this.renderDetailLimit();
+  private dataHere(point: [number, number]): { maxZoom: number; fromRegion: boolean } {
+    const here = this.downloaded.filter((region) => contains(region.bbox, point));
+    return here.length > 0
+      ? { maxZoom: bestAvailableZoom(here, BASEMAP_MAX_ZOOM), fromRegion: true }
+      : { maxZoom: BASEMAP_MAX_ZOOM, fromRegion: false };
   }
 
   /** Current coverage, downloaded state and all. */
@@ -259,22 +260,34 @@ export class RegionCoverage {
   };
 
   private readonly renderDetailLimit = (): void => {
-    const state = describeDetailLimit(this.map.getZoom(), this.maxDataZoom);
+    const centre = this.map.getCenter();
+    const point: [number, number] = [centre.lng, centre.lat];
+    const data = this.dataHere(point);
+    const state = describeDetailLimit(this.map.getZoom(), data.maxZoom, { fromRegion: data.fromRegion });
     this.notice.hidden = !state.overzoomed;
-    if (!state.overzoomed) return;
 
     // Naming the region turns a complaint into an instruction. The notice reports that the
     // map is stretched here; the thing that fixes it is a specific download, and until now
     // nothing connected the two — you had to open a list of four names and work out for
     // yourself which one you were looking at.
-    const centre = this.map.getCenter();
-    const covering = regionAt(this.footprints(), [centre.lng, centre.lat], { downloaded: false });
+    //
+    // Only where nothing downloaded covers the centre: past a downloaded region's own
+    // ceiling, another region would not add anything.
+    const covering =
+      state.overzoomed && !data.fromRegion
+        ? regionAt(this.footprints(), point, { downloaded: false })
+        : null;
 
-    this.notice.textContent = covering
-      ? `Limited detail here — get ${covering.name}`
-      : (state.label ?? '');
-    this.notice.title = state.detail ?? '';
+    if (state.overzoomed) {
+      this.notice.textContent = covering
+        ? `Limited detail here — get ${covering.name}`
+        : (state.label ?? '');
+      this.notice.title = state.detail ?? '';
+    }
 
+    // Withdrawn along with the notice, too: returning early once the notice was hidden left
+    // the last offer outlined on the map after zooming back out, pointing at nothing.
+    //
     // Only when it changes: this runs on every zoom frame, and re-feeding the source on
     // each one would be work for an identical result.
     if ((covering?.id ?? null) !== this.offeredRegionId) {

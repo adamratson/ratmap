@@ -55,7 +55,7 @@ export function renderRoutePanel(summary: RouteSummary, deps: RoutesUiDeps): voi
   if (carried.focusKey) {
     const target = container.querySelector<HTMLElement>(`[data-focus-key="${carried.focusKey}"]`);
     target?.focus({ preventScroll: true });
-    if (target instanceof HTMLInputElement && carried.save) {
+    if (target instanceof HTMLInputElement && target.type === 'text' && carried.save) {
       target.setSelectionRange(carried.save.selectionStart, carried.save.selectionEnd);
     }
   }
@@ -122,17 +122,10 @@ function planSection(
   const sac = sacSection(summary);
   if (sac) section.append(sac);
 
-  if (summary.hasStraightLegs) {
-    // C11 in the UI: an unsnapped leg is allowed, but it is a straight line across
-    // country and must never be presented as a path.
-    section.append(
-      el(
-        'p',
-        'route-note warn',
-        'Dashed sections are straight lines, not paths — no route was found between those points in the downloaded map.',
-      ),
-    );
-  }
+  const straight = straightLegsNote(summary);
+  if (straight) section.append(el('p', 'route-note warn', straight));
+
+  section.append(editTools(summary, planner));
 
   // Five identically-styled grey pills, with Clear sitting immediately beside Done, made
   // finishing and destroying look like the same kind of thing — fixed by pulling Clear
@@ -188,6 +181,59 @@ function planSection(
   if (carriedSave && ready) openSaveForm(section, planner, deps, onStatus, carriedSave);
 
   return section;
+}
+
+/**
+ * C11 in the UI: an unsnapped leg is allowed, but it is a straight line across country and
+ * must never be presented as a path. A freehand one is no different on the ground, but
+ * blaming it on the map would send someone looking for a fault that is not there.
+ */
+function straightLegsNote(summary: RouteSummary): string | null {
+  if (!summary.hasStraightLegs) return null;
+  if (summary.hasUnroutedLegs && summary.hasFreehandLegs) {
+    return 'Dashed sections are straight lines, not paths — drawn freehand, or no route was found between those points in the downloaded map.';
+  }
+  if (summary.hasUnroutedLegs) {
+    return 'Dashed sections are straight lines, not paths — no route was found between those points in the downloaded map.';
+  }
+  return 'Dashed sections are drawn freehand — straight lines, not paths.';
+}
+
+/**
+ * Controls that shape the route rather than act on it: closing it into a round trip, and
+ * whether new legs follow paths. A row of their own because the action row below only just
+ * fits a phone's width as it is.
+ */
+function editTools(summary: RouteSummary, planner: RoutePlanner): HTMLElement {
+  const row = el('div', 'route-tools');
+
+  const roundTrip = buttonEl('Round trip', () => planner.closeLoop());
+  roundTrip.disabled = !summary.canCloseLoop;
+  roundTrip.title = 'Add a last leg back to the start';
+  row.append(roundTrip, snapToggle(summary, planner));
+  return row;
+}
+
+/**
+ * Whether new legs follow paths or go straight. A switch rather than a button because a
+ * switch shows which way it is set, which a button would have to spell out in its label.
+ */
+function snapToggle(summary: RouteSummary, planner: RoutePlanner): HTMLElement {
+  const row = el('label', 'settings-row route-snap');
+  const text = el('span', 'settings-row-text');
+  text.append(el('span', 'settings-row-label', 'Snap to paths'));
+  if (!summary.snapToPath) {
+    text.append(el('span', 'settings-row-note', 'New legs are drawn as straight lines.'));
+  }
+
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = summary.snapToPath;
+  input.dataset.focusKey = 'snap-to-path';
+  input.addEventListener('change', () => planner.setSnapToPath(input.checked));
+
+  row.append(text, input);
+  return row;
 }
 
 /** "8 waypoints · 4.2 km" — what the Clear-route undo toast names, so it's obvious what

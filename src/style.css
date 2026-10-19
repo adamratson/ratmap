@@ -1663,7 +1663,8 @@ textarea {
   margin-top: 0.7rem;
 }
 
-.route-actions button {
+.route-actions button,
+.route-tools button {
   /* Height, not width, is the touch-target constraint here — five short-text pills
      genuinely fit one narrow phone width side by side; measured against the actual
      rendered row (343px available, ~349px needed at the wider padding) rather than
@@ -1701,9 +1702,27 @@ textarea {
   color: var(--danger);
 }
 
-.route-actions button:disabled {
+.route-actions button:disabled,
+.route-tools button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* Round trip and the snap switch. The switch takes whatever width the button leaves, so
+   its label and note wrap beside the button rather than pushing the checkbox off-row. */
+.route-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 0.7rem;
+}
+
+/* The settings switch, reused: the same control does the same job in both places. Tighter
+   than in Settings, where each row stands alone rather than sitting over an action row. */
+.route-snap {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
 }
 
 .route-save-form {

@@ -18,6 +18,10 @@ const BASE: RouteSummary = {
   distanceM: 8200,
   pendingLegs: 0,
   hasStraightLegs: false,
+  hasFreehandLegs: false,
+  hasUnroutedLegs: false,
+  snapToPath: true,
+  canCloseLoop: true,
   canUndo: true,
   profile: null,
   profileNote: null,
@@ -143,6 +147,72 @@ describe('the planning panel', () => {
 
       expect(planner.undo).toHaveBeenCalledOnce();
     });
+  });
+});
+
+describe('round trip in the panel', () => {
+  const roundTrip = (panel: HTMLElement) =>
+    [...panel.querySelectorAll<HTMLButtonElement>('.route-tools button')].find(
+      (b) => b.textContent === 'Round trip',
+    )!;
+
+  it('closes the route back to its start', () => {
+    const container = document.createElement('div');
+    const planner = { closeLoop: vi.fn() } as unknown as RoutePlanner;
+    renderRoutePanel(BASE, { ...deps(container), planner });
+
+    roundTrip(container).click();
+
+    expect(planner.closeLoop).toHaveBeenCalled();
+  });
+
+  it('is off when there is nothing to close', () => {
+    expect(roundTrip(render({ canCloseLoop: false })).disabled).toBe(true);
+  });
+
+  it('stays out of the action row, which only just fits a phone', () => {
+    const inRow = [...render({}).querySelectorAll('.route-actions button')].map((b) => b.textContent);
+    expect(inRow).not.toContain('Round trip');
+  });
+});
+
+describe('snap to paths in the panel', () => {
+  it('shows the switch as set, and flips the planner when touched', () => {
+    const container = document.createElement('div');
+    const planner = { setSnapToPath: vi.fn() } as unknown as RoutePlanner;
+    renderRoutePanel(BASE, { ...deps(container), planner });
+
+    const toggle = container.querySelector<HTMLInputElement>('.route-snap input[type=checkbox]')!;
+    expect(toggle.checked).toBe(true);
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+
+    expect(planner.setSnapToPath).toHaveBeenCalledWith(false);
+  });
+
+  it('says so while new legs are drawn straight', () => {
+    const panel = render({ snapToPath: false });
+    expect(panel.querySelector<HTMLInputElement>('.route-snap input')!.checked).toBe(false);
+    expect(panel.querySelector('.route-snap')!.textContent).toContain('straight lines');
+  });
+
+  const note = (panel: HTMLElement) => panel.querySelector('.route-note.warn')?.textContent ?? '';
+
+  it('does not blame the map for a leg drawn freehand', () => {
+    const panel = render({ hasStraightLegs: true, hasFreehandLegs: true });
+    expect(note(panel)).toContain('drawn freehand');
+    expect(note(panel)).not.toContain('no route was found');
+  });
+
+  it('still says when no route was found', () => {
+    const panel = render({ hasStraightLegs: true, hasUnroutedLegs: true });
+    expect(note(panel)).toContain('no route was found');
+    expect(note(panel)).not.toContain('freehand');
+  });
+
+  it('names both causes when a route has both', () => {
+    const panel = render({ hasStraightLegs: true, hasUnroutedLegs: true, hasFreehandLegs: true });
+    expect(note(panel)).toContain('drawn freehand, or no route was found');
   });
 });
 

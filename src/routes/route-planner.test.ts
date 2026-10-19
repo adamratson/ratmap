@@ -234,6 +234,72 @@ describe('placing waypoints', () => {
     expect(fakes.computeLeg).toHaveBeenCalledWith(ACHINTEE, CIC_HUT, expect.anything());
   });
 
+  it('draws legs straight while snap to paths is off, and keeps them so', async () => {
+    planner.activate();
+    planner.handleMapClick(click(ACHINTEE));
+    planner.setSnapToPath(false);
+    planner.handleMapClick(click(SUMMIT));
+    await settle();
+
+    expect(fakes.computeLeg).toHaveBeenLastCalledWith(
+      ACHINTEE,
+      SUMMIT,
+      expect.objectContaining({ snap: false }),
+    );
+    expect(last().snapToPath).toBe(false);
+
+    // Switched back on, a drag of the freehand leg's end still draws it freehand: the
+    // switch is for legs made from now on.
+    planner.setSnapToPath(true);
+    fakes.computeLeg.mockClear();
+    const dragged = fakes.markers.at(-1)!;
+    dragged.lngLat = CIC_HUT;
+    dragged.handlers.dragend();
+    await settle();
+
+    expect(fakes.computeLeg).toHaveBeenCalledWith(
+      ACHINTEE,
+      CIC_HUT,
+      expect.objectContaining({ snap: false }),
+    );
+  });
+
+  it('routes back to the start, the way new legs are drawn', async () => {
+    planner.activate();
+    describePoint.mockReturnValueOnce({ name: 'Achintee' });
+    planner.handleMapClick(click(ACHINTEE));
+    describePoint.mockReturnValueOnce({ name: 'Ben Nevis', ele: 1345 });
+    planner.handleMapClick(click(SUMMIT));
+    await settle();
+    expect(last().canCloseLoop).toBe(true);
+
+    planner.setSnapToPath(false);
+    planner.closeLoop();
+    await settle();
+
+    expect(fakes.computeLeg).toHaveBeenLastCalledWith(
+      SUMMIT,
+      ACHINTEE,
+      expect.objectContaining({ snap: false }),
+    );
+    expect(last()).toMatchObject({ waypointCount: 3, pendingLegs: 0, canCloseLoop: false });
+    // Named for where the walk goes, not for the car park it starts and ends at.
+    expect(planner.getName()).toBe('Ben Nevis');
+  });
+
+  it('does not close a route that is only being followed', async () => {
+    planner.activate();
+    planner.handleMapClick(click(ACHINTEE));
+    planner.handleMapClick(click(SUMMIT));
+    await settle();
+    planner.startFollowing();
+    expect(planner.isFollowing()).toBe(true);
+
+    planner.closeLoop();
+
+    expect(planner.getDraft().waypointCount).toBe(2);
+  });
+
   it('lets markers be dragged only while planning', () => {
     planner.activate();
     planner.handleMapClick(click(ACHINTEE));

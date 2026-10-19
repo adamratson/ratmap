@@ -94,6 +94,66 @@ test.describe('route planning', () => {
     expect(state.coordCount).toBeGreaterThan(100);
   });
 
+  test('draws a straight leg with snap to paths off, even where a path exists', async ({ page }) => {
+    await openRegionsSheet(page);
+    await downloadTestRegion(page);
+    await clearConditions(page);
+
+    await showArea(page, TEST_AREA);
+    await startNewRoute(page);
+
+    const snap = page.locator('.route-snap input[type=checkbox]');
+    await expect(snap).toBeChecked();
+    await snap.uncheck();
+
+    await clickMapAt(page, ...TRAILHEAD);
+    await clickMapAt(page, ...RIDGE);
+    await expect.poll(async () => (await plannerState(page)).pending, { timeout: 30_000 }).toBe(0);
+
+    const state = await plannerState(page);
+    expect(state.legKinds).toEqual(['straight']);
+    expect(state.coordCount).toBe(2);
+    await expect(
+      page.locator('.route-note.warn').filter({ hasText: /drawn freehand/i }),
+    ).toBeVisible();
+    await expect(
+      page.locator('.route-note.warn').filter({ hasText: /no route was found/i }),
+    ).toHaveCount(0);
+
+    // Back on, the next leg follows the path again; the freehand one stays as it was.
+    await snap.check();
+    await page.locator('.route-actions button', { hasText: 'Undo' }).click();
+    await clickMapAt(page, ...RIDGE);
+    await expect.poll(async () => (await plannerState(page)).pending, { timeout: 30_000 }).toBe(0);
+    expect((await plannerState(page)).legKinds).toEqual(['snapped']);
+  });
+
+  test('closes a route into a round trip along real paths', async ({ page }) => {
+    await openRegionsSheet(page);
+    await downloadTestRegion(page);
+    await clearConditions(page);
+
+    await showArea(page, TEST_AREA);
+    await startNewRoute(page);
+
+    await clickMapAt(page, ...TRAILHEAD);
+    await clickMapAt(page, ...RIDGE);
+    await expect.poll(async () => (await plannerState(page)).pending, { timeout: 30_000 }).toBe(0);
+    const outM = (await plannerState(page)).distanceM;
+
+    const roundTrip = page.locator('.route-tools button', { hasText: 'Round trip' });
+    await roundTrip.click();
+    await expect.poll(async () => (await plannerState(page)).pending, { timeout: 30_000 }).toBe(0);
+
+    const state = await plannerState(page);
+    expect(state.waypoints).toBe(3);
+    expect(state.legKinds).toEqual(['snapped', 'snapped']);
+    // Back the way it came, near enough: the same path is the shortest one both ways.
+    expect(state.distanceM).toBeGreaterThan(outM * 1.8);
+    expect(state.distanceM).toBeLessThan(outM * 2.2);
+    await expect(roundTrip).toBeDisabled();
+  });
+
   test('computes an elevation profile offline from the region terrain archive', async ({
     page,
   }) => {

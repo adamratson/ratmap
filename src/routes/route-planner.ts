@@ -34,8 +34,16 @@ export interface RouteSummary {
   distanceM: number;
   /** Legs still being computed. Non-zero means the figures below are partial. */
   pendingLegs: number;
-  /** True if any leg could not be snapped to a path (C11). */
+  /** True if any leg is a straight line: could not be snapped to a path (C11), or freehand. */
   hasStraightLegs: boolean;
+  /** True if any leg was drawn freehand, with snap to paths off. */
+  hasFreehandLegs: boolean;
+  /** True if any leg was meant to follow paths and no route was found for it (C11). */
+  hasUnroutedLegs: boolean;
+  /** Whether new legs follow the path network, or are drawn as straight lines. */
+  snapToPath: boolean;
+  /** Whether there is a route to close back to its start, and it is not closed already. */
+  canCloseLoop: boolean;
   canUndo: boolean;
   profile: ElevationProfile | null;
   /** Why there is no profile, when there is none. */
@@ -173,6 +181,11 @@ export class RoutePlanner {
   private suppressClickUntil = 0;
 
   private active = false;
+  /**
+   * Applies to legs made from here on, never to ones already drawn — each leg remembers
+   * its own mode (see Waypoint.freehand), so a route can mix the two.
+   */
+  private snapToPath = true;
   private inflight: AbortController | null = null;
   private profile: ElevationProfile | null = null;
   private profileNote: string | null = null;
@@ -247,6 +260,16 @@ export class RoutePlanner {
     return this.loadedName ?? this.suggestName();
   }
 
+  isSnappingToPath(): boolean {
+    return this.snapToPath;
+  }
+
+  setSnapToPath(snap: boolean): void {
+    if (this.snapToPath === snap) return;
+    this.snapToPath = snap;
+    this.emit();
+  }
+
   activate(): void {
     if (this.active) return;
     addRouteLayers(this.map, this.theme());
@@ -308,7 +331,10 @@ export class RoutePlanner {
     if (target instanceof Element && target.closest('.route-waypoint')) return true;
 
     const point: LngLat = [event.lngLat.lng, event.lngLat.lat];
-    const meta = this.describePoint?.(event) ?? {};
+    const meta: Partial<Waypoint> = {
+      ...this.describePoint?.(event),
+      ...(this.snapToPath ? {} : { freehand: true }),
+    };
     const onRoute = this.map
       .queryRenderedFeatures(event.point, {
         layers: [ROUTE_LINE_LAYER_ID, ROUTE_CASING_LAYER_ID].filter((id) =>
@@ -325,6 +351,13 @@ export class RoutePlanner {
 
     this.afterEdit();
     return true;
+  }
+
+  /** Route back to the start — see {@link RouteDraft.closeLoop}. */
+  closeLoop(): void {
+    if (!this.isEditing()) return;
+    if (!this.draft.closeLoop(this.snapToPath ? {} : { freehand: true })) return;
+    this.afterEdit();
   }
 
   undo(): void {
@@ -535,6 +568,7 @@ export class RoutePlanner {
 
         const leg = await this.router.computeLeg(ends[0], ends[1], {
           signal: controller.signal,
+          snap: this.draft.legSnaps(index),
         });
 
         if (controller.signal.aborted) return;
@@ -832,6 +866,9 @@ export class RoutePlanner {
 
   private suggestName(): string {
     const waypoints = this.draft.getWaypoints();
+    // A round trip's finish is a copy of its start, and "Achintee" is a poor name for a
+    // walk up Ben Nevis and back — the far point is what the walk is to.
+    if (this.draft.isLoop()) waypoints.pop();
     const named = waypoints.filter((waypoint) => waypoint.name);
     if (named.length > 0) return named[named.length - 1].name!;
     if (this.draft.totalDistanceM > 0) return `${formatDistance(this.draft.totalDistanceM)} route`;
@@ -851,6 +888,10 @@ export class RoutePlanner {
       distanceM: this.draft.totalDistanceM,
       pendingLegs: this.draft.pendingLegs().length,
       hasStraightLegs: this.draft.hasStraightLegs(),
+      hasFreehandLegs: this.draft.hasFreehandLegs(),
+      hasUnroutedLegs: this.draft.hasUnroutedLegs(),
+      snapToPath: this.snapToPath,
+      canCloseLoop: this.draft.canCloseLoop(),
       canUndo: this.draft.canUndo,
       profile: this.profile,
       profileNote: this.profileNote,

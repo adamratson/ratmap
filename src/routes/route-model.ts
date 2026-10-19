@@ -17,6 +17,16 @@ export interface Waypoint {
   name?: string;
   /** Metres, when known at placement time. The profile does not depend on it. */
   ele?: number;
+  /**
+   * The leg arriving at this waypoint is drawn freehand — a straight line, not routed —
+   * because snap to paths was off when that leg was made. Ignored on the first waypoint.
+   *
+   * Kept on the waypoint rather than the leg because a leg is `null` while it awaits
+   * computing: dragging a waypoint would otherwise forget how its legs were drawn, and
+   * re-route a freehand leg (or flatten a routed one) according to wherever the switch
+   * happens to be now.
+   */
+  freehand?: boolean;
 }
 
 /**
@@ -72,6 +82,11 @@ export class RouteDraft {
     return this.waypoints.length >= 2 && this.legs.every((leg) => leg !== null);
   }
 
+  /** Whether a leg is routed over the network, rather than drawn freehand. */
+  legSnaps(index: number): boolean {
+    return this.waypoints[index + 1]?.freehand !== true;
+  }
+
   /** Waypoint pair a leg runs between. */
   legEnds(index: number): [LngLat, LngLat] | null {
     const from = this.waypoints[index];
@@ -100,6 +115,35 @@ export class RouteDraft {
     return waypoint;
   }
 
+  /** Whether the route ends where it starts — a round trip someone has already closed. */
+  isLoop(): boolean {
+    const first = this.waypoints[0];
+    const last = this.waypoints[this.waypoints.length - 1];
+    return this.waypoints.length >= 3 && sameCoord([first.lng, first.lat], [last.lng, last.lat]);
+  }
+
+  /** Whether {@link closeLoop} has anything to do. */
+  canCloseLoop(): boolean {
+    return this.waypoints.length >= 2 && !this.isLoop();
+  }
+
+  /**
+   * Finish back at the start: a new last waypoint on the first one, and a leg to it.
+   *
+   * A copy of the start, name and all, rather than a reference to it — every other rule
+   * here (a drag moves one waypoint, a delete fuses two legs) assumes waypoints are
+   * independent, and the finish of a round trip is a place someone may well want to move.
+   */
+  closeLoop(meta: Partial<Waypoint> = {}): Waypoint | null {
+    if (!this.canCloseLoop()) return null;
+    const { name, ele, lng, lat } = this.waypoints[0];
+    return this.add([lng, lat], {
+      ...(name ? { name } : {}),
+      ...(typeof ele === 'number' ? { ele } : {}),
+      ...meta,
+    });
+  }
+
   insertAt(index: number, point: LngLat, meta: Partial<Waypoint> = {}): Waypoint {
     const clamped = Math.max(0, Math.min(index, this.waypoints.length));
     this.snapshot();
@@ -109,13 +153,18 @@ export class RouteDraft {
 
     if (this.waypoints.length === 1) return waypoint;
 
+    // Every leg this insertion creates is drawn the way the new waypoint asks — including
+    // one that arrives at a waypoint already there, which is where that leg's mode lives.
+    const freehand = meta.freehand === true;
     if (clamped === 0) {
       this.legs.unshift(null);
+      setFreehand(this.waypoints[1], freehand);
     } else if (clamped >= this.waypoints.length - 1) {
       this.legs.push(null);
     } else {
       // Splitting an existing leg in two: both halves need computing.
       this.legs.splice(clamped - 1, 1, null, null);
+      setFreehand(this.waypoints[clamped + 1], freehand);
     }
 
     return waypoint;
@@ -228,9 +277,19 @@ export class RouteDraft {
     return this.legs.reduce((total, leg) => total + (leg?.distanceM ?? 0), 0);
   }
 
-  /** True when any computed leg fell back to a straight line (C11). */
+  /** True when any computed leg is a straight line — fallen back (C11) or freehand. */
   hasStraightLegs(): boolean {
     return this.legs.some((leg) => leg?.kind === 'straight');
+  }
+
+  /** True when any computed leg was drawn freehand on purpose. */
+  hasFreehandLegs(): boolean {
+    return this.legs.some((leg) => leg?.freehand === true);
+  }
+
+  /** True when any computed leg was meant to follow paths and could not (C11). */
+  hasUnroutedLegs(): boolean {
+    return this.legs.some((leg) => leg?.kind === 'straight' && leg.freehand !== true);
   }
 
   toState(): RouteDraftState {
@@ -256,6 +315,12 @@ export class RouteDraft {
     this.undoStack.push(this.toState());
     if (this.undoStack.length > UNDO_DEPTH) this.undoStack.shift();
   }
+}
+
+/** Absent rather than false when routed, so records written before freehand look the same. */
+function setFreehand(waypoint: Waypoint, freehand: boolean): void {
+  if (freehand) waypoint.freehand = true;
+  else delete waypoint.freehand;
 }
 
 function copyCoord(coord: LngLat): LngLat {

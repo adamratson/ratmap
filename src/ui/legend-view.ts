@@ -156,8 +156,8 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
       )}
       ${legendRow(
         lineSwatch(ink.routeStraight, 3.5, { dash: '5 4', casing: ink.routeCasing, cap: 'butt' }),
-        'Unsnapped leg',
-        'No path connects these two waypoints — a straight line only, not a real route. Move a waypoint onto a path to fix it.',
+        'Straight leg',
+        'A straight line only, not a real route — drawn with snap to paths off, or no path connects these two waypoints. Move a waypoint onto a path to fix an unrouted one.',
       )}
       ${legendRow(
         lineSwatch(ink.offRoute, 2, { dash: '3 3' }),

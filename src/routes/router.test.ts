@@ -66,6 +66,19 @@ describe('OfflineRouter', () => {
     expect(leg.wayNames).toEqual(['Test path']);
   });
 
+  it('draws a freehand leg straight, without reading the network', async () => {
+    const getZxy = vi.fn(serveTile);
+    const archive = { getZxy } as unknown as PMTiles;
+    const registry = { get: () => archive } as unknown as TileSourceRegistry;
+    const router = new OfflineRouter({ registry, downloadedRegions: () => [REGION] });
+
+    const leg = await router.computeLeg(FROM, TO, { snap: false });
+
+    expect(leg).toMatchObject({ kind: 'straight', freehand: true, coords: [FROM, TO] });
+    expect(leg.reason).toBeUndefined();
+    expect(getZxy).not.toHaveBeenCalled();
+  });
+
   it('does not cache a tile whose read was cancelled', async () => {
     // pmtiles rejects with AbortError when the signal fires between its reads. That tile
     // must not be remembered as empty, or every later leg routes around a hole.

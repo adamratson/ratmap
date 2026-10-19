@@ -245,6 +245,127 @@ describe('RouteDraft.coordinates', () => {
   });
 });
 
+describe('RouteDraft freehand legs', () => {
+  it('routes a leg unless the waypoint it arrives at was placed freehand', () => {
+    const draft = new RouteDraft();
+    draft.add(A);
+    draft.add(B, { freehand: true });
+    draft.add(C);
+    expect([draft.legSnaps(0), draft.legSnaps(1)]).toEqual([false, true]);
+  });
+
+  it('keeps a leg freehand when its waypoint is dragged', () => {
+    const draft = new RouteDraft();
+    draft.add(A);
+    const b = draft.add(B, { freehand: true });
+    computeAll(draft);
+
+    draft.move(b.id, C);
+
+    expect(draft.pendingLegs()).toEqual([0]);
+    expect(draft.legSnaps(0)).toBe(false);
+  });
+
+  it('draws both halves of a split leg the way the inserted waypoint asks', () => {
+    const draft = new RouteDraft();
+    draft.add(A);
+    draft.add(C);
+    draft.insertAt(1, B, { freehand: true });
+    expect([draft.legSnaps(0), draft.legSnaps(1)]).toEqual([false, false]);
+
+    draft.insertAt(1, [-5.06, 56.805]);
+    expect([draft.legSnaps(0), draft.legSnaps(1), draft.legSnaps(2)]).toEqual([true, true, false]);
+  });
+
+  it('draws a leg added before the start the way the new waypoint asks', () => {
+    const draft = new RouteDraft();
+    draft.add(B);
+    draft.insertAt(0, A, { freehand: true });
+    expect(draft.legSnaps(0)).toBe(false);
+  });
+
+  it('tells a freehand leg apart from one that failed to route', () => {
+    const draft = new RouteDraft();
+    draft.add(A);
+    draft.add(B);
+    draft.setLeg(0, { ...leg([A, B], 'straight'), freehand: true });
+    expect([draft.hasStraightLegs(), draft.hasFreehandLegs(), draft.hasUnroutedLegs()]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+
+    draft.add(C);
+    draft.setLeg(1, leg([B, C], 'straight'));
+    expect(draft.hasUnroutedLegs()).toBe(true);
+  });
+
+  it('undoes back to the mode a leg had', () => {
+    const draft = new RouteDraft();
+    draft.add(A);
+    draft.add(C, { freehand: true });
+    draft.insertAt(1, B);
+    draft.undo();
+    expect(draft.legSnaps(0)).toBe(false);
+  });
+});
+
+describe('RouteDraft.closeLoop', () => {
+  it('finishes on a copy of the start, with a leg to compute', () => {
+    const draft = new RouteDraft();
+    const start = draft.add(A, { name: 'Achintee', ele: 30 });
+    draft.add(B);
+    computeAll(draft);
+
+    const finish = draft.closeLoop()!;
+
+    expect(finish).toMatchObject({ lng: A[0], lat: A[1], name: 'Achintee', ele: 30 });
+    expect(finish.id).not.toBe(start.id);
+    expect(draft.pendingLegs()).toEqual([1]);
+    expect(draft.legEnds(1)).toEqual([B, A]);
+    expect(draft.isLoop()).toBe(true);
+  });
+
+  it('does nothing without a route, or on one already closed', () => {
+    const draft = new RouteDraft();
+    draft.add(A);
+    expect(draft.closeLoop()).toBeNull();
+
+    draft.add(B);
+    draft.closeLoop();
+    expect(draft.canCloseLoop()).toBe(false);
+    expect(draft.closeLoop()).toBeNull();
+    expect(draft.waypointCount).toBe(3);
+  });
+
+  it('draws the way home freehand when asked', () => {
+    const draft = new RouteDraft();
+    draft.add(A);
+    draft.add(B);
+    draft.closeLoop({ freehand: true });
+    expect(draft.legSnaps(1)).toBe(false);
+  });
+
+  it('is undone in one step', () => {
+    const draft = new RouteDraft();
+    draft.add(A);
+    draft.add(B);
+    draft.closeLoop();
+    draft.undo();
+    expect(draft.waypointCount).toBe(2);
+    expect(draft.canCloseLoop()).toBe(true);
+  });
+
+  it('opens again once the finish is moved off the start', () => {
+    const draft = new RouteDraft();
+    draft.add(A);
+    draft.add(B);
+    const finish = draft.closeLoop()!;
+    draft.move(finish.id, C);
+    expect(draft.isLoop()).toBe(false);
+  });
+});
+
 describe('RouteDraft state round-trip', () => {
   it('restores to an independent copy', () => {
     const draft = new RouteDraft();

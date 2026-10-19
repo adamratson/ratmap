@@ -59,12 +59,22 @@ export interface ComputedLeg {
   kind: LegKind;
   /** Named ways the route follows, in order. Empty for a straight leg. */
   wayNames: string[];
-  /** Why this leg is straight rather than snapped. Absent when it snapped. */
+  /**
+   * Why this leg is straight rather than snapped. Absent when it snapped, and when it was
+   * drawn freehand — that one is straight because it was asked to be, not for a reason.
+   */
   reason?: string;
+  /**
+   * Drawn straight on purpose, with snap to paths off. Still `kind: 'straight'`: it is a
+   * line across country exactly like a leg that failed to route, and is drawn as one.
+   */
+  freehand?: true;
 }
 
 export interface RouteRequest {
   signal?: AbortSignal;
+  /** False to draw the leg as a straight line without consulting the network. Default true. */
+  snap?: boolean;
 }
 
 export interface OfflineRouterOptions {
@@ -111,6 +121,16 @@ export class OfflineRouter {
       wayNames: [],
       reason,
     });
+
+    if (request.snap === false) {
+      return {
+        coords: [from, to],
+        distanceM: distanceMetres(from, to),
+        kind: 'straight',
+        wayNames: [],
+        freehand: true,
+      };
+    }
 
     const region = this.regionFor(from, to);
     if (!region) {

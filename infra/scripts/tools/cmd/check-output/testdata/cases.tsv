@@ -15,3 +15,9 @@ sac-unnamed	sac	testdata/sac-unnamed.geojsonl
 terrain-features-ok	terrain-features	testdata/terrain-features-ok.geojsonl
 terrain-features-few	terrain-features	testdata/terrain-features-few.geojsonl
 terrain-features-one	terrain-features	testdata/terrain-features-one.geojsonl
+landmarks-ok	landmarks	testdata/landmarks-ok.geojsonl
+landmarks-few	landmarks	testdata/landmarks-few.geojsonl
+landmarks-area	landmarks	testdata/landmarks-area.geojsonl
+detail-ok	detail	testdata/detail-ok.geojsonl
+detail-few	detail	testdata/detail-few.geojsonl
+detail-shape	detail	testdata/detail-shape.geojsonl

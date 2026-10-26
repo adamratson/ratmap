@@ -21,6 +21,9 @@ export type LayerGroup =
   | 'paths'
   | 'sac'
   | 'terrainFeatures'
+  | 'landmarks'
+  | 'boundaries'
+  | 'powerLines'
   | 'avalanche'
   | 'footprints';
 
@@ -31,6 +34,9 @@ export const LAYER_GROUP_ORDER: readonly LayerGroup[] = [
   'paths',
   'sac',
   'terrainFeatures',
+  'landmarks',
+  'boundaries',
+  'powerLines',
   'avalanche',
   'footprints',
 ];
@@ -47,6 +53,9 @@ const DEFAULT_VISIBLE: Record<LayerGroup, boolean> = {
   paths: true,
   sac: true,
   terrainFeatures: true,
+  landmarks: true,
+  boundaries: true,
+  powerLines: true,
   avalanche: false,
   footprints: true,
 };
@@ -65,8 +74,9 @@ const LAYER_ID_SUFFIXES: Record<LayerGroup, readonly string[]> = {
   hillshade: ['hillshade'],
   contours: ['-contours-lines-index', '-contours-lines', '-contours-labels'],
   // Both flavours: the basemap artifact's own paths above z14 (`…-basemap-paths`) and the
-  // low-zoom paths artifact below it (`…-paths-paths`).
-  paths: ['-paths-casing', '-paths'],
+  // low-zoom paths artifact below it (`…-paths-paths`). Fords go with them: a ford is
+  // part of the path, not of the field it crosses.
+  paths: ['-paths-casing', '-paths', '-detail-fords'],
   sac: ['-sac-band', '-sac-labels'],
   terrainFeatures: [
     '-terrain-features-scree',
@@ -74,6 +84,9 @@ const LAYER_ID_SUFFIXES: Record<LayerGroup, readonly string[]> = {
     '-terrain-features-rock',
     '-terrain-features-rock-outline',
   ],
+  landmarks: ['-landmarks-symbols'],
+  boundaries: ['-detail-walls', '-detail-fences', '-detail-gates'],
+  powerLines: ['-detail-power-lines', '-detail-pylons'],
   avalanche: ['-avalanche-shade'],
   footprints: [FOOTPRINT_FILL_LAYER_ID, FOOTPRINT_LINE_LAYER_ID],
 };

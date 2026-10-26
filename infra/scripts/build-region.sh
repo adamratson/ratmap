@@ -43,8 +43,8 @@ wants() {
 
 for requested in ${ONLY//,/ }; do
   case "$requested" in
-    basemap|paths|peaks|sac|terrain|terrain-features) ;;
-    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features)" >&2
+    basemap|paths|peaks|sac|terrain|terrain-features|landmarks|detail) ;;
+    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features, landmarks, detail)" >&2
        exit 2 ;;
   esac
 done
@@ -123,6 +123,31 @@ else
   TERRAIN_FEATURES_SOURCE=""
 fi
 
+# Masts, towers, trig pillars, cairns, lighthouses and wind turbines (build-landmarks.sh),
+# resolved the same way again.
+# Protomaps keeps no man_made= POIs — see that script's header.
+if [ -n "${LANDMARKS_SOURCE_URL:-}" ]; then
+  LANDMARKS_SOURCE="$LANDMARKS_SOURCE_URL"
+elif [ -s "$DIST_DIR/landmarks-global.pmtiles" ]; then
+  LANDMARKS_SOURCE="$DIST_DIR/landmarks-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  LANDMARKS_SOURCE="$PUBLIC_BASE_URL/landmarks-global.pmtiles"
+else
+  LANDMARKS_SOURCE=""
+fi
+
+# Walls, fences, power lines, gates, stiles and fords (build-detail.sh), resolved the same
+# way. Protomaps carries none of it — see that script's header.
+if [ -n "${DETAIL_SOURCE_URL:-}" ]; then
+  DETAIL_SOURCE="$DETAIL_SOURCE_URL"
+elif [ -s "$DIST_DIR/detail-global.pmtiles" ]; then
+  DETAIL_SOURCE="$DIST_DIR/detail-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  DETAIL_SOURCE="$PUBLIC_BASE_URL/detail-global.pmtiles"
+else
+  DETAIL_SOURCE=""
+fi
+
 # Measured for Scotland (2026-08-21): basemap z12 ~84 MB / z13 ~175 MB; terrain z10
 # ~107 MB / z11 ~340 MB. Raster terrain grows far faster than vector basemap per level,
 # hence the different ceilings. Override per build if a region needs more.
@@ -150,6 +175,16 @@ SAC_MAXZOOM="$BASEMAP_MAXZOOM"
 # over, and terrain-features-global.pmtiles itself stops at z15.
 TERRAIN_FEATURES_MAXZOOM="$BASEMAP_MAXZOOM"
 [ "$TERRAIN_FEATURES_MAXZOOM" -gt 15 ] && TERRAIN_FEATURES_MAXZOOM=15
+
+# And again for landmarks: drawn over the basemap, and landmarks-global.pmtiles stops at
+# z15. A region whose basemap ceiling is below the global archive's z13 floor gets no
+# landmarks at all — see the extract below.
+LANDMARKS_MAXZOOM="$BASEMAP_MAXZOOM"
+[ "$LANDMARKS_MAXZOOM" -gt 15 ] && LANDMARKS_MAXZOOM=15
+
+# Field detail, the same again: detail-global.pmtiles holds z12-15.
+DETAIL_MAXZOOM="$BASEMAP_MAXZOOM"
+[ "$DETAIL_MAXZOOM" -gt 15 ] && DETAIL_MAXZOOM=15
 
 # paths-global.pmtiles only holds z12-13 — it exists to fill the gap below where the
 # basemap starts carrying paths, not to duplicate it.
@@ -361,6 +396,38 @@ elif [ -n "$TERRAIN_FEATURES_SOURCE" ]; then
     "$TERRAIN_FEATURES_MAXZOOM" --allow-empty
 else
   echo "==> terrain features: skipped (no terrain-features-global.pmtiles — run ./scripts/build-terrain-features.sh)"
+fi
+
+if ! wants landmarks; then
+  :
+elif [ -z "$LANDMARKS_SOURCE" ]; then
+  echo "==> landmarks: skipped (no landmarks-global.pmtiles — run ./scripts/build-landmarks.sh)"
+elif [ "$LANDMARKS_MAXZOOM" -lt 13 ]; then
+  # The global archive holds z13-15 only (build-landmarks.sh), so a region capped below
+  # that has nothing to cut — and an extract asked for z0-12 of it is an empty archive.
+  echo "==> landmarks: skipped (basemap capped at z$LANDMARKS_MAXZOOM, landmarks start at z13)"
+else
+  echo "==> landmarks (masts, towers, trig pillars, cairns, lighthouses, wind turbines)"
+  # Versioned like peaks: a rebuilt landmark set needs a new name to reach a region
+  # already downloaded. Bump the number here, in tools/cmd/build-manifest's artifactKinds
+  # and in docker/build-global.sh's cut_from_global together.
+  extract_verified "$LANDMARKS_SOURCE" "$OUT_DIR/$REGION_ID-landmarks-1.pmtiles" \
+    "$LANDMARKS_MAXZOOM" --allow-empty
+fi
+
+if ! wants detail; then
+  :
+elif [ -z "$DETAIL_SOURCE" ]; then
+  echo "==> field detail: skipped (no detail-global.pmtiles — run ./scripts/build-detail.sh)"
+elif [ "$DETAIL_MAXZOOM" -lt 12 ]; then
+  # As for landmarks: the global archive starts at z12 (build-detail.sh).
+  echo "==> field detail: skipped (basemap capped at z$DETAIL_MAXZOOM, field detail starts at z12)"
+else
+  echo "==> field detail (walls, fences, power lines, gates, stiles, fords)"
+  # Versioned like landmarks; bump together with tools/cmd/build-manifest's artifactKinds
+  # and docker/build-global.sh's cut_from_global.
+  extract_verified "$DETAIL_SOURCE" "$OUT_DIR/$REGION_ID-detail-1.pmtiles" \
+    "$DETAIL_MAXZOOM" --allow-empty
 fi
 
 if ! wants terrain; then

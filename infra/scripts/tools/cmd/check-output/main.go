@@ -6,6 +6,8 @@
 //	check-output munros FILE             # build-peaks.sh: the Munro count
 //	check-output sac FILE                # build-sac.sh: known paths' hardest grades
 //	check-output terrain-features FILE   # build-terrain-features.sh: every kind present
+//	check-output landmarks FILE          # build-landmarks.sh: every kind present, all points
+//	check-output detail FILE             # build-detail.sh: every kind present, right shapes
 //
 // Each prints a line per assertion and exits 1 with a FAIL line when one fails. The
 // expected values and why each was chosen are documented beside the calls in the scripts.
@@ -34,15 +36,17 @@ func (f failure) Error() string { return string(f) }
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail FILE")
 		os.Exit(2)
 	}
 	checks := map[string]func(string, io.Writer) error{
 		"peaks": peaks, "munros": munros, "sac": sac, "terrain-features": terrainFeatures,
+		"landmarks": landmarks,
+		"detail":    detail,
 	}
 	check, ok := checks[os.Args[1]]
 	if !ok {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail FILE")
 		os.Exit(2)
 	}
 	if err := check(os.Args[2], os.Stdout); err != nil {
@@ -59,6 +63,11 @@ func main() {
 // eachProps calls fn with every feature's properties, a feature with none getting an
 // empty set. Blank lines are skipped and a GeoJSONSeq record separator is stripped.
 func eachProps(path string, fn func(map[string]json.RawMessage) error) error {
+	return eachFeature(path, func(p map[string]json.RawMessage, _ string) error { return fn(p) })
+}
+
+// eachFeature is eachProps with the feature's geometry type as well ("" for none).
+func eachFeature(path string, fn func(props map[string]json.RawMessage, geometry string) error) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -70,11 +79,18 @@ func eachProps(path string, fn func(map[string]json.RawMessage) error) error {
 		if text := bytes.TrimSpace(bytes.TrimLeft(line, "\x1e")); len(text) > 0 {
 			var feature struct {
 				Properties map[string]json.RawMessage `json:"properties"`
+				Geometry   *struct {
+					Type string `json:"type"`
+				} `json:"geometry"`
 			}
 			if err := json.Unmarshal(text, &feature); err != nil {
 				return fmt.Errorf("%s: line %d: %w", path, n, err)
 			}
-			if err := fn(feature.Properties); err != nil {
+			geometry := ""
+			if feature.Geometry != nil {
+				geometry = feature.Geometry.Type
+			}
+			if err := fn(feature.Properties, geometry); err != nil {
 				return fmt.Errorf("%s: line %d: %w", path, n, err)
 			}
 		}
@@ -280,6 +296,117 @@ func terrainFeatures(path string, out io.Writer) error {
 	}
 	if len(histogram) < 2 {
 		return failure("FAIL: fewer than two distinct kinds in the whole build")
+	}
+	return nil
+}
+
+// landmarks checks that all six kinds are present in meaningful numbers, as
+// terrainFeatures does, and that every feature is a Point: the app draws each as one
+// symbol, and an area that slipped past normalize-landmarks' centroid step would repeat
+// its icon in every tile it touches.
+func landmarks(path string, out io.Writer) error {
+	minimum := []struct {
+		kind string
+		n    int
+	}{{"mast", 20}, {"tower", 10}, {"survey_point", 5}, {"cairn", 5}, {"lighthouse", 2}, {"wind_turbine", 50}}
+	histogram := map[string]int{}
+	notPoints := 0
+	err := eachFeature(path, func(p map[string]json.RawMessage, geometry string) error {
+		kv, ok := p["kind"]
+		if !ok {
+			return errors.New(`no "kind"`)
+		}
+		histogram[rawjson.Text(kv)]++
+		if geometry != "Point" {
+			notPoints++
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	sorted := []string{"cairn", "lighthouse", "mast", "survey_point", "tower", "wind_turbine"}
+	parts := make([]string, len(sorted))
+	for i, k := range sorted {
+		parts[i] = fmt.Sprintf("%s x%d", k, histogram[k])
+	}
+	fmt.Fprintf(out, "  by kind: %s\n", strings.Join(parts, ", "))
+	if notPoints > 0 {
+		return failure(fmt.Sprintf("FAIL: %d features are not points — normalize-landmarks' centroid step likely broken", notPoints))
+	}
+	var missing []string
+	for _, m := range minimum {
+		if histogram[m.kind] < m.n {
+			missing = append(missing, fmt.Sprintf("%s (%d < %d)", m.kind, histogram[m.kind], m.n))
+		}
+	}
+	if len(missing) > 0 {
+		return failure("FAIL: implausibly few features for " + strings.Join(missing, ", ") +
+			" — filter or normalize step likely broken")
+	}
+	return nil
+}
+
+// detail checks build-detail.sh's output the way landmarks does: every kind present in
+// meaningful numbers, and each in the geometry it is drawn as — the field boundaries and
+// power lines as lines, the rest as points. Thresholds are two orders of magnitude below
+// Scotland alone (normalize-detail over scotland-latest.osm.pbf, 2026-10-27; the counts
+// are beside each), loose enough for a narrow test extract, tight enough that a broken
+// filter, which produces zero, still fails.
+func detail(path string, out io.Writer) error {
+	minimum := []struct {
+		kind string
+		n    int
+	}{
+		{"wall", 1000},            // 198,680
+		{"fence", 1000},           // 199,849
+		{"power_line", 20},        // 2,447
+		{"minor_power_line", 300}, // 39,020
+		{"pylon", 100},            // 16,405
+		{"gate", 1000},            // 103,083
+		{"stile", 10},             // 1,305
+		{"cattle_grid", 50},       // 5,003
+		{"ford", 80},              // 8,450
+	}
+	lines := map[string]bool{"wall": true, "fence": true, "power_line": true, "minor_power_line": true}
+	histogram := map[string]int{}
+	misshapen := 0
+	err := eachFeature(path, func(p map[string]json.RawMessage, geometry string) error {
+		kv, ok := p["kind"]
+		if !ok {
+			return errors.New(`no "kind"`)
+		}
+		kind := rawjson.Text(kv)
+		histogram[kind]++
+		want := "Point"
+		if lines[kind] {
+			want = "LineString"
+		}
+		if geometry != want {
+			misshapen++
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	parts := make([]string, len(minimum))
+	for i, m := range minimum {
+		parts[i] = fmt.Sprintf("%s x%d", m.kind, histogram[m.kind])
+	}
+	fmt.Fprintf(out, "  by kind: %s\n", strings.Join(parts, ", "))
+	if misshapen > 0 {
+		return failure(fmt.Sprintf("FAIL: %d features are not the shape their kind is drawn as — normalize-detail likely broken", misshapen))
+	}
+	var missing []string
+	for _, m := range minimum {
+		if histogram[m.kind] < m.n {
+			missing = append(missing, fmt.Sprintf("%s (%d < %d)", m.kind, histogram[m.kind], m.n))
+		}
+	}
+	if len(missing) > 0 {
+		return failure("FAIL: implausibly few features for " + strings.Join(missing, ", ") +
+			" — filter or normalize step likely broken")
 	}
 	return nil
 }

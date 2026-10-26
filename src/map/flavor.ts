@@ -234,6 +234,22 @@ export interface MapInk {
   parkingGlyph: string;
   parkingRim: string;
   parkingText: string;
+  /**
+   * Landmarks (src/overlays/landmarks.ts): masts, trig points and cairns, in one dark ink
+   * haloed in the ground colour like the parking sign — black on a paper map, chalk at
+   * night. Their names take a quieter ink than summit names, which they sit beside.
+   */
+  landmark: string;
+  landmarkRim: string;
+  landmarkText: string;
+  /**
+   * Field detail (src/overlays/detail.ts). Walls and fences in a quiet grey a step off the
+   * contours' brown, so they read as a different thing without competing; power lines
+   * darker and cooler; the ford symbol in the water-label blue.
+   */
+  boundary: string;
+  power: string;
+  ford: string;
 }
 
 const DAY_INK: MapInk = {
@@ -260,6 +276,12 @@ const DAY_INK: MapInk = {
   parkingGlyph: '#ffffff',
   parkingRim: '#ffffff',
   parkingText: '#1d4a80',
+  landmark: '#2b2724',
+  landmarkRim: '#ffffff',
+  landmarkText: '#4f4740',
+  boundary: '#7d776e',
+  power: '#454a52',
+  ford: '#2f6b86',
 };
 
 // Contrast against night earth (#161a1f): path 6.3:1, contour label 6.5:1, route 5.8:1,
@@ -289,6 +311,12 @@ const NIGHT_INK: MapInk = {
   parkingGlyph: '#ffffff',
   parkingRim: '#0e1114',
   parkingText: '#8db4e2',
+  landmark: '#dfe3e8',
+  landmarkRim: '#0e1114',
+  landmarkText: '#aab2bb',
+  boundary: '#7a8189',
+  power: '#aeb5be',
+  ford: '#7fb3c9',
 };
 
 export function mapInk(theme: Theme): MapInk {

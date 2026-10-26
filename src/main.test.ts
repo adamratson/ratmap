@@ -539,6 +539,9 @@ const stubPrefersDark = (dark: boolean): void => {
       'paths',
       'sac',
       'terrainFeatures',
+      'landmarks',
+      'boundaries',
+      'powerLines',
       'avalanche',
       'footprints',
     ]);

@@ -1,6 +1,8 @@
 import type { MapInk } from '../map/flavor';
 import { SAC_GRADES, sacCssColor } from '../overlays/sac';
 import { TERRAIN_FEATURE_KINDS, terrainSwatch } from '../overlays/terrain-features';
+import { LANDMARK_KINDS, landmarkSwatch } from '../overlays/landmarks';
+import { DETAIL_LEGEND } from '../overlays/detail';
 import { SLOPE_CLASSES, slopeCssColor } from '../overlays/avalanche';
 
 // The map legend: every symbol the map draws, in the colours it draws them.
@@ -125,6 +127,26 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
           entry.note,
         ),
       ).join('')}
+    </div>
+
+    <div class="legend-section">
+      <h3>Landmarks</h3>
+      <p class="legend-note">
+        Reference points to take a bearing on, from zoom 13 in a downloaded region and
+        named from 15. From OpenStreetMap, so coverage is partial: a top with no trig
+        point shown may have one nobody has mapped.
+      </p>
+      ${LANDMARK_KINDS.map((entry) => legendRow(landmarkSwatch(entry.icon, ink), entry.label, entry.note)).join('')}
+    </div>
+
+    <div class="legend-section">
+      <h3>Field detail</h3>
+      <p class="legend-note">
+        The handrails to navigate along and the ways through them, in a downloaded region.
+        Mapped field by field in some places and not at all in others: open ground with no
+        wall shown may well have one.
+      </p>
+      ${DETAIL_LEGEND.map((entry) => legendRow(entry.swatch(ink), entry.label, entry.note)).join('')}
     </div>
 
     <div class="legend-section">

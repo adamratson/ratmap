@@ -1,0 +1,13 @@
+{"type":"Feature","tippecanoe":{"minzoom":14},"geometry":{"type": "LineString", "coordinates": [[-2.45, 54.68], [-2.44, 54.69]]},"properties":{"kind":"wall"}}
+{"type":"Feature","tippecanoe":{"minzoom":14},"geometry":{"type": "LineString", "coordinates": [[0, 0], [1, 0], [1, 1], [0, 0]]},"properties":{"kind":"fence"}}
+{"type":"Feature","tippecanoe":{"minzoom":12},"geometry":{"type": "LineString", "coordinates": [[0, 0], [10, 0]]},"properties":{"kind":"power_line"}}
+{"type":"Feature","tippecanoe":{"minzoom":14},"geometry":{"type": "LineString", "coordinates": [[0, 0], [10, 0]]},"properties":{"kind":"minor_power_line"}}
+{"type":"Feature","tippecanoe":{"minzoom":15},"geometry":{"type": "Point", "coordinates": [0, 0]},"properties":{"kind":"pylon"}}
+{"type":"Feature","tippecanoe":{"minzoom":15},"geometry":{"type": "Point", "coordinates": [1, 2]},"properties":{"kind":"gate"}}
+{"type":"Feature","tippecanoe":{"minzoom":15},"geometry":{"type": "Point", "coordinates": [1, 2]},"properties":{"kind":"gate"}}
+{"type":"Feature","tippecanoe":{"minzoom":15},"geometry":{"type":"Point","coordinates":[2,0]},"properties":{"kind":"gate"}}
+{"type":"Feature","tippecanoe":{"minzoom":15},"geometry":{"type": "Point", "coordinates": [1, 2]},"properties":{"kind":"stile"}}
+{"type":"Feature","tippecanoe":{"minzoom":15},"geometry":{"type": "Point", "coordinates": [1, 2]},"properties":{"kind":"cattle_grid"}}
+{"type":"Feature","tippecanoe":{"minzoom":14},"geometry":{"type": "Point", "coordinates": [1, 2]},"properties":{"kind":"ford"}}
+{"type":"Feature","tippecanoe":{"minzoom":14},"geometry":{"type":"Point","coordinates":[5,5]},"properties":{"kind":"ford"}}
+{"type":"Feature","tippecanoe":{"minzoom":15},"geometry":{"type":"Point","coordinates":[0.5,0]},"properties":{"kind":"pylon"}}

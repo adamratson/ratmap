@@ -1,0 +1,26 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-2.4511, 54.6838]}, "properties": {"man_made": "mast", "tower:type": "communication", "@type": "node", "@id": 1, "name": "A <&> \"q\""}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[0, 0], [2, 0], [2, 4], [0, 4], [0, 0]]]]}, "properties": {"man_made": "lighthouse", "@type": "way", "@id": 20, "name": "Mull of Galloway Lighthouse"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"power": "generator", "generator:source": "wind", "generator:method": "wind_turbine", "@type": "node", "@id": 21}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"power": "generator", "generator:source": "solar", "@type": "node", "@id": 22}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[0, 0], [2, 0], [2, 4], [0, 4], [0, 0]]]]}, "properties": {"power": "plant", "generator:source": "wind", "@type": "way", "@id": 23, "name": "Whitelee Wind Farm"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-2.4511, 54.6838]}, "properties": {"man_made": "mast", "tower:type": "communication", "@type": "node", "@id": 1}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[0, 0], [4, 0], [4, 2], [0, 2], [0, 0]]]]}, "properties": {"man_made": "tower", "@type": "way", "@id": 1}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[10, 10], [11, 10], [11, 11], [10, 11], [10, 10]]], [[[20, 20], [23, 20], [23, 23], [20, 23], [20, 20]], [[21, 21], [22, 21], [22, 22], [21, 22], [21, 21]]]]}, "properties": {"man_made": "tower", "tower:type": "bell_tower", "@type": "relation", "@id": 1}}
+{"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[1, 1], [2, 2], [3, 3], [1, 1]]]}, "properties": {"man_made": "cairn", "@type": "way", "@id": 2}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "cairn", "@type": "node", "@id": 3, "name": 7}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "survey_point", "@type": "node", "@id": 4, "name": "Cross Fell trig"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "survey_point", "survey_point:structure": "pillar", "@type": "node", "@id": 5}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "survey_point", "survey_point:structure": "medallion", "@type": "node", "@id": 6}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "survey_point", "natural": "peak", "@type": "node", "@id": 7, "name": "Great Dun Fell"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "cairn", "natural": "volcano", "@type": "node", "@id": 8}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "cairn", "natural": "saddle", "@type": "node", "@id": 9}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "mast", "tower:type": "lighting", "@type": "node", "@id": 10}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "tower", "tower:type": "firefighter_training", "@type": "node", "@id": 11}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "water_tower", "@type": "node", "@id": 12}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": "Mast", "@type": "node", "@id": 13}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {"man_made": 5}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 2]}, "properties": {}}
+
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [3, 4]}, "properties": {"man_made": "cairn"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [3, 4]}, "properties": {"man_made": "cairn"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [5, 6]}}

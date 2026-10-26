@@ -1,0 +1,12 @@
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-2.4511, 54.6838]},"properties":{"kind":"mast","name":"A <&> \"q\""}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1,2]},"properties":{"kind":"lighthouse","name":"Mull of Galloway Lighthouse"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1, 2]},"properties":{"kind":"wind_turbine"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[2,1]},"properties":{"kind":"tower"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[21.5,21.5]},"properties":{"kind":"tower"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1.75,1.75]},"properties":{"kind":"cairn"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1, 2]},"properties":{"kind":"cairn"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1, 2]},"properties":{"kind":"survey_point","name":"Cross Fell trig"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1, 2]},"properties":{"kind":"survey_point"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1, 2]},"properties":{"kind":"cairn"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[3, 4]},"properties":{"kind":"cairn"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[3, 4]},"properties":{"kind":"cairn"}}

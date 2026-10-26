@@ -9,6 +9,8 @@ import {
 } from '../map/layers';
 import { SAC_GRADES, sacCssColor } from '../overlays/sac';
 import { terrainSwatch } from '../overlays/terrain-features';
+import { landmarkSwatch } from '../overlays/landmarks';
+import { powerSwatch, wallSwatch } from '../overlays/detail';
 import { slopeCssColor } from '../overlays/avalanche';
 import { lineSwatch } from './legend-view';
 
@@ -39,7 +41,7 @@ const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink
   },
   paths: {
     label: 'Paths and tracks',
-    note: 'Footpaths and tracks, in downloaded regions.',
+    note: 'Footpaths, tracks and fords, in downloaded regions.',
     swatch: (ink) => lineSwatch(ink.pathLine, 2, { dash: '4 3', casing: ink.pathCasing, cap: 'butt' }),
   },
   sac: {
@@ -51,6 +53,21 @@ const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink
     label: 'Ground surface',
     note: 'Scree, shingle and rock outcrops.',
     swatch: (ink) => terrainSwatch('scree', ink),
+  },
+  landmarks: {
+    label: 'Landmarks',
+    note: 'Masts, trig points, cairns, lighthouses and wind turbines.',
+    swatch: (ink) => landmarkSwatch('mast', ink),
+  },
+  boundaries: {
+    label: 'Walls, fences and gates',
+    note: 'Field boundaries and the gates, stiles and cattle grids through them.',
+    swatch: wallSwatch,
+  },
+  powerLines: {
+    label: 'Power lines',
+    note: 'Pylon and pole lines.',
+    swatch: powerSwatch,
   },
   avalanche: {
     label: 'Avalanche terrain',

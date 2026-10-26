@@ -40,6 +40,7 @@ const IDS_BY_GROUP: Record<LayerGroup, string[]> = {
     'region-lochaber-basemap-paths',
     'region-lochaber-paths-paths-casing',
     'region-lochaber-paths-paths',
+    'region-lochaber-detail-fords',
   ],
   sac: ['region-lochaber-sac-band', 'region-lochaber-sac-labels'],
   terrainFeatures: [
@@ -48,6 +49,9 @@ const IDS_BY_GROUP: Record<LayerGroup, string[]> = {
     'region-lochaber-terrain-features-rock',
     'region-lochaber-terrain-features-rock-outline',
   ],
+  landmarks: ['region-lochaber-landmarks-symbols'],
+  boundaries: ['region-lochaber-detail-walls', 'region-lochaber-detail-fences', 'region-lochaber-detail-gates'],
+  powerLines: ['region-lochaber-detail-power-lines', 'region-lochaber-detail-pylons'],
   avalanche: ['region-lochaber-avalanche-shade'],
   footprints: ['region-footprints-fill', 'region-footprints-line'],
 };

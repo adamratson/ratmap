@@ -1,0 +1,3 @@
+  kept 6 features; skipped 2 with no recognized man_made= or wind generator tags, 1 summits (the peaks artifact draws those), 2 not landmarks (floodlights, benchmark bolts), 0 already seen (continent seams)
+  by kind: cairn x1, lighthouse x1, mast x1, survey_point x1, tower x1, wind_turbine x1
+  normalize-landmarks self-test OK (11 cases)

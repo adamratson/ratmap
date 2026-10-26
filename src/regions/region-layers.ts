@@ -15,6 +15,8 @@ import { PEAKS_LAYER_ID, PEAKS_SOURCE_ID } from '../overlays/peaks';
 import { addSacLayers, sacBandLayerId } from '../overlays/sac';
 import { addAvalancheLayer, avalancheSourceSpec } from '../overlays/avalanche';
 import { addTerrainFeatureLayers } from '../overlays/terrain-features';
+import { addLandmarkLayers } from '../overlays/landmarks';
+import { addDetailLayers } from '../overlays/detail';
 import { applyAllStoredVisibility } from '../map/layers';
 
 // Renders a downloaded region *over* the low-zoom world catalog rather than replacing it,
@@ -96,6 +98,18 @@ function beneathPaths(map: MLMap, region: Region): string | undefined {
     sacBandLayerId(regionSourceId(region.id, 'sac')),
   ]);
   return regionLayerIds(map, region).find((id) => anchors.has(id)) ?? beneathLabels(map, region);
+}
+
+/**
+ * Where a region's own point symbols belong — landmarks, gates, fords: in with the
+ * basemap's POIs, just beneath them. Above every line, so no path strikes through a mast or
+ * a gate, and above the contour and grade labels, which give way to a symbol rather than
+ * the other way round. Without the basemap yet (C16), under the region's labels like the
+ * rest.
+ */
+function amongBasemapPois(map: MLMap, region: Region): string | undefined {
+  const pois = `${regionSourceId(region.id, 'basemap')}-pois`;
+  return map.getLayer(pois) ? pois : beneathLabels(map, region);
 }
 
 /**
@@ -520,6 +534,26 @@ export async function addRegionToMap(
         ink,
         minzoom: Math.max(artifact.minzoom ?? minzoom, minzoom),
         before: beneathPaths(map, region),
+      });
+    } else if (artifact.kind === 'landmarks') {
+      // Masts, towers, trig points, cairns, lighthouses and wind turbines — POIs Protomaps
+      // does not keep (see src/overlays/landmarks.ts).
+      map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+      addLandmarkLayers(map, sourceId, {
+        ink,
+        minzoom: Math.max(artifact.minzoom ?? minzoom, minzoom),
+        before: amongBasemapPois(map, region),
+      });
+    } else if (artifact.kind === 'detail') {
+      // Walls, fences, power lines, gates, stiles and fords (see src/overlays/detail.ts).
+      // The lines are ground detail like the scree, so under the paths; the gates and fords
+      // sit on the paths, so with the landmarks, over them.
+      map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+      addDetailLayers(map, sourceId, {
+        ink,
+        minzoom: Math.max(artifact.minzoom ?? minzoom, minzoom),
+        beforeLines: beneathPaths(map, region),
+        beforeSymbols: amongBasemapPois(map, region),
       });
     }
   }

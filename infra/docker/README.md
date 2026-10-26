@@ -147,15 +147,18 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 | `sac` | `build-sac.sh` over all 8 continents → `sac-global.pmtiles` (SAC hiking grades) | minutes: its `tags-filter` reads the shared subset, about a tenth of the 85 GB source. The tiling itself is minutes too (~921 k ways planet-wide, ~400 MB out) |
 | `paths` | `build-paths.sh` — tiles each continent separately, caches the tilesets under `/work/cache/paths-tiles`, `tile-join`s them → `paths-global.pmtiles`, the walkable network at z12-13 where the basemap has none | hours. 82 M ways planet-wide; the filter pass alone was 29 min on 12 cpus against the full source, which it now reads from the shared subset instead. **Resumable**: a re-run skips continents already tiled, so an interrupted stage costs one continent, not the planet. `RATMAP_PATHS_PARALLEL` tiles several at once, up to 3, sized to the host |
 | `terrain-features` | `build-terrain-features.sh` over all 8 continents → `terrain-features-global.pmtiles` (scree, shingle, rock, boulders — `natural=` values Protomaps' OSM ingestion drops) | like `sac`, a `tags-filter` over the shared subset; tiling is minutes (~826 k features planet-wide by taginfo's count, ~5 MB out for Scotland+Montenegro alone in local testing) |
+| `landmarks` | `build-landmarks.sh` over all 8 continents → `landmarks-global.pmtiles` (masts, towers, trig points, cairns, lighthouses, wind turbines — POIs Protomaps keeps none of) | like `terrain-features`, a `tags-filter` over the shared subset. ~1.9 M features planet-wide by taginfo's count before dropping floodlights and benchmark bolts; Scotland alone came to 11,653 features, 1.5 MB as a region cutout (2026-10-27) |
+| `detail` | `build-detail.sh` over all 8 continents → `detail-global.pmtiles` (walls, fences, power lines and pylons, gates, stiles, cattle grids, fords — none of it in the basemap) | the biggest of the OSM overlays. Scotland alone: 574 k features, 37 MB, 36 s (2026-10-27), with no tile over tippecanoe's size limit. Planet-wide taginfo counts ~46 M features (9.7 M fences, 6.2 M walls, 6.8 M gates, 18.6 M pylons), so expect a global archive in the low gigabytes and the same again across the region cutouts — size the bucket for it before running |
 | `places` | `build-places.sh` over all 8 continents → a search index per region under `regions/<id>/`, and `places.sqlite`, the app's fallback | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue. 16 range requests per extract (`REGION_DOWNLOAD_THREADS`), terrain downloading alongside the basemap. `RATMAP_REGIONS_PARALLEL` builds several regions at once, up to 4, sized to the host |
 | `contours` | `build-contours.sh` for the ids opting in with `"contours": true` — each region traced in 1° cells at ~1 GB a cell, whatever its size; two regions at a time, the box's cells split between them (`RATMAP_CONTOURS_PARALLEL`, `RATMAP_CONTOURS_CELL_WORKERS`) | the slowest by far. Its 30 m DEMs are fetched ahead of the builds (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2) and cached, and `avalanche` reuses them for every region that has both |
 | `manifest` | `build-manifest.sh` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | seconds when little changed: sha256s are cached by size, mtime and inode in `dist/.manifest-sha256-cache.json`, so only new or rebuilt archives are hashed. A first run hashes everything, 2 threads (`MANIFEST_HASH_WORKERS`, 1 for a spinning disk) |
 
-`sac`, `paths` and `terrain-features` sit before `regions` in `all` for a reason:
-`build-region.sh` cuts each region's `<id>-sac.pmtiles`, `<id>-paths.pmtiles` and
-`<id>-terrain-features.pmtiles` out of those global archives, so a `regions` run that
-precedes them builds the whole catalogue without any of the three. Naming stages by hand,
+`sac`, `paths`, `terrain-features`, `landmarks` and `detail` sit before `regions` in `all`
+for a reason: `build-region.sh` cuts each region's `<id>-sac.pmtiles`, `<id>-paths.pmtiles`,
+`<id>-terrain-features.pmtiles`, `<id>-landmarks-1.pmtiles` and `<id>-detail-1.pmtiles` out
+of those global archives, so a `regions` run that precedes them builds the whole catalogue
+without any of them. Naming stages by hand,
 keep that order.
 
 Stages skip work that already exists; `--force` redoes it. `--dry-run` passes through to
@@ -188,7 +191,18 @@ a global catalogue is days — don't reach for it here. Bringing `terrain-featur
 docker compose run --rm infra global terrain-features regions manifest
 ```
 
-— or combine all three new-since-launch kinds in one pass:
+Landmarks (masts, trig points, cairns, lighthouses, wind turbines) and field detail
+(walls, fences, power lines, gates, stiles, fords) likewise:
+
+```sh
+docker compose run --rm infra global landmarks detail regions manifest
+```
+
+Adding them also widened the shared OSM subset's filter (`osm_subset` in
+`scripts/lib.sh`), so the first OSM stage of that run rebuilds each continent's subset
+once.
+
+— or combine all three of the earlier new-since-launch kinds in one pass:
 
 ```sh
 docker compose run --rm infra global sac paths terrain-features regions manifest

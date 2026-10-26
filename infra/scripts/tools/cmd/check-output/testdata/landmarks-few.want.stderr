@@ -1,0 +1,1 @@
+FAIL: implausibly few features for survey_point (4 < 5), cairn (0 < 5), lighthouse (0 < 2) — filter or normalize step likely broken

@@ -363,6 +363,13 @@ export async function addRegionToMap(
       // placed peaks-symbol directly beneath — lands this region's copy right alongside
       // it, one layer above peaks-symbol, rather than one layer below it.
       const beforeTownLabels = map.getLayer(TOWN_LABEL_LAYER_ID) ? TOWN_LABEL_LAYER_ID : beforePeaks;
+      // The fills and lines go under anything the region already draws. The basemap is not
+      // necessarily first: the manifest lists artifacts alphabetically, so `avalanche` is
+      // added before it, and C16 means a region restored half-downloaded can have its relief
+      // on the map before the basemap arrives at all. Stacked at the peaks like the labels,
+      // the opaque earth, landcover and water painted straight over those overlays — which
+      // is how avalanche terrain came to show nowhere, Scotland included.
+      const beneathRegion = regionLayerIds(map, region)[0] ?? beforePeaks;
       for (const layer of generated) {
         if (!('source' in layer) || !layer.source) continue;
         const scoped = {
@@ -370,7 +377,12 @@ export async function addRegionToMap(
           id: `${sourceId}-${layer.id}`,
           minzoom: Math.max(layer.minzoom ?? 0, minzoom),
         };
-        const beforeId = layer.id === TOWN_LABEL_LAYER_ID ? beforeTownLabels : beforePeaks;
+        const beforeId =
+          layer.id === TOWN_LABEL_LAYER_ID
+            ? beforeTownLabels
+            : layer.type === 'symbol'
+              ? beforePeaks
+              : beneathRegion;
         map.addLayer(scoped, beforeId);
       }
 

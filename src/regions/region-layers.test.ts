@@ -316,6 +316,73 @@ describe('addRegionToMap', () => {
     }
   });
 
+  describe('an overlay added before the basemap', () => {
+    const avalancheArtifact = {
+      kind: 'avalanche',
+      filename: 'lochaber-avalanche-1.pmtiles',
+      path: 'p6',
+      bytes: 1,
+      minzoom: 8,
+      maxzoom: 11,
+    };
+    // The manifest's real order: alphabetical, so `avalanche` comes ahead of `basemap`.
+    const manifestOrder: Region = { ...region, artifacts: [avalancheArtifact, ...region.artifacts] };
+
+    const groundIds = (map: ReturnType<typeof fakeMap>) => {
+      const ids = map.layers.map((l) => String(l.id));
+      const fills = map.layers.filter(
+        (l) =>
+          l.source === 'region-lochaber-basemap' &&
+          l.type !== 'symbol' &&
+          !String(l.id).includes('-paths'),
+      );
+      return {
+        ids,
+        lastBasemapGround: ids.indexOf(String(fills.at(-1)!.id)),
+        earth: ids.indexOf('region-lochaber-basemap-earth'),
+        casing: ids.indexOf('region-lochaber-basemap-paths-casing'),
+      };
+    };
+
+    it('draws avalanche terrain over the basemap fills, not under them', async () => {
+      // Regression: avalanche was added first, at the peaks, and every basemap layer then
+      // went in at the peaks too — on top of it. The opaque earth and landcover hid the
+      // slope shading everywhere, while the Layers tab showed it switched on.
+      const map = fakeMap();
+
+      await addRegionToMap(map as unknown as MLMap, registry, manifestOrder, 'light');
+
+      const { ids, lastBasemapGround, casing } = groundIds(map);
+      const shade = ids.indexOf('region-lochaber-avalanche-shade');
+      expect(shade).toBeGreaterThan(-1);
+      expect(shade).toBeGreaterThan(lastBasemapGround);
+      expect(shade).toBeLessThan(casing);
+    });
+
+    it('keeps the overlays visible when the basemap arrives in a later call (C16)', async () => {
+      // A half-downloaded region is restored with what it has; the rest is added when
+      // the download resumes, and the overlays already drawn are not added again.
+      const map = fakeMap();
+      const partial: Region = {
+        ...region,
+        artifacts: manifestOrder.artifacts.filter((a) => a.kind !== 'basemap'),
+      };
+
+      await addRegionToMap(map as unknown as MLMap, registry, partial, 'light');
+      await addRegionToMap(map as unknown as MLMap, registry, manifestOrder, 'light');
+
+      const { ids, lastBasemapGround, earth } = groundIds(map);
+      expect(earth).toBeGreaterThan(-1);
+      for (const id of [
+        'region-lochaber-avalanche-shade',
+        'region-lochaber-terrain-hillshade',
+        'region-lochaber-contours-lines',
+      ]) {
+        expect(ids.indexOf(id), id).toBeGreaterThan(lastBasemapGround);
+      }
+    });
+  });
+
   it('filters paths on the attribute the Protomaps schema actually uses', async () => {
     const map = fakeMap();
 

@@ -7,11 +7,12 @@ set -euo pipefail
 INFRA_DIR=/opt/ratmap/infra
 SCRIPTS_DIR="$INFRA_DIR/scripts"
 
-# mktemp, the Geofabrik cache, aws's config dir and the stage logs all live under /work.
-# If /work isn't a mounted volume these still work — they just land on the container's
-# writable layer, which is exactly the disk that runs out at 40 GB into Europe. The
-# preflight in build-global.sh is what catches that; here we only create the dirs.
-mkdir -p "$RATMAP_WORK/tmp" "$RATMAP_CACHE/osm" "$RATMAP_WORK/home" "$RATMAP_WORK/logs"
+# mktemp, the caches, aws's config dir and the stage logs all live under /work, and the
+# Geofabrik extracts under /osm (OSM_CACHE_DIR). If those aren't mounted volumes these
+# still work — they just land on the container's writable layer, which is exactly the
+# disk that runs out at 40 GB into Europe. The preflight in build-global.sh is what
+# catches that; here we only create the dirs.
+mkdir -p "$RATMAP_WORK/tmp" "$RATMAP_CACHE" "$OSM_CACHE_DIR" "$RATMAP_WORK/home" "$RATMAP_WORK/logs"
 mkdir -p "$INFRA_DIR/dist"
 
 usage() {

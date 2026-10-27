@@ -10,7 +10,7 @@
 #
 #  1. A *verified, pinned* source cache. lib.sh's cached_osm_extract already keeps each
 #     extract across runs and shares it between the peaks and places builds; this points
-#     it at the /work volume (OSM_CACHE_DIR) so it survives the container, and warms it
+#     it at the /osm volume (OSM_CACHE_DIR) so it survives the container, and warms it
 #     up front checking each file against Geofabrik's published md5 — fetch_to resumes
 #     and retries but never verifies, and a truncated europe extract would show up as
 #     missing summits rather than as an error. The continents are pinned to dated
@@ -39,7 +39,7 @@ DIST_DIR="$INFRA_DIR/dist"
 WORK_DIR="${RATMAP_WORK:-/work}"
 CACHE_DIR="${RATMAP_CACHE:-$WORK_DIR/cache}"
 # The same directory lib.sh's cached_osm_extract uses — the Dockerfile sets
-# OSM_CACHE_DIR to it. One cache, on the volume, shared by prefetch and both builds.
+# OSM_CACHE_DIR to /osm, a volume of its own. One cache, shared by prefetch and the builds.
 OSM_CACHE="${OSM_CACHE_DIR:-$CACHE_DIR/osm}"
 export OSM_CACHE_DIR="$OSM_CACHE"
 LOG_DIR="$WORK_DIR/logs"
@@ -60,12 +60,15 @@ CONTINENTS=(
 GEOFABRIK_BASE="${GEOFABRIK_BASE:-https://download.geofabrik.de}"
 
 # Hard minimums, checked in preflight. Rationale in docker/README.md; briefly:
-#   work: 85 GB of continent extracts + a ~35 GB working copy of the largest + exports
+#   work: 85 GB of continent extracts + a ~35 GB working copy of the largest + exports.
+#         When /osm is on a filesystem of its own the extracts are checked there instead
+#         (OSM_EXTRACTS_GB) and the work figure drops by the same amount.
 #   mem:  the GeoJSON intermediates are streamed a feature at a time, so the only large
 #         allocation left is build-places-db's dedupe set — ~210 B per surviving row
 #         (measured on 1.5 M, 2026-09-25), so ~1.1 GB for the planet's ~5.1 M
 #         places+peaks. The Python it replaced held every row as well: ~319 B, ~1.6 GB.
 MIN_WORK_GB="${RATMAP_MIN_WORK_GB:-150}"
+OSM_EXTRACTS_GB=85
 MIN_DIST_GB="${RATMAP_MIN_DIST_GB:-20}"
 MIN_MEM_GB="${RATMAP_MIN_MEM_GB:-4}"
 REC_MEM_GB=8
@@ -260,6 +263,20 @@ preflight() {
     export PROM_FETCH_WORKERS="${PROM_FETCH_WORKERS:-$(peaks_fetch_workers)}"
     read -r peaks_need peaks_region peaks_mpx < <(peaks_mem_gb)
   fi
+  # The extracts on a filesystem of their own (compose.yml's /osm mount on another disk)
+  # are checked there: room for whatever of the set is not downloaded yet. On the same
+  # filesystem as /work they are already in MIN_WORK_GB.
+  local osm_gb="" osm_held_gb=0 osm_need=0
+  if [ "$(stat -c %d "$OSM_CACHE")" != "$(stat -c %d "$WORK_DIR")" ]; then
+    osm_gb="$(gb_free "$OSM_CACHE")"
+    osm_held_gb="$( (du -ck "$OSM_CACHE"/*.osm.pbf 2>/dev/null || true) \
+      | awk '{ k = $1 } END { printf "%.0f", k / 1048576 }')"
+    osm_need=$(( OSM_EXTRACTS_GB - ${osm_held_gb:-0} ))
+    [ "$osm_need" -lt 0 ] && osm_need=0
+    if [ -z "${RATMAP_MIN_WORK_GB:-}" ]; then
+      MIN_WORK_GB=$(( MIN_WORK_GB - OSM_EXTRACTS_GB ))
+    fi
+  fi
   work_gb="$(gb_free "$WORK_DIR")"
   dist_gb="$(gb_free "$DIST_DIR")"
   mem_gb="$(mem_limit_gb)"
@@ -269,6 +286,10 @@ preflight() {
   echo "preflight"
   printf '  %-28s %s GB free  (need >= %s)\n' "$WORK_DIR" "$work_gb" "$MIN_WORK_GB"
   printf '  %-28s %s GB free  (need >= %s)\n' "$DIST_DIR" "$dist_gb" "$MIN_DIST_GB"
+  if [ -n "$osm_gb" ]; then
+    printf '  %-28s %s GB free  (need >= %s; %s GB of extracts already there)\n' \
+      "$OSM_CACHE" "$osm_gb" "$osm_need" "$osm_held_gb"
+  fi
   printf '  %-28s %s GB        (need >= %s, %s recommended)\n' "memory available" "$mem_gb" "$MIN_MEM_GB" "$REC_MEM_GB"
   if [ -n "$peaks_need" ]; then
     printf '  %-28s %s GB        (%s, %s Mpx at 90 m)\n' "peaks prominence needs" "$peaks_need" "$peaks_region" "$peaks_mpx"
@@ -329,7 +350,32 @@ preflight() {
     echo "    RATMAP_ALLOW_UNMOUNTED_WORK=1 if you really mean it."
     fail=1
   fi
+  if command -v mountpoint >/dev/null 2>&1 \
+     && ! mountpoint -q "$OSM_CACHE" 2>/dev/null \
+     && [ "$(stat -c %d "$OSM_CACHE")" != "$(stat -c %d "$WORK_DIR")" ] \
+     && [ -z "${RATMAP_ALLOW_UNMOUNTED_WORK:-}" ]; then
+    echo "  ! $OSM_CACHE is not a mounted volume — the extracts would fill the container's"
+    echo "    writable layer and go with it. Mount it (compose.yml does) or set"
+    echo "    RATMAP_ALLOW_UNMOUNTED_WORK=1 if you really mean it."
+    fail=1
+  fi
+  # Before 2026-10-27 the extracts lived in $CACHE_DIR/osm on /work. Left there they would
+  # sit unused while every stage downloaded the planet again into $OSM_CACHE, so stop and
+  # say how to move them. cp -a keeps mtimes, which the shared subsets' cache key is made
+  # of — the subsets themselves stay put, in $CACHE_DIR/osm/subsets.
+  local old_osm="$CACHE_DIR/osm"
+  if [ "$old_osm" != "$OSM_CACHE" ] && compgen -G "$old_osm/*.osm.pbf" >/dev/null; then
+    echo "  ! continent extracts in $old_osm, where they lived before $OSM_CACHE had a"
+    echo "    mount of its own. Move them, or delete them to download afresh:"
+    echo "      cd $old_osm && cp -a ./*.osm.pbf pinned-sources.tsv $OSM_CACHE/ \\"
+    echo "        && rm ./*.osm.pbf pinned-sources.tsv"
+    fail=1
+  fi
   [ "$work_gb" -lt "$MIN_WORK_GB" ] && { echo "  ! not enough space on $WORK_DIR"; fail=1; }
+  if [ -n "$osm_gb" ] && [ "$osm_gb" -lt "$osm_need" ]; then
+    echo "  ! not enough space on $OSM_CACHE"
+    fail=1
+  fi
   [ "$dist_gb" -lt "$MIN_DIST_GB" ] && { echo "  ! not enough space on $DIST_DIR"; fail=1; }
   if [ "$mem_gb" -lt "$MIN_MEM_GB" ]; then
     echo "  ! ${mem_gb} GB of memory will not survive the places stage."
@@ -544,7 +590,7 @@ fetch_continent() {
 
 stage_prefetch() {
   # Writes into the very directory lib.sh's cached_osm_extract reads
-  # (OSM_CACHE_DIR, set to /work/cache/osm in the Dockerfile), so the build scripts find
+  # (OSM_CACHE_DIR, set to /osm in the Dockerfile), so the build scripts find
   # every continent already present and download nothing. What this stage adds over
   # letting them fetch lazily is the md5 check against Geofabrik's published digest —
   # fetch_to resumes and retries but never verifies, and a silently truncated 35 GB
@@ -921,7 +967,7 @@ stage_contours() {
   # Needs the cache: with DEM_CACHE_DIR set empty there is nowhere to fetch into. This is
   # lib.sh's default restated, since this driver deliberately does not source lib.sh.
   local ahead="${RATMAP_CONTOURS_FETCH_AHEAD:-2}"
-  local dem_cache="${DEM_CACHE_DIR-$(dirname "$OSM_CACHE")/dem}"
+  local dem_cache="${DEM_CACHE_DIR-$CACHE_DIR/dem}"
   DEM_READY=""
   DEM_FETCHER=""
   if [ "$ahead" -gt 0 ] && [ -n "$dem_cache" ]; then

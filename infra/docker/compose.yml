@@ -31,6 +31,19 @@ services:
       # the multi-GB sequential reads osmium does.
       - ratmap-work:/work
 
+      # The continent extracts and their pins (OSM_CACHE_DIR, below), on a mount of their
+      # own so they can sit on another disk. They are the bulk of the disk — ~85 GB — and
+      # the least demanding of it: each is written once, by one download, and read twice,
+      # sequentially, by prefetch's md5 check and by the shared subset build. Everything
+      # the stages re-read — the subsets, the DEM clips, the paths tilesets — and every
+      # build's scratch stays on /work. So a big spinning disk suits this one, and /work
+      # can be a smaller, faster one.
+      #
+      # A named volume unless RATMAP_OSM_DIR names a host directory to bind-mount instead,
+      # set in the shell or in infra/docker/.env (gitignored; compose reads it for this):
+      #   RATMAP_OSM_DIR=/mnt/disk1/ratmap-osm
+      - ${RATMAP_OSM_DIR:-ratmap-osm}:/osm
+
       # Build output, straight into the repo's infra/dist so upload.sh and the app see it.
       - ../dist:/opt/ratmap/infra/dist
 
@@ -96,6 +109,10 @@ services:
       # run ...` silently ran the default instead — the same gap this file already
       # records for RATMAP_REGION_FILTER.
       RATMAP_AVALANCHE_PARALLEL: "${RATMAP_AVALANCHE_PARALLEL:-}"
+      # The preflight's /work floor (default 150 GB, 65 when /osm is on another disk).
+      # docker/README.md tells a contours-everywhere run to raise it; same passthrough
+      # reason as the rest.
+      RATMAP_MIN_WORK_GB: "${RATMAP_MIN_WORK_GB:-}"
       # Threads build-manifest hashes with (default 2). Set 1 on a spinning disk.
       # Same passthrough reason as the rest: undeclared, an inline host value is dropped.
       MANIFEST_HASH_WORKERS: "${MANIFEST_HASH_WORKERS:-}"
@@ -109,6 +126,10 @@ services:
       RATMAP_CONTOURS_FETCH_AHEAD: "${RATMAP_CONTOURS_FETCH_AHEAD:-}"
       # 1 filters each OSM stage from the whole extract rather than the shared subset.
       RATMAP_NO_OSM_SUBSET: "${RATMAP_NO_OSM_SUBSET:-}"
+      # The image sets this too, from 2026-10-27. Restated so that a pulled image built
+      # before then, which still points it at /work/cache/osm, uses the /osm mount above
+      # rather than downloading the planet again onto /work.
+      OSM_CACHE_DIR: /osm
       # DEM_CACHE_DIR is deliberately *not* passed through: declared here it would arrive
       # as an empty string whenever the host leaves it unset, and empty means "no cache".
       # Unset, it defaults to /work/cache/dem beside the OSM cache (lib.sh).
@@ -122,3 +143,4 @@ services:
 
 volumes:
   ratmap-work:
+  ratmap-osm:

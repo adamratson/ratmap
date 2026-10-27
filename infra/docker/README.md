@@ -35,17 +35,36 @@ already measured in days.
 ## Requirements — read before starting
 
 ```
-/work                     >= 150 GB free    OSM cache + scratch
+/osm                      >=  85 GB         continent extracts (OSM_CACHE_DIR)
+/work                     >=  65 GB free    caches + scratch (150 GB if /osm shares its disk)
 /opt/ratmap/infra/dist    >=  20 GB free    output
 memory                    >=   4 GB, 8 GB comfortable
 ```
 
-The disk figure: 85 GB of continent extracts held in the cache, plus a working copy of
+The disk figures: 85 GB of continent extracts held in `/osm`, plus a working copy of
 the largest one (europe is ~35 GB) while it is being filtered, plus the GeoJSON
-exports. The cache is worth keeping between runs — re-running the places stage after the
-peaks stage then costs no download at all.
+exports. The extracts are worth keeping between runs — re-running the places stage after
+the peaks stage then costs no download at all.
 
-Two more caches live beside it, both worth keeping and both growing as stages run:
+`/osm` is a mount of its own (`compose.yml`) so the extracts can go on a different disk
+from `/work`. They are most of the bytes and the least demanding of them: each is written
+once and read twice, sequentially — prefetch's md5 check and the shared subset build — so
+a large spinning disk is enough. What the stages re-read, and every build's scratch, stays on
+`/work`, which can then be a smaller, faster disk. A named volume by default; set
+`RATMAP_OSM_DIR` to a host directory, in the shell or in `infra/docker/.env`, to
+bind-mount that instead. The preflight checks each where it is, and counts extracts
+already downloaded against the 85 GB.
+
+Extracts downloaded before `/osm` existed are in `/work/cache/osm`. The preflight refuses
+to start while they are there, rather than download the planet again beside them. Move
+them with their mtimes, which keeps the shared subsets valid (the subsets stay where they
+are):
+
+```bash
+docker compose run --rm --entrypoint sh infra -c 'cd /work/cache/osm && cp -a ./*.osm.pbf pinned-sources.tsv /osm/ && rm ./*.osm.pbf pinned-sources.tsv'
+```
+
+Two more caches live on `/work`, both worth keeping and both growing as stages run:
 
 - `/work/cache/osm/subsets`: the OSM stages' shared subset, about a tenth of the extracts
   (~9 GB for the planet).
@@ -54,7 +73,7 @@ Two more caches live beside it, both worth keeping and both growing as stages ru
   30 m clips for every contours and avalanche region would be ~55 GB more, as those
   stages run.
 
-Neither is in the 150 GB floor. A run that is going to build contours and avalanche
+Neither is in the `/work` floor. A run that is going to build contours and avalanche
 everywhere wants `RATMAP_MIN_WORK_GB` raised to match, or `DEM_CACHE_DIR=` to not keep
 the 30 m clips.
 
@@ -148,7 +167,7 @@ Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
 
 | Stage | What it does | Rough cost |
 |---|---|---|
-| `prefetch` | One resumable, md5-verified copy of each continent into `/work/cache/osm`, pinned to a dated snapshot | ~85 GB download, once |
+| `prefetch` | One resumable, md5-verified copy of each continent into `/osm`, pinned to a dated snapshot | ~85 GB download, once |
 | `world` | `build-world-catalog.sh` — z0–5 planet basemap extract | minutes, ~15 MB out |
 | `terrain` | `build-terrain.sh` — coarse global hillshade | minutes, ~62 MB out at z4 |
 | `peaks` | `build-peaks.sh` over all 8 continents → `peaks-global.pmtiles`, then one prominence pass over the catalogue | hours, mostly DEM fetches on a first run (`PROM_FETCH_WORKERS` at a time, up to 3, sized to the host). They are cached under `/work/cache/dem`, so a rebuild fetches none. As the first OSM stage in `all`, it also builds the shared subset — see [below](#one-tags-filter-pass-shared-by-the-osm-stages) |
@@ -315,9 +334,10 @@ The caching itself lives in the pipeline, not here: `lib.sh`'s `cached_osm_extra
 each extract in `OSM_CACHE_DIR` and shares it between the peaks and places builds, and
 `fetch_to` resumes and retries. The image contributes two things to that.
 
-First, it sets `OSM_CACHE_DIR=/work/cache/osm` so the cache lands on the volume. Left at
-its default the extracts would land in `infra/.cache/osm` **inside** the container — on
-the writable layer, and gone when the container exits, so every run re-downloads 85 GB.
+First, it sets `OSM_CACHE_DIR=/osm` so the cache lands on its own volume. Unset, lib.sh
+would put the extracts in `/work/cache/osm` beside the other caches (`RATMAP_CACHE`), and
+with neither set in `infra/.cache/osm` **inside** the container — on the writable layer,
+and gone when the container exits, so every run would re-download 85 GB.
 
 Second, `prefetch` warms that same directory up front and checks each file against
 Geofabrik's published `.md5`. `fetch_to` resumes and retries but never verifies, and a
@@ -330,7 +350,7 @@ copy. `RATMAP_NO_CACHE=1` skips the verification pass and lets the scripts fetch
 
 `prefetch` does not download `europe-latest.osm.pbf`. It resolves each continent to the
 newest *dated* snapshot — `europe-260823.osm.pbf` — records the choice in
-`/work/cache/osm/pinned-sources.tsv`, and every later stage reads its source URLs from
+`/osm/pinned-sources.tsv`, and every later stage reads its source URLs from
 there.
 
 The reason is that `-latest` is a moving target and a planet run is not a quick job.

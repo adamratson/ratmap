@@ -150,14 +150,16 @@ ENV PATH=/usr/local/go/bin:${PATH} \
 # `mktemp -d`, and left at /tmp a planet run fills the container's writable layer and
 # dies partway through with a confusing ENOSPC.
 #
-# OSM_CACHE_DIR points lib.sh's cached_osm_extract at the volume too. Without it the
-# scripts would cache continent extracts inside the image at infra/.cache/osm — a second
-# 85 GB copy, on the container's writable layer, thrown away when the container exits.
+# OSM_CACHE_DIR points lib.sh's cached_osm_extract at /osm, a mount of its own for the
+# continent extracts (compose.yml says why they are apart from /work). Without it the
+# scripts would cache them under RATMAP_CACHE, and without that inside the image at
+# infra/.cache/osm — a second 85 GB copy, on the container's writable layer, thrown away
+# when the container exits.
 ENV TMPDIR=/work/tmp \
     HOME=/work/home \
     RATMAP_WORK=/work \
     RATMAP_CACHE=/work/cache \
-    OSM_CACHE_DIR=/work/cache/osm \
+    OSM_CACHE_DIR=/osm \
     LC_ALL=C.UTF-8 \
     LANG=C.UTF-8
 

@@ -6,5 +6,5 @@ docker/README.md
 
 # cached_osm_extract's default location (lib.sh). On a machine that has run the scripts
 # natively this is tens of GB of continent extracts — uploading it as build context would
-# make every `docker compose build` crawl. The image points OSM_CACHE_DIR at /work anyway.
+# make every `docker compose build` crawl. The image points OSM_CACHE_DIR at /osm anyway.
 .cache/

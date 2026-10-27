@@ -117,7 +117,14 @@ fetch_to() {
 # re-download hundreds of MB — re-running the places stage after the peaks stage then
 # costs no transfer at all. Prints the path on stdout; progress goes to stderr so callers
 # can capture the path cleanly.
-OSM_CACHE_DIR="${OSM_CACHE_DIR:-$INFRA_DIR/.cache/osm}"
+#
+# CACHE_ROOT holds every other cache — the shared subsets, DEM clips, paths tilesets:
+# infra/.cache on a laptop, /work/cache in the image (RATMAP_CACHE). The extracts sit in
+# it too by default, but the image gives them a mount of their own, /osm, so they can live
+# on a big slow disk while what is re-read stage after stage stays on the fast one. That
+# is why nothing else is placed relative to OSM_CACHE_DIR.
+CACHE_ROOT="${RATMAP_CACHE:-$INFRA_DIR/.cache}"
+OSM_CACHE_DIR="${OSM_CACHE_DIR:-$CACHE_ROOT/osm}"
 
 cached_osm_extract() {
   local url="$1"
@@ -170,10 +177,18 @@ RATMAP_OSM_SUBSET_FILTER="
 
 # osm_subset <extract.osm.pbf> <this stage's tags-filter expressions...>
 #
-# Prints the path of the shared subset of <extract>, building it on first use. Cached
-# beside the extracts, keyed on the union above and on the extract's size and mtime, so a
+# Prints the path of the shared subset of <extract>, building it on first use. Cached in
+# OSM_SUBSET_DIR, keyed on the union above and on the extract's size and mtime, so a
 # changed union or a re-downloaded extract builds a fresh one; older subsets of the same
 # extract are removed when it does. RATMAP_NO_OSM_SUBSET=1 hands back the extract itself.
+#
+# Not beside the extracts: every OSM stage reads the subset, some of them several times
+# over, where each extract is read once to build it. So it belongs on the fast disk with
+# the other caches. The default is where it has always been on a laptop, and on the image
+# keeps the subsets already built in /work when the extracts move to /osm — the key is
+# the extract's size and mtime, not its path, so a copy that keeps mtimes keeps them valid.
+OSM_SUBSET_DIR="${OSM_SUBSET_DIR:-$CACHE_ROOT/osm/subsets}"
+
 osm_subset() {
   local src="$1"
   shift
@@ -196,7 +211,7 @@ osm_subset() {
   local key base dir out tmp
   key="$(go_run util subset-key "$src" "$union")"
   base="$(basename "${src%.osm.pbf}")"
-  dir="$OSM_CACHE_DIR/subsets"
+  dir="$OSM_SUBSET_DIR"
   out="$dir/$base.$key.osm.pbf"
 
   if [ -s "$out" ]; then
@@ -218,11 +233,11 @@ osm_subset() {
   echo "$out"
 }
 
-# Copernicus DEM clips, cached by fetch-dem.sh. Beside the OSM cache, the same placement
+# Copernicus DEM clips, cached by fetch-dem.sh. In CACHE_ROOT, the same placement
 # build-paths.sh uses for its tilesets: infra/.cache/dem on a laptop (gitignored with the
-# rest of .cache), /work/cache/dem in the image, where OSM_CACHE_DIR points at the volume.
+# rest of .cache), /work/cache/dem in the image.
 # `-` rather than `:-`, so an explicitly empty DEM_CACHE_DIR= switches caching off.
-DEM_CACHE_DIR="${DEM_CACHE_DIR-$(dirname "$OSM_CACHE_DIR")/dem}"
+DEM_CACHE_DIR="${DEM_CACHE_DIR-$CACHE_ROOT/dem}"
 
 # Memory this process may actually use, in whole GB.
 #

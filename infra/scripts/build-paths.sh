@@ -35,9 +35,9 @@ PATHS_SOURCE_URLS="${PATHS_SOURCE_URLS:-$(go_run region-osm-sources)}"
 #
 # Keyed on the *pinned* source basename (europe-260823, not europe-latest), so when the
 # pin moves the key moves with it and the tileset is rebuilt — the same invalidation rule
-# cached_osm_extract uses for the extracts themselves. Sits next to that cache, which on
-# the container is the /work volume rather than the container's own disk.
-PATHS_TILE_CACHE="${PATHS_TILE_CACHE:-$(dirname "$OSM_CACHE_DIR")/paths-tiles}"
+# cached_osm_extract uses for the extracts themselves. Sits in CACHE_ROOT (lib.sh), which
+# on the container is the /work volume rather than the container's own disk.
+PATHS_TILE_CACHE="${PATHS_TILE_CACHE:-$CACHE_ROOT/paths-tiles}"
 mkdir -p "$PATHS_TILE_CACHE"
 
 # How many continents to tile at once. One by default: tippecanoe already uses every core

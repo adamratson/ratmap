@@ -222,9 +222,6 @@ function snapToggle(summary: RouteSummary, planner: RoutePlanner): HTMLElement {
   const row = el('label', 'settings-row route-snap');
   const text = el('span', 'settings-row-text');
   text.append(el('span', 'settings-row-label', 'Snap to paths'));
-  if (!summary.snapToPath) {
-    text.append(el('span', 'settings-row-note', 'New legs are drawn as straight lines.'));
-  }
 
   const input = document.createElement('input');
   input.type = 'checkbox';

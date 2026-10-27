@@ -134,7 +134,7 @@ for n in $(seq 1 "$CELLS"); do
 done
 
 echo "==> tiling"
-# Written to a temp name and only renamed to $OUT after verification — same reason as
+# Written in the work directory and only moved to $OUT after verification — same reason as
 # build-region.sh's extract_verified(): tippecanoe writing straight to the final path
 # means a run killed mid-write (OOM, timeout, an interrupted docker compose) leaves a
 # corrupt file sitting at the real filename with no warning. build-manifest's own
@@ -142,15 +142,17 @@ echo "==> tiling"
 # region too, since it scans everything under dist/regions/. Hit for real (austria,
 # 2026-09) before this fix.
 #
+# The work directory rather than beside $OUT for tippecanoe's sake: see move_into_dist in
+# lib.sh, which also leaves a leftover from a killed copy under a hidden name that
+# build-manifest skips as an unrecognised suffix.
+#
 # The temporary name still ends in .pmtiles, deliberately: tippecanoe picks its output
 # *format* from the extension, and the "$OUT.building" this used to write came out as
 # MBTiles ("SQLite format 3" in the header, tippecanoe 2.79.0 — the image's version), which
 # then failed `pmtiles verify` — as any contours build since 0c483f6 (2026-09-04) would
 # have, until this was found on 2026-09-23. The same trap build-paths.sh's comment
-# describes, with the same fix. The leading dot keeps it out of upload.sh's glob, and
-# build-manifest skips it as an unrecognised suffix should a killed run leave one behind.
-TMP_OUT="$OUT_DIR/.$REGION_ID-contours.building.pmtiles"
-rm -f "$TMP_OUT"
+# describes, with the same fix.
+TMP_OUT="$WORK_DIR/$REGION_ID-contours.pmtiles"
 tippecanoe -o "$TMP_OUT" \
   -Z"$CONTOUR_MINZOOM" -z"$CONTOUR_MAXZOOM" \
   --simplification=4 \
@@ -160,10 +162,9 @@ tippecanoe -o "$TMP_OUT" \
 
 if ! pmtiles verify "$TMP_OUT" >/dev/null 2>&1; then
   echo "FAILED verification: $(basename "$OUT") is not a valid PMTiles archive" >&2
-  rm -f "$TMP_OUT"
   exit 1
 fi
-mv "$TMP_OUT" "$OUT"
+move_into_dist "$TMP_OUT" "$OUT"
 echo
 echo "Built $OUT ($(du -h "$OUT" | cut -f1))"
 # --base-live, not a bare rebuild: this dist/ almost never holds every region in the

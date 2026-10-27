@@ -95,6 +95,14 @@ Desktop the limit that matters is the VM's (Settings → Resources), not the hos
 Docker Desktop's disk image also needs raising (Settings → Resources → Disk image size) if
 `/work` is a named volume, since named volumes live inside it.
 
+Every archive tippecanoe or tile-join builds is made in `/work` and copied into `dist`
+once finished (`move_into_dist` in `scripts/lib.sh`), so `dist` only ever takes one
+sequential write per archive and can sit on slower storage. `/work` should not:
+tippecanoe's tile writes land there, and while an archive is being finished it holds up
+to three copies of it (tippecanoe's SQLite store, its clustered copy and the archive).
+Writing straight to a slow bind-mounted `dist` held the 2026-10-27 detail stage at 4.5
+MB/s for hours.
+
 ## Use
 
 On the machine that will actually run the planet build, pull rather than build — CI

@@ -19,6 +19,35 @@ require_cmd() {
   }
 }
 
+# Move a finished archive from the work directory into dist/, never half-there under its
+# real name.
+#
+#   tippecanoe -o "$WORK_DIR/x.pmtiles" ...
+#   move_into_dist "$WORK_DIR/x.pmtiles" "$DIST_DIR/x.pmtiles"
+#
+# Why the archive is built in the work directory at all: writing PMTiles, tippecanoe and
+# tile-join put every tile into a SQLite database at the output path, from one writer
+# thread the tiling threads queue behind, then copy it out in clustered order. Pointed at
+# dist/, that throttles the tiling itself whenever dist/ is slower than the work volume —
+# the 2026-10-27 global detail run sat at 97-98% for hours with eight threads asleep
+# behind one in disk wait, writing 4.5 MB/s to a bind-mounted dist/ while 14 GB of RAM
+# sat free. In the Docker image the work directory is under TMPDIR, on the /work volume.
+#
+# The move crosses filesystems there, which makes it a copy: one sequential pass, but not
+# atomic. So the copy lands under a hidden name beside DEST — still ending in .pmtiles,
+# since tippecanoe and pmtiles pick the format by extension, and dotted, so upload.sh's
+# *.pmtiles glob and build-manifest pass over a leftover from a killed run — and only the
+# rename on the same filesystem gives it the real name.
+move_into_dist() {
+  local src="$1" dest="$2" arriving
+  arriving="$(dirname "$dest")/.$(basename "$dest" .pmtiles).building.pmtiles"
+  if ! mv "$src" "$arriving"; then
+    rm -f "$arriving"
+    return 1
+  fi
+  mv "$arriving" "$dest"
+}
+
 # Build one of scripts/tools' Go commands (compute-prominence, encode-avalanche,
 # reduce-paths, ...) into a directory, and print the binary's path.
 #

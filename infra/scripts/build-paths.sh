@@ -210,8 +210,12 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 OUT="$DIST_DIR/paths-global.pmtiles"
-# Ends in .pmtiles for the same reason as the per-continent temp name above.
-OUT_BUILDING="$DIST_DIR/.paths-global.building.pmtiles"
+# Joined in a scratch directory and moved into dist/ after: tile-join writes PMTiles the
+# way tippecanoe does — see move_into_dist in lib.sh. Ends in .pmtiles for the same
+# reason as the per-continent temp name above.
+JOIN_DIR="$(mktemp -d)"
+trap 'rm -rf "$TOOLS_DIR" "$JOIN_DIR"' EXIT
+OUT_BUILDING="$JOIN_DIR/paths-global.pmtiles"
 
 # Join the continents into the artifact the regions are cut from.
 #
@@ -230,10 +234,9 @@ tile-join -o "$OUT_BUILDING" -pk --force \
 
 if ! pmtiles verify "$OUT_BUILDING" >/dev/null 2>&1; then
   echo "FAILED verification: the joined archive is not valid PMTiles" >&2
-  rm -f "$OUT_BUILDING"
   exit 1
 fi
-mv "$OUT_BUILDING" "$OUT"
+move_into_dist "$OUT_BUILDING" "$OUT"
 
 pmtiles show "$OUT"
 echo "Built $OUT"

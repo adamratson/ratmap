@@ -143,14 +143,13 @@ PROM_FETCH_WORKERS="${PROM_FETCH_WORKERS:-$(workers_for_budget 1.25 3)}"
 "$CHECK_OUTPUT_BIN" munros "$WORK_DIR/peaks-final.geojsonl"
 
 OUT="$DIST_DIR/peaks-global.pmtiles"
-# Built beside OUT and renamed into place only once every check below has passed: a failed
-# check used to leave the archive at OUT, and build-global.sh's peaks stage skips when OUT
-# exists — so the next run called it "already built" and cut regions from it unchecked.
-# Still ending in .pmtiles, since tippecanoe and pmtiles both pick the format by extension
-# (anything else is written as MBTiles); the leading dot keeps a leftover from a killed run
-# out of upload.sh's *.pmtiles glob.
-PARTIAL="$DIST_DIR/.peaks-global.partial.pmtiles"
-trap 'rm -rf "$WORK_DIR" "$PARTIAL"' EXIT
+# Built in the work directory and moved to OUT only once every check below has passed: a
+# failed check used to leave the archive at OUT, and build-global.sh's peaks stage skips
+# when OUT exists — so the next run called it "already built" and cut regions from it
+# unchecked. The work directory rather than beside OUT for tippecanoe's sake: see
+# move_into_dist in lib.sh. Still ending in .pmtiles, since tippecanoe and pmtiles both
+# pick the format by extension (anything else is written as MBTiles).
+PARTIAL="$WORK_DIR/peaks-global.pmtiles"
 
 # Only peaks the app can draw: tippecanoe loses some without a word, beyond Web Mercator's
 # edge and on a rounding tie at a tile edge (181 and 1 of them on the planet, 2026-09-25).
@@ -197,6 +196,6 @@ if ! tippecanoe-decode -z"$MAXZOOM" -Z"$MAXZOOM" "$PARTIAL" \
   exit 1
 fi
 
-mv "$PARTIAL" "$OUT"
+move_into_dist "$PARTIAL" "$OUT"
 pmtiles show "$OUT"
 echo "Built $OUT"

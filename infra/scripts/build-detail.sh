@@ -66,6 +66,8 @@ done
 
 OUT="$DIST_DIR/detail-global.pmtiles"
 
+# Tiled in the work directory and moved into dist/ after: see move_into_dist in lib.sh.
+#
 # -Z12: power lines start at z12 (normalize-detail's minZoom), everything else later, as
 # each feature's own `tippecanoe.minzoom`.
 #
@@ -74,11 +76,13 @@ OUT="$DIST_DIR/detail-global.pmtiles"
 # -r1: no thinning of points by zoom — a gate is either on its path or the walker is
 # looking for one that is not there. The tile-size guard is --drop-densest-as-needed, and
 # it should not fire in open country: see the measurement in docker/README.md.
-tippecanoe -o "$OUT" -Z12 -z15 -r1 \
+tippecanoe -o "$WORK_DIR/detail-global.pmtiles" -Z12 -z15 -r1 \
   --include=kind \
   -l detail -n "ratmap field detail (walls, fences, power lines, gates, stiles, fords)" \
   --drop-densest-as-needed --progress-interval=10 --force \
   "$WORK_DIR/detail-final.geojsonl"
+
+move_into_dist "$WORK_DIR/detail-global.pmtiles" "$OUT"
 
 pmtiles show "$OUT"
 echo "Built $OUT"

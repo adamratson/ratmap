@@ -93,11 +93,14 @@ OUT="$DIST_DIR/terrain-features-global.pmtiles"
 # region's own layers are suppressed anyway (regionMinZoom in region-layers.ts).
 #
 # -z15: the basemap's own ceiling.
-tippecanoe -o "$OUT" -Z11 -z15 \
+#
+# Tiled in the work directory and moved into dist/ after: see move_into_dist in lib.sh.
+tippecanoe -o "$WORK_DIR/terrain-features-global.pmtiles" -Z11 -z15 \
   --include=kind --include=name \
   -l terrain_features -n "ratmap terrain features (scree, shingle, rock, stone)" \
   --drop-densest-as-needed --progress-interval=10 --force \
   "$WORK_DIR/terrain-features-final.geojsonl"
+move_into_dist "$WORK_DIR/terrain-features-global.pmtiles" "$OUT"
 
 pmtiles show "$OUT"
 echo "Built $OUT"

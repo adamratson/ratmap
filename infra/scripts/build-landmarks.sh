@@ -76,6 +76,8 @@ done
 
 OUT="$DIST_DIR/landmarks-global.pmtiles"
 
+# Tiled in the work directory and moved into dist/ after: see move_into_dist in lib.sh.
+#
 # -Z13: the app draws these from z13 (src/overlays/landmarks.ts), where a mast is a
 # landmark rather than one of a hundred dots across a county.
 #
@@ -85,11 +87,13 @@ OUT="$DIST_DIR/landmarks-global.pmtiles"
 # top, which would take a lone mast off a z13 hillside at random. Collision in the app does
 # the thinning instead, and keeps named and nearby features over the rest; a tile that
 # still overflows (a city's rooftop masts) is cut back by --drop-densest-as-needed.
-tippecanoe -o "$OUT" -Z13 -z15 -r1 \
+tippecanoe -o "$WORK_DIR/landmarks-global.pmtiles" -Z13 -z15 -r1 \
   --include=kind --include=name \
   -l landmarks -n "ratmap landmarks (masts, towers, trig pillars, cairns, lighthouses, wind turbines)" \
   --drop-densest-as-needed --progress-interval=10 --force \
   "$WORK_DIR/landmarks-final.geojsonl"
+
+move_into_dist "$WORK_DIR/landmarks-global.pmtiles" "$OUT"
 
 pmtiles show "$OUT"
 echo "Built $OUT"

@@ -190,10 +190,10 @@ describe('snap to paths in the panel', () => {
     expect(planner.setSnapToPath).toHaveBeenCalledWith(false);
   });
 
-  it('says so while new legs are drawn straight', () => {
+  it('shows the switch off while new legs are drawn straight, with no note under it', () => {
     const panel = render({ snapToPath: false });
     expect(panel.querySelector<HTMLInputElement>('.route-snap input')!.checked).toBe(false);
-    expect(panel.querySelector('.route-snap')!.textContent).toContain('straight lines');
+    expect(panel.querySelector('.route-snap .settings-row-note')).toBeNull();
   });
 
   const note = (panel: HTMLElement) => panel.querySelector('.route-note.warn')?.textContent ?? '';

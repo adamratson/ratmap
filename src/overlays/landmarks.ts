@@ -141,27 +141,64 @@ export function ensureLandmarkIcon(map: MLMap, icon: LandmarkIcon, ink: MapInk):
 /** From z13, the landmarks archive's own floor (build-landmarks.sh's -Z13). */
 export const LANDMARKS_MIN_ZOOM = 13;
 
+/**
+ * From z14 every landmark icon draws, whatever it collides with.
+ *
+ * Below that, collision thins them, which is what keeps a town's rooftop masts from
+ * piling up at z13. But collision also lost the landmarks that matter most: the summit's
+ * own symbol and name are placed first, and the masts on Great Dun Fell, ~20 m from its
+ * summit, were hidden by them from z13.5 to z14.5 and only partly shown above (measured
+ * in the app, 2026-10-28). At walking zooms a landmark beside a summit is the point of the
+ * layer. The icon then sits under the summit's name, which is drawn above it. Names still
+ * collide, and give way.
+ */
+export const LANDMARKS_OVERLAP_ZOOM = 14;
+
 export function landmarksLayerId(sourceId: string): string {
   return `${sourceId}-symbols`;
 }
 
+/** The layer from LANDMARKS_OVERLAP_ZOOM up. */
+export function landmarksOverlapLayerId(sourceId: string): string {
+  return `${sourceId}-symbols-overlap`;
+}
+
 /**
- * The landmark symbol layer: the icon from z13, its name beside it from z15.
+ * The landmark symbol layers: the icon from z13, its name beside it from z15. Two layers
+ * because whether an icon may overlap is not something a zoom expression can change: one
+ * below LANDMARKS_OVERLAP_ZOOM, where they collide, and one from it up, where they don't.
+ * A region whose own floor is already at or above that zoom gets only the second — a
+ * layer whose minzoom reaches its maxzoom is a style error.
  *
  * Placement order when symbols collide: trig points, then lighthouses, masts, towers and
  * wind turbines, then cairns — a trig is the rarest and the one a walker checks a position
  * against — and within each, named ones first.
  */
-export function landmarksLayer(
+export function landmarksLayers(
   sourceId: string,
   { minzoom, icons, ink }: { minzoom: number; icons: Record<LandmarkIcon, string>; ink: MapInk },
-): SymbolLayerSpecification {
+): SymbolLayerSpecification[] {
+  const base = landmarksLayer(sourceId, icons, ink);
+  const floor = Math.max(LANDMARKS_MIN_ZOOM, minzoom);
+  const layers: SymbolLayerSpecification[] = [];
+  if (floor < LANDMARKS_OVERLAP_ZOOM) {
+    layers.push({ ...base, minzoom: floor, maxzoom: LANDMARKS_OVERLAP_ZOOM });
+  }
+  layers.push({
+    ...base,
+    id: landmarksOverlapLayerId(sourceId),
+    minzoom: Math.max(LANDMARKS_OVERLAP_ZOOM, floor),
+    layout: { ...base.layout, 'icon-allow-overlap': true },
+  });
+  return layers;
+}
+
+function landmarksLayer(sourceId: string, icons: Record<LandmarkIcon, string>, ink: MapInk): SymbolLayerSpecification {
   return {
     id: landmarksLayerId(sourceId),
     type: 'symbol',
     source: sourceId,
     'source-layer': LANDMARKS_SOURCE_LAYER,
-    minzoom: Math.max(LANDMARKS_MIN_ZOOM, minzoom),
     layout: {
       'icon-image': [
         'match',
@@ -200,7 +237,7 @@ export function landmarksLayer(
   };
 }
 
-/** Register the symbols and add the layer, before `before`. */
+/** Register the symbols and add the layers, before `before`. */
 export function addLandmarkLayers(
   map: MLMap,
   sourceId: string,
@@ -209,7 +246,7 @@ export function addLandmarkLayers(
   const icons = Object.fromEntries(
     (Object.keys(LANDMARK_SHAPES) as LandmarkIcon[]).map((icon) => [icon, ensureLandmarkIcon(map, icon, ink)]),
   ) as Record<LandmarkIcon, string>;
-  map.addLayer(landmarksLayer(sourceId, { minzoom, icons, ink }), before);
+  for (const layer of landmarksLayers(sourceId, { minzoom, icons, ink })) map.addLayer(layer, before);
 }
 
 /** The symbol as a legend swatch, from the same shape the map image is drawn from. */

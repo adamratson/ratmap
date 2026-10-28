@@ -49,7 +49,7 @@ const IDS_BY_GROUP: Record<LayerGroup, string[]> = {
     'region-lochaber-terrain-features-rock',
     'region-lochaber-terrain-features-rock-outline',
   ],
-  landmarks: ['region-lochaber-landmarks-symbols'],
+  landmarks: ['region-lochaber-landmarks-symbols', 'region-lochaber-landmarks-symbols-overlap'],
   boundaries: ['region-lochaber-detail-walls', 'region-lochaber-detail-fences', 'region-lochaber-detail-gates'],
   powerLines: ['region-lochaber-detail-power-lines', 'region-lochaber-detail-pylons'],
   avalanche: ['region-lochaber-avalanche-shade'],

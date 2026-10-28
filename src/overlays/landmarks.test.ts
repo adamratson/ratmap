@@ -7,7 +7,7 @@ import {
   LANDMARK_KINDS,
   LANDMARK_SHAPES,
   landmarkSwatch,
-  landmarksLayer,
+  landmarksLayers,
   type LandmarkIcon,
 } from './landmarks';
 
@@ -63,9 +63,10 @@ describe('landmark shapes', () => {
   });
 });
 
-describe('landmarksLayer', () => {
+describe('landmarksLayers', () => {
   const icons = { mast: 'm', trig: 't', cairn: 'c', lighthouse: 'l', turbine: 'w' };
-  const layer = landmarksLayer('region-x-landmarks', { minzoom: 9, icons, ink: mapInk('light') });
+  const layers = landmarksLayers('region-x-landmarks', { minzoom: 9, icons, ink: mapInk('light') });
+  const [layer, overlap] = layers;
 
   it('draws from z13, the archive’s own floor, however low the region allows', () => {
     expect(layer).toMatchObject({
@@ -73,8 +74,32 @@ describe('landmarksLayer', () => {
       type: 'symbol',
       'source-layer': 'landmarks',
       minzoom: 13,
+      maxzoom: 14,
     });
-    expect(landmarksLayer('s', { minzoom: 14, icons, ink: mapInk('light') }).minzoom).toBe(14);
+  });
+
+  it('lets icons collide below z14 and draws every one from z14 up', () => {
+    expect(layers).toHaveLength(2);
+    expect(layer.layout!['icon-allow-overlap']).toBeUndefined();
+    expect(overlap).toMatchObject({
+      id: 'region-x-landmarks-symbols-overlap',
+      minzoom: 14,
+      layout: { 'icon-allow-overlap': true },
+    });
+    expect(overlap.maxzoom).toBeUndefined();
+    // Names still give way.
+    expect(overlap.layout!['text-allow-overlap']).toBeUndefined();
+    expect(overlap.layout!['icon-image']).toEqual(layer.layout!['icon-image']);
+  });
+
+  it('adds only the overlap layer where the region itself starts at z14 or above', () => {
+    const high = landmarksLayers('s', { minzoom: 14, icons, ink: mapInk('light') });
+    expect(high.map((l) => [l.id, l.minzoom])).toEqual([['s-symbols-overlap', 14]]);
+    expect(landmarksLayers('s', { minzoom: 15, icons, ink: mapInk('light') })[0].minzoom).toBe(15);
+    expect(landmarksLayers('s', { minzoom: 13.5, icons, ink: mapInk('light') })[0]).toMatchObject({
+      minzoom: 13.5,
+      maxzoom: 14,
+    });
   });
 
   it('gives masts and towers one symbol and every other kind its own', () => {
@@ -109,11 +134,11 @@ describe('landmarksLayer', () => {
 });
 
 describe('addLandmarkLayers', () => {
-  it('adds one symbol layer before the anchor, with a symbol per icon in the theme’s ink', () => {
+  it('adds both symbol layers before the anchor, with a symbol per icon in the theme’s ink', () => {
     const { map, added, images } = fakeMap();
     addLandmarkLayers(map, 'region-x-landmarks', { minzoom: 9, before: 'region-x-basemap-pois', ink: mapInk('light') });
-    expect(added).toHaveLength(1);
-    expect(added[0].before).toBe('region-x-basemap-pois');
+    expect(added).toHaveLength(2);
+    expect(added.map((a) => a.before)).toEqual(['region-x-basemap-pois', 'region-x-basemap-pois']);
     expect([...images.keys()]).toEqual(ICONS.map((icon) => `ratmap-landmark-${icon}-2b2724`));
   });
 

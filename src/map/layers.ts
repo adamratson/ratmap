@@ -84,7 +84,7 @@ const LAYER_ID_SUFFIXES: Record<LayerGroup, readonly string[]> = {
     '-terrain-features-rock',
     '-terrain-features-rock-outline',
   ],
-  landmarks: ['-landmarks-symbols'],
+  landmarks: ['-landmarks-symbols', '-landmarks-symbols-overlap'],
   boundaries: ['-detail-walls', '-detail-fences', '-detail-gates'],
   powerLines: ['-detail-power-lines', '-detail-pylons'],
   avalanche: ['-avalanche-shade'],

@@ -8,6 +8,7 @@
 //	check-output terrain-features FILE   # build-terrain-features.sh: every kind present
 //	check-output landmarks FILE          # build-landmarks.sh: every kind present, all points
 //	check-output detail FILE             # build-detail.sh: every kind present, right shapes
+//	check-output parking FILE            # build-parking.sh: enough car parks, all sized points
 //
 // Each prints a line per assertion and exits 1 with a FAIL line when one fails. The
 // expected values and why each was chosen are documented beside the calls in the scripts.
@@ -36,17 +37,18 @@ func (f failure) Error() string { return string(f) }
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking FILE")
 		os.Exit(2)
 	}
 	checks := map[string]func(string, io.Writer) error{
 		"peaks": peaks, "munros": munros, "sac": sac, "terrain-features": terrainFeatures,
 		"landmarks": landmarks,
 		"detail":    detail,
+		"parking":   parking,
 	}
 	check, ok := checks[os.Args[1]]
 	if !ok {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking FILE")
 		os.Exit(2)
 	}
 	if err := check(os.Args[2], os.Stdout); err != nil {
@@ -407,6 +409,49 @@ func detail(path string, out io.Writer) error {
 	if len(missing) > 0 {
 		return failure("FAIL: implausibly few features for " + strings.Join(missing, ", ") +
 			" — filter or normalize step likely broken")
+	}
+	return nil
+}
+
+// parking checks build-parking.sh's output: car parks in meaningful numbers, every one a
+// Point — an area that slipped past normalize-parking's centroid step would repeat its
+// sign in every tile it touches — and every one carrying the `size` the app ranks by.
+//
+// The floor is two orders of magnitude below Scotland's ~30,000 kept car parks (39,407
+// amenity=parking less the private and restricted, measured against
+// scotland-latest.osm.pbf, 2026-10-28): loose enough for a narrow test extract, tight
+// enough that a broken filter, which produces zero, still fails.
+func parking(path string, out io.Writer) error {
+	const minimum = 100
+	total, named, customers, notPoints, unsized := 0, 0, 0, 0, 0
+	err := eachFeature(path, func(p map[string]json.RawMessage, geometry string) error {
+		total++
+		if _, ok := rawjson.String(p["name"]); ok {
+			named++
+		}
+		if _, ok := p["customers"]; ok {
+			customers++
+		}
+		if size, ok := p["size"]; !ok || len(size) == 0 || size[0] == '"' || string(size) == "null" {
+			unsized++
+		}
+		if geometry != "Point" {
+			notPoints++
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "  car parks: %d (%d named, %d customers only)\n", total, named, customers)
+	if notPoints > 0 {
+		return failure(fmt.Sprintf("FAIL: %d features are not points — normalize-parking's centroid step likely broken", notPoints))
+	}
+	if unsized > 0 {
+		return failure(fmt.Sprintf("FAIL: %d car parks have no numeric size — the app ranks by it", unsized))
+	}
+	if total < minimum {
+		return failure(fmt.Sprintf("FAIL: implausibly few car parks (%d < %d) — filter or normalize step likely broken", total, minimum))
 	}
 	return nil
 }

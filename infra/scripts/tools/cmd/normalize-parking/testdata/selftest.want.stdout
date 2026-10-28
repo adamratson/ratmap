@@ -1,0 +1,2 @@
+  kept 4 car parks (2 named, 1 customers only); skipped 1 with no amenity=parking, 2 restricted (private, permit, residents...), 1 lock-up garages, 1 already seen (continent seams)
+  normalize-parking self-test OK (9 cases)

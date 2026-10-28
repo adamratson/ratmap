@@ -22,8 +22,8 @@ ratmap infra toolchain
   global [stages...] [--force] [--dry-run]   run the planet-scale pipeline
                                              stages: prefetch world terrain peaks sac
                                                      paths terrain-features landmarks
-                                                     detail places regions contours
-                                                     avalanche manifest all
+                                                     detail parking places regions
+                                                     contours avalanche manifest all
   <script>.sh [args...]                      run one infra/scripts entry directly, e.g.
                                                build-region.sh scotland --dry-run
                                                build-world-catalog.sh
@@ -42,9 +42,9 @@ Mounts this image expects (see docker/README.md):
 
 Everything the build scripts honour as an environment variable still works:
   PEAKS_SOURCE_URLS SAC_SOURCE_URLS PATHS_SOURCE_URLS TERRAIN_FEATURES_SOURCE_URLS
-  LANDMARKS_SOURCE_URLS DETAIL_SOURCE_URLS PLACES_SOURCE_URLS
+  LANDMARKS_SOURCE_URLS DETAIL_SOURCE_URLS PARKING_SOURCE_URLS PLACES_SOURCE_URLS
   WORLD_SOURCE_URL TERRAIN_SOURCE_URL SAC_SOURCE_URL PATHS_SOURCE_URL
-  TERRAIN_FEATURES_SOURCE_URL LANDMARKS_SOURCE_URL DETAIL_SOURCE_URL
+  TERRAIN_FEATURES_SOURCE_URL LANDMARKS_SOURCE_URL DETAIL_SOURCE_URL PARKING_SOURCE_URL
   WORLD_CATALOG_MAXZOOM TERRAIN_MAXZOOM REGION_BASEMAP_MAXZOOM REGION_TERRAIN_MAXZOOM
   CONTOUR_INTERVAL INDEX_EVERY CONTOUR_MINZOOM CONTOUR_MAXZOOM
   REGION_DOWNLOAD_THREADS RATMAP_REGIONS_PARALLEL PROM_FETCH_WORKERS
@@ -100,7 +100,7 @@ case "$cmd" in
     ls -1 "$SCRIPTS_DIR" | sed 's/^/  /' >&2
     exit 1
     ;;
-  prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|places|regions|contours|avalanche|manifest|all)
+  prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|parking|places|regions|contours|avalanche|manifest|all)
     # A stage name on its own. Without this it falls through to the catch-all below and
     # dies as `exec: regions: not found`, which says nothing about the one word missing.
     echo "\"$cmd\" is a stage of the pipeline, not a command. Run it through 'global':" >&2

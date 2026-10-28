@@ -1,0 +1,10 @@
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-3.2058, 54.4012]},"properties":{"size":0}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-3.1195,54.4105]},"properties":{"name":"Car <&> \"Park\"","size":7196}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-2.99975,54.50025]},"properties":{"size":1795}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-3.1, 54.4]},"properties":{"size":0}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-3.1, 54.4]},"properties":{"size":0}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-3.1, 54.4]},"properties":{"size":0}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-3.0496,54.4504]},"properties":{"name":"Old Dungeon Ghyll","customers":1,"size":4601}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[1.001,1.001]},"properties":{"size":49450}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[2.0003333,2]},"properties":{"size":0}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-3.3, 54.3]},"properties":{"size":0}}

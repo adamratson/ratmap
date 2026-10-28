@@ -1,0 +1,20 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-3.2058, 54.4012]}, "properties": {"amenity": "parking", "parking": "layby", "fee": "no", "@type": "node", "@id": 1}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[-3.12, 54.41], [-3.119, 54.41], [-3.119, 54.410999999999994], [-3.12, 54.410999999999994], [-3.12, 54.41]]]]}, "properties": {"amenity": "parking", "name": "Car <&> \"Park\"", "access": "yes", "@type": "way", "@id": 2}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[-3.0, 54.5], [-2.9995, 54.5], [-2.9995, 54.5005], [-3.0, 54.5005], [-3.0, 54.5]]]]}, "properties": {"amenity": "parking", "access": "permissive", "@type": "way", "@id": 3}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-3.1, 54.4]}, "properties": {"amenity": "parking", "access": "destination", "@type": "node", "@id": 4}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-3.1, 54.4]}, "properties": {"amenity": "parking", "access": "public", "@type": "node", "@id": 5}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-3.1, 54.4]}, "properties": {"amenity": "parking", "access": "unknown", "@type": "node", "@id": 6}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[-3.05, 54.45], [-3.0492, 54.45], [-3.0492, 54.4508], [-3.05, 54.4508], [-3.05, 54.45]]]]}, "properties": {"amenity": "parking", "access": "customers", "name": "Old Dungeon Ghyll", "@type": "way", "@id": 7}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[0, 0], [0.0001, 0], [0.0001, 0.0001], [0, 0]]], [[[1, 1], [1.002, 1], [1.002, 1.002], [1, 1.002], [1, 1]]]]}, "properties": {"amenity": "parking", "@type": "relation", "@id": 8}}
+{"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[2, 2], [2.001, 2], [2, 2]]]}, "properties": {"amenity": "parking", "@type": "way", "@id": 9}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {"amenity": "parking", "access": "private", "@type": "node", "@id": 10}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {"amenity": "parking", "access": "no", "@type": "node", "@id": 11}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {"amenity": "parking", "access": "permit", "@type": "node", "@id": 12}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {"amenity": "parking", "access": "residents", "@type": "node", "@id": 13}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {"amenity": "parking", "access": "yes;permit", "@type": "node", "@id": 14}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[0, 0], [0.0002, 0], [0.0002, 0.0002], [0, 0.0002], [0, 0]]]]}, "properties": {"amenity": "parking", "parking": "garage_boxes", "@type": "way", "@id": 15}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[0, 0], [0.0002, 0], [0.0002, 0.0002], [0, 0.0002], [0, 0]]]]}, "properties": {"amenity": "parking", "parking": "sheds", "@type": "way", "@id": 16}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {"amenity": "bicycle_parking", "@type": "node", "@id": 17}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {"amenity": "parking_space", "@type": "node", "@id": 18}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[-3.12, 54.41], [-3.119, 54.41], [-3.119, 54.410999999999994], [-3.12, 54.410999999999994], [-3.12, 54.41]]]]}, "properties": {"amenity": "parking", "name": "Car <&> \"Park\"", "access": "yes", "@type": "way", "@id": 2}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-3.3, 54.3]}, "properties": {"amenity": "parking", "@type": "node", "@id": 2}}

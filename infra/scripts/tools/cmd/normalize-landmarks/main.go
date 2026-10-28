@@ -26,8 +26,7 @@
 //   - Reduce areas to a point. A tower drawn as a building outline, or a cairn as a
 //     small closed way (25 k of the planet's 39 k cairns are ways), is still a single
 //     symbol on the map — an icon on a polygon would repeat in every tile the polygon
-//     touches. The point is the area-weighted centroid of the largest polygon's outer
-//     ring, which for anything tower- or cairn-sized is inside it.
+//     touches. See osmpoint.Represent.
 //   - Deduplicate by (@type, @id) across concatenated continent extracts, the seam
 //     problem normalize-sac documents.
 package main
@@ -38,14 +37,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 
+	"ratmap/infra/tools/internal/osmpoint"
 	"ratmap/infra/tools/internal/rawjson"
 )
 
@@ -183,10 +181,10 @@ func run(srcPath, destPath string, out io.Writer) error {
 			kind, reason := classify(props)
 			if kind == "" {
 				dropped[reason]++
-			} else if key, ok := osmKey(props); ok && seen[key] {
+			} else if key, ok := osmpoint.Key(props); ok && seen[key] {
 				duplicated++
 			} else {
-				point, err := representativePoint(f["geometry"])
+				point, _, err := osmpoint.Represent(f["geometry"])
 				if err != nil {
 					return fail(fmt.Errorf("%s: line %d: %w", srcPath, n, err))
 				}
@@ -196,10 +194,10 @@ func run(srcPath, destPath string, out io.Writer) error {
 				w.WriteString(`{"type":"Feature","geometry":{"type":"Point","coordinates":`)
 				w.WriteString(point)
 				w.WriteString(`},"properties":{"kind":`)
-				w.Write(jsonString(kind))
+				w.Write(osmpoint.JSONString(kind))
 				if name, ok := rawjson.String(props["name"]); ok {
 					w.WriteString(`,"name":`)
-					w.Write(jsonString(name))
+					w.Write(osmpoint.JSONString(name))
 				}
 				w.WriteString("}}\n")
 				kept++
@@ -243,107 +241,6 @@ func isWindTurbine(props map[string]json.RawMessage) bool {
 	power, _ := rawjson.String(props["power"])
 	source, _ := rawjson.String(props["generator:source"])
 	return power == "generator" && source == "wind"
-}
-
-// osmKey is "<@type>/<@id>" as written; ok=false when the export carried no id.
-func osmKey(props map[string]json.RawMessage) (string, bool) {
-	id, ok := props["@id"]
-	if !ok || string(bytes.TrimSpace(id)) == "null" {
-		return "", false
-	}
-	return rawjson.Text(props["@type"]) + "/" + string(bytes.TrimSpace(id)), true
-}
-
-type position [2]float64
-
-// representativePoint is the GeoJSON coordinates of the one point drawn for a feature:
-// a Point's own coordinates as written, an area's centroid (see the header).
-func representativePoint(raw json.RawMessage) (string, error) {
-	var g struct {
-		Type        string          `json:"type"`
-		Coordinates json.RawMessage `json:"coordinates"`
-	}
-	if len(raw) == 0 || json.Unmarshal(raw, &g) != nil {
-		return "", fmt.Errorf("geometry is %s, not a GeoJSON geometry", raw)
-	}
-	var polygons [][][]position
-	switch g.Type {
-	case "Point":
-		var p position
-		if err := json.Unmarshal(g.Coordinates, &p); err != nil {
-			return "", fmt.Errorf("Point coordinates: %w", err)
-		}
-		return string(bytes.TrimSpace(g.Coordinates)), nil
-	case "Polygon":
-		var p [][]position
-		if err := json.Unmarshal(g.Coordinates, &p); err != nil {
-			return "", fmt.Errorf("Polygon coordinates: %w", err)
-		}
-		polygons = [][][]position{p}
-	case "MultiPolygon":
-		if err := json.Unmarshal(g.Coordinates, &polygons); err != nil {
-			return "", fmt.Errorf("MultiPolygon coordinates: %w", err)
-		}
-	default:
-		// build-landmarks.sh exports --geometry-types=point,polygon, so anything else is
-		// a changed export, not data to guess about.
-		return "", fmt.Errorf("unexpected %s geometry", g.Type)
-	}
-
-	best, bestArea := position{}, -1.0
-	for _, polygon := range polygons {
-		if len(polygon) == 0 || len(polygon[0]) == 0 {
-			continue
-		}
-		c, area := ringCentroid(polygon[0])
-		if area > bestArea {
-			best, bestArea = c, area
-		}
-	}
-	if bestArea < 0 {
-		return "", fmt.Errorf("%s with no rings", g.Type)
-	}
-	return "[" + coord(best[0]) + "," + coord(best[1]) + "]", nil
-}
-
-// ringCentroid is a ring's area-weighted centroid and its absolute area, in degrees —
-// planar, which at tower and cairn scale is exact enough. A degenerate ring (zero area)
-// falls back to the mean of its vertices.
-func ringCentroid(ring []position) (position, float64) {
-	var a, cx, cy float64
-	// Relative to the first vertex, so the products do not lose precision far from 0,0.
-	o := ring[0]
-	for i := 0; i+1 < len(ring); i++ {
-		x0, y0 := ring[i][0]-o[0], ring[i][1]-o[1]
-		x1, y1 := ring[i+1][0]-o[0], ring[i+1][1]-o[1]
-		cross := x0*y1 - x1*y0
-		a += cross
-		cx += (x0 + x1) * cross
-		cy += (y0 + y1) * cross
-	}
-	if a == 0 {
-		var sx, sy float64
-		for _, p := range ring {
-			sx += p[0]
-			sy += p[1]
-		}
-		return position{sx / float64(len(ring)), sy / float64(len(ring))}, 0
-	}
-	return position{o[0] + cx/(3*a), o[1] + cy/(3*a)}, math.Abs(a) / 2
-}
-
-// coord is a coordinate to 7 decimal places (~1 cm), osmium's own precision.
-func coord(v float64) string {
-	return strconv.FormatFloat(math.Round(v*1e7)/1e7, 'f', -1, 64)
-}
-
-// jsonString encodes s as JSON without Go's HTML escaping of <, > and &.
-func jsonString(s string) []byte {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false)
-	enc.Encode(s)
-	return bytes.TrimRight(b.Bytes(), "\n")
 }
 
 // selfTest is --self-test: the kind mapping, the three ways a feature is dropped, and

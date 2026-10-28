@@ -73,7 +73,7 @@ MIN_DIST_GB="${RATMAP_MIN_DIST_GB:-20}"
 MIN_MEM_GB="${RATMAP_MIN_MEM_GB:-4}"
 REC_MEM_GB=8
 
-ALL_STAGES=(prefetch world terrain peaks sac paths terrain-features landmarks detail places regions contours avalanche manifest)
+ALL_STAGES=(prefetch world terrain peaks sac paths terrain-features landmarks detail parking places regions contours avalanche manifest)
 FORCE=""
 DRY_RUN=""
 SKIP_PREFLIGHT=""
@@ -89,7 +89,7 @@ for arg in "$@"; do
     --preflight-only)  PREFLIGHT_ONLY=1 ;;
     --repin)           REPIN=1 ;;
     all)               stages=("${ALL_STAGES[@]}") ;;
-    prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|places|regions|contours|avalanche|manifest) stages+=("$arg") ;;
+    prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|parking|places|regions|contours|avalanche|manifest) stages+=("$arg") ;;
     -*)  echo "Unknown flag: $arg" >&2; exit 2 ;;
     *)   echo "Unknown stage: $arg (known: ${ALL_STAGES[*]}, all)" >&2; exit 2 ;;
   esac
@@ -760,6 +760,16 @@ stage_detail() {
   DETAIL_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-detail.sh"
 }
 
+stage_parking() {
+  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/parking-global.pmtiles" ]; then
+    log "parking: already built — --force to redo"
+    return 0
+  fi
+  # Car parks, the small unnamed ones included — the basemap drops most of those (see
+  # build-parking.sh's own header). Before `regions`, same reason as `terrain-features`.
+  PARKING_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-parking.sh"
+}
+
 stage_places() {
   # Built means both outputs: a places.sqlite from before the region indexes existed is
   # not a finished stage, and skipping it would leave every region without its index.
@@ -812,6 +822,7 @@ stage_regions() {
     terrain-features:terrain-features-global.pmtiles
     landmarks:landmarks-global.pmtiles:landmarks-1
     detail:detail-global.pmtiles:detail-1
+    parking:parking-global.pmtiles:parking-1
     peaks:peaks-global.pmtiles:peaks-1
   )
 

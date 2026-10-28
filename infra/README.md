@@ -35,6 +35,7 @@ changed.
 ./scripts/build-paths.sh           # paths-global.pmtiles — the walkable network at z12-13
 ./scripts/build-landmarks.sh       # landmarks-global.pmtiles — masts, trig points, cairns, lighthouses, wind turbines
 ./scripts/build-detail.sh          # detail-global.pmtiles — walls, fences, power lines, gates, stiles, fords
+./scripts/build-parking.sh         # parking-global.pmtiles — car parks, the laybys the basemap drops included
 ./scripts/build-places.sh          # search indexes (C9): one per region, and the app's fallback
 ```
 
@@ -57,9 +58,9 @@ Geofabrik's continent extracts — that's 85 GB of source; don't kick it off by 
 known summit elevations (Ben Nevis 1345 m) so a parsing or schema regression fails the
 build rather than surfacing on a mountain.
 
-### One OSM pass for seven stages
+### One OSM pass for eight stages
 
-Peaks, places, SAC, paths, terrain features, landmarks and field detail each filter the same source extracts. They
+Peaks, places, SAC, paths, terrain features, landmarks, field detail and car parks each filter the same source extracts. They
 used to do it separately — at planet scale 85 GB per stage, and nine or ten passes over it
 in all, since osmium reads its input once for a node-only filter, twice for a way filter
 and up to four times for `nwr/`. Now the first of them to run builds a **shared subset**

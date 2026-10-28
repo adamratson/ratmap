@@ -43,8 +43,8 @@ wants() {
 
 for requested in ${ONLY//,/ }; do
   case "$requested" in
-    basemap|paths|peaks|sac|terrain|terrain-features|landmarks|detail) ;;
-    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features, landmarks, detail)" >&2
+    basemap|paths|peaks|sac|terrain|terrain-features|landmarks|detail|parking) ;;
+    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features, landmarks, detail, parking)" >&2
        exit 2 ;;
   esac
 done
@@ -148,6 +148,18 @@ else
   DETAIL_SOURCE=""
 fi
 
+# Car parks (build-parking.sh), resolved the same way. The basemap drops most of the small
+# unnamed ones — see that script's header.
+if [ -n "${PARKING_SOURCE_URL:-}" ]; then
+  PARKING_SOURCE="$PARKING_SOURCE_URL"
+elif [ -s "$DIST_DIR/parking-global.pmtiles" ]; then
+  PARKING_SOURCE="$DIST_DIR/parking-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  PARKING_SOURCE="$PUBLIC_BASE_URL/parking-global.pmtiles"
+else
+  PARKING_SOURCE=""
+fi
+
 # Measured for Scotland (2026-08-21): basemap z12 ~84 MB / z13 ~175 MB; terrain z10
 # ~107 MB / z11 ~340 MB. Raster terrain grows far faster than vector basemap per level,
 # hence the different ceilings. Override per build if a region needs more.
@@ -185,6 +197,10 @@ LANDMARKS_MAXZOOM="$BASEMAP_MAXZOOM"
 # Field detail, the same again: detail-global.pmtiles holds z12-15.
 DETAIL_MAXZOOM="$BASEMAP_MAXZOOM"
 [ "$DETAIL_MAXZOOM" -gt 15 ] && DETAIL_MAXZOOM=15
+
+# Car parks, as landmarks: parking-global.pmtiles holds z13-15.
+PARKING_MAXZOOM="$BASEMAP_MAXZOOM"
+[ "$PARKING_MAXZOOM" -gt 15 ] && PARKING_MAXZOOM=15
 
 # paths-global.pmtiles only holds z12-13 — it exists to fill the gap below where the
 # basemap starts carrying paths, not to duplicate it.
@@ -428,6 +444,21 @@ else
   # and docker/build-global.sh's cut_from_global.
   extract_verified "$DETAIL_SOURCE" "$OUT_DIR/$REGION_ID-detail-1.pmtiles" \
     "$DETAIL_MAXZOOM" --allow-empty
+fi
+
+if ! wants parking; then
+  :
+elif [ -z "$PARKING_SOURCE" ]; then
+  echo "==> car parks: skipped (no parking-global.pmtiles — run ./scripts/build-parking.sh)"
+elif [ "$PARKING_MAXZOOM" -lt 13 ]; then
+  # As for landmarks: the global archive starts at z13 (build-parking.sh).
+  echo "==> car parks: skipped (basemap capped at z$PARKING_MAXZOOM, car parks start at z13)"
+else
+  echo "==> car parks"
+  # Versioned like landmarks; bump together with tools/cmd/build-manifest's artifactKinds
+  # and docker/build-global.sh's cut_from_global.
+  extract_verified "$PARKING_SOURCE" "$OUT_DIR/$REGION_ID-parking-1.pmtiles" \
+    "$PARKING_MAXZOOM" --allow-empty
 fi
 
 if ! wants terrain; then

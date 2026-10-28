@@ -21,3 +21,7 @@ landmarks-area	landmarks	testdata/landmarks-area.geojsonl
 detail-ok	detail	testdata/detail-ok.geojsonl
 detail-few	detail	testdata/detail-few.geojsonl
 detail-shape	detail	testdata/detail-shape.geojsonl
+parking-ok	parking	testdata/parking-ok.geojsonl
+parking-few	parking	testdata/parking-few.geojsonl
+parking-area	parking	testdata/parking-area.geojsonl
+parking-unsized	parking	testdata/parking-unsized.geojsonl

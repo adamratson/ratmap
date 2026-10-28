@@ -141,7 +141,7 @@ cached_osm_extract() {
   echo "$dest"
 }
 
-# Everything the seven OSM stages filter for, as one `osmium tags-filter` expression list:
+# Everything the eight OSM stages filter for, as one `osmium tags-filter` expression list:
 #
 #   n/natural=peak,volcano,saddle n/mountain_pass=yes   build-peaks.sh, build-places.sh
 #   n/place=city,town,village,hamlet,suburb             build-places.sh
@@ -152,6 +152,7 @@ cached_osm_extract() {
 #   nwr/generator:source=wind                           build-landmarks.sh
 #   w/barrier=wall,fence nw/barrier=gate,kissing_gate,stile,cattle_grid
 #   w/power=line,minor_line n/power=tower nw/ford       build-detail.sh
+#   nwr/amenity=parking                                 build-parking.sh
 #
 # Each stage used to run its own tags-filter over the full extract, which at planet scale
 # is 85 GB per stage and nine or ten passes in all (a node-only filter reads the input
@@ -163,7 +164,8 @@ cached_osm_extract() {
 # only match, and reference, what the union already kept.
 #
 # A stage filtering for anything not listed here would silently lose data, so osm_subset
-# refuses to run for one — add the expression here first.
+# refuses to run for one — add the expression here first. Adding one changes every
+# subset's key, so the next run builds them all again, once: one pass over the extracts.
 RATMAP_OSM_SUBSET_FILTER="
   n/natural=peak,volcano,saddle n/mountain_pass=yes
   n/place=city,town,village,hamlet,suburb
@@ -173,6 +175,7 @@ RATMAP_OSM_SUBSET_FILTER="
   nwr/man_made=mast,tower,survey_point,cairn,lighthouse nwr/generator:source=wind
   w/barrier=wall,fence nw/barrier=gate,kissing_gate,stile,cattle_grid
   w/power=line,minor_line n/power=tower nw/ford
+  nwr/amenity=parking
 "
 
 # osm_subset <extract.osm.pbf> <this stage's tags-filter expressions...>
@@ -222,7 +225,7 @@ osm_subset() {
 
   mkdir -p "$dir"
   rm -f "$dir/$base".*.osm.pbf
-  echo "  building the shared OSM subset of $base (one pass for all seven OSM stages)" >&2
+  echo "  building the shared OSM subset of $base (one pass for all eight OSM stages)" >&2
   # Still ends in .osm.pbf: osmium picks the output format from the extension. The
   # leading dot keeps a half-written file out of the glob above and out of the cache.
   tmp="$dir/.$base.$key.$$.osm.pbf"

@@ -533,18 +533,16 @@ export async function sheetHeight(page: Page): Promise<number> {
 }
 
 /**
- * The layers a *downloaded region's own archives* put on the map.
+ * The layers *downloaded regions' archives* put on the map: `regions-z<min>-<max>-<kind>-…`,
+ * shared by every region of a kind (sharedSourceId in src/regions/region-layers.ts).
  *
- * Not simply everything whose id starts with `region-`: the coverage outlines are
- * `region-footprints-*` and are drawn for regions nobody has downloaded, so counting those
- * would make "the region is on the map" true before any download and still true after a
- * delete. Archive layers are `region-<id>-<kind>-…`.
+ * Not the coverage outlines, `region-footprints-*`, which are drawn for regions nobody has
+ * downloaded, so counting those would make "the region is on the map" true before any
+ * download and still true after a delete.
  */
 export async function regionArchiveLayers(
   page: Page,
 ): Promise<Array<{ id: string; type: string }>> {
   const layers = await styleLayers(page);
-  return layers.filter(
-    (layer) => layer.id.startsWith('region-') && !layer.id.startsWith('region-footprints-'),
-  );
+  return layers.filter((layer) => layer.id.startsWith('regions-'));
 }

@@ -58,12 +58,12 @@ test.describe('offline regions', () => {
     const layers = await styleLayers(page);
     const ids = layers.map((l) => l.id);
     const firstRegionLabel = layers.findIndex(
-      (l) => l.type === 'symbol' && l.id.startsWith('region-'),
+      (l) => l.type === 'symbol' && l.id.startsWith('regions-'),
     );
     expect(firstRegionLabel).toBeGreaterThan(-1);
 
     const hillshadeLayers = layers.filter(
-      (l) => l.type === 'hillshade' && l.id.startsWith('region-'),
+      (l) => l.type === 'hillshade' && l.id.startsWith('regions-'),
     );
     // If this is ever empty, TEST_REGION stopped carrying terrain and the assertion below
     // would pass vacuously — so require at least one hillshade layer to actually check.
@@ -156,8 +156,12 @@ test.describe('offline regions', () => {
     const basemapFeatures = () =>
       page.evaluate(() => {
         const map = (window as unknown as { __ratmapMap: MLMap }).__ratmapMap;
-        if (!map.getSource('region-andorra-basemap')) return 0;
-        return map.querySourceFeatures('region-andorra-basemap', { sourceLayer: 'roads' }).length;
+        // The basemap source every downloaded region shares (sharedSourceId).
+        const basemap = Object.keys(map.getStyle().sources).find(
+          (id) => id.startsWith('regions-') && id.endsWith('-basemap'),
+        );
+        if (!basemap) return 0;
+        return map.querySourceFeatures(basemap, { sourceLayer: 'roads' }).length;
       });
 
     await openRegionsSheet(page);

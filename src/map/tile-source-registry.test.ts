@@ -213,3 +213,113 @@ describe('regional copies of a remote archive (summits offline)', () => {
     expect((await served.getZxy(...INSIDE))?.from).toBe('remote');
   });
 });
+
+describe('archives shared by every downloaded region of a kind', () => {
+  const KEY = 'regions-z0-15-basemap';
+  // Two overlapping regions, the shape of England North West and Scotland, which reaches
+  // south over it. Their z10 tiles: one inside both, one in Scotland only, one that
+  // Scotland's southern edge crosses, and one outside both.
+  const NORTH_WEST = [-3.9075, 52.9455, -1.908, 55.1886] as const;
+  const SCOTLAND = [-14.8615, 54.54, 0.2161, 61.1356] as const;
+  const IN_BOTH = [10, 505, 325] as const; // over Great Dun Fell
+  const SCOTLAND_ONLY = [10, 498, 313] as const;
+  const ACROSS_SCOTLAND_EDGE = [10, 503, 326] as const; // 54.37-54.57 N, all in North West
+  const OUTSIDE = [10, 519, 355] as const;
+
+  type FakeCopy = { getHeader: ReturnType<typeof vi.fn>; getZxy: ReturnType<typeof vi.fn> };
+
+  function setUp() {
+    const protocol = new Protocol();
+    const registry = new TileSourceRegistry(protocol);
+    const local = (name: string, header: Record<string, number>): FakeCopy =>
+      Object.assign(registry.addLocal(new File([new Uint8Array(8)], name)), {
+        getHeader: vi.fn(async () => ({ tileType: 1, minZoom: 0, maxZoom: 15, ...header })),
+        getZxy: vi.fn(async () => ({ data: new ArrayBuffer(1), from: name })),
+      }) as unknown as FakeCopy;
+    const northWest = local('nw-basemap.pmtiles', { minLon: -3.9, minLat: 52.9, maxLon: -1.9, maxLat: 55.2 });
+    const scotland = local('sc-basemap.pmtiles', { minLon: -14.9, minLat: 54.5, maxLon: 0.2, maxLat: 61.1 });
+    const served = () =>
+      protocol.get(KEY) as unknown as {
+        getHeader(): Promise<Record<string, number>>;
+        getZxy(z: number, x: number, y: number): Promise<{ from: string } | undefined>;
+      };
+    return { registry, protocol, northWest, scotland, served };
+  }
+
+  it('is served under its key, answering for every region in it', async () => {
+    const { registry, served } = setUp();
+    registry.addSharedCopy(KEY, 'nw-basemap.pmtiles', NORTH_WEST, 0);
+    registry.addSharedCopy(KEY, 'sc-basemap.pmtiles', SCOTLAND, 0);
+
+    expect(registry.sourceUrl(KEY)).toBe(`pmtiles://${KEY}`);
+    expect((await served().getZxy(...SCOTLAND_ONLY))?.from).toBe('sc-basemap.pmtiles');
+    // No network behind it: outside every region there is simply no tile.
+    expect(await served().getZxy(...OUTSIDE)).toBeUndefined();
+  });
+
+  it('describes all its regions in one header', async () => {
+    const { registry, served } = setUp();
+    registry.addSharedCopy(KEY, 'nw-basemap.pmtiles', NORTH_WEST, 0);
+    registry.addSharedCopy(KEY, 'sc-basemap.pmtiles', SCOTLAND, 0);
+
+    expect(await served().getHeader()).toMatchObject({
+      minZoom: 0,
+      maxZoom: 15,
+      minLon: -14.9,
+      minLat: 52.9,
+      maxLon: 0.2,
+      maxLat: 61.1,
+    });
+  });
+
+  it('prefers a region that holds the whole tile over one whose edge crosses it', async () => {
+    // Contours are traced per region from a DEM cut to its bbox, so a region's edge tiles
+    // are only partly drawn.
+    const { registry, served } = setUp();
+    registry.addSharedCopy(KEY, 'sc-basemap.pmtiles', SCOTLAND, 0);
+    registry.addSharedCopy(KEY, 'nw-basemap.pmtiles', NORTH_WEST, 0);
+    // Scotland, added first, overlaps the tile too, so it would otherwise answer.
+    expect((await served().getZxy(...ACROSS_SCOTLAND_EDGE))?.from).toBe('nw-basemap.pmtiles');
+  });
+
+  it('answers from the next region when the first has no such tile', async () => {
+    const { registry, northWest, served } = setUp();
+    registry.addSharedCopy(KEY, 'nw-basemap.pmtiles', NORTH_WEST, 0);
+    registry.addSharedCopy(KEY, 'sc-basemap.pmtiles', SCOTLAND, 0);
+    northWest.getZxy.mockResolvedValue(undefined);
+
+    expect((await served().getZxy(...IN_BOTH))?.from).toBe('sc-basemap.pmtiles');
+  });
+
+  it('leaves a region out below its own floor', async () => {
+    const { registry, served } = setUp();
+    registry.addSharedCopy(KEY, 'nw-basemap.pmtiles', NORTH_WEST, 11);
+    registry.addSharedCopy(KEY, 'sc-basemap.pmtiles', SCOTLAND, 6);
+
+    expect((await served().getZxy(...IN_BOTH))?.from).toBe('sc-basemap.pmtiles');
+  });
+
+  it('says whether it changed, so a source over it is reloaded only when it did', () => {
+    const { registry } = setUp();
+    expect(registry.addSharedCopy(KEY, 'nw-basemap.pmtiles', NORTH_WEST, 9)).toBe(true);
+    expect(registry.addSharedCopy(KEY, 'nw-basemap.pmtiles', NORTH_WEST, 9)).toBe(false);
+    expect(registry.addSharedCopy(KEY, 'sc-basemap.pmtiles', SCOTLAND, 6)).toBe(true);
+    expect(registry.sharedCopyCount(KEY)).toBe(2);
+    // An archive that was never registered is not added.
+    expect(registry.addSharedCopy(KEY, 'nope.pmtiles', SCOTLAND, 6)).toBe(false);
+  });
+
+  it('drops a region when it is deleted, and itself with the last one', async () => {
+    const { registry, protocol, served } = setUp();
+    registry.addSharedCopy(KEY, 'nw-basemap.pmtiles', NORTH_WEST, 0);
+    registry.addSharedCopy(KEY, 'sc-basemap.pmtiles', SCOTLAND, 0);
+
+    expect(registry.removeLocal('nw-basemap.pmtiles')).toEqual([KEY]);
+    expect((await served().getZxy(...IN_BOTH))?.from).toBe('sc-basemap.pmtiles');
+    expect(registry.sharedCopyCount(KEY)).toBe(1);
+
+    expect(registry.removeLocal('sc-basemap.pmtiles')).toEqual([KEY]);
+    expect(registry.sharedCopyCount(KEY)).toBe(0);
+    expect(protocol.get(KEY)).toBeUndefined();
+  });
+});

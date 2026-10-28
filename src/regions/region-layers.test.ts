@@ -8,7 +8,32 @@ import { paintValue, styleColor } from '../test-support/paint-value';
 const getArtifactFileMock = vi.hoisted(() => vi.fn());
 vi.mock('./opfs-store', () => ({ getArtifactFile: getArtifactFileMock }));
 
-const { addRegionToMap, removeRegionFromMap, regionSourceId } = await import('./region-layers');
+const { addRegionToMap, removeRegionFromMap, sharedSourceId } = await import('./region-layers');
+
+/** Each kind's archive zoom range, as the catalogue's regions mostly have them. */
+const ZOOMS: Record<string, [number, number]> = {
+  avalanche: [8, 11],
+  basemap: [0, 15],
+  contours: [11, 14],
+  detail: [12, 15],
+  landmarks: [13, 15],
+  paths: [12, 13],
+  peaks: [0, 7],
+  sac: [12, 15],
+  terrain: [0, 11],
+  'terrain-features': [11, 15],
+};
+
+/** The shared source a kind is drawn through, at its usual zoom range. */
+const sid = (kind: string) => sharedSourceId(kind, ...ZOOMS[kind]!);
+
+/** An archive's kind, from its filename: `<region>-<kind>[-<n>].pmtiles`. */
+function kindOf(filename: string): string {
+  // terrain-features before terrain, which it starts with.
+  return Object.keys(ZOOMS)
+    .sort((a, b) => b.length - a.length)
+    .find((kind) => filename.includes(`-${kind}`))!;
+}
 
 const region: Region = {
   id: 'lochaber',
@@ -25,11 +50,17 @@ const region: Region = {
 function fakeMap() {
   const layers: Array<Record<string, unknown>> = [];
   const sources = new Set<string>();
+  const images = new Set<string>();
+  // Every reload (setUrl) of a source, in order.
+  const reloads: string[] = [];
+  const sourceObject = (id: string) => ({ setUrl: vi.fn(() => void reloads.push(id)) });
   return {
     layers,
     sources,
+    /** The sources reloaded so far, in order. */
+    reloaded: () => [...reloads],
     addSource: vi.fn((id: string) => void sources.add(id)),
-    getSource: vi.fn((id: string) => (sources.has(id) ? {} : undefined)),
+    getSource: vi.fn((id: string) => (sources.has(id) ? sourceObject(id) : undefined)),
     removeSource: vi.fn((id: string) => void sources.delete(id)),
     // Honours beforeId, because layer *order* is the thing several of these tests are
     // actually asserting on — a fake that always appends would make them meaningless.
@@ -49,21 +80,49 @@ function fakeMap() {
     }),
     getStyle: vi.fn(() => ({ layers })),
     getLayersOrder: vi.fn(() => layers.map((l) => String(l.id))),
+    // Landmarks and field detail register their symbols.
+    hasImage: vi.fn((id: string) => images.has(id)),
+    addImage: vi.fn((id: string) => void images.add(id)),
   };
 }
 
-const registry = {
-  addLocal: vi.fn(),
-  addRegionalCopy: vi.fn(() => false),
-  removeLocal: vi.fn(),
-  sourceUrl: (key: string) => `pmtiles://${key}`,
-} as unknown as TileSourceRegistry;
+/**
+ * The registry's side of sharing, without real archives: which copies each shared archive
+ * holds, and a header per archive with its kind's zoom range — or `zooms[filename]`'s.
+ */
+function fakeRegistry(zooms: Record<string, [number, number]> = {}) {
+  const shared = new Map<string, Set<string>>();
+  return {
+    addLocal: vi.fn((file: File) => ({
+      getHeader: async () => {
+        const [minZoom, maxZoom] = zooms[file.name] ?? ZOOMS[kindOf(file.name)]!;
+        return { minZoom, maxZoom };
+      },
+    })),
+    addRegionalCopy: vi.fn(() => false),
+    addSharedCopy: vi.fn((key: string, filename: string, _bbox: unknown, _floor: number) => {
+      const copies = shared.get(key) ?? new Set<string>();
+      shared.set(key, copies);
+      if (copies.has(filename)) return false;
+      copies.add(filename);
+      return true;
+    }),
+    sharedCopyCount: (key: string) => shared.get(key)?.size ?? 0,
+    removeLocal: vi.fn((filename: string) =>
+      [...shared].filter(([, copies]) => copies.delete(filename)).map(([key]) => key),
+    ),
+    sourceUrl: (key: string) => `pmtiles://${key}`,
+  };
+}
+
+let fake = fakeRegistry();
+let registry = fake as unknown as TileSourceRegistry;
 
 beforeEach(() => {
   getArtifactFileMock.mockReset();
   getArtifactFileMock.mockImplementation(async (name: string) => new File([new Uint8Array(4)], name));
-  // Shared across tests, so call counts accumulate without this.
-  vi.mocked(registry.addLocal).mockClear();
+  fake = fakeRegistry();
+  registry = fake as unknown as TileSourceRegistry;
 });
 
 describe('addRegionToMap', () => {
@@ -105,7 +164,7 @@ describe('addRegionToMap', () => {
     const earthColour = async (theme: 'light' | 'dark') => {
       const map = fakeMap();
       await addRegionToMap(map as unknown as MLMap, registry, region, theme);
-      const earth = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-earth');
+      const earth = map.layers.find((l) => String(l.id) === `${sid('basemap')}-earth`);
       return (earth?.paint as Record<string, unknown> | undefined)?.['fill-color'];
     };
 
@@ -121,7 +180,7 @@ describe('addRegionToMap', () => {
 
     for (const layer of map.layers) {
       expect(layer.source).toBeTruthy();
-      expect(String(layer.source)).toMatch(/^region-lochaber-/);
+      expect(String(layer.source)).toMatch(/^regions-/);
     }
   });
 
@@ -132,7 +191,7 @@ describe('addRegionToMap', () => {
 
     expect(registry.addLocal).toHaveBeenCalledTimes(3);
     expect(map.addSource).toHaveBeenCalledWith(
-      regionSourceId('lochaber', 'terrain'),
+      sid('terrain'),
       expect.objectContaining({ type: 'raster-dem', encoding: 'terrarium' }),
     );
   });
@@ -144,14 +203,14 @@ describe('addRegionToMap', () => {
 
     const ids = map.layers.map((l) => String(l.id));
     const firstRegionLabel = map.layers.findIndex(
-      (l) => l.type === 'symbol' && String(l.id).startsWith('region-lochaber-'),
+      (l) => l.type === 'symbol' && String(l.id).startsWith('regions-'),
     );
     expect(firstRegionLabel).toBeGreaterThan(-1);
 
     // Regression: everything was inserted at the peaks layer, which stacks each artifact
     // on top of the previous one — so the hillshade ended up over the basemap's own
     // labels and washed out gully and corrie names.
-    for (const id of ['region-lochaber-terrain-hillshade', 'region-lochaber-contours-lines']) {
+    for (const id of [`${sid('terrain')}-hillshade`, `${sid('contours')}-lines`]) {
       expect(ids.indexOf(id)).toBeGreaterThan(-1);
       expect(ids.indexOf(id)).toBeLessThan(firstRegionLabel);
     }
@@ -174,8 +233,8 @@ describe('addRegionToMap', () => {
 
     const ids = map.layers.map((l) => String(l.id));
     const peaksIdx = ids.indexOf('peaks-symbol');
-    const regionTownLabelIdx = ids.indexOf('region-lochaber-basemap-places_locality');
-    const regionRoadsIdx = ids.indexOf('region-lochaber-basemap-roads_minor');
+    const regionTownLabelIdx = ids.indexOf(`${sid('basemap')}-places_locality`);
+    const regionRoadsIdx = ids.indexOf(`${sid('basemap')}-roads_minor`);
 
     expect(peaksIdx).toBeGreaterThan(-1);
     expect(regionTownLabelIdx).toBeGreaterThan(-1);
@@ -204,13 +263,13 @@ describe('addRegionToMap', () => {
         (map.layers.find((l) => l.id === id)?.layout as Record<string, unknown> | undefined)
           ?.visibility;
       for (const id of [
-        'region-lochaber-contours-lines-index',
-        'region-lochaber-contours-lines',
-        'region-lochaber-contours-labels',
+        `${sid('contours')}-lines-index`,
+        `${sid('contours')}-lines`,
+        `${sid('contours')}-labels`,
       ]) {
         expect(visibilityOf(id), id).toBe('none');
       }
-      expect(visibilityOf('region-lochaber-terrain-hillshade')).toBe('visible');
+      expect(visibilityOf(`${sid('terrain')}-hillshade`)).toBe('visible');
     } finally {
       vi.unstubAllGlobals();
     }
@@ -286,17 +345,17 @@ describe('addRegionToMap', () => {
 
     const ids = map.layers.map((l) => String(l.id));
     const generated = map.layers.filter(
-      (l) => l.source === 'region-lochaber-basemap' && !String(l.id).includes('-paths'),
+      (l) => l.source === sid('basemap') && !String(l.id).includes('-paths'),
     );
     const lastLine = ids.indexOf(String(generated.filter((l) => l.type === 'line').at(-1)!.id));
     const firstSymbol = ids.indexOf(String(generated.find((l) => l.type === 'symbol')!.id));
-    const casing = ids.indexOf('region-lochaber-basemap-paths-casing');
-    const paths = ids.indexOf('region-lochaber-basemap-paths');
+    const casing = ids.indexOf(`${sid('basemap')}-paths-casing`);
+    const paths = ids.indexOf(`${sid('basemap')}-paths`);
 
     expect(casing).toBeGreaterThan(lastLine);
     expect(paths).toBe(casing + 1);
     expect(paths).toBeLessThan(firstSymbol);
-    expect(paths).toBeLessThan(ids.indexOf('region-lochaber-basemap-pois_parking'));
+    expect(paths).toBeLessThan(ids.indexOf(`${sid('basemap')}-pois_parking`));
   });
 
   it('keeps relief and contours under the paths', async () => {
@@ -305,11 +364,11 @@ describe('addRegionToMap', () => {
     await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
     const ids = map.layers.map((l) => String(l.id));
-    const casing = ids.indexOf('region-lochaber-basemap-paths-casing');
+    const casing = ids.indexOf(`${sid('basemap')}-paths-casing`);
     for (const id of [
-      'region-lochaber-terrain-hillshade',
-      'region-lochaber-contours-lines-index',
-      'region-lochaber-contours-lines',
+      `${sid('terrain')}-hillshade`,
+      `${sid('contours')}-lines-index`,
+      `${sid('contours')}-lines`,
     ]) {
       expect(ids.indexOf(id)).toBeGreaterThan(-1);
       expect(ids.indexOf(id)).toBeLessThan(casing);
@@ -332,15 +391,15 @@ describe('addRegionToMap', () => {
       const ids = map.layers.map((l) => String(l.id));
       const fills = map.layers.filter(
         (l) =>
-          l.source === 'region-lochaber-basemap' &&
+          l.source === sid('basemap') &&
           l.type !== 'symbol' &&
           !String(l.id).includes('-paths'),
       );
       return {
         ids,
         lastBasemapGround: ids.indexOf(String(fills.at(-1)!.id)),
-        earth: ids.indexOf('region-lochaber-basemap-earth'),
-        casing: ids.indexOf('region-lochaber-basemap-paths-casing'),
+        earth: ids.indexOf(`${sid('basemap')}-earth`),
+        casing: ids.indexOf(`${sid('basemap')}-paths-casing`),
       };
     };
 
@@ -353,7 +412,7 @@ describe('addRegionToMap', () => {
       await addRegionToMap(map as unknown as MLMap, registry, manifestOrder, 'light');
 
       const { ids, lastBasemapGround, casing } = groundIds(map);
-      const shade = ids.indexOf('region-lochaber-avalanche-shade');
+      const shade = ids.indexOf(`${sid('avalanche')}-shade`);
       expect(shade).toBeGreaterThan(-1);
       expect(shade).toBeGreaterThan(lastBasemapGround);
       expect(shade).toBeLessThan(casing);
@@ -374,9 +433,9 @@ describe('addRegionToMap', () => {
       const { ids, lastBasemapGround, earth } = groundIds(map);
       expect(earth).toBeGreaterThan(-1);
       for (const id of [
-        'region-lochaber-avalanche-shade',
-        'region-lochaber-terrain-hillshade',
-        'region-lochaber-contours-lines',
+        `${sid('avalanche')}-shade`,
+        `${sid('terrain')}-hillshade`,
+        `${sid('contours')}-lines`,
       ]) {
         expect(ids.indexOf(id), id).toBeGreaterThan(lastBasemapGround);
       }
@@ -422,10 +481,10 @@ describe('addRegionToMap', () => {
 
     const ids = map.layers.map((l) => String(l.id));
     const firstRegionLabel = map.layers.findIndex(
-      (l) => l.type === 'symbol' && String(l.id).startsWith('region-lochaber-basemap-'),
+      (l) => l.type === 'symbol' && String(l.id).startsWith(`${sid('basemap')}-`),
     );
     expect(firstRegionLabel).toBeGreaterThan(-1);
-    expect(ids.indexOf('region-lochaber-contours-labels')).toBeLessThan(firstRegionLabel);
+    expect(ids.indexOf(`${sid('contours')}-labels`)).toBeLessThan(firstRegionLabel);
   });
 
   it('does not draw the region at zooms where its tiles cover a continent', async () => {
@@ -437,9 +496,9 @@ describe('addRegionToMap', () => {
     // a region's low-zoom tiles are planet tiles that merely intersect it. Montenegro's z5
     // basemap tile spans Vienna to Athens; drawing it painted that rectangle over Romania
     // and Bulgaria. Lochaber is 1.0 deg wide, so its tiles stop out-sizing it at z9.
-    for (const layer of map.layers) {
-      expect(Number(layer.minzoom)).toBeGreaterThanOrEqual(9);
-    }
+    // The layers are every region's, so the floor goes with the region's copy instead.
+    const floors = fake.addSharedCopy.mock.calls.map(([, , , floor]) => floor);
+    expect(floors).toEqual([9, 9, 9]);
   });
 
   it('scales the cutoff to the region, rather than assuming one size', async () => {
@@ -450,8 +509,7 @@ describe('addRegionToMap', () => {
 
     await addRegionToMap(map as unknown as MLMap, registry, scotland, 'light');
 
-    const hillshade = map.layers.find((l) => String(l.id).endsWith('terrain-hillshade'))!;
-    expect(hillshade.minzoom).toBe(6);
+    expect(fake.addSharedCopy).toHaveBeenCalledWith(sid('terrain'), 'lochaber-terrain.pmtiles', scotland.bbox, 6);
   });
 
   it('skips artifacts that are not actually in OPFS yet', async () => {
@@ -462,8 +520,8 @@ describe('addRegionToMap', () => {
 
     await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
-    expect(map.sources.has(regionSourceId('lochaber', 'contours'))).toBe(false);
-    expect(map.sources.has(regionSourceId('lochaber', 'basemap'))).toBe(true);
+    expect(map.sources.has(sid('contours'))).toBe(false);
+    expect(map.sources.has(sid('basemap'))).toBe(true);
   });
 
   it('is idempotent — a second call does not duplicate sources', async () => {
@@ -483,7 +541,6 @@ describe('removeRegionFromMap', () => {
     await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
     expect(map.layers.length).toBeGreaterThan(0);
 
-    vi.mocked(registry.removeLocal).mockClear();
     removeRegionFromMap(map as unknown as MLMap, registry, region);
 
     expect(map.layers).toEqual([]);
@@ -494,10 +551,10 @@ describe('removeRegionFromMap', () => {
     );
   });
 
-  it('leaves a region whose id merely starts with the removed one', async () => {
-    // Real catalogue pairs: england-east / england-east-midlands, sachsen / sachsen-anhalt.
-    // Matching layers by `region-england-east-` stripped the Midlands too, sources left
-    // behind, so it went blank until a reload.
+  it('keeps what another region still draws, reloading it so the deleted one leaves', async () => {
+    // Real catalogue pairs, overlapping: england-east / england-east-midlands. When each
+    // region had its own layers, matching them by `region-england-east-` once stripped the
+    // Midlands too. Now they share them, and deleting one must leave the other drawn.
     const regionOf = (id: string): Region => ({
       ...region,
       id,
@@ -509,15 +566,106 @@ describe('removeRegionFromMap', () => {
     const map = fakeMap();
     await addRegionToMap(map as unknown as MLMap, registry, east, 'light');
     await addRegionToMap(map as unknown as MLMap, registry, midlands, 'light');
-    const midlandsLayers = map.layers.filter((l) =>
-      String(l.id).startsWith('region-england-east-midlands-'),
-    );
-    expect(midlandsLayers.length).toBeGreaterThan(0);
+    const layers = [...map.layers];
+    const sources = [...map.sources];
+    const reloadedBefore = map.reloaded().length;
 
     removeRegionFromMap(map as unknown as MLMap, registry, east);
 
-    expect(map.layers).toEqual(midlandsLayers);
-    expect([...map.sources].every((s) => s.startsWith('region-england-east-midlands-'))).toBe(true);
+    expect(map.layers).toEqual(layers);
+    expect([...map.sources]).toEqual(sources);
+    // Its tiles were in those sources' caches; a reload drops them.
+    expect(map.reloaded().slice(reloadedBefore).sort()).toEqual(sources.sort());
+  });
+});
+
+describe('overlapping regions', () => {
+  const regionOf = (id: string, kinds: string[]): Region => ({
+    ...region,
+    id,
+    artifacts: kinds.map((kind, i) => ({ kind, filename: `${id}-${kind}.pmtiles`, path: `p${i}`, bytes: 1 })),
+  });
+  const northWest = regionOf('england-north-west', ['basemap', 'landmarks']);
+  const scotland = regionOf('scotland', ['basemap']);
+
+  /** Every basemap fill on the map is below every landmark layer. */
+  function landmarksAboveAllGround(map: ReturnType<typeof fakeMap>) {
+    const ids = map.layers.map((l) => String(l.id));
+    const ground = map.layers
+      .filter((l) => String(l.source).endsWith('-basemap') && l.type === 'fill')
+      .map((l) => ids.indexOf(String(l.id)));
+    const landmarks = map.layers
+      .filter((l) => String(l.source).endsWith('-landmarks'))
+      .map((l) => ids.indexOf(String(l.id)));
+    expect(ground.length).toBeGreaterThan(0);
+    expect(landmarks.length).toBeGreaterThan(0);
+    return Math.max(...ground) < Math.min(...landmarks);
+  }
+
+  it('draws them through one source and one set of layers per kind', async () => {
+    const map = fakeMap();
+    const a = regionOf('a', ['basemap', 'terrain', 'contours']);
+    const b = regionOf('b', ['basemap', 'terrain', 'contours']);
+
+    await addRegionToMap(map as unknown as MLMap, registry, a, 'light');
+    const layers = map.layers.length;
+    await addRegionToMap(map as unknown as MLMap, registry, b, 'light');
+
+    expect([...map.sources].sort()).toEqual([sid('basemap'), sid('contours'), sid('terrain')].sort());
+    expect(map.layers.length).toBe(layers);
+  });
+
+  it('reloads a shared source when a region joins it, and not when one is drawn again', async () => {
+    const map = fakeMap();
+    const a = regionOf('a', ['basemap', 'contours']);
+    const b = regionOf('b', ['basemap', 'contours']);
+
+    await addRegionToMap(map as unknown as MLMap, registry, a, 'light');
+    expect(map.reloaded()).toEqual([]);
+    await addRegionToMap(map as unknown as MLMap, registry, b, 'light');
+    expect(map.reloaded().sort()).toEqual([sid('basemap'), sid('contours')].sort());
+    // A theme change or a second restore draws the same regions again.
+    await addRegionToMap(map as unknown as MLMap, registry, b, 'light');
+    expect(map.reloaded()).toHaveLength(2);
+  });
+
+  it('keeps one region’s landmarks over another’s ground, drawn after it (Great Dun Fell)', async () => {
+    // Scotland's bbox reaches 54.54 N, over the masts on Great Dun Fell in North West
+    // England. Restored after it and without landmarks of its own, Scotland's basemap went
+    // in over every North West layer, and its opaque earth painted the masts out.
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, northWest, 'light');
+    await addRegionToMap(map as unknown as MLMap, registry, scotland, 'light');
+
+    expect(landmarksAboveAllGround(map)).toBe(true);
+  });
+
+  it('gives an archive with another zoom range a source of its own, its ground under every overlay', async () => {
+    // Basemaps end at z13 or z14 in some regions; one source can only have one range.
+    fake = fakeRegistry({ 'scotland-basemap.pmtiles': [0, 14] });
+    registry = fake as unknown as TileSourceRegistry;
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, northWest, 'light');
+    await addRegionToMap(map as unknown as MLMap, registry, scotland, 'light');
+
+    expect(map.sources.has(sid('basemap'))).toBe(true);
+    expect(map.sources.has(sharedSourceId('basemap', 0, 14))).toBe(true);
+    expect(landmarksAboveAllGround(map)).toBe(true);
+  });
+
+  it('takes a kind off the map with the last region that has it, leaving the rest', async () => {
+    const map = fakeMap();
+    await addRegionToMap(map as unknown as MLMap, registry, northWest, 'light');
+    await addRegionToMap(map as unknown as MLMap, registry, scotland, 'light');
+
+    removeRegionFromMap(map as unknown as MLMap, registry, northWest);
+
+    expect([...map.sources]).toEqual([sid('basemap')]);
+    expect(map.layers.some((l) => String(l.source).endsWith('-landmarks'))).toBe(false);
+    expect(map.layers.some((l) => l.source === sid('basemap'))).toBe(true);
+    expect(map.reloaded()).toContain(sid('basemap'));
   });
 });
 
@@ -535,11 +683,11 @@ describe('the low-zoom path network', () => {
     await addRegionToMap(map as unknown as MLMap, registry, withPaths, 'light');
 
     const ids = map.layers.map((l) => String(l.id));
-    expect(ids.indexOf('region-lochaber-paths-paths-casing')).toBeGreaterThan(
-      ids.indexOf('region-lochaber-basemap-paths'),
+    expect(ids.indexOf(`${sid('paths')}-paths-casing`)).toBeGreaterThan(
+      ids.indexOf(`${sid('basemap')}-paths`),
     );
-    expect(ids.indexOf('region-lochaber-paths-paths')).toBeLessThan(
-      ids.indexOf('region-lochaber-contours-labels'),
+    expect(ids.indexOf(`${sid('paths')}-paths`)).toBeLessThan(
+      ids.indexOf(`${sid('contours')}-labels`),
     );
   });
 
@@ -548,8 +696,8 @@ describe('the low-zoom path network', () => {
 
     await addRegionToMap(map as unknown as MLMap, registry, withPaths, 'light');
 
-    const low = map.layers.find((l) => String(l.id) === 'region-lochaber-paths-paths')!;
-    const basemap = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-paths')!;
+    const low = map.layers.find((l) => String(l.id) === `${sid('paths')}-paths`)!;
+    const basemap = map.layers.find((l) => String(l.id) === `${sid('basemap')}-paths`)!;
     expect(low['source-layer']).toBe('paths');
     // Identical paint, so crossing the handoff zoom changes which source draws and
     // nothing a user could see.
@@ -562,37 +710,38 @@ describe('the low-zoom path network', () => {
 
     await addRegionToMap(map as unknown as MLMap, registry, withPaths, 'light');
 
-    const low = map.layers.find((l) => String(l.id) === 'region-lochaber-paths-paths')!;
-    const basemap = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-paths')!;
+    const low = map.layers.find((l) => String(l.id) === `${sid('paths')}-paths`)!;
+    const basemap = map.layers.find((l) => String(l.id) === `${sid('basemap')}-paths`)!;
     // maxzoom is exclusive in the style spec, so these meet at 14 with neither a gap nor
     // an overlap — an overlap would double-draw the translucent casing and read brighter.
     expect(low.maxzoom).toBe(14);
     expect(basemap.minzoom).toBe(14);
   });
 
-  it('leaves the basemap paths alone when there is no low-zoom artifact', async () => {
+  it('starts the basemap paths at z14 even without the low-zoom artifact', async () => {
     const map = fakeMap();
 
     await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
 
-    // A region downloaded before this artifact existed still draws whatever its z12-13
-    // tiles carry, rather than losing paths it used to show.
-    const basemap = map.layers.find((l) => String(l.id) === 'region-lochaber-basemap-paths')!;
-    expect(basemap.minzoom).toBe(12);
+    // The basemap's path layers are every region's, so there is no one region's "has the
+    // low-zoom artifact" to start them earlier for. Every region in the catalogue has it;
+    // one downloaded before it existed goes without z12-13 paths until updated.
+    const basemap = map.layers.find((l) => String(l.id) === `${sid('basemap')}-paths`)!;
+    expect(basemap.minzoom).toBe(14);
   });
 
-  it('adds no low-zoom layer to a region too small to have those zooms', async () => {
+  it('leaves a region too small for those zooms to its floor, not to a layer', async () => {
     const map = fakeMap();
-    // A region a hundredth of a degree across is suppressed below z16 by regionMinZoom,
-    // which leaves this artifact no band of zooms at all. A layer whose minzoom is above
-    // its maxzoom is a style error, so there must not be one.
+    // A region a hundredth of a degree across is held back below z16 by regionMinZoom.
+    // That is the region's copy's floor; the shared layer keeps its own zooms, and must
+    // not be given a minzoom above its maxzoom, which is a style error.
     const tiny: Region = { ...withPaths, id: 'tiny', bbox: [-5.01, 56.79, -5.0, 56.8] };
 
     await addRegionToMap(map as unknown as MLMap, registry, tiny, 'light');
 
-    const ids = map.layers.map((l) => String(l.id));
-    expect(ids).not.toContain('region-tiny-paths-paths');
-    expect(ids).not.toContain('region-tiny-paths-paths-casing');
+    expect(fake.addSharedCopy).toHaveBeenCalledWith(sid('paths'), 'lochaber-paths.pmtiles', tiny.bbox, 16);
+    const low = map.layers.find((l) => String(l.id) === `${sid('paths')}-paths`)!;
+    expect(Number(low.minzoom)).toBeLessThan(Number(low.maxzoom));
   });
 
   it('keeps the grade band under the path lines', async () => {
@@ -609,8 +758,8 @@ describe('the low-zoom path network', () => {
     await addRegionToMap(map as unknown as MLMap, registry, both, 'light');
 
     const ids = map.layers.map((l) => String(l.id));
-    expect(ids.indexOf('region-lochaber-sac-band')).toBeLessThan(
-      ids.indexOf('region-lochaber-paths-paths-casing'),
+    expect(ids.indexOf(`${sid('sac')}-band`)).toBeLessThan(
+      ids.indexOf(`${sid('paths')}-paths-casing`),
     );
   });
 });
@@ -625,8 +774,8 @@ describe('SAC grades', () => {
     await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
 
     const ids = map.layers.map((l) => String(l.id));
-    const band = ids.indexOf('region-lochaber-sac-band');
-    const casing = ids.indexOf('region-lochaber-basemap-paths-casing');
+    const band = ids.indexOf(`${sid('sac')}-band`);
+    const casing = ids.indexOf(`${sid('basemap')}-paths-casing`);
     expect(band).toBeGreaterThan(-1);
     expect(casing).toBeGreaterThan(-1);
     expect(band).toBeLessThan(casing);
@@ -645,8 +794,8 @@ describe('SAC grades', () => {
 
     // A band narrower than the casing would show as a coloured line beside the path
     // rather than around it.
-    expect(widthAt16('region-lochaber-sac-band')).toBeGreaterThan(
-      widthAt16('region-lochaber-basemap-paths-casing'),
+    expect(widthAt16(`${sid('sac')}-band`)).toBeGreaterThan(
+      widthAt16(`${sid('basemap')}-paths-casing`),
     );
   });
 
@@ -655,7 +804,7 @@ describe('SAC grades', () => {
 
     await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
 
-    const labels = map.layers.find((l) => String(l.id) === 'region-lochaber-sac-labels')!;
+    const labels = map.layers.find((l) => String(l.id) === `${sid('sac')}-labels`)!;
     const layout = labels.layout as Record<string, unknown>;
     expect(layout['symbol-placement']).toBe('line');
     // "T3", not "3" — the form on the signpost.
@@ -670,7 +819,7 @@ describe('SAC grades', () => {
 
     await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
 
-    const band = map.layers.find((l) => String(l.id) === 'region-lochaber-sac-band')!;
+    const band = map.layers.find((l) => String(l.id) === `${sid('sac')}-band`)!;
     expect(band['source-layer']).toBe('sac');
     // build-sac.sh normalizes sac_scale=demanding_mountain_hiking to t=3; a style
     // expression reading the raw OSM string would silently colour nothing.
@@ -683,7 +832,7 @@ describe('SAC grades', () => {
 
     await addRegionToMap(map as unknown as MLMap, registry, sacOnly, 'light');
 
-    expect(map.layers.map((l) => String(l.id))).toContain('region-lochaber-sac-band');
+    expect(map.layers.map((l) => String(l.id))).toContain(`${sid('sac')}-band`);
   });
 
   it('removes its layers and source when the region is deleted', async () => {
@@ -693,7 +842,7 @@ describe('SAC grades', () => {
     removeRegionFromMap(map as unknown as MLMap, registry, graded);
 
     expect(map.layers).toEqual([]);
-    expect(map.sources.has('region-lochaber-sac')).toBe(false);
+    expect(map.sources.has(sid('sac'))).toBe(false);
   });
 });
 
@@ -709,7 +858,7 @@ describe('a region’s own copy of the summits', () => {
     await addRegionToMap(map as unknown as MLMap, registry, withPeaks, 'light');
 
     expect(registry.addRegionalCopy).toHaveBeenCalledWith(PEAKS_PMTILES_URL, 'lochaber-peaks-1.pmtiles', region.bbox);
-    expect(map.sources.has(regionSourceId('lochaber', 'peaks'))).toBe(false);
+    expect([...map.sources].some((id) => id.includes('peaks'))).toBe(false);
     expect(map.layers.some((l) => String(l.id).includes('-peaks-'))).toBe(false);
   });
 
@@ -718,7 +867,9 @@ describe('a region’s own copy of the summits', () => {
     const setUrl = vi.fn();
     const map = fakeMap();
     const peaksSource = { type: 'vector', setUrl };
-    map.getSource.mockImplementation((id: string) => (id === 'peaks' ? peaksSource : map.sources.has(id) ? {} : undefined));
+    map.getSource.mockImplementation((id: string) =>
+      id === 'peaks' ? peaksSource : map.sources.has(id) ? { setUrl: vi.fn() } : undefined,
+    );
 
     await addRegionToMap(map as unknown as MLMap, registry, withPeaks, 'light');
 

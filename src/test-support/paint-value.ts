@@ -18,10 +18,32 @@ export function paintValue(
   zoom: number,
   properties: Record<string, unknown> = {},
 ): unknown {
-  const spec = (latest as unknown as Record<string, Record<string, unknown>>)[`paint_${layerType}`][
+  return evaluate('paint', layerType, property, value, zoom, properties);
+}
+
+/** {@link paintValue} for a layout property, such as `symbol-sort-key`. */
+export function layoutValue(
+  layerType: LayerType,
+  property: string,
+  value: unknown,
+  zoom: number,
+  properties: Record<string, unknown> = {},
+): unknown {
+  return evaluate('layout', layerType, property, value, zoom, properties);
+}
+
+function evaluate(
+  group: 'paint' | 'layout',
+  layerType: LayerType,
+  property: string,
+  value: unknown,
+  zoom: number,
+  properties: Record<string, unknown>,
+): unknown {
+  const spec = (latest as unknown as Record<string, Record<string, unknown>>)[`${group}_${layerType}`][
     property
   ];
-  if (!spec) throw new Error(`no paint property ${layerType}.${property}`);
+  if (!spec) throw new Error(`no ${group} property ${layerType}.${property}`);
   const parsed = createPropertyExpression(value, spec as never);
   if (parsed.result !== 'success') {
     throw new Error(`${property}: ${parsed.value.map((e) => e.message).join('; ')}`);

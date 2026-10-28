@@ -17,6 +17,7 @@ import { addAvalancheLayer, avalancheSourceSpec } from '../overlays/avalanche';
 import { addTerrainFeatureLayers } from '../overlays/terrain-features';
 import { addLandmarkLayers } from '../overlays/landmarks';
 import { addDetailLayers } from '../overlays/detail';
+import { parkingLayer } from '../map/parking';
 import { applyAllStoredVisibility } from '../map/layers';
 
 // Renders a downloaded region *over* the low-zoom world catalog rather than replacing it,
@@ -254,6 +255,22 @@ const BASEMAP_PATHS_MIN_ZOOM = 14;
 function regionMinZoom([west, south, east, north]: Region['bbox']): number {
   const span = Math.max(east - west, north - south);
   return Math.ceil(Math.log2(360 / span));
+}
+
+/**
+ * Where car parks belong: just above the basemap's POIs rather than among them, so a car
+ * park places before a bench or a cafe claims its spot — the slot the basemap's own car
+ * park layer had — and still below the place labels, which place first of all. Without
+ * the basemap yet (C16), under the downloaded labels like the rest.
+ */
+function aboveBasemapPois(map: MLMap): string | undefined {
+  const pois = downloadedLayerIds(map).find((id) => {
+    const source = layerSource(map, id);
+    return source.endsWith('-basemap') && id === `${source}-pois`;
+  });
+  if (!pois) return beneathLabels(map);
+  const order = map.getLayersOrder();
+  return order[order.indexOf(pois) + 1];
 }
 
 function layerSource(map: MLMap, id: string): string {
@@ -600,6 +617,10 @@ function addKindLayers(
       minzoom,
       before: amongBasemapPois(map),
     });
+  } else if (kind === 'parking') {
+    // Car parks (see src/map/parking.ts), the basemap's own no longer drawn.
+    map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+    map.addLayer(parkingLayer(sourceId, theme, minzoom), aboveBasemapPois(map));
   } else if (kind === 'detail') {
     // Walls, fences, power lines, gates, stiles and fords (see src/overlays/detail.ts).
     // The lines are ground detail like the scree, so under the paths; the gates and fords

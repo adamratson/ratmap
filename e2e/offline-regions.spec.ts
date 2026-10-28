@@ -277,8 +277,9 @@ test.describe('the region catalogue', () => {
     await page.locator('.regions-search').fill(TEST_REGION);
     await expect(page.locator('.regions-hint')).toHaveText('1 match.');
     await expect(page.locator('.region-name')).toHaveText(new RegExp(TEST_REGION));
-    // Size and artifacts up front: this is a decision about megabytes on a phone.
-    await expect(page.locator('.region-meta')).toHaveText(/MB · .*basemap/);
+    // Size up front: this is a decision about megabytes on a phone. Only the size — not a
+    // list of what the region is made of.
+    await expect(page.locator('.region-meta')).toHaveText(/ [kMG]B$/);
 
     await page.locator('.regions-search').fill('zzzznowhere');
     await expect(page.locator('.regions-hint')).toHaveText('No region matches that name.');

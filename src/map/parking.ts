@@ -1,22 +1,22 @@
-import type { Map as MLMap, SymbolLayerSpecification } from 'maplibre-gl';
+import type { ExpressionSpecification, Map as MLMap, SymbolLayerSpecification } from 'maplibre-gl';
 import { parseHex } from '../overlays/terrain-features';
 import type { Theme } from '../ui/theme';
 import { MAP_FONTS, mapInk, type MapInk } from './flavor';
 
 // Car parks. On a hill map these are trailheads: where a walk starts is usually where the
-// car is left. They ride in every basemap archive already — Protomaps puts OSM
-// `amenity=parking` in the `pois` source-layer as `kind: "parking"` (checked by decoding
-// scotland-basemap z12-15 tiles, 2026-10-15) — but upstream's `pois` layer has a hardcoded
-// `kind` allowlist that omits it, and the vendored sprite has no parking icon. So the data
-// was there and never drawn, same story as bare rock in landuse.ts.
+// car is left. They ride on their own artifact, `<region>-parking-1.pmtiles`, built from
+// OSM `amenity=parking` by infra/scripts/build-parking.sh and cut per region (C16).
 //
-// **No `min_zoom` gate.** Upstream's own POI layer hides a feature below its `min_zoom`,
-// but for parking that hides the ones that matter: unnamed car parks — laybys and
-// trailhead lots — carry `min_zoom: 17`, past the archives' z15 ceiling, so they would
-// never show at all. The tiles already thin them by zoom (a few large named car parks at
-// z13, more at z14, everything at z15), so this draws whatever a tile carries.
-
-export const PARKING_LAYER_ID = 'pois_parking';
+// They used to come from the basemap, where Protomaps keeps them as `kind: "parking"` in
+// `pois`. It keeps too few. Over the central Lake District its z15 tiles held 79 of 81 named
+// public car parks but only 51 of 241 unnamed ones, and 25 of the 181 unnamed areas under
+// 500 m² — the laybys and trailhead lots walks actually start from — and its z13 tiles held
+// 8 car parks in all (measured against the england-north-west basemap, 2026-10-28). The
+// artifact carries all 540 there, at every zoom from z13; collision does the thinning.
+//
+// What reaches the tiles is already curated (tools/cmd/normalize-parking): private,
+// residents' and permit car parks and lock-up garages are dropped, areas are reduced to one
+// point with their size, and customers-only car parks — pubs, hotels — are flagged.
 
 /** Icon edge in CSS px. The image is rendered at PIXEL_RATIO times this. */
 const ICON_SIZE = 16;
@@ -118,22 +118,44 @@ export function supplyParkingIcons(map: MLMap): void {
   });
 }
 
-/** The car park symbol layer: the sign from z13, its name beside it from z15. */
-export function parkingLayer(source: string, theme: Theme): SymbolLayerSpecification {
+/** Layer name inside `<region>-parking-1.pmtiles`, set by infra/scripts/build-parking.sh. */
+export const PARKING_SOURCE_LAYER = 'parking';
+
+/** From z13, the parking archive's own floor (build-parking.sh's -Z13). */
+export const PARKING_MIN_ZOOM = 13;
+
+export function parkingLayerId(sourceId: string): string {
+  return `${sourceId}-symbols`;
+}
+
+/**
+ * The car park symbol layer: the sign from z13, its name beside it from z15.
+ *
+ * Placement order when signs collide, first to last: named car parks, as the ones a walk
+ * description sends you to; then the rest; customers-only after public within each; and
+ * within those, larger first, so at z13 the lot at the head of a valley holds its place
+ * over a layby beside it. `size` is the area in m² (0 for a car park mapped as a point),
+ * folded into (-1, 0] so it never outranks the steps above it.
+ */
+export function parkingLayer(sourceId: string, theme: Theme, minzoom: number): SymbolLayerSpecification {
   const ink = mapInk(theme);
+  const size: ExpressionSpecification = ['coalesce', ['get', 'size'], 0];
   return {
-    id: PARKING_LAYER_ID,
+    id: parkingLayerId(sourceId),
     type: 'symbol',
-    source,
-    'source-layer': 'pois',
-    minzoom: 13,
-    filter: ['==', ['get', 'kind'], 'parking'],
+    source: sourceId,
+    'source-layer': PARKING_SOURCE_LAYER,
+    minzoom: Math.max(PARKING_MIN_ZOOM, minzoom),
     layout: {
       'icon-image': parkingIconId(theme),
       'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.8, 15, 1],
-      // Named car parks place first: they are the ones a walk description sends you to.
-      'symbol-sort-key': ['case', ['has', 'name'], 0, 1],
-      'text-field': ['step', ['zoom'], '', 15, ['coalesce', ['get', 'name:en'], ['get', 'name']]],
+      'symbol-sort-key': [
+        '+',
+        ['case', ['has', 'name'], 0, 2],
+        ['coalesce', ['get', 'customers'], 0],
+        ['-', ['/', size, ['+', size, 500]]],
+      ],
+      'text-field': ['step', ['zoom'], '', 15, ['coalesce', ['get', 'name'], '']],
       'text-font': [MAP_FONTS.regular],
       'text-size': 11,
       'text-max-width': 8,

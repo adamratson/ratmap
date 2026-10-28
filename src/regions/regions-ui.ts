@@ -546,7 +546,9 @@ function renderRegionRow(region: Region, disk: RegionDiskState, deps: RegionsUiD
 
   const meta = document.createElement('span');
   meta.className = 'region-meta';
-  const kinds = region.artifacts.map((a) => a.kind).join(' + ');
+  // Not the artifact kinds: a region is downloaded whole, so the list of what is in it is
+  // a dozen words nobody acts on, and it grows with every kind the pipeline adds.
+  //
   // The group disambiguates the collisions a global catalogue creates — Georgia the
   // country and Georgia the state are otherwise the same row twice.
   const where = region.group ? `${region.group} · ` : '';
@@ -557,7 +559,7 @@ function renderRegionRow(region: Region, disk: RegionDiskState, deps: RegionsUiD
     status === 'update'
       ? `${formatBytes(disk.missingBytes)} to add`
       : formatBytes(region.totalBytes);
-  meta.textContent = `${where}${size} · ${kinds}`;
+  meta.textContent = `${where}${size}`;
 
   info.append(name, meta);
 

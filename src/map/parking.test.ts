@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
 import { mapInk } from './flavor';
+import { layoutValue } from '../test-support/paint-value';
 import { parkingIconId, parkingImage, parkingLayer, supplyParkingIcons } from './parking';
 
 /** The [r, g, b, a] of one pixel. */
@@ -66,20 +67,41 @@ describe('supplyParkingIcons', () => {
 });
 
 describe('parkingLayer', () => {
-  it('draws every car park the tile carries, with no min_zoom gate', () => {
-    // Unnamed car parks carry min_zoom 17, past the archives' z15 ceiling. A gate on it
-    // (as upstream's own POI layer has) would hide exactly the trailhead laybys.
-    const layer = parkingLayer('basemap', 'light');
-    expect(layer).toMatchObject({ type: 'symbol', 'source-layer': 'pois', minzoom: 13 });
-    expect(layer.filter).toEqual(['==', ['get', 'kind'], 'parking']);
-    expect(JSON.stringify(layer.filter)).not.toContain('min_zoom');
+  it('draws every car park in its own artifact from z13, however low the region allows', () => {
+    const layer = parkingLayer('regions-z13-15-parking', 'light', 0);
+    expect(layer).toMatchObject({
+      id: 'regions-z13-15-parking-symbols',
+      type: 'symbol',
+      source: 'regions-z13-15-parking',
+      'source-layer': 'parking',
+      minzoom: 13,
+    });
+    // The artifact holds only car parks a walker can use; nothing is left to filter.
+    expect(layer.filter).toBeUndefined();
+    expect(parkingLayer('s', 'light', 14).minzoom).toBe(14);
+  });
+
+  it('places named before unnamed, public before customers-only, larger before smaller', () => {
+    const sortKey = (props: Record<string, unknown>) =>
+      layoutValue('symbol', 'symbol-sort-key', parkingLayer('s', 'light', 13).layout!['symbol-sort-key'], 15, props) as number;
+    const order = [
+      { name: 'Seathwaite', size: 5000 },
+      { name: 'Seathwaite layby', size: 0 },
+      { name: 'Old Dungeon Ghyll', customers: 1, size: 9000 },
+      { size: 20000 },
+      { size: 90 },
+      { customers: 1, size: 50000 },
+      { customers: 1, size: 0 },
+    ].map(sortKey);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(new Set(order).size).toBe(order.length);
   });
 
   it('uses the sign drawn for its own theme', () => {
-    expect(parkingLayer('basemap', 'dark').layout).toMatchObject({ 'icon-image': parkingIconId('dark') });
+    expect(parkingLayer('s', 'dark', 13).layout).toMatchObject({ 'icon-image': parkingIconId('dark') });
   });
 
   it('keeps the sign when its name has no room', () => {
-    expect(parkingLayer('basemap', 'light').layout).toMatchObject({ 'text-optional': true });
+    expect(parkingLayer('s', 'light', 13).layout).toMatchObject({ 'text-optional': true });
   });
 });

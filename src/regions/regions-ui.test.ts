@@ -342,6 +342,15 @@ describe('a catalogue that covers the globe', () => {
     expect(meta.some((text) => text.startsWith('North America'))).toBe(true);
   });
 
+  it('gives each region its size, not a list of what it is made of', async () => {
+    const container = await openSheet();
+    type(container, 'scot');
+
+    const meta = container.querySelector('.region-meta')!.textContent!;
+    expect(meta).toMatch(/ [kMG]B$/);
+    expect(meta).not.toMatch(/basemap|terrain|\+/);
+  });
+
   it('keeps the query when a download or delete re-renders the sheet', async () => {
     const container = await openSheet();
     type(container, 'scot');

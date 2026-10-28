@@ -17,6 +17,7 @@ const ZOOMS: Record<string, [number, number]> = {
   contours: [11, 14],
   detail: [12, 15],
   landmarks: [13, 15],
+  parking: [13, 15],
   paths: [12, 13],
   peaks: [0, 7],
   sac: [12, 15],
@@ -355,7 +356,7 @@ describe('addRegionToMap', () => {
     expect(casing).toBeGreaterThan(lastLine);
     expect(paths).toBe(casing + 1);
     expect(paths).toBeLessThan(firstSymbol);
-    expect(paths).toBeLessThan(ids.indexOf(`${sid('basemap')}-pois_parking`));
+    expect(paths).toBeLessThan(ids.indexOf(`${sid('basemap')}-pois`));
   });
 
   it('keeps relief and contours under the paths', async () => {
@@ -666,6 +667,40 @@ describe('overlapping regions', () => {
     expect(map.layers.some((l) => String(l.source).endsWith('-landmarks'))).toBe(false);
     expect(map.layers.some((l) => l.source === sid('basemap'))).toBe(true);
     expect(map.reloaded()).toContain(sid('basemap'));
+  });
+});
+
+describe('car parks', () => {
+  const withParking: Region = {
+    ...region,
+    artifacts: [...region.artifacts, { kind: 'parking', filename: 'lochaber-parking-1.pmtiles', path: 'p7', bytes: 1 }],
+  };
+
+  it('draws them from their own artifact, just above the basemap’s other POIs', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, withParking, 'light');
+
+    const ids = map.layers.map((l) => String(l.id));
+    expect(map.sources.has(sid('parking'))).toBe(true);
+    // Above the POIs, so a car park places before a cafe claims its spot; the basemap's
+    // own car park layer, which drew too few, is gone.
+    expect(ids.indexOf(`${sid('parking')}-symbols`)).toBe(ids.indexOf(`${sid('basemap')}-pois`) + 1);
+    expect(ids.some((id) => id.endsWith('pois_parking'))).toBe(false);
+  });
+
+  it('shares one source and one layer between overlapping regions', async () => {
+    const map = fakeMap();
+    const other: Region = {
+      ...withParking,
+      id: 'glencoe',
+      artifacts: withParking.artifacts.map((a) => ({ ...a, filename: a.filename.replace('lochaber', 'glencoe') })),
+    };
+
+    await addRegionToMap(map as unknown as MLMap, registry, withParking, 'light');
+    await addRegionToMap(map as unknown as MLMap, registry, other, 'light');
+
+    expect(map.layers.filter((l) => l.source === sid('parking'))).toHaveLength(1);
   });
 });
 

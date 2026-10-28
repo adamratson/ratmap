@@ -34,12 +34,12 @@ export const LANDMARK_KINDS: readonly LandmarkKindInfo[] = [
   {
     icon: 'mast',
     label: 'Mast or tower',
-    note: 'Transmitters, radar and lookout towers — visible from miles off. Floodlights left out.',
+    note: 'Transmitters, radar and lookout towers.',
   },
   {
     icon: 'trig',
     label: 'Trig point',
-    note: 'Survey pillars and beacons. One on a summit is shown as the summit instead.',
+    note: 'Survey pillars and beacons. On a summit, shown as the summit.',
   },
   {
     icon: 'cairn',
@@ -49,7 +49,7 @@ export const LANDMARK_KINDS: readonly LandmarkKindInfo[] = [
   {
     icon: 'turbine',
     label: 'Wind turbine',
-    note: 'Each turbine of a wind farm, so its extent is a reference too.',
+    note: 'Each turbine of a wind farm.',
   },
   {
     icon: 'lighthouse',

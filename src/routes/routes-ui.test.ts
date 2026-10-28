@@ -393,7 +393,7 @@ describe('SAC grades in the panel', () => {
       sac: graded({ gradedM: 8200, coverage: 1, metresByGrade: new Map([[2, 8200]]), hardest: 2 }),
     });
 
-    expect(panel.textContent).toContain('Every part of this route carries a grade');
+    expect(panel.textContent).toContain('Graded along the whole route');
     expect(panel.textContent).not.toContain('%');
   });
 

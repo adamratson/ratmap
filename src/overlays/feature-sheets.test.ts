@@ -103,11 +103,11 @@ describe('the path grade card', () => {
     expect(body.querySelector('.sheet-sac-note')!.textContent).toBe(t3.note);
   });
 
-  it('says a grade assumes summer conditions', () => {
+  it('names the grading scale', () => {
     renderPathSheet(body, { properties: {}, grade: t3 } as never);
 
     expect(body.querySelector('h2')!.textContent).toBe('Path');
-    expect(body.querySelector('.sheet-note')!.textContent).toMatch(/good summer conditions/);
+    expect(body.querySelector('.sheet-note')!.textContent).toBe('SAC hiking scale from OpenStreetMap.');
   });
 });
 

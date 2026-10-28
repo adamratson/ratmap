@@ -34,7 +34,7 @@ describe('evaluateGate (C1)', () => {
     if (gate.allowed) throw new Error('expected refusal');
     expect(gate.reason).toBe('not-persisted');
     // Must explain rather than just fail.
-    expect(gate.message).toMatch(/home screen|install/i);
+    expect(gate.message).toMatch(/without warning/i);
   });
 
   it('refuses when the region would not fit', () => {

@@ -310,6 +310,6 @@ export const DETAIL_LEGEND: readonly DetailLegendEntry[] = [
   {
     swatch: (ink) => detailSwatch('ford', ink),
     label: 'Ford',
-    note: 'Path or track through water, stepping stones included — impassable in spate. From zoom 14.',
+    note: 'Path or track through water, including stepping stones. From zoom 14.',
   },
 ];

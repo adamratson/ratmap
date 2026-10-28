@@ -84,8 +84,8 @@ export function startStorageOnboarding({
           ? IOS_STANDALONE_NOT_PERSISTED
           : 'Your browser hasn’t granted ratmap permanent storage yet, so downloads are off.'
         : promptFailure
-          ? `The install prompt didn’t open (${promptFailure}). Install ratmap from your browser’s menu to download maps.`
-          : 'Downloads are off until ratmap is installed — a browser tab can’t keep maps safely.',
+          ? `The install prompt didn’t open (${promptFailure}). Install from the browser’s menu to download maps.`
+          : 'Downloads are off until ratmap is installed.',
       kind: 'warn',
     });
   }
@@ -104,9 +104,8 @@ export function startStorageOnboarding({
  * The relaunch comes first because it's the common case and costs nothing to try.
  */
 const IOS_STANDALONE_NOT_PERSISTED =
-  'iOS hasn’t granted ratmap permanent storage yet, so downloads are off. Close ratmap ' +
-  'fully and reopen it. If this keeps showing, turn on “Prevent Cross-Site Tracking” in ' +
-  'Settings → Apps → Safari.';
+  'iOS hasn’t granted permanent storage, so downloads are off. Fully close and reopen ratmap; ' +
+  'if this persists, turn on “Prevent Cross-Site Tracking” in Settings → Apps → Safari.';
 
 /** The iOS Share → Add to Home Screen walkthrough (C2: iOS has no install prompt). */
 export function renderInstallSheet(body: HTMLElement): void {

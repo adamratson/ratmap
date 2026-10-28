@@ -593,7 +593,7 @@ const stubPrefersDark = (dark: boolean): void => {
 
     const sheet = document.querySelector<HTMLElement>('#sheet')!;
     expect(sheet.classList.contains('at-peek')).toBe(false);
-    expect(sheet.textContent).toMatch(/evicted|guarantee/i);
+    expect(sheet.textContent).toMatch(/without warning/i);
     expect(sheet.querySelectorAll('.install-steps li').length).toBeGreaterThan(0);
   });
 });

@@ -126,7 +126,7 @@ describe('the legs a route was planned as', () => {
 
     expect(parsed.legs).toBeUndefined();
     expect(parsed.coords).toHaveLength(3);
-    expect(parsed.note).toMatch(/straight-line sections in it aren’t marked/);
+    expect(parsed.note).toMatch(/straight sections unmarked/);
   });
 
   it('leaves a file without them exactly as it was read', () => {

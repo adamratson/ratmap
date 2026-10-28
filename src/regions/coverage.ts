@@ -191,7 +191,7 @@ export class RegionCoverage {
     this.drawFootprints();
     this.onRestoreProblem?.(
       failed.length > 0
-        ? `Couldn’t draw ${failed.join(', ')} from storage. The rest of the map is unaffected; deleting and downloading ${failed.length === 1 ? 'it' : 'them'} again should fix it.`
+        ? `Couldn’t draw ${failed.join(', ')} from storage.`
         : null,
     );
     if (changed) this.onDownloadedChange?.();
@@ -213,7 +213,7 @@ export class RegionCoverage {
     }
     if ([...names].some((name) => name.endsWith('.pmtiles'))) {
       this.onRestoreProblem?.(
-        'Your downloaded regions are on this phone, but the catalogue that describes them isn’t, so they can’t be drawn. Open ratmap once with a connection to fix it.',
+        'Downloaded regions are on this phone, but the catalogue that describes them isn’t, so they can’t be drawn.',
       );
     }
   }

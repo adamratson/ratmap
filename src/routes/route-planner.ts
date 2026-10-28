@@ -507,7 +507,7 @@ export class RoutePlanner {
   startFollowing(): void {
     const coords = this.draft.coordinates();
     if (coords.length < 2) {
-      this.onStatus?.('Nothing to follow yet — plan or open a route first.', 'warn');
+      this.onStatus?.('Nothing to follow yet.', 'warn');
       return;
     }
     this.follower = new RouteFollower(coords);
@@ -631,7 +631,7 @@ export class RoutePlanner {
     if (!terrain) {
       this.profile = null;
       this.profileNote =
-        'Elevation profile needs a downloaded region — the worldwide terrain layer is far too coarse to measure a climb from.';
+        'Elevation profile needs a downloaded region.';
       return;
     }
 
@@ -641,7 +641,7 @@ export class RoutePlanner {
       this.profile = buildProfile(samples, elevations);
       this.profileNote =
         this.profile.coverage < 1
-          ? `Elevation data covers ${Math.round(this.profile.coverage * 100)}% of this route; the climb totals and Naismith time are understated.`
+          ? `Elevation data covers ${Math.round(this.profile.coverage * 100)}% of this route; climb and time are understated.`
           : null;
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') throw err;

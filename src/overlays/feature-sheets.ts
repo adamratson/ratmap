@@ -84,7 +84,7 @@ export function renderPathSheet(body: HTMLElement, hit: SacHit & { grade: NonNul
 
   body.querySelector('.sheet-sac-note')!.textContent = grade.note;
   body.querySelector('.sheet-note')!.textContent =
-    'SAC hiking scale, as tagged in OpenStreetMap. It describes the path in good summer conditions — snow, ice or bad weather put it up a grade or more.';
+    'SAC hiking scale from OpenStreetMap.';
 }
 
 /**

@@ -162,7 +162,7 @@ export class CatalogueTooNew extends Error {
   constructor(schemaVersion: number) {
     super(
       `Region catalogue is newer than this app (schema ${schemaVersion} > ` +
-        `${SUPPORTED_SCHEMA_VERSION}). Update the app to download regions.`,
+        `${SUPPORTED_SCHEMA_VERSION}).`,
     );
     this.name = 'CatalogueTooNew';
   }

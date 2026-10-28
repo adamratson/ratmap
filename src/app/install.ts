@@ -99,6 +99,4 @@ export const IOS_INSTALL_STEPS = [
 ] as const;
 
 export const INSTALL_RATIONALE =
-  'Installing is what lets the browser guarantee your offline maps stay on the device. ' +
-  'Without it, downloaded regions can be evicted with no warning — which you would only ' +
-  'discover with no signal.';
+  'Without installing, the browser can delete downloaded regions without warning.';

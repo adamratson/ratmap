@@ -79,7 +79,7 @@ export function setUpLocation({ map, button, status, onPosition, onDotClick }: L
         break;
       case 'denied':
         status.setCondition('location', {
-          message: 'ratmap cannot see your location. Allow it in your browser settings.',
+          message: 'Location access is blocked in browser settings.',
           kind: 'warn',
         });
         break;

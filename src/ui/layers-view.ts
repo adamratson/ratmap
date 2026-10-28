@@ -61,7 +61,7 @@ const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink
   },
   boundaries: {
     label: 'Walls, fences and gates',
-    note: 'Field boundaries and the gates, stiles and cattle grids through them.',
+    note: 'Field boundaries, gates, stiles and cattle grids.',
     swatch: wallSwatch,
   },
   powerLines: {
@@ -71,7 +71,7 @@ const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink
   },
   avalanche: {
     label: 'Avalanche terrain',
-    note: 'Slopes shaded by steepness. Terrain only — not a forecast. Off by default.',
+    note: 'Slopes shaded by steepness.',
     swatch: () =>
       `<svg viewBox="0 0 40 24"><rect x="3" y="5" width="34" height="14" rx="2" fill="${slopeCssColor(2)}" fill-opacity="0.75"/></svg>`,
   },

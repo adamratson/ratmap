@@ -37,8 +37,7 @@ export function describeDetailLimit(
       overzoomed: true,
       label: 'Limited detail at this zoom',
       detail:
-        `The downloaded region here carries data to zoom ${maxDataZoom}, so this view is ` +
-        'enlarged rather than detailed.',
+        `This downloaded region’s data stops at zoom ${maxDataZoom}; this view is enlarged.`,
     };
   }
 
@@ -46,8 +45,6 @@ export function describeDetailLimit(
     overzoomed: true,
     label: 'Limited detail at this zoom',
     detail:
-      `The worldwide map only carries data to zoom ${maxDataZoom}, so this view is ` +
-      'enlarged rather than detailed. Full-detail maps arrive with downloadable offline ' +
-      'regions.',
+      `Worldwide map data stops at zoom ${maxDataZoom}; offline regions have full detail.`,
   };
 }

@@ -46,7 +46,7 @@ export function watchMapHealth(map: MLMap, status: Pick<StatusCentre, 'setCondit
     // and take it back down when tiles start arriving again.
     if (isNetworkFailure(e.error)) {
       status.setCondition('offline', {
-        message: 'No connection. Downloaded areas still work; everywhere else is blank.',
+        message: 'No connection. Only downloaded regions are shown.',
         kind: 'warn',
       });
       return;

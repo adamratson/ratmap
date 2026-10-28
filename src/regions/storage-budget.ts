@@ -50,8 +50,8 @@ export function evaluateGate(region: Region, storage: StorageSnapshot): Download
       allowed: false,
       reason: 'not-persisted',
       message:
-        'Persistent storage has not been granted, so downloaded maps could be deleted by ' +
-        'the browser without warning. Install the app to your home screen first.',
+        'Persistent storage has not been granted, so the browser could delete downloaded ' +
+        'maps without warning.',
     };
   }
 

@@ -586,7 +586,7 @@ describe('download progress', () => {
     const onStatus = await tapDownload();
 
     await vi.waitFor(() =>
-      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/ran out of storage.*tap Resume/), 'error'),
+      expect(onStatus).toHaveBeenCalledWith(expect.stringMatching(/ran out of storage.*Progress is kept/), 'error'),
     );
   });
 
@@ -818,7 +818,7 @@ describe('when the catalogue cannot be fetched', () => {
 
     expect(notice(container).hidden).toBe(false);
     expect(notice(container).textContent).toMatch(/Can’t reach the region catalogue \(Failed to fetch\)/);
-    expect(notice(container).textContent).toMatch(/Check your connection/);
+    expect(notice(container).textContent).not.toMatch(/copy saved on this phone/);
   });
 
   it('works from the copy saved on the phone, so downloaded regions can still be managed', async () => {
@@ -832,16 +832,16 @@ describe('when the catalogue cannot be fetched', () => {
     expect(notice(container).textContent).toMatch(/copy saved on this phone/);
   });
 
-  it('asks for an app update when the catalogue is newer than this build', async () => {
+  it('says so when the catalogue is newer than this build', async () => {
     const { CatalogueTooNew } = await import('./manifest');
     fetchManifestMock.mockRejectedValue(new CatalogueTooNew(2));
 
     const container = await openSheet();
 
-    expect(notice(container).textContent).toMatch(/Update the app/);
+    expect(notice(container).textContent).toMatch(/newer than this app/);
   });
 
-  it('still lists the regions from the last catalogue it understood, when updating', async () => {
+  it('still lists the regions from the last catalogue it understood', async () => {
     const { CatalogueTooNew } = await import('./manifest');
     fetchManifestMock.mockRejectedValue(new CatalogueTooNew(2));
     loadCachedManifestMock.mockReturnValue({ schemaVersion: 1, builtAt: 'x', regions: [LOCHABER] });
@@ -849,7 +849,7 @@ describe('when the catalogue cannot be fetched', () => {
     const container = await openSheet();
 
     expect(rowNames(container)).toEqual([LOCHABER.name]);
-    expect(notice(container).textContent).toMatch(/Update the app to see new regions/);
+    expect(notice(container).textContent).toMatch(/newer than this version of ratmap/);
   });
 
   it('shows no notice when the catalogue arrives', async () => {

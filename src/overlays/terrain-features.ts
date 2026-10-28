@@ -38,7 +38,7 @@ export const TERRAIN_FEATURE_KINDS: readonly TerrainFeatureKindInfo[] = [
   {
     kind: 'scree',
     label: 'Scree',
-    note: 'Loose rock fragments — underfoot changes the walk. Coverage is partial.',
+    note: 'Loose rock fragments. Coverage is partial.',
   },
   {
     kind: 'shingle',
@@ -48,7 +48,7 @@ export const TERRAIN_FEATURE_KINDS: readonly TerrainFeatureKindInfo[] = [
   {
     kind: 'rock',
     label: 'Rock outcrop / boulder field',
-    note: 'Bare rock, outlined. OSM cannot tell an outcrop from a boulder field. Coverage is partial.',
+    note: 'Bare rock. OSM doesn’t distinguish outcrops from boulder fields. Coverage is partial.',
   },
 ];
 

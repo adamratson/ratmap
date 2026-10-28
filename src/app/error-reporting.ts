@@ -34,7 +34,7 @@ export function reportUncaughtErrors(
 
     const detail = error?.message || (typeof reason === 'string' ? reason : 'unknown error');
     status.setCondition(CONDITION_KEY, {
-      message: `Something went wrong: ${detail}. If part of the app stops responding, reopening it should help.`,
+      message: `Something went wrong: ${detail}.`,
       kind: 'error',
       // Unlike the conditions that track something still true, nothing will clear this on
       // its own — so the person reading it can.

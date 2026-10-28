@@ -66,7 +66,7 @@ export const RATMAP_GPX_NS = 'tag:adamratson.github.io,2026:ratmap/gpx/1';
 const GEOJSON_LEGS_VERSION = 1;
 
 const UNREADABLE_LEGS =
-  'Its legs couldn’t be read, so it opens as one track, and any straight-line sections in it aren’t marked as such.';
+  'Its legs couldn’t be read, so it opens as one track with straight sections unmarked.';
 
 /**
  * GPX 1.1 track.

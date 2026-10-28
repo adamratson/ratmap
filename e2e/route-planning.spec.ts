@@ -66,7 +66,7 @@ test.describe('route planning', () => {
     // Filtered rather than a bare locator: with no region the panel also warns that the
     // profile needs one, so two notes are on screen and both are correct.
     await expect(
-      page.locator('.route-note.warn').filter({ hasText: /straight lines, not paths/i }),
+      page.locator('.route-note.warn').filter({ hasText: /straight lines/i }),
     ).toBeVisible();
   });
 

@@ -186,7 +186,7 @@ async function loadCatalogue(): Promise<{ manifest: RegionManifest | null; notic
       return {
         manifest: cached,
         notice: cached
-          ? 'The region catalogue has moved on from this version of ratmap. Update the app to see new regions; the ones below are from the last catalogue it understood.'
+          ? 'The region catalogue is newer than this version of ratmap. Showing regions from the last catalogue it could read.'
           : err.message,
       };
     }
@@ -198,11 +198,11 @@ async function loadCatalogue(): Promise<{ manifest: RegionManifest | null; notic
     return cached
       ? {
           manifest: cached,
-          notice: `Can’t reach the region catalogue (${reason}). Showing the copy saved on this phone — downloaded regions still work, but downloading needs a connection.`,
+          notice: `Can’t reach the region catalogue (${reason}). Showing the copy saved on this phone.`,
         }
       : {
           manifest: null,
-          notice: `Can’t reach the region catalogue (${reason}). Check your connection and open this again.`,
+          notice: `Can’t reach the region catalogue (${reason}).`,
         };
   }
 }
@@ -620,7 +620,7 @@ function renderRegionRow(region: Region, disk: RegionDiskState, deps: RegionsUiD
         removeRegionFromMap(deps.map, deps.registry, region);
         try {
           await deleteRegion(region);
-          deps.onStatus(`Deleted ${region.name}. Download it again whenever you need it.`, 'ok');
+          deps.onStatus(`Deleted ${region.name}.`, 'ok');
         } catch (err) {
           // Some of it is still on disk. Said plainly, rather than "Deleted" over storage
           // that was never reclaimed; the restore below puts back whatever remains.
@@ -708,7 +708,7 @@ async function mayDownload(region: Region, deps: RegionsUiDeps): Promise<boolean
   // one still running goes ahead, since it finishes long before a region does.
   if (deps.offlineState?.() === 'failed') {
     deps.onStatus(
-      `Not downloading ${region.name}: ratmap itself isn’t set up to open without signal yet, so the map would be on your phone but you couldn’t open it offline. Reopen ratmap with a connection, then try again.`,
+      `Not downloading ${region.name}: ratmap isn’t set up to open without signal yet.`,
       'warn',
     );
     return false;
@@ -750,29 +750,28 @@ async function startDownload(region: Region, deps: RegionsUiDeps): Promise<void>
       deps.onStatus(`${region.name} is available offline.`, 'ok');
     } catch (err) {
       deps.onStatus(
-        `${region.name} downloaded, but couldn’t be drawn on the map: ${(err as Error).message}. It’s saved; reopening the app should show it.`,
+        `${region.name} downloaded, but couldn’t be drawn on the map: ${(err as Error).message}.`,
         'error',
       );
     }
   } catch (err) {
     if (err instanceof DownloadCancelled) {
       // Partial data is kept deliberately, so Resume picks up where this left off.
-      deps.onStatus(`Paused ${region.name} — progress is kept, tap Resume to continue.`, 'warn');
+      deps.onStatus(`Paused ${region.name}. Progress is kept.`, 'warn');
     } else if (err instanceof DownloadStalled) {
       // Deliberately not phrased as a pause. This branch used to be reached through an
       // `AbortError` name check that also caught the download's own stall timeout, so a
       // connection that had died reported itself as "Paused — progress is kept": no
       // error, nothing to act on, and on a slow link nothing was kept either.
       deps.onStatus(
-        `${region.name} stopped downloading — the connection dropped or is too slow. ` +
-          'Whatever arrived is kept, so Resume picks up from there.',
+        `${region.name} stopped downloading: the connection dropped or is too slow. Progress is kept.`,
         'error',
       );
     } else if ((err as { name?: unknown })?.name === 'QuotaExceededError') {
       // The browser's own words for this are about "quota" and "origin". What the person
       // needs is what ran out and what to do about it.
       deps.onStatus(
-        `The phone ran out of storage for ${region.name}. What arrived is kept — free up some space, then tap Resume.`,
+        `The phone ran out of storage for ${region.name}. Progress is kept.`,
         'error',
       );
     } else {

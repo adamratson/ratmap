@@ -145,7 +145,7 @@ export class OfflineRouter {
     const bbox = boundsOf([from, to], padForLeg(from, to))!;
     const tiles = tilesForBbox(bbox, ROUTING_ZOOM);
     if (tiles.length > MAX_TILES_PER_LEG) {
-      return straight('This leg is too long to route in one go — add a waypoint part-way.');
+      return straight('This leg is too long to route.');
     }
 
     const graph = await this.buildGraph(archive, region, tiles, request.signal);

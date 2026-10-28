@@ -104,7 +104,7 @@ describe('location states', () => {
     expect(onPosition).toHaveBeenCalledWith([-5.0, 56.8]);
   });
 
-  it('turns a refusal into a standing condition that says what to do', () => {
+  it('turns a refusal into a standing condition that says where it is blocked', () => {
     report({ status: 'denied' });
     expect(status.setCondition).toHaveBeenCalledWith(
       'location',

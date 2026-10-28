@@ -30,14 +30,8 @@ describe('renderLegend', () => {
     for (const entry of SLOPE_CLASSES) expect(labels).toContain(entry.label);
   });
 
-  it('says an ungraded path is untagged, not easy', () => {
-    expect(legendFor('dark').textContent).toMatch(/unbanded path is untagged, not necessarily easy/);
-  });
-
-  it('says avalanche shading is terrain, not a forecast, and where to switch it on', () => {
-    const text = legendFor('dark').textContent!;
-    expect(text).toMatch(/This is terrain, not a forecast/);
-    expect(text).toMatch(/switch it on in Layers/);
+  it('says avalanche shading is off by default', () => {
+    expect(legendFor('dark').textContent).toMatch(/Off by default/);
   });
 
   it('draws ground surface in the theme’s own ink, and never as individual boulders', () => {

@@ -566,12 +566,12 @@ if (import.meta.env.PROD) {
         'offline-shell',
         state === 'installing'
           ? {
-              message: 'Setting ratmap up to open without signal — keep it open with a connection for a minute or two.',
+              message: 'Preparing ratmap for offline use…',
               kind: 'ok',
             }
           : state === 'failed'
             ? {
-                message: 'ratmap couldn’t finish setting itself up to open without signal. It works while you’re online; reopen it with a connection to try again.',
+                message: 'Couldn’t prepare ratmap for offline use. It still works online.',
                 kind: 'warn',
               }
             : null,

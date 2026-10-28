@@ -54,7 +54,7 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
       ${legendRow(
         `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="6" fill="${ink.peakDot}" stroke="${ink.peakDotStroke}" stroke-width="2"/></svg>`,
         'Summit',
-        'Named and given a height once its prominence clears the zoom threshold — less prominent summits appear as you zoom in.',
+        'Less prominent summits appear as you zoom in.',
       )}
     </div>
 
@@ -63,26 +63,25 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
       ${legendRow(
         lineSwatch(ink.pathLine, 2, { dash: '4 3', casing: ink.pathCasing, cap: 'butt' }),
         'Footpath',
-        'Dashed. Drawn once its region is downloaded, from zoom 12.',
+        'Dashed. In downloaded regions, from zoom 12.',
       )}
       ${legendRow(
         lineSwatch(ink.pathLine, 3.2, { casing: ink.pathCasing }),
         'Track',
-        'Solid and heavier than a footpath — vehicle-width.',
+        'Solid. Vehicle-width.',
       )}
       ${legendRow(
         `<svg viewBox="0 0 40 24"><rect x="13" y="5" width="14" height="14" rx="3" fill="${ink.parkingFill}" stroke="${ink.parkingRim}" stroke-width="1.5"/><text x="20" y="16.2" font-size="10" font-weight="600" fill="${ink.parkingGlyph}" text-anchor="middle">P</text></svg>`,
         'Car park',
-        'From zoom 13 in a downloaded region, named from 15. Unnamed laybys and trailhead parking appear at 15.',
+        'From zoom 13 in downloaded regions, named from 15. Laybys and trailhead parking from 15.',
       )}
     </div>
 
     <div class="legend-section">
       <h3>Path grade (SAC)</h3>
       <p class="legend-note">
-        The Swiss Alpine Club's T1–T6 scale, where OpenStreetMap carries it — a coloured
-        band under the path, labelled from zoom 14. Most paths are not graded; an
-        unbanded path is untagged, not necessarily easy.
+        Swiss Alpine Club T1–T6 scale, from OpenStreetMap. Labelled from zoom 14. Most
+        paths are ungraded.
       </p>
       ${SAC_GRADES.map((entry) =>
         legendRow(
@@ -103,22 +102,19 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
       ${legendRow(
         `<svg viewBox="0 0 40 24"><path d="M3,17 C14,17 12,7 23,7 S34,15 37,9" fill="none" stroke="${ink.contourIndex}" stroke-width="1.8"/><text x="21" y="6.5" font-size="6.5" fill="${ink.contourLabel}" text-anchor="middle">620</text></svg>`,
         'Index contour',
-        'Every 50 m, drawn heavier and labelled with height — count the thin lines between them for the rest.',
+        'Every 50 m, heavier and labelled.',
       )}
       ${legendRow(
         '<div class="legend-hillshade-swatch"></div>',
         'Hillshade',
-        'Shaded relief from downloaded terrain — fades out at close zoom, where contours carry the detail instead.',
+        'Shaded relief in downloaded regions. Fades out at close zoom.',
       )}
     </div>
 
     <div class="legend-section">
       <h3>Ground surface</h3>
       <p class="legend-note">
-        Scree, shingle and rock outcrops — OpenStreetMap detail the basemap has no room
-        for. Coverage is partial and uneven: a hillside with nothing shown here is not
-        "there is no scree there", most of the world's surface tagging is simply
-        incomplete.
+        Scree, shingle and rock outcrops from OpenStreetMap. Coverage is partial.
       </p>
       ${TERRAIN_FEATURE_KINDS.map((entry) =>
         legendRow(
@@ -132,9 +128,8 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
     <div class="legend-section">
       <h3>Landmarks</h3>
       <p class="legend-note">
-        Reference points to take a bearing on, from zoom 13 in a downloaded region and
-        named from 15. From OpenStreetMap, so coverage is partial: a top with no trig
-        point shown may have one nobody has mapped.
+        From zoom 13 in downloaded regions, named from 15. OpenStreetMap coverage is
+        partial.
       </p>
       ${LANDMARK_KINDS.map((entry) => legendRow(landmarkSwatch(entry.icon, ink), entry.label, entry.note)).join('')}
     </div>
@@ -142,9 +137,7 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
     <div class="legend-section">
       <h3>Field detail</h3>
       <p class="legend-note">
-        The handrails to navigate along and the ways through them, in a downloaded region.
-        Mapped field by field in some places and not at all in others: open ground with no
-        wall shown may well have one.
+        In downloaded regions. OpenStreetMap coverage is partial.
       </p>
       ${DETAIL_LEGEND.map((entry) => legendRow(entry.swatch(ink), entry.label, entry.note)).join('')}
     </div>
@@ -152,11 +145,7 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
     <div class="legend-section">
       <h3>Avalanche terrain</h3>
       <p class="legend-note">
-        Off by default &mdash; switch it on in Layers. Slope steepness computed from
-        the downloaded region's elevation data, shaded where a slab could release.
-        <strong>This is terrain, not a forecast.</strong> Avalanche danger is snowpack
-        and weather as well as ground, and this map has never seen either. Unshaded is
-        not the same as safe: the runout of a slope above you is often gentle ground.
+        Off by default. Slope steepness from downloaded elevation data.
       </p>
       ${SLOPE_CLASSES.map((entry) =>
         legendRow(
@@ -174,17 +163,17 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
       ${legendRow(
         lineSwatch(ink.routeLine, 3.5, { casing: ink.routeCasing }),
         'Route',
-        'A planned or saved route, following real paths where the network allows.',
+        'Planned or saved route, following paths where possible.',
       )}
       ${legendRow(
         lineSwatch(ink.routeStraight, 3.5, { dash: '5 4', casing: ink.routeCasing, cap: 'butt' }),
         'Straight leg',
-        'A straight line only, not a real route — drawn with snap to paths off, or no path connects these two waypoints. Move a waypoint onto a path to fix an unrouted one.',
+        'Straight line, not a path. Drawn with snap to paths off, or where no path connects the waypoints.',
       )}
       ${legendRow(
         lineSwatch(ink.offRoute, 2, { dash: '3 3' }),
         'Off-route',
-        'Shown while following a route — the way back to it.',
+        'The way back to the route while following.',
       )}
     </div>
 
@@ -198,7 +187,7 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
       ${legendRow(
         '<svg viewBox="0 0 40 24"><rect x="3" y="4" width="34" height="16" rx="2" fill="#2563eb" fill-opacity="0.08" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="3 3"/></svg>',
         'Available to download',
-        'Outlined below full detail zoom — get it from the Offline tab.',
+        'Outlined below full detail zoom.',
       )}
     </div>
   `;

@@ -138,7 +138,7 @@ describe('storage onboarding (C1, C2)', () => {
     env.standalone = true;
     env.ios = true;
     await start();
-    expect(banner().message).toMatch(/reopen it/);
+    expect(banner().message).toMatch(/close and reopen/);
     expect(banner().message).toMatch(/Prevent Cross-Site Tracking/);
   });
 

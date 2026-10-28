@@ -298,7 +298,7 @@ test.describe('without persistent storage (C1)', () => {
     // A condition rather than a toast: it is currently true and stays true until the user
     // does something about it.
     await expect(
-      page.locator('#conditions .condition', { hasText: /can’t keep maps safely/ }),
+      page.locator('#conditions .condition', { hasText: /until ratmap is installed/ }),
     ).toBeVisible();
 
     await openRegionsSheet(page);

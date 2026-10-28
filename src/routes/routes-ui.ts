@@ -97,7 +97,7 @@ function planSection(
       el(
         'p',
         'route-hint',
-        'Tap the map to drop waypoints. Tap the line to add one in between, drag a marker to move it, press and hold one to remove it.',
+        'Tap the map to add waypoints. Tap the line to insert one, drag to move, press and hold to remove.',
       ),
     );
   }
@@ -191,12 +191,12 @@ function planSection(
 function straightLegsNote(summary: RouteSummary): string | null {
   if (!summary.hasStraightLegs) return null;
   if (summary.hasUnroutedLegs && summary.hasFreehandLegs) {
-    return 'Dashed sections are straight lines, not paths — drawn freehand, or no route was found between those points in the downloaded map.';
+    return 'Dashed sections are straight lines: drawn freehand, or no route was found.';
   }
   if (summary.hasUnroutedLegs) {
-    return 'Dashed sections are straight lines, not paths — no route was found between those points in the downloaded map.';
+    return 'Dashed sections are straight lines where no route was found.';
   }
-  return 'Dashed sections are drawn freehand — straight lines, not paths.';
+  return 'Dashed sections are straight lines, drawn freehand.';
 }
 
 /**
@@ -300,7 +300,7 @@ function sacSection(summary: RouteSummary): HTMLElement | null {
       el(
         'p',
         'route-note',
-        'No SAC grades along this route. Most paths are not graded, which tells you nothing about how hard they are.',
+        'No SAC grades along this route.',
       ),
     );
     return block;
@@ -331,7 +331,7 @@ function sacSection(summary: RouteSummary): HTMLElement | null {
 
 function coverageSentence(coverage: number): string {
   const percent = Math.round(coverage * 100);
-  if (percent >= 99) return 'Every part of this route carries a grade.';
+  if (percent >= 99) return 'Graded along the whole route.';
   return `Graded on ${percent}% of the route; the rest is untagged.`;
 }
 
@@ -395,8 +395,7 @@ function followSection(summary: RouteSummary, planner: RoutePlanner): HTMLElemen
     el(
       'p',
       'follow-note',
-      'Following needs the app open and the screen on — no browser on any platform can ' +
-        'track you in the background. ratmap keeps the screen awake while you follow.',
+      'Following needs the app open and the screen on. No background tracking; ratmap keeps the screen awake.',
     ),
   );
 

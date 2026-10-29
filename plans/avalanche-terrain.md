@@ -458,8 +458,9 @@ Two small things to fold into the next session with a physical phone, neither a 
 the same page on device silicon (§3), and a battery/thermal look at a full-screen
 `color-relief` pass.
 
-The wider on-device gap from the main spec (§4 Phase 6) is unchanged and unrelated: no part
-of this app has ever been verified on a physical iPhone beyond the download path.
+The wider on-device gap from the main spec (§4 Phase 6) was closed on 2026-10-29, when
+Adam's pass verified the core app on a physical iPhone and Android. That pass did not
+specifically cover this layer, so the two checks above are still open.
 
 ### Acceptance
 

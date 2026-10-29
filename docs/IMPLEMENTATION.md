@@ -85,9 +85,9 @@ background geolocation and no background downloads — accepted, see §7.
    the same day, before the spike drew a proper `hillshade` layer, gave a false positive —
    see git history / earlier revision of this doc for that trail. Left out here since the
    corrected result supersedes it.)
-   Not yet covered: `setTerrain`/3D specifically (only 2D hillshade was tested), and this
-   was tested from the OPFS spike, not the main map's own terrain source — closing this
-   fully means our real `terrain-global.pmtiles` (Phase 1) gets the same test.
+   That run covered 2D hillshade only, from the OPFS spike rather than the main map's own
+   terrain source. ✅ **Closed** (2026-10-29, Adam's on-device pass): `setTerrain`/3D and
+   the real terrain archives both confirmed on a physical phone.
 2. **OPFS → `getFile()` → `FileSource` → `Protocol.add()`** serving a local archive, and
    how it behaves after the app is backgrounded and resumed.
    ✅ **Confirmed** (2026-08-21, real iPhone): loaded via the OPFS spike picker, backgrounded
@@ -95,14 +95,13 @@ background geolocation and no background downloads — accepted, see §7.
    background duration, OS memory pressure evicting the tab, multiple archives at once).
 3. **`persist()` actually granted** on a real iOS device once installed to Home Screen,
    and observed retention past 7 days of no use.
-   ⚠️ **Partially confirmed**: granted on install (2026-08-21). 7-day retention check still
-   outstanding — re-open without touching it before 2026-08-28 and recheck the status
-   banner.
+   ✅ **Confirmed**: granted on install (2026-08-21), and retention past 7 days of no use
+   confirmed in Adam's on-device pass (2026-10-29).
 4. Sustained OPFS write throughput for a multi-GB download on a mid-range phone.
-   ⚠️ **Weak signal only**: 471 MB/s on a small (single-digit MB) test file (2026-08-21,
-   real iPhone). That's a burst write, not sustained — flash write speed on phones commonly
-   degrades over a multi-GB transfer as any write cache fills. Not representative until
-   tested with a file in the hundreds of MB to low GB range.
+   The first signal was weak: 471 MB/s on a small (single-digit MB) test file (2026-08-21,
+   real iPhone), a burst write rather than a sustained one. ✅ **Confirmed** (2026-10-29,
+   Adam's on-device pass): multi-GB downloads complete on a phone. No sustained throughput
+   figure was recorded, so the 471 MB/s burst number above is still the only measurement.
 
 **The Phase 0 OPFS spike harness (the "pick a local .pmtiles file" picker) was removed on
 2026-08-23.** It existed to prove items 2 and 4 above before a real downloader existed;
@@ -255,9 +254,9 @@ checked in a real browser (headless Chromium against the production build). Note
   ordinary HTTP cache, which is evictable and not a guarantee. Hillshade and peaks did not
   render at all. Genuine offline tiles require the OPFS region downloader (C5, C12). Treat
   the tile half of this acceptance criterion as *pending Phase 3*, not met.
-- Still to verify **on a real device**: this was all checked on desktop. The iPhone run
-  (installed to Home Screen, Airplane Mode, force-quit, relaunch) and the Android Chrome
-  equivalent have not been done.
+- This was all checked on desktop first. The iPhone run (installed to Home Screen,
+  Airplane Mode, force-quit, relaunch) and the Android Chrome equivalent were done in
+  Adam's on-device pass on 2026-10-29 and passed.
 
 ### Phase 3 — Offline regions
 
@@ -368,9 +367,9 @@ inferred; covered by `src/regions/opfs-store.test.ts`.
 
 Still open:
 
-- **Full on-device verification has still not been run** (iPhone install → Airplane Mode
-  → force-quit → relaunch; Android Chrome equivalent). Only the download path has been
-  exercised on hardware; everything else above is desktop.
+- ~~Full on-device verification has still not been run~~ — **done 2026-10-29** (Adam's
+  on-device pass: iPhone install → Airplane Mode → force-quit → relaunch, and the Android
+  Chrome equivalent, both passing).
 - Only `lochaber` is published. `cairngorms` and `scotland` are defined in
   `infra/regions.json` but not built or uploaded. Scotland-scale contours are untested and
   will be far larger — Lochaber alone is 21 MB for a 1°×0.6° box.
@@ -412,7 +411,7 @@ each confirmed in the production build before being fixed:
   will not start without signal. The update controller now reports the state, a banner
   shows it, and the download gate refuses while a failed setup stands.
 
-Still unverified: all of it on a real phone. See §4 Phase 6.
+Verified on a real phone in Adam's on-device pass (2026-10-29). See §4 Phase 6.
 
 ### Phase 3.5 — Summit lists (peak bagging)
 
@@ -751,15 +750,16 @@ Small, compared to the native path — no review, no store, no privacy manifest.
   `public/icons/mark.svg` rendered by `scripts/gen-icons.mjs` into the `any`, maskable and
   apple-touch sizes.
 - ~~No iOS splash screens exist~~ — eleven portrait `apple-touch-startup-image`s from the
-  same script, linked in `index.html`. **Still unverified on a device**: that iOS picks
-  them up, and what an offline launch shows (they are deliberately not precached; see
-  `vite.config.ts`).
+  same script, linked in `index.html`. **Verified on a device 2026-10-29** (Adam's
+  on-device pass): iOS picks them up, online and on an offline launch (they are
+  deliberately not precached; see `vite.config.ts`).
 - The bucket is on its raw `katapultobjects.com` URL rather than a custom domain. Unlike
   R2's `*.r2.dev` this isn't documented as rate-limited, but a custom domain is still
   cleaner long-term (own DNS, a future provider swap becomes a config change only) and
   would resolve §8.1 too.
-- On-device verification (iPhone Home Screen install + Airplane Mode + force-quit;
-  Android Chrome equivalent) has still never been run — everything so far is desktop.
+- ~~On-device verification has never been run~~ — **done 2026-10-29** (Adam's on-device
+  pass: iPhone Home Screen install + Airplane Mode + force-quit, and the Android Chrome
+  equivalent).
 
 ---
 

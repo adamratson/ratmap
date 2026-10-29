@@ -17,14 +17,13 @@ C1–C5 are addressed; §3's redesign is in place.
 
 Two things worth carrying forward:
 
-- **A1 is still unconfirmed on a real device.** The iOS `contextmenu` behaviour is
-  documented upstream, not device-tested. The replacement gesture (a pointer-event
-  press-and-hold, `src/routes/press-hold.ts`) works on every platform regardless, so
-  this is a matter of closing the finding rather than of the fix being at risk.
-- **The region footprints (C4) were never seen in a browser.** The remote tile host
-  stopped responding to the dev session partway through, so the map style never finished
-  loading. The geometry, nesting and render wiring are covered by
-  `src/regions/region-footprints.test.ts`; the on-map appearance is not.
+- **A1 confirmed on a real device (2026-10-29, Adam's on-device pass).** The iOS
+  `contextmenu` behaviour was documented upstream but not device-tested when this was
+  written; the replacement gesture (a pointer-event press-and-hold,
+  `src/routes/press-hold.ts`) is now confirmed on iOS.
+- **The region footprints (C4) are confirmed on the map (2026-10-29, same pass).** The
+  remote tile host stopped responding to the original dev session, so they were first
+  covered only by `src/regions/region-footprints.test.ts`.
 
 Two corrections to this document are marked inline: the `showUserHeading` claim under C2,
 and B4's suggestion that `Done` become a downward drag — it stayed as a button, because
@@ -91,7 +90,7 @@ clearing the whole route.
 *Note: the iOS `contextmenu` behaviour is documented upstream
 ([mdn/browser-compat-data#6376](https://github.com/mdn/browser-compat-data/issues/6376),
 [Leaflet#6817](https://github.com/Leaflet/Leaflet/issues/6817)), not device-tested in
-this session — confirm on a real device before treating this as closed.*
+this session. The fix was confirmed on a real device on 2026-10-29; see Status.*
 
 Fix: detect long-press with a `touchstart` timer (~500ms, cancelled by `touchmove`), or
 replace long-press with a tap-to-open popover (`Remove` / `Make start`) on the marker.

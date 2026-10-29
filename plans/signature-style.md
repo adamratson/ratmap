@@ -377,9 +377,9 @@ other two. (§6.3 said `theme.test.ts` asserts the value. It doesn't; nothing do
 Splashes are `globIgnores`d from the precache. The build shows Vite rewriting their hrefs to
 `/ratmap/splash/…` and zero splash entries in `sw.js`.
 
-**Unverified: no iPhone or Android device was used.** Still to check: the Home Screen icon, the
-maskable crop under Android's launcher shapes, and whether iOS actually shows the splash
-(online and offline).
+**Verified on device 2026-10-29 (Adam's on-device pass):** the Home Screen icon, the maskable
+crop under Android's launcher shapes, and the iOS splash (online and offline). No iPhone or
+Android device was used when this step was built.
 
 **Step 6** is done.
 

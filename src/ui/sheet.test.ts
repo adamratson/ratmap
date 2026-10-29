@@ -151,6 +151,23 @@ describe('BottomSheet', () => {
     expect(transform()).not.toBe(beforeGrow);
   });
 
+  it('can scroll every view to its end, whatever part of the sheet is below the screen', () => {
+    // The sheet is full height and moved down by the detent's offset, so that many pixels
+    // of the scroller are off-screen. The spacer after the body makes up the difference:
+    // without it, a view shorter than the whole sheet never scrolled, and its last rows
+    // stayed below the screen edge — the Layers list at the middle detent on a phone.
+    const sheet = new BottomSheet({ element: container });
+    heights['.sheet-peek'] = 100;
+    heights['.sheet-body'] = 500;
+    const spacer = container.querySelector<HTMLElement>('.sheet-spacer')!;
+
+    for (const detent of ['content', 'full'] as const) {
+      sheet.open(detent);
+      expect(spacer.style.height).toBe(transform().match(/translateY\((.+)\)/)![1]);
+      expect(parseFloat(spacer.style.height)).toBeGreaterThan(0);
+    }
+  });
+
   it('still reports layout changes through onLayout when the transform is unchanged', () => {
     // Toasts and the map attribution read the sheet's geometry on every onLayout call,
     // not only when the detent changes — the guard skips the DOM write, not the callback.

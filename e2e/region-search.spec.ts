@@ -15,10 +15,16 @@ import {
 // device: the global fallback shipped with the app holds only cities, towns and the
 // best-known summits, and a village is findable once its region is downloaded.
 //
-// The index is served from e2e/fixtures rather than the bucket: a real one, built from
-// Andorra's OSM extract by infra/scripts/build-places.sh (2026-09-28), added to the live
-// catalogue here the way build-manifest publishes it. The rest of the region is the real
-// bucket's, so the download itself is exactly the app's.
+// The live catalogue publishes Andorra's index, and then the whole region, index included,
+// is the real bucket's, so the download itself is exactly the app's. Only if the catalogue
+// has no index does the test add one from e2e/fixtures: a real one, built from Andorra's
+// OSM extract by infra/scripts/build-places.sh (2026-09-28), listed the way build-manifest
+// publishes it.
+//
+// Never the fixture in place of a published index: the catalogue then lists the bucket's
+// file, a different size, and the download of a fixture that ends short of it never
+// completes — how this test failed once the catalogue began shipping the index
+// (2026-10-28).
 
 const INDEX_FILE = 'andorra-places-1.sqlite';
 const INDEX = readFileSync(new URL(`./fixtures/${INDEX_FILE}`, import.meta.url));
@@ -48,7 +54,7 @@ async function fulfilRange(route: Route, body: Buffer): Promise<void> {
   });
 }
 
-/** Publish the fixture index as one of Andorra's artifacts, in the live catalogue. */
+/** Publish the fixture index as one of Andorra's artifacts, unless the catalogue has one. */
 async function publishIndex(page: Page): Promise<void> {
   await page.route('**/regions/manifest.json', async (route) => {
     const response = await route.fetch();
@@ -63,10 +69,13 @@ async function publishIndex(page: Page): Promise<void> {
         bytes: INDEX.length,
       } as { kind: string });
       andorra.totalBytes += INDEX.length;
+      // Routed before the catalogue is answered, so it is in place before any download.
+      await page.route(`**/regions/andorra/${INDEX_FILE}`, (indexRoute) =>
+        fulfilRange(indexRoute, INDEX),
+      );
     }
     await route.fulfill({ response, json: manifest });
   });
-  await page.route(`**/regions/andorra/${INDEX_FILE}`, (route) => fulfilRange(route, INDEX));
 }
 
 test.describe('search across downloaded regions', () => {

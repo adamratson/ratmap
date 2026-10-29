@@ -131,6 +131,19 @@ export class BottomSheet {
    */
   private readonly scroller: HTMLElement;
 
+  /**
+   * Empty space after {@link body}, as tall as the part of the sheet below the screen.
+   *
+   * The sheet is always full height and is moved down by its detent's offset, so the
+   * bottom `offset` pixels of the scroller are off-screen. Without this, a view no taller
+   * than the whole sheet never scrolls, yet its last rows sit below the screen edge —
+   * the Layers list at the middle detent on a phone. With it, the scroll range is exactly
+   * the hidden part. A spacer rather than the scroller shrinking to fit: a drag up then
+   * uncovers the rest of the view, not a blank strip, and a snap down doesn't clip the
+   * list before the sheet has moved.
+   */
+  private readonly spacer: HTMLElement;
+
   private readonly element: HTMLElement;
   private readonly onLayout?: (detent: Detent) => void;
   private current: Detent = 'peek';
@@ -163,11 +176,13 @@ export class BottomSheet {
       <div class="sheet-peek"></div>
       <div class="sheet-scroll">
         <div class="sheet-body" id="sheet-body" role="region" tabindex="-1"></div>
+        <div class="sheet-spacer" aria-hidden="true"></div>
       </div>
     `;
     this.peek = this.element.querySelector<HTMLElement>('.sheet-peek')!;
     this.scroller = this.element.querySelector<HTMLElement>('.sheet-scroll')!;
     this.body = this.element.querySelector<HTMLElement>('.sheet-body')!;
+    this.spacer = this.element.querySelector<HTMLElement>('.sheet-spacer')!;
 
     // Both rows are content-driven. The peek row changes when the planner adds a chip;
     // the body changes on every render, and the middle detent is sized from it — so a
@@ -282,6 +297,7 @@ export class BottomSheet {
       this.appliedOffset = offset;
       this.element.classList.toggle('sheet-animating', animate);
       this.element.style.transform = `translateY(${offset}px)`;
+      this.spacer.style.height = `${offset}px`;
     }
 
     for (const candidate of DETENTS) {

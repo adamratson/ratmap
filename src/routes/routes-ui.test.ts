@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderRoutePanel } from './routes-ui';
+import { summariseAvalancheTerrain } from './avalanche-sampler';
+import type { LngLat } from './geo';
+
+const avalancheLayerOn = vi.hoisted(() => ({ value: false }));
+vi.mock('../map/layers', () => ({ isLayerVisible: () => avalancheLayerOn.value }));
 import type { RoutePlanner, RouteSummary } from './route-planner';
 
 function deps(container: HTMLElement) {
@@ -30,6 +35,8 @@ const BASE: RouteSummary = {
   currentDistanceM: null,
   sac: null,
   sacNote: null,
+  avalanche: null,
+  avalancheNote: null,
 };
 
 function render(summary: Partial<RouteSummary>): HTMLElement {
@@ -415,5 +422,54 @@ describe('SAC grades in the panel', () => {
     expect([...panel.querySelectorAll('.route-stat dt')].map((n) => n.textContent)).not.toContain(
       'Hardest graded',
     );
+  });
+});
+
+describe('avalanche terrain in the panel', () => {
+  const along = (n: number): LngLat[] =>
+    Array.from({ length: n }, (_, i) => [-5.0, 56.8 + i * 0.001] as LngLat);
+  const steep = summariseAvalancheTerrain(along(4), [
+    { slope: 0, aspect: null },
+    { slope: 33, aspect: 1 },
+    { slope: 41, aspect: 1 },
+    { slope: 0, aspect: null },
+  ]);
+  const gentle = summariseAvalancheTerrain(along(3), [
+    { slope: 0, aspect: null },
+    { slope: 0, aspect: null },
+    { slope: 0, aspect: null },
+  ]);
+
+  afterEach(() => {
+    avalancheLayerOn.value = false;
+  });
+
+  it('stays out of the panel while the layer is off', () => {
+    const panel = render({ avalanche: steep });
+    expect(panel.querySelector('.route-avalanche')).toBeNull();
+  });
+
+  it('breaks the route down by slope class, with the steepest slope and the caveat', () => {
+    avalancheLayerOn.value = true;
+    const block = render({ avalanche: steep }).querySelector('.route-avalanche')!;
+
+    const grades = [...block.querySelectorAll('.sac-chip-grade')].map((chip) => chip.textContent);
+    expect(grades).toEqual(['30–34°', '40–44°']);
+    expect(block.textContent).toMatch(/Steepest slope crossed: 41°\./);
+    expect(block.textContent).toMatch(/never seen the snow/);
+  });
+
+  it('says nothing reaches 25° — not that the route is safe — on gentle ground', () => {
+    avalancheLayerOn.value = true;
+    const block = render({ avalanche: gentle }).querySelector('.route-avalanche')!;
+    expect(block.textContent).toMatch(/Nowhere on this route reaches 25°\./);
+    expect(block.textContent).not.toMatch(/safe/i);
+    expect(block.textContent).toMatch(/slide onto you from above/);
+  });
+
+  it('reports a read failure instead of an empty breakdown', () => {
+    avalancheLayerOn.value = true;
+    const panel = render({ avalancheNote: 'Could not read avalanche terrain: boom' });
+    expect(panel.textContent).toMatch(/Could not read avalanche terrain: boom/);
   });
 });

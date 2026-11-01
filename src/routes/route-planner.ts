@@ -14,10 +14,18 @@ import {
 import { buildProfile, profileSampleCoords, type ElevationProfile } from './profile';
 import { TerrainSampler } from './terrain-sampler';
 import { SacSampler, summariseSacGrades, type SacSummary } from './sac-sampler';
+import {
+  AvalancheSampler,
+  avalancheSampleCoords,
+  summariseAvalancheTerrain,
+  type AvalancheCell,
+  type AvalancheSummary,
+} from './avalanche-sampler';
 import { RouteFollower, type FollowState } from './follow';
 import { onPressHold } from './press-hold';
 import { WakeLock } from '../app/wake-lock';
-import type { Region } from '../regions/manifest';
+import type { PMTiles } from 'pmtiles';
+import type { Region, RegionArtifact } from '../regions/manifest';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 import type { Theme } from '../ui/theme';
 
@@ -58,6 +66,16 @@ export interface RouteSummary {
   sac: SacSummary | null;
   /** Why there are no grades, when there are none. */
   sacNote: string | null;
+  /**
+   * Slope classes along the route, where the region carries avalanche terrain.
+   *
+   * Terrain only — the artifact has never seen the snow, and it colours where a slope
+   * could release, not where the debris goes (A6). Null means the region has no avalanche
+   * artifact, never "no steep ground"; that is `steepest: null` inside it.
+   */
+  avalanche: AvalancheSummary | null;
+  /** Why there is no avalanche terrain breakdown, when reading it failed. */
+  avalancheNote: string | null;
   follow: FollowState | null;
   following: boolean;
   /**
@@ -191,6 +209,8 @@ export class RoutePlanner {
   private profileNote: string | null = null;
   private sac: SacSummary | null = null;
   private sacNote: string | null = null;
+  private avalanche: AvalancheSummary | null = null;
+  private avalancheNote: string | null = null;
 
   private follower: RouteFollower | null = null;
   private followState: FollowState | null = null;
@@ -306,6 +326,7 @@ export class RoutePlanner {
     this.router.clearCache();
     this.samplers.clear();
     this.sacSamplers.clear();
+    this.avalancheSamplers.clear();
     void this.refreshProfile();
   }
 
@@ -378,6 +399,8 @@ export class RoutePlanner {
     this.profileNote = null;
     this.sac = null;
     this.sacNote = null;
+    this.avalanche = null;
+    this.avalancheNote = null;
     this.stopFollowing();
     this.afterEdit();
   }
@@ -481,6 +504,8 @@ export class RoutePlanner {
       this.profileNote = null;
       this.sac = null;
       this.sacNote = null;
+      this.avalanche = null;
+      this.avalancheNote = null;
     }
     this.renderGeometry();
     this.renderMarkers();
@@ -587,11 +612,12 @@ export class RoutePlanner {
   }
 
   /**
-   * Measure the route: elevation profile, then SAC grades.
+   * Measure the route: elevation profile, SAC grades, then avalanche terrain.
    *
-   * Both read the same sample points — the profile's 25 m densification — so the two sets
-   * of numbers describe the same places, and a later feature that colours the chart by
-   * grade has them index for index. One `emit()` at the end: each of these is a panel
+   * The first two read the same sample points — the profile's 25 m densification — so the
+   * two sets of numbers describe the same places, and a later feature that colours the
+   * chart by grade has them index for index. Slope samples finer (see
+   * avalancheSampleCoords), because a skipped cell there is a missed gully. One `emit()` at the end: each of these is a panel
    * re-render, and a waypoint drag already fires one per frame.
    */
   private async refreshProfile(signal?: AbortSignal): Promise<void> {
@@ -601,6 +627,8 @@ export class RoutePlanner {
       this.profileNote = null;
       this.sac = null;
       this.sacNote = null;
+      this.avalanche = null;
+      this.avalancheNote = null;
       this.emit();
       return;
     }
@@ -609,6 +637,8 @@ export class RoutePlanner {
     await this.measureElevation(coords, samples, signal);
     if (signal?.aborted) return;
     await this.measureSacGrades(coords, samples, signal);
+    if (signal?.aborted) return;
+    await this.measureAvalancheTerrain(coords, signal);
     if (signal?.aborted) return;
 
     this.emit();
@@ -683,57 +713,108 @@ export class RoutePlanner {
   }
 
   /**
-   * The grade archive covering this route, or null.
+   * Total the route's distance by slope class, from the region's avalanche terrain.
    *
-   * Whole-route containment, like the profile: a route running out of the region would
-   * come back with its far half ungraded and no way to tell that apart from genuinely
-   * untagged ground. Saying nothing is the honest answer there.
+   * Absent when the region has no such artifact, which is most regions — it is built only
+   * for the alpine set (plans/avalanche-terrain.md §8 decision 2).
    */
-  private sacSourceFor(coords: readonly LngLat[]): SacSampler | null {
-    const bounds = boundsOf(coords);
-    if (!bounds) return null;
-
-    for (const region of this.downloadedRegions()) {
-      const artifact = region.artifacts.find((candidate) => candidate.kind === 'sac');
-      if (!artifact) continue;
-      if (
-        bounds[0] < region.bbox[0] ||
-        bounds[1] < region.bbox[1] ||
-        bounds[2] > region.bbox[2] ||
-        bounds[3] > region.bbox[3]
-      ) {
-        continue;
-      }
-
-      const archive = this.registry.get(artifact.filename);
-      if (!archive) continue;
-
-      const existing = this.sacSamplers.get(artifact.filename);
-      if (existing) return existing;
-
-      // z15 default: the same zoom the router reads the network at, and the archive's own
-      // top level — build-sac.sh tiles to z15 because that is where paths stop being
-      // generalised away.
-      const maxzoom = typeof artifact.maxzoom === 'number' ? artifact.maxzoom : 15;
-      const sampler = new SacSampler({ archive, maxzoom });
-      this.sacSamplers.set(artifact.filename, sampler);
-      return sampler;
+  private async measureAvalancheTerrain(
+    coords: readonly LngLat[],
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const source = this.avalancheSourceFor(coords);
+    if (!source) {
+      this.avalanche = null;
+      this.avalancheNote = null;
+      return;
     }
 
-    return null;
+    try {
+      const samples = avalancheSampleCoords(coords);
+      const cells = await source.sampler.cells(samples, signal);
+      if (signal?.aborted) return;
+      this.avalanche = summariseAvalancheTerrain(samples, cells);
+      this.avalancheNote = null;
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') throw err;
+      this.avalanche = null;
+      this.avalancheNote = `Could not read avalanche terrain: ${(err as Error).message}`;
+    }
+  }
+
+  /** The grade archive covering this route, or null — see {@link coveringArchive}. */
+  private sacSourceFor(coords: readonly LngLat[]): SacSampler | null {
+    const found = this.coveringArchive(coords, 'sac');
+    if (!found) return null;
+
+    const existing = this.sacSamplers.get(found.artifact.filename);
+    if (existing) return existing;
+
+    // z15 default: the same zoom the router reads the network at, and the archive's own
+    // top level — build-sac.sh tiles to z15 because that is where paths stop being
+    // generalised away.
+    const maxzoom = typeof found.artifact.maxzoom === 'number' ? found.artifact.maxzoom : 15;
+    const sampler = new SacSampler({ archive: found.archive, maxzoom });
+    this.sacSamplers.set(found.artifact.filename, sampler);
+    return sampler;
   }
 
   private readonly sacSamplers = new Map<string, SacSampler>();
 
   private terrainSourceFor(coords: readonly LngLat[]): TerrainSampler | null {
+    // The whole route must be inside: a profile that silently stops at a region edge
+    // would understate the climb without saying so.
+    const found = this.coveringArchive(coords, 'terrain');
+    if (!found) return null;
+
+    // Cached per artifact so a drag does not rebuild the decode cache on every frame.
+    const existing = this.samplers.get(found.artifact.filename);
+    if (existing) return existing;
+
+    const maxzoom = typeof found.artifact.maxzoom === 'number' ? found.artifact.maxzoom : 11;
+    const sampler = new TerrainSampler({ archive: found.archive, maxzoom });
+    this.samplers.set(found.artifact.filename, sampler);
+    return sampler;
+  }
+
+  private readonly samplers = new Map<string, TerrainSampler>();
+
+  private avalancheSourceFor(
+    coords: readonly LngLat[],
+  ): { sampler: AvalancheSampler; region: Region } | null {
+    const found = this.coveringArchive(coords, 'avalanche');
+    if (!found) return null;
+
+    let sampler = this.avalancheSamplers.get(found.artifact.filename);
+    if (!sampler) {
+      // z11 default: the build caps the zoom at the DEM's own resolution, which is z11 in
+      // Scotland and z12 in the Alps — the manifest's own figure is the one to trust.
+      const maxzoom = typeof found.artifact.maxzoom === 'number' ? found.artifact.maxzoom : 11;
+      sampler = new AvalancheSampler({ archive: found.archive, maxzoom });
+      this.avalancheSamplers.set(found.artifact.filename, sampler);
+    }
+    return { sampler, region: found.region };
+  }
+
+  private readonly avalancheSamplers = new Map<string, AvalancheSampler>();
+
+  /**
+   * The downloaded region artifact of `kind` whose region wholly contains `coords`.
+   *
+   * Whole-route containment for every sampler: a route running out of the region would
+   * come back with its far part unmeasured, and no way to tell that apart from genuinely
+   * empty ground. Saying nothing is the honest answer there.
+   */
+  private coveringArchive(
+    coords: readonly LngLat[],
+    kind: RegionArtifact['kind'],
+  ): { artifact: RegionArtifact; archive: PMTiles; region: Region } | null {
     const bounds = boundsOf(coords);
     if (!bounds) return null;
 
     for (const region of this.downloadedRegions()) {
-      const artifact = region.artifacts.find((candidate) => candidate.kind === 'terrain');
+      const artifact = region.artifacts.find((candidate) => candidate.kind === kind);
       if (!artifact) continue;
-      // The whole route must be inside: a profile that silently stops at a region edge
-      // would understate the climb without saying so.
       if (
         bounds[0] < region.bbox[0] ||
         bounds[1] < region.bbox[1] ||
@@ -744,22 +825,25 @@ export class RoutePlanner {
       }
 
       const archive = this.registry.get(artifact.filename);
-      if (!archive) continue;
-
-      const maxzoom = typeof artifact.maxzoom === 'number' ? artifact.maxzoom : 11;
-      // Cached per artifact so a drag does not rebuild the decode cache on every frame.
-      const existing = this.samplers.get(artifact.filename);
-      if (existing) return existing;
-
-      const sampler = new TerrainSampler({ archive, maxzoom });
-      this.samplers.set(artifact.filename, sampler);
-      return sampler;
+      if (archive) return { artifact, archive, region };
     }
 
     return null;
   }
 
-  private readonly samplers = new Map<string, TerrainSampler>();
+  /**
+   * Slope and aspect at one point, from the region's avalanche terrain artifact, plus the
+   * region it came from (the tap sheet names that region's forecast service).
+   *
+   * Null where no downloaded region carries the artifact here. `cell: null` inside one is
+   * a point the archive has no tile for — still not "flat".
+   */
+  async avalancheAt(point: LngLat): Promise<{ cell: AvalancheCell | null; region: Region } | null> {
+    const source = this.avalancheSourceFor([point]);
+    if (!source) return null;
+    const [cell] = await source.sampler.cells([point]);
+    return { cell, region: source.region };
+  }
 
   /**
    * The ground height at one point, in metres, read from the same downloaded terrain the
@@ -897,6 +981,8 @@ export class RoutePlanner {
       profileNote: this.profileNote,
       sac: this.sac,
       sacNote: this.sacNote,
+      avalanche: this.avalanche,
+      avalancheNote: this.avalancheNote,
       follow: this.followState,
       following: this.follower !== null,
       currentDistanceM: this.currentDistanceM(),

@@ -1134,6 +1134,44 @@ textarea {
   color: var(--munro) !important;
 }
 
+/* Slope at a tapped point (avalanche terrain layer on). Set apart from the summit or
+   coordinate facts above it, because it answers a different question. */
+.sheet-avalanche {
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.sheet-avalanche h3 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sheet-body .sheet-avalanche-slope {
+  color: var(--text);
+}
+
+.sheet-avalanche-swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.4rem;
+  border-radius: 2px;
+  vertical-align: -0.05em;
+}
+
+/* An inline link in a quiet caveat line: full-strength text and an underline, so it
+   reads as the one actionable thing in the line. */
+.sheet-avalanche a {
+  color: var(--text);
+  text-decoration: underline;
+}
+
 /* The caveat under a detail sheet — smaller and quieter than the fact above it, but
    present, because "T3 in summer" and "T3 under snow" are different mountains. */
 .sheet-note {
@@ -1615,6 +1653,26 @@ textarea {
 
 .sac-chip-grade {
   font-weight: 600;
+}
+
+/* Slope classes reuse the SAC chip row; the swatch is square because slope is drawn as an
+   area on the map, not a line. */
+.route-avalanche {
+  margin: 0.7rem 0 0;
+}
+
+.route-avalanche h3 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.slope-chip-swatch {
+  border-radius: 2px;
 }
 
 .sac-chip-distance {

@@ -6,6 +6,9 @@ import { parseRouteFile, toGeoJson, toGpx } from './gpx';
 import { deleteRoute, listRoutes, saveRoute, type SavedRoute } from './route-store';
 import type { RoutePlanner, RouteSummary } from './route-planner';
 import { SAC_GRADES, sacCssColor, sacGradeInfo } from '../overlays/sac';
+import { AVALANCHE_TERRAIN_ONLY, slopeCssColor } from '../overlays/avalanche';
+import { avalancheClassBreakdown } from './avalanche-sampler';
+import { isLayerVisible } from '../map/layers';
 import { fillReadout } from '../ui/readout';
 
 // The route planner's interface: a panel that lives over the map while planning or
@@ -121,6 +124,9 @@ function planSection(
 
   const sac = sacSection(summary);
   if (sac) section.append(sac);
+
+  const avalanche = avalancheSection(summary);
+  if (avalanche) section.append(avalanche);
 
   const straight = straightLegsNote(summary);
   if (straight) section.append(el('p', 'route-note warn', straight));
@@ -326,6 +332,68 @@ function sacSection(summary: RouteSummary): HTMLElement | null {
   block.append(chips);
 
   block.append(el('p', 'route-note', coverageSentence(sac.coverage)));
+  return block;
+}
+
+/**
+ * How much of the route crosses each slope class, and the steepest slope crossed.
+ *
+ * Only while the avalanche terrain layer is switched on: that toggle is the opt-in to the
+ * whole feature, and a summer route panel that talks about avalanches unasked is noise
+ * people learn to skip. It never claims more than the layer can know — the standing line
+ * says it is terrain only, and that a route on gentle ground can still be under a slope
+ * that is not (A6).
+ */
+function avalancheSection(summary: RouteSummary): HTMLElement | null {
+  if (!isLayerVisible('avalanche')) return null;
+  if (summary.avalancheNote) return el('p', 'route-note warn', summary.avalancheNote);
+
+  const avalanche = summary.avalanche;
+  if (!avalanche) return null;
+
+  const block = el('div', 'route-avalanche');
+  block.append(el('h3', '', 'Avalanche terrain'));
+
+  const percent = Math.round(avalanche.coverage * 100);
+  if (avalanche.steepest === null) {
+    block.append(
+      el(
+        'p',
+        'route-note',
+        percent >= 99
+          ? 'Nowhere on this route reaches 25°.'
+          : `Nowhere reaches 25° on the ${percent}% of the route with slope data.`,
+      ),
+    );
+  } else {
+    // Same chip row as the SAC breakdown: one wrapping row read as a set. The swatch is
+    // square because the map draws slope as an area, where a SAC grade is a line.
+    const chips = el('ul', 'sac-chips');
+    for (const { slopeClass, index, metres } of avalancheClassBreakdown(avalanche)) {
+      const chip = el('li', 'sac-chip');
+      const swatch = el('span', 'sac-chip-swatch slope-chip-swatch');
+      swatch.style.background = slopeCssColor(index);
+      chip.append(
+        swatch,
+        el('span', 'sac-chip-grade', slopeClass.label),
+        el('span', 'sac-chip-distance', formatDistance(metres)),
+      );
+      chip.title = slopeClass.note;
+      chips.append(chip);
+    }
+    block.append(chips);
+
+    const steepest = el('p', 'route-note');
+    steepest.append('Steepest slope crossed: ');
+    const figure = el('span');
+    fillReadout(figure, `${avalanche.steepest}°`);
+    steepest.append(figure);
+    if (percent < 99) steepest.append(` (slope data covers ${percent}% of the route)`);
+    steepest.append('.');
+    block.append(steepest);
+  }
+
+  block.append(el('p', 'route-note', AVALANCHE_TERRAIN_ONLY));
   return block;
 }
 

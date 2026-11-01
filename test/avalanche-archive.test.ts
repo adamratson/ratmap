@@ -13,6 +13,8 @@ import { describe, expect, it } from 'vitest';
 import { PMTiles } from 'pmtiles';
 import { NodeFileSource } from './node-file-source';
 import { AVALANCHE_ENCODING, SLOPE_FLOOR_DEG, slopeClassFor } from '../src/overlays/avalanche';
+import { AvalancheSampler } from '../src/routes/avalanche-sampler';
+import type { DecodedTile } from '../src/routes/terrain-sampler';
 
 // Checks the **published bytes**, not the code that wrote them.
 //
@@ -89,8 +91,8 @@ describe.skipIf(!ARCHIVE || !haveGdal())(
   () => {
     const archive = new PMTiles(new NodeFileSource(ARCHIVE!) as never);
 
-    /** The tile covering the archive's own centre, decoded once and reused. */
-    async function centreTile(): Promise<{ slope: Uint8Array; aspect: Uint8Array; runout: Uint8Array }> {
+    /** Zoom and x/y of the tile covering the archive's own centre. */
+    async function centreTileCoord(): Promise<{ z: number; x: number; y: number }> {
       const header = await archive.getHeader();
       const n = 2 ** header.maxZoom;
       const latRad = (header.centerLat * Math.PI) / 180;
@@ -98,11 +100,67 @@ describe.skipIf(!ARCHIVE || !haveGdal())(
       const y = Math.floor(
         ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n,
       );
-      const tile = await archive.getZxy(header.maxZoom, x, y);
-      if (!tile) throw new Error(`no tile at the archive centre (${header.maxZoom}/${x}/${y})`);
+      return { z: header.maxZoom, x, y };
+    }
+
+    /** The tile covering the archive's own centre, decoded once and reused. */
+    async function centreTile(): Promise<{ slope: Uint8Array; aspect: Uint8Array; runout: Uint8Array }> {
+      const { z, x, y } = await centreTileCoord();
+      const tile = await archive.getZxy(z, x, y);
+      if (!tile) throw new Error(`no tile at the archive centre (${z}/${x}/${y})`);
       const [slope, aspect, runout] = decodeBands(new Uint8Array(tile.data)).bands;
       return { slope, aspect, runout };
     }
+
+    it('reads back through the app sampler at the right cell, not a transposed one', async () => {
+      const { z, x, y } = await centreTileCoord();
+      const { slope, aspect } = await centreTile();
+      const size = Math.round(Math.sqrt(slope.length));
+
+      // The app's sampler, fed by GDAL instead of createImageBitmap (which Node lacks), so
+      // this exercises its lng/lat → tile → pixel arithmetic against the real archive.
+      const decode = async (bytes: ArrayBuffer): Promise<DecodedTile> => {
+        const { width, bands } = decodeBands(new Uint8Array(bytes));
+        const data = new Uint8ClampedArray(width * width * 4);
+        for (let i = 0; i < width * width; i++) {
+          data[i * 4] = bands[0][i];
+          data[i * 4 + 1] = bands[1][i];
+          data[i * 4 + 2] = bands[2][i];
+          data[i * 4 + 3] = 255;
+        }
+        return { width, height: width, data };
+      };
+      const sampler = new AvalancheSampler({ archive, maxzoom: z, decode });
+
+      // Steep cells whose mirror across the diagonal holds a different slope: those are the
+      // cells a swapped x/y would misread, so they are the only ones that prove anything.
+      const picks: { px: number; py: number }[] = [];
+      for (let i = 0; i < slope.length && picks.length < 20; i += 97) {
+        const px = i % size;
+        const py = Math.floor(i / size);
+        if (slope[i] !== 0 && slope[px * size + py] !== slope[i]) picks.push({ px, py });
+      }
+      expect(picks.length, 'no steep, asymmetric cells in the centre tile').toBeGreaterThan(0);
+
+      const world = size * 2 ** z;
+      const points = picks.map(({ px, py }): [number, number] => {
+        const gx = x * size + px + 0.5;
+        const gy = y * size + py + 0.5;
+        const lng = (gx / world) * 360 - 180;
+        const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * gy) / world))) * 180) / Math.PI;
+        return [lng, lat];
+      });
+
+      const cells = await sampler.cells(points);
+      const wrong = picks.flatMap(({ px, py }, k) => {
+        const i = py * size + px;
+        const got = cells[k];
+        return got?.slope === slope[i] && got.aspect === aspect[i]
+          ? []
+          : [`(${px},${py}): read ${JSON.stringify(got)}, stored slope ${slope[i]} aspect ${aspect[i]}`];
+      });
+      expect(wrong).toEqual([]);
+    });
 
     it('declares a zoom range capped at the DEM resolution', async () => {
       const header = await archive.getHeader();

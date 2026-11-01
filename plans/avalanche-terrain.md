@@ -1,7 +1,8 @@
 # Avalanche terrain — an optional layer, no live data
 
-**Status: Stage A built — pipeline and map layer.** Written and implemented 2026-09-08;
-see §6's status block for what is done and what is not. Destined for
+**Status: Stage A built — pipeline, map layer, tap readout and route breakdown.** Written and
+implemented 2026-09-08, readout and breakdown added 2026-10-29; see §6's status blocks for
+what is done and what is not. Destined for
 `docs/IMPLEMENTATION.md` as **Phase 4.6**, in the same slot Phase 4.5 (SAC) occupies — an additive
 per-region artifact under C16, no migration, no runtime compute, no new infrastructure.
 
@@ -384,10 +385,47 @@ dropped all 41.
 roughly 20 gigapixels of DEM to fetch and process. The stage skips what is already built,
 so it resumes.
 
-**Not yet built, from the list above:** the sampler (`src/avalanche-sampler.ts`), the tap
-readout, and the per-class route breakdown. The layer renders and can be switched on and
-off; it cannot yet be interrogated. Those are the next piece of work, and the archive test
-already pins the channel semantics they will read.
+**All 41 regions are now published** (the live manifest carries an `avalanche` artifact for
+every one, checked 2026-10-29).
+
+### Status (2026-10-29): sampler, tap readout and route breakdown built
+
+| | |
+|---|---|
+| `src/routes/avalanche-sampler.ts` | `AvalancheSampler` reads R/G as `{ slope, aspect }`, **nearest pixel**; `summariseAvalancheTerrain` totals a route by class. Lives beside the other samplers in `src/routes/`, not at `src/` as the table above had it |
+| `src/routes/terrain-sampler.ts` | tile fetch, cache and per-tile grouping pulled out into `RasterSampler`, which both samplers extend — the "generalised, not a second copy" of the table above |
+| `src/routes/route-planner.ts` | `avalanche`/`avalancheNote` on the route summary, `avalancheAt()` for the tap sheet; the three samplers' region lookup is now one `coveringArchive()` |
+| `src/overlays/feature-sheets.ts`, `src/main.ts` | slope, aspect, the class note, the terrain-only line and the region's forecast service on the coordinate and summit sheets |
+| `src/routes/routes-ui.ts` | per-class chips and "Steepest slope crossed" in the route panel |
+| `src/overlays/avalanche.ts` | `AVALANCHE_TERRAIN_ONLY`, and `forecastServiceFor()` over the 41 regions |
+
+Decisions made while building, each easy to reverse:
+
+- **Shown only while the layer is on.** The Layers toggle is the opt-in to the feature: a
+  summer tap on a summit, or a summer route panel, does not lead with avalanches.
+- **Read by press-and-hold (right-click), not a plain tap.** A plain tap on empty map
+  dismisses the sheet, and with the layer covering most of an alpine region a tap-to-read
+  would make dismissing impossible. The legend now says how to read a slope.
+- **Routes are sampled every 10 m, not the profile's 25 m.** The failure runs the other
+  way from elevation: too coarse a slope sample skips cells, and the skipped cell can be
+  the one steep gully. A stretch takes the **steeper** of its two ends, so a class can be
+  over-stated by one sample spacing and never under-stated.
+- **Forecast links come from the EAWS member list** (avalanches.org/about), each URL
+  checked to load on 2026-10-29. 29 of the 41 regions have one. Austria has no national
+  service, only provincial ones, so it links the EAWS list. The other 12 (the Balkans,
+  Bulgaria, Georgia, Turkey, and the non-Pyrenean Spanish regions) get "No avalanche
+  forecast service is listed for this region" rather than a guessed link.
+
+Verified: unit tests for the sampler, summary, sheet and panel; a test that runs the
+sampler over a **real built archive** (`test/avalanche-archive.test.ts`) and fails on a
+transposed x/y (confirmed by transposing it); and in the dev build with Andorra downloaded
+from the live bucket — a press-and-hold on a slope read "Slope 33°, faces SW" with the
+Andorra bulletin link, and a route from the Port d'Envalira trail reported 280 m at 25–29°
+and a steepest slope of 29°.
+
+**Still open:** acceptance item 2's human check on one *named* face with a known angle (the
+automated checks prove the lookup matches the archive, not that the archive matches a
+surveyed slope); the on-device GPU and battery checks in §8; and Stage B.
 
 **Not in scope, deliberately:** slope does **not** feed routing cost. Same reasoning as
 §4.5's refusal to let SAC grades steer the router — a route that silently avoids a path

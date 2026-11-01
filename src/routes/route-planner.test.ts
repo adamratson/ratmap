@@ -23,6 +23,7 @@ const fakes = vi.hoisted(() => ({
   computeLeg: vi.fn(),
   clearCache: vi.fn(),
   terrainSample: vi.fn(),
+  avalancheCells: vi.fn(),
   wakeLock: { acquire: vi.fn(async () => {}), release: vi.fn(async () => {}) },
 }));
 
@@ -65,6 +66,11 @@ vi.mock('./router', () => ({
 }));
 
 vi.mock('./terrain-sampler', () => ({
+  // The base class too: avalanche-sampler.ts extends it, and a mock without it fails at
+  // import rather than at the point anything is sampled.
+  RasterSampler: class {
+    sampleWith = (points: unknown) => fakes.avalancheCells(points);
+  },
   TerrainSampler: class {
     sample = fakes.terrainSample;
   },
@@ -123,6 +129,7 @@ beforeEach(() => {
   fakes.computeLeg.mockImplementation(async (from: LngLat, to: LngLat) => snapped(from, to));
   fakes.clearCache.mockReset();
   fakes.terrainSample.mockReset();
+  fakes.avalancheCells.mockReset();
   fakes.wakeLock.acquire.mockClear();
   fakes.wakeLock.release.mockClear();
 
@@ -572,6 +579,60 @@ describe('the elevation profile', () => {
 
     expect(fakes.terrainSample).not.toHaveBeenCalled();
     expect(last().profileNote).toMatch(/needs a downloaded region/);
+  });
+});
+
+describe('avalanche terrain', () => {
+  const coords: LngLat[] = [ACHINTEE, SUMMIT];
+  const alpine = (): Region => ({
+    id: 'lochaber',
+    name: 'Lochaber',
+    bbox: [-5.6, 56.5, -4.6, 57.1],
+    totalBytes: 1,
+    artifacts: [
+      { kind: 'avalanche', filename: 'lochaber-avalanche-1.pmtiles', path: 'x', bytes: 1, maxzoom: 11 },
+    ],
+  });
+
+  it('totals the route by slope class, sampled finer than the profile', async () => {
+    regions = [alpine()];
+    registry.get.mockReturnValue({});
+    fakes.avalancheCells.mockImplementation(async (samples: LngLat[]) =>
+      samples.map((_, i) => ({ slope: i % 10 === 0 ? 37 : 0, aspect: 1 })),
+    );
+
+    planner.load({ name: 'x', coords });
+    await settle();
+
+    const samples = fakes.avalancheCells.mock.calls[0][0] as LngLat[];
+    for (let i = 1; i < samples.length; i++) {
+      expect(distanceMetres(samples[i - 1], samples[i])).toBeLessThanOrEqual(10.01);
+    }
+    expect(last().avalanche?.steepest).toBe(37);
+    expect(last().avalanche?.metresByClass.get(35)).toBeGreaterThan(0);
+    expect(last().avalancheNote).toBeNull();
+  });
+
+  it('has nothing to say where the region carries no avalanche artifact', async () => {
+    planner.load({ name: 'x', coords });
+    await settle();
+    expect(fakes.avalancheCells).not.toHaveBeenCalled();
+    expect(last().avalanche).toBeNull();
+  });
+
+  it('reads one point for the tap sheet, with the region it came from', async () => {
+    regions = [alpine()];
+    registry.get.mockReturnValue({});
+    fakes.avalancheCells.mockResolvedValue([{ slope: 42, aspect: 3 }]);
+
+    expect(await planner.avalancheAt(SUMMIT)).toEqual({
+      cell: { slope: 42, aspect: 3 },
+      region: regions[0],
+    });
+  });
+
+  it('is null at a point no downloaded region covers', async () => {
+    expect(await planner.avalancheAt(SUMMIT)).toBeNull();
   });
 });
 

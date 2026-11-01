@@ -1,6 +1,17 @@
 import type { LngLat } from 'maplibre-gl';
 import { formatElevation, isMunro, type PeakProperties } from './peaks';
 import { sacCssColor, type SacHit } from './sac';
+import {
+  AVALANCHE_TERRAIN_ONLY,
+  aspectName,
+  forecastServiceFor,
+  slopeClassFor,
+  slopeCssColor,
+  SLOPE_CLASSES,
+  SLOPE_FLOOR_DEG,
+} from './avalanche';
+import type { AvalancheCell } from '../routes/avalanche-sampler';
+import type { Region } from '../regions/manifest';
 import { fillReadout } from '../ui/readout';
 import type { StatusCentre } from '../ui/status';
 import { savePlace } from '../search/saved-places';
@@ -11,11 +22,18 @@ import { savePlace } from '../search/saved-places';
 
 type Toasts = Pick<StatusCentre, 'toast'>;
 
+/**
+ * What the avalanche terrain artifact says about a tapped point, as the planner reads it:
+ * null where no downloaded region carries the artifact, `cell: null` inside one where the
+ * archive has no tile.
+ */
+export type AvalancheReading = Promise<{ cell: AvalancheCell | null; region: Region } | null>;
+
 export function renderPeakSheet(
   body: HTMLElement,
   peak: PeakProperties,
   lngLat: LngLat,
-  { status }: { status: Toasts },
+  { status, avalanche }: { status: Toasts; avalanche?: AvalancheReading },
 ): void {
   const name = peak.name?.trim() || 'Unnamed summit';
   const ele = formatElevation(peak.ele);
@@ -31,6 +49,7 @@ export function renderPeakSheet(
       <button class="sheet-save" type="button">Save place</button>
       ${wikidata ? `<a class="sheet-link" target="_blank" rel="noreferrer">Wikidata</a>` : ''}
     </div>
+    ${avalanche ? '<div class="sheet-avalanche"></div>' : ''}
   `;
   // textContent, not interpolation: names come from OSM, which is user-editable data.
   body.querySelector('h2')!.textContent = name;
@@ -41,6 +60,7 @@ export function renderPeakSheet(
     const link = body.querySelector<HTMLAnchorElement>('.sheet-link')!;
     link.href = `https://www.wikidata.org/wiki/${encodeURIComponent(wikidata)}`;
   }
+  if (avalanche) renderAvalancheReadout(body.querySelector<HTMLElement>('.sheet-avalanche')!, avalanche);
 
   body.querySelector('.sheet-save')!.addEventListener('click', () => {
     void savePlace({
@@ -99,7 +119,11 @@ export function renderPathSheet(body: HTMLElement, hit: SacHit & { grade: NonNul
 export function renderCoordsSheet(
   body: HTMLElement,
   lngLat: LngLat,
-  { status, elevation }: { status: Toasts; elevation: Promise<number | null> },
+  {
+    status,
+    elevation,
+    avalanche,
+  }: { status: Toasts; elevation: Promise<number | null>; avalanche?: AvalancheReading },
 ): void {
   const coordsText = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
 
@@ -110,8 +134,10 @@ export function renderCoordsSheet(
       <button class="sheet-copy" type="button">Copy</button>
       <button class="sheet-save" type="button">Save place</button>
     </div>
+    ${avalanche ? '<div class="sheet-avalanche"></div>' : ''}
   `;
   body.querySelector('h2')!.textContent = coordsText;
+  if (avalanche) renderAvalancheReadout(body.querySelector<HTMLElement>('.sheet-avalanche')!, avalanche);
 
   // Saved with the place once known, as a summit's height is. A save tapped before the
   // read lands goes without it rather than waiting on it.
@@ -144,6 +170,71 @@ export function renderCoordsSheet(
         status.toast(`Could not save “${coordsText}”: ${err.message}`, { kind: 'error' }),
       );
   });
+}
+
+/**
+ * Slope and aspect at a tapped point, from the avalanche terrain layer.
+ *
+ * Worded per plans/avalanche-terrain.md §1: a slope angle and what that angle means for
+ * release, never a danger level. Below the floor is "under 25°", not "safe" — the cell
+ * stores 0 for everything it does not draw (A7), and gentle ground can sit under a steep
+ * slope (A6). Every reading ends on the terrain-only line and the region's forecast.
+ */
+export function renderAvalancheReadout(container: HTMLElement, reading: AvalancheReading): void {
+  container.innerHTML = `
+    <h3>Avalanche terrain</h3>
+    <p class="sheet-avalanche-slope">Reading slope…</p>
+    <p class="sheet-note sheet-avalanche-caveat"></p>
+    <p class="sheet-note sheet-avalanche-forecast"></p>
+  `;
+  const slopeLine = container.querySelector<HTMLElement>('.sheet-avalanche-slope')!;
+  const caveat = container.querySelector<HTMLElement>('.sheet-avalanche-caveat')!;
+  const forecast = container.querySelector<HTMLElement>('.sheet-avalanche-forecast')!;
+  caveat.textContent = AVALANCHE_TERRAIN_ONLY;
+
+  reading
+    .then((result) => {
+      if (!result) {
+        slopeLine.textContent = 'Needs a downloaded region with avalanche terrain.';
+        return;
+      }
+      slopeLine.textContent = slopeSentence(result.cell);
+      const slopeClass = result.cell ? slopeClassFor(result.cell.slope) : null;
+      if (slopeClass) {
+        // A swatch rather than coloured text: the palette's pale end is a fill colour,
+        // unreadable as type on a light sheet.
+        const swatch = document.createElement('span');
+        swatch.className = 'sheet-avalanche-swatch';
+        swatch.style.background = slopeCssColor(SLOPE_CLASSES.indexOf(slopeClass));
+        slopeLine.prepend(swatch);
+      }
+
+      const service = forecastServiceFor(result.region.id);
+      if (service) {
+        forecast.append('Get the forecast before going: ');
+        const link = document.createElement('a');
+        link.href = service.url;
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        link.textContent = service.name;
+        forecast.append(link, '.');
+      } else {
+        forecast.textContent =
+          'No avalanche forecast service is listed for this region. Ask locally before going onto snow.';
+      }
+    })
+    .catch((err: Error) => {
+      slopeLine.textContent = `Could not read avalanche terrain: ${err.message}`;
+    });
+}
+
+function slopeSentence(cell: AvalancheCell | null): string {
+  if (!cell) return 'No slope data here.';
+  const slopeClass = slopeClassFor(cell.slope);
+  if (!slopeClass) return `Under ${SLOPE_FLOOR_DEG}° here.`;
+  const aspect = cell.aspect === null ? null : aspectName(cell.aspect);
+  const facing = aspect ? `, faces ${aspect}` : '';
+  return `Slope ${cell.slope}°${facing}. ${slopeClass.note}`;
 }
 
 /**

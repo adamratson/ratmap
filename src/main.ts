@@ -19,7 +19,7 @@ import { startAppUpdates, type AppUpdates } from './app/update';
 import { APP_VERSION } from './app/version';
 import { buildBaseStyle } from './map/base-style';
 import { mapInk } from './map/flavor';
-import { applyAllStoredVisibility } from './map/layers';
+import { applyAllStoredVisibility, isLayerVisible } from './map/layers';
 import { watchMapHealth } from './map/network-status';
 import { supplyParkingIcons } from './map/parking';
 import { TileSourceRegistry } from './map/tile-source-registry';
@@ -389,7 +389,10 @@ map.on('click', (e) => {
     // carried no geometry — otherwise the sheet reports, and "Save place" stores, the
     // spot the finger landed on rather than the summit.
     const lngLat = hit.lngLat ? new maplibregl.LngLat(...hit.lngLat) : e.lngLat;
-    views.open('peak', (body) => renderPeakSheet(body, hit.properties, lngLat, { status }));
+    const avalanche = avalancheReading(lngLat);
+    views.open('peak', (body) =>
+      renderPeakSheet(body, hit.properties, lngLat, { status, ...(avalanche ? { avalanche } : {}) }),
+    );
     return;
   }
 
@@ -406,9 +409,21 @@ map.on('click', (e) => {
 
 function showCoordsSheet(lngLat: maplibregl.LngLat, { focus = false } = {}): void {
   const elevation = planner.elevationAt([lngLat.lng, lngLat.lat]);
-  views.open('coords', (body) => renderCoordsSheet(body, lngLat, { status, elevation }), {
-    focus,
-  });
+  const avalanche = avalancheReading(lngLat);
+  views.open(
+    'coords',
+    (body) =>
+      renderCoordsSheet(body, lngLat, { status, elevation, ...(avalanche ? { avalanche } : {}) }),
+    { focus },
+  );
+}
+
+/**
+ * Slope at a tapped point — only while the avalanche terrain layer is on. That toggle is
+ * the opt-in to the feature; a summer tap on a summit should not lead with avalanches.
+ */
+function avalancheReading(lngLat: maplibregl.LngLat) {
+  return isLayerVisible('avalanche') ? planner.avalancheAt([lngLat.lng, lngLat.lat]) : null;
 }
 
 // Coordinates for a bare point are a secondary action, not the primary tap — a plain click

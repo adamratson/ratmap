@@ -55,9 +55,18 @@ function terrariumMetres(r: number, g: number, b: number): number {
   return r * 256 + g + b / 256 - 32768;
 }
 
-export class TerrainSampler {
+/** Reads one value out of a decoded tile at tile-local pixel coordinates. */
+export type PixelReader<T> = (tile: DecodedTile, px: number, py: number) => T | null;
+
+/**
+ * Point sampling over a region's raster archive: tile fetch, decode, cache, and grouping
+ * points by tile. What a pixel *means* is the subclass's business — terrarium heights here,
+ * slope and aspect in avalanche-sampler.ts — so the two read the same way and only differ
+ * in the one place they should.
+ */
+export class RasterSampler {
   private readonly archive: PMTiles;
-  private readonly maxzoom: number;
+  protected readonly maxzoom: number;
   private readonly decode: TileImageDecoder;
   private readonly cacheSize: number;
   private readonly tiles = new Map<string, DecodedTile | null>();
@@ -70,14 +79,18 @@ export class TerrainSampler {
   }
 
   /**
-   * Heights for a list of points, index for index. `null` where the archive has no tile.
+   * One value per point, index for index. `null` where the archive has no tile.
    *
    * Points are grouped by tile so each one is fetched and decoded once, however many
    * samples fall inside it — a route profile is thousands of points over a handful of
    * tiles, and decoding per point would be thousands of WebP decodes.
    */
-  async sample(points: readonly LngLat[], signal?: AbortSignal): Promise<(number | null)[]> {
-    const results: (number | null)[] = new Array(points.length).fill(null);
+  protected async sampleWith<T>(
+    points: readonly LngLat[],
+    read: PixelReader<T>,
+    signal?: AbortSignal,
+  ): Promise<(T | null)[]> {
+    const results: (T | null)[] = new Array(points.length).fill(null);
     if (points.length === 0) return results;
 
     // Tile size is a property of the archive, not something to assume — read it from the
@@ -93,7 +106,7 @@ export class TerrainSampler {
     }
 
     for (const [key, indices] of byTile) {
-      if (signal?.aborted) throw new DOMException('Profile cancelled', 'AbortError');
+      if (signal?.aborted) throw new DOMException('Sampling cancelled', 'AbortError');
 
       const [x, y] = key.split('/').map(Number);
       const tile = await this.tileAt(x, y, signal);
@@ -104,7 +117,7 @@ export class TerrainSampler {
 
       for (const index of indices) {
         const [gx, gy] = lngLatToGlobal(points[index][0], points[index][1], world);
-        results[index] = samplePixel(tile, gx - x * tileSize, gy - y * tileSize);
+        results[index] = read(tile, gx - x * tileSize, gy - y * tileSize);
       }
     }
 
@@ -135,6 +148,13 @@ export class TerrainSampler {
     }
     this.tiles.set(key, decoded);
     return decoded;
+  }
+}
+
+export class TerrainSampler extends RasterSampler {
+  /** Heights for a list of points, index for index. `null` where the archive has no tile. */
+  sample(points: readonly LngLat[], signal?: AbortSignal): Promise<(number | null)[]> {
+    return this.sampleWith(points, samplePixel, signal);
   }
 }
 

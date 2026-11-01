@@ -6,9 +6,8 @@ import type { StatusCentre } from '../ui/status';
 const savePlaceMock = vi.hoisted(() => vi.fn());
 vi.mock('../search/saved-places', () => ({ savePlace: savePlaceMock }));
 
-const { PeakTooltip, renderCoordsSheet, renderPathSheet, renderPeakSheet } = await import(
-  './feature-sheets'
-);
+const { PeakTooltip, renderAvalancheReadout, renderCoordsSheet, renderPathSheet, renderPeakSheet } =
+  await import('./feature-sheets');
 
 const BEN_NEVIS = new maplibregl.LngLat(-5.00360, 56.79685);
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -198,5 +197,84 @@ describe('PeakTooltip', () => {
     new PeakTooltip(element).show({ name: '<b>x</b>' }, { x: 0, y: 0 });
 
     expect(element.querySelector('b')).toBeNull();
+  });
+});
+
+describe('the avalanche terrain readout', () => {
+  const region = (id: string) =>
+    ({ id, name: id, bbox: [-8, 54, -0.7, 61], totalBytes: 0, artifacts: [] }) as never;
+
+  async function readout(reading: Parameters<typeof renderAvalancheReadout>[1]) {
+    renderAvalancheReadout(body, reading);
+    await flush();
+    return {
+      slope: body.querySelector('.sheet-avalanche-slope')!.textContent,
+      caveat: body.querySelector('.sheet-avalanche-caveat')!.textContent,
+      forecast: body.querySelector<HTMLElement>('.sheet-avalanche-forecast')!,
+    };
+  }
+
+  it('gives the angle, the aspect and what that angle means — not a danger level', async () => {
+    const { slope } = await readout(
+      Promise.resolve({ cell: { slope: 38, aspect: 2 }, region: region('scotland') }),
+    );
+    expect(slope).toBe('Slope 38°, faces NE. Where most slab avalanches release.');
+    expect(slope).not.toMatch(/danger|risk|safe/i);
+    expect(body.querySelector('.sheet-avalanche-swatch')).not.toBeNull();
+  });
+
+  it('says "under 25°" for a zero cell, never flat or safe', async () => {
+    const { slope } = await readout(
+      Promise.resolve({ cell: { slope: 0, aspect: null }, region: region('scotland') }),
+    );
+    expect(slope).toBe('Under 25° here.');
+  });
+
+  it('always carries the terrain-only line', async () => {
+    const { caveat } = await readout(
+      Promise.resolve({ cell: { slope: 0, aspect: null }, region: region('scotland') }),
+    );
+    expect(caveat).toMatch(/never seen the snow/);
+    expect(caveat).toMatch(/slide onto you from above/);
+  });
+
+  it('links the region’s forecast service', async () => {
+    const { forecast } = await readout(
+      Promise.resolve({ cell: { slope: 31, aspect: 5 }, region: region('scotland') }),
+    );
+    const link = forecast.querySelector('a')!;
+    expect(link.href).toBe('https://www.sais.gov.uk/');
+    expect(link.textContent).toBe('Scottish Avalanche Information Service');
+  });
+
+  it('says so, rather than guessing a link, where no service is listed', async () => {
+    const { forecast } = await readout(
+      Promise.resolve({ cell: { slope: 31, aspect: 5 }, region: region('georgia') }),
+    );
+    expect(forecast.querySelector('a')).toBeNull();
+    expect(forecast.textContent).toMatch(/No avalanche forecast service is listed/);
+  });
+
+  it('asks for a region rather than reporting nothing as no slope', async () => {
+    const { slope, forecast } = await readout(Promise.resolve(null));
+    expect(slope).toBe('Needs a downloaded region with avalanche terrain.');
+    expect(forecast.textContent).toBe('');
+  });
+
+  it('is left off the summit card unless asked for', () => {
+    renderPeakSheet(body, { name: 'Ben Nevis', ele: 1345 }, BEN_NEVIS, { status });
+    expect(body.querySelector('.sheet-avalanche')).toBeNull();
+  });
+
+  it('appears on the coordinates card when asked for', async () => {
+    renderCoordsSheet(body, BEN_NEVIS, {
+      status,
+      elevation: Promise.resolve(1300),
+      avalanche: Promise.resolve({ cell: { slope: 44, aspect: 1 }, region: region('scotland') }),
+    });
+    await flush();
+    expect(body.querySelector('.sheet-avalanche-slope')!.textContent).toBe(
+      'Slope 44°, faces N. Frequent, smaller, more often loose snow than slab.',
+    );
   });
 });

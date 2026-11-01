@@ -3,7 +3,7 @@ import { SAC_GRADES, sacCssColor } from '../overlays/sac';
 import { TERRAIN_FEATURE_KINDS, terrainSwatch } from '../overlays/terrain-features';
 import { LANDMARK_KINDS, landmarkSwatch } from '../overlays/landmarks';
 import { DETAIL_LEGEND } from '../overlays/detail';
-import { SLOPE_CLASSES, slopeCssColor } from '../overlays/avalanche';
+import { AVALANCHE_TERRAIN_ONLY, SLOPE_CLASSES, slopeCssColor } from '../overlays/avalanche';
 
 // The map legend: every symbol the map draws, in the colours it draws them.
 
@@ -145,7 +145,8 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
     <div class="legend-section">
       <h3>Avalanche terrain</h3>
       <p class="legend-note">
-        Off by default. Slope steepness from downloaded elevation data.
+        Off by default. Slope steepness from downloaded elevation data. Press and hold
+        (or right-click) for the slope at a point. ${AVALANCHE_TERRAIN_ONLY}
       </p>
       ${SLOPE_CLASSES.map((entry) =>
         legendRow(

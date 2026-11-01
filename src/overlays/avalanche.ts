@@ -124,6 +124,77 @@ export function slopeClassFor(degrees: number): SlopeClass | null {
   );
 }
 
+/**
+ * The standing line every avalanche surface carries (§1, A6). Two things the layer cannot
+ * know, said every time: the snow, and what is above you — a slope layer colours where a
+ * slab could release and leaves the runout under it white.
+ */
+export const AVALANCHE_TERRAIN_ONLY =
+  'Terrain only: this layer has never seen the snow, and it does not show what could slide onto you from above.';
+
+export interface ForecastService {
+  name: string;
+  url: string;
+}
+
+/**
+ * The avalanche forecast for each region the artifact is built for, by region id.
+ *
+ * A link is not live data: it costs nothing offline, and "get the forecast" is the most
+ * useful thing this feature can say (§1). Taken from the EAWS member list
+ * (avalanches.org/about, each service's own "warnings" address) and checked to load on
+ * 2026-10-29 — not from memory. Regions with no EAWS member get no entry, and the sheet
+ * says so, rather than a guessed link to a general weather site. Austria has no single
+ * national service, only one per province, so it points at the EAWS list itself.
+ */
+const FORECAST_SERVICES: Record<string, ForecastService> = (() => {
+  const slf = { name: 'SLF (Swiss avalanche bulletin)', url: 'https://www.slf.ch/en/avalanche-bulletin-and-snow-situation/' };
+  const meteoFrance = { name: 'Météo-France mountain bulletins', url: 'https://meteofrance.com/meteo-montagne' };
+  const aineva = { name: 'AINEVA', url: 'https://aineva.it/bollettini/' };
+  const bavaria = { name: 'Lawinenwarndienst Bayern', url: 'https://lawinenwarndienst.bayern.de/' };
+  const aemet = { name: 'AEMET Pyrenees bulletin', url: 'https://www.aemet.es/en/eltiempo/prediccion/montana/boletin_peligro_aludes' };
+  const varsom = { name: 'Varsom (NVE)', url: 'https://www.varsom.no/en/' };
+  return {
+    scotland: { name: 'Scottish Avalanche Information Service', url: 'https://www.sais.gov.uk/' },
+    switzerland: slf,
+    liechtenstein: slf,
+    austria: { name: 'Austria’s provincial services (EAWS list)', url: 'https://www.avalanches.org/about/#members' },
+    oberbayern: bavaria,
+    schwaben: bavaria,
+    'rhone-alpes': meteoFrance,
+    'provence-alpes-cote-d-azur': meteoFrance,
+    'midi-pyrenees': meteoFrance,
+    aquitaine: meteoFrance,
+    corse: meteoFrance,
+    'nord-ovest': aineva,
+    'nord-est': aineva,
+    centro: { name: 'Meteomont Carabinieri', url: 'https://meteomont.carabinieri.it/home' },
+    slovenia: { name: 'ARSO avalanche bulletin', url: 'https://www.vreme.si/plazovi/' },
+    andorra: { name: 'Andorra snow and avalanche bulletin', url: 'https://www.meteo.ad/estatneu' },
+    aragon: aemet,
+    navarra: aemet,
+    cataluna: {
+      name: 'ICGC avalanche bulletin',
+      url: 'https://www.icgc.cat/ca/Ambits-tematics/Riscos-i-emergencies/Allaus/Butlleti-de-Perill-dAllaus-BPA',
+    },
+    'nord-norge': varsom,
+    vestlandet: varsom,
+    ostlandet: varsom,
+    trondelag: varsom,
+    sweden: { name: 'Lavinprognoser (Swedish EPA)', url: 'https://lavinprognoser.se/' },
+    iceland: { name: 'Icelandic Met Office avalanche forecast', url: 'https://en.vedur.is/#tab=avalanche' },
+    slovakia: { name: 'Slovak avalanche prevention centre', url: 'https://avalanches.sk/bulletin/latest' },
+    malopolskie: { name: 'TOPR avalanche bulletin (Tatras)', url: 'https://lawiny.topr.pl/' },
+    romania: { name: 'ANM snow and avalanche bulletin', url: 'https://www.meteoromania.ro/Upload-Produse/nivologie/nivologie.pdf' },
+    ukraine: { name: 'UHMC avalanche warnings', url: 'https://www.meteo.gov.ua/en/Sniholavinni-poperedzhennya' },
+  };
+})();
+
+/** The avalanche forecast service for a region, or null where none is known. */
+export function forecastServiceFor(regionId: string): ForecastService | null {
+  return FORECAST_SERVICES[regionId] ?? null;
+}
+
 /** Compass names for the aspect octants the G channel stores (1-8; 0 means none). */
 export const ASPECT_OCTANTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
 

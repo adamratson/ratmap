@@ -6,8 +6,14 @@ import type { StatusCentre } from '../ui/status';
 const savePlaceMock = vi.hoisted(() => vi.fn());
 vi.mock('../search/saved-places', () => ({ savePlace: savePlaceMock }));
 
-const { PeakTooltip, renderAvalancheReadout, renderCoordsSheet, renderPathSheet, renderPeakSheet } =
-  await import('./feature-sheets');
+const {
+  PeakTooltip,
+  openInLinks,
+  renderAvalancheReadout,
+  renderCoordsSheet,
+  renderPathSheet,
+  renderPeakSheet,
+} = await import('./feature-sheets');
 
 const BEN_NEVIS = new maplibregl.LngLat(-5.00360, 56.79685);
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -173,6 +179,72 @@ describe('the coordinates card', () => {
     await flush();
 
     expect(savePlaceMock).toHaveBeenCalledWith({ name: '56.79685, -5.00360', lng: -5.0036, lat: 56.79685 });
+  });
+});
+
+describe('opening a point in another maps app', () => {
+  const hrefs = () =>
+    Array.from(body.querySelectorAll<HTMLAnchorElement>('.sheet-open-in a')).map((link) => link.href);
+
+  it('sends the coordinates to each app, in the form each one documents', () => {
+    expect(openInLinks(BEN_NEVIS, 'Ben Nevis')).toEqual([
+      {
+        name: 'Google Maps',
+        href: 'https://www.google.com/maps/search/?api=1&query=56.79685%2C-5.00360',
+      },
+      { name: 'Waze', href: 'https://www.waze.com/ul?ll=56.79685%2C-5.00360' },
+      { name: 'Apple Maps', href: 'https://maps.apple.com/?ll=56.79685%2C-5.00360&q=Ben+Nevis' },
+    ]);
+  });
+
+  it('never searches Google or Waze for the name, which can resolve somewhere else', () => {
+    const [google, waze] = openInLinks(BEN_NEVIS, 'Ben Nevis');
+
+    expect(google!.href).not.toContain('Ben');
+    expect(waze!.href).not.toContain('Ben');
+  });
+
+  it('brings a tap on a repeated world copy back into range', () => {
+    const [google] = openInLinks(new maplibregl.LngLat(-5.0036 + 360, 56.79685), 'Ben Nevis');
+
+    expect(google!.href).toContain('query=56.79685%2C-5.00360');
+  });
+
+  it('keeps a label with URL syntax in it from breaking out of its parameter', () => {
+    const apple = new URL(openInLinks(BEN_NEVIS, 'Sgùrr & Beinn=?#')[2]!.href);
+
+    expect(apple.searchParams.get('q')).toBe('Sgùrr & Beinn=?#');
+    expect(apple.searchParams.get('ll')).toBe('56.79685,-5.00360');
+    expect(apple.hash).toBe('');
+  });
+
+  it('offers all three from a summit, labelling the pin with its name', () => {
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, { status });
+
+    expect(hrefs()).toHaveLength(3);
+    expect(hrefs()[2]).toContain('q=Ben+Nevis');
+  });
+
+  it('offers all three from a bare point, which Apple still needs a label for to drop a pin', () => {
+    renderCoordsSheet(body, BEN_NEVIS, { status, elevation: Promise.resolve(null) });
+
+    expect(hrefs()).toHaveLength(3);
+    expect(hrefs()[2]).toContain('q=56.79685%2C+-5.00360');
+  });
+
+  it('leaves the app in a new tab, sends no referrer, and says where each link goes', () => {
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, { status });
+
+    const links = Array.from(body.querySelectorAll<HTMLAnchorElement>('.sheet-open-in a'));
+    expect(links.map((link) => link.getAttribute('aria-label'))).toEqual([
+      'Open in Google Maps',
+      'Open in Waze',
+      'Open in Apple Maps',
+    ]);
+    for (const link of links) {
+      expect(link.target).toBe('_blank');
+      expect(link.rel).toBe('noreferrer');
+    }
   });
 });
 

@@ -49,6 +49,7 @@ export function renderPeakSheet(
       <button class="sheet-save" type="button">Save place</button>
       ${wikidata ? `<a class="sheet-link" target="_blank" rel="noreferrer">Wikidata</a>` : ''}
     </div>
+    <div class="sheet-actions sheet-open-in"></div>
     ${avalanche ? '<div class="sheet-avalanche"></div>' : ''}
   `;
   // textContent, not interpolation: names come from OSM, which is user-editable data.
@@ -60,6 +61,7 @@ export function renderPeakSheet(
     const link = body.querySelector<HTMLAnchorElement>('.sheet-link')!;
     link.href = `https://www.wikidata.org/wiki/${encodeURIComponent(wikidata)}`;
   }
+  renderOpenIn(body.querySelector<HTMLElement>('.sheet-open-in')!, lngLat, name);
   if (avalanche) renderAvalancheReadout(body.querySelector<HTMLElement>('.sheet-avalanche')!, avalanche);
 
   body.querySelector('.sheet-save')!.addEventListener('click', () => {
@@ -109,8 +111,8 @@ export function renderPathSheet(body: HTMLElement, hit: SacHit & { grade: NonNul
 
 /**
  * Right-click or long-press anywhere on the map to read off its coordinates — just the raw
- * lat/lng and the ground height there, with copy and save as the only actions since there's
- * no OSM feature behind a bare point to link out to.
+ * lat/lng and the ground height there. There's no OSM feature behind a bare point to link
+ * out to, so beyond copy and save the only way out is another maps app.
  *
  * `elevation` is a promise because it is read from a terrain archive, which can take a tile
  * fetch and decode; the sheet opens at once and fills the height in when it lands. It
@@ -134,9 +136,11 @@ export function renderCoordsSheet(
       <button class="sheet-copy" type="button">Copy</button>
       <button class="sheet-save" type="button">Save place</button>
     </div>
+    <div class="sheet-actions sheet-open-in"></div>
     ${avalanche ? '<div class="sheet-avalanche"></div>' : ''}
   `;
   body.querySelector('h2')!.textContent = coordsText;
+  renderOpenIn(body.querySelector<HTMLElement>('.sheet-open-in')!, lngLat, coordsText);
   if (avalanche) renderAvalancheReadout(body.querySelector<HTMLElement>('.sheet-avalanche')!, avalanche);
 
   // Saved with the place once known, as a summit's height is. A save tapped before the
@@ -170,6 +174,47 @@ export function renderCoordsSheet(
         status.toast(`Could not save “${coordsText}”: ${err.message}`, { kind: 'error' }),
       );
   });
+}
+
+/**
+ * Links that hand a point to another maps app — https rather than a `waze://`-style scheme,
+ * so each opens the app where it is installed and the service's web map where it isn't.
+ *
+ * The position goes as coordinates, never as a search for the name: a summit's name can
+ * resolve to somewhere else entirely, and that link would look fine. `label` only names the
+ * pin. Apple needs one regardless: `ll` alone centres the map and marks nothing. Its newer
+ * `/place` URLs would not, but they need iOS 18.4 and this app runs from iOS 17.
+ *
+ * `wrap` because a tap on a repeated world copy reports a longitude past ±180 — see §2.
+ */
+export function openInLinks(lngLat: LngLat, label: string): { name: string; href: string }[] {
+  const { lng, lat } = lngLat.wrap();
+  const ll = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  return [
+    {
+      name: 'Google Maps',
+      href: `https://www.google.com/maps/search/?${new URLSearchParams({ api: '1', query: ll })}`,
+    },
+    { name: 'Waze', href: `https://www.waze.com/ul?${new URLSearchParams({ ll })}` },
+    { name: 'Apple Maps', href: `https://maps.apple.com/?${new URLSearchParams({ ll, q: label })}` },
+  ];
+}
+
+function renderOpenIn(container: HTMLElement, lngLat: LngLat, label: string): void {
+  const heading = document.createElement('span');
+  heading.className = 'sheet-open-in-label';
+  heading.textContent = 'Open in';
+
+  const links = openInLinks(lngLat, label).map(({ name, href }) => {
+    const link = document.createElement('a');
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+    link.textContent = name;
+    link.setAttribute('aria-label', `Open in ${name}`);
+    return link;
+  });
+  container.replaceChildren(heading, ...links);
 }
 
 /**

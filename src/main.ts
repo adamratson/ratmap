@@ -407,7 +407,10 @@ map.on('click', (e) => {
   }
 });
 
-function showCoordsSheet(lngLat: maplibregl.LngLat, { focus = false } = {}): void {
+function showCoordsSheet(tapped: maplibregl.LngLat, { focus = false } = {}): void {
+  // A tap on a repeated world copy reports a longitude past ±180, which the sheet would
+  // otherwise show, copy, save and hand to other apps as it stands.
+  const lngLat = tapped.wrap();
   const elevation = planner.elevationAt([lngLat.lng, lngLat.lat]);
   const avalanche = avalancheReading(lngLat);
   views.open(

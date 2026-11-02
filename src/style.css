@@ -1205,8 +1205,26 @@ textarea {
 }
 
 .sheet-actions a {
+  /* A button already sizes this way; a link's padding would otherwise add to min-height. */
+  box-sizing: border-box;
   background: var(--border);
   color: var(--text);
+}
+
+/* Three links and their label don't fit one row at phone width, and at the narrowest the
+   links alone don't either. */
+.sheet-open-in {
+  flex-wrap: wrap;
+}
+
+.sheet-open-in-label {
+  flex-basis: 100%;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-faint);
 }
 
 .places-list {

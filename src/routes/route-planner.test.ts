@@ -582,6 +582,45 @@ describe('the elevation profile', () => {
   });
 });
 
+describe('a route opened from a link', () => {
+  const coords: LngLat[] = [ACHINTEE, SUMMIT];
+  const received = { payload: 'abc', stats: { ascentM: 1340, descentM: 12 } };
+  const legs = [{ coords, distanceM: 6000, kind: 'snapped' as const, wayNames: [] }];
+  const waypoints = [
+    { id: 'a', lng: ACHINTEE[0], lat: ACHINTEE[1] },
+    { id: 'b', lng: SUMMIT[0], lat: SUMMIT[1] },
+  ];
+
+  it('reports where it came from, and the carried distance', async () => {
+    planner.load({ name: 'x', coords, waypoints, legs, received });
+    await settle();
+    expect(last().received).toEqual(received);
+    expect(last().distanceM).toBe(6000);
+  });
+
+  it('forgets the sender’s figures as soon as the route is edited', async () => {
+    planner.load({ name: 'x', coords, waypoints, legs, received });
+    await settle();
+    planner.activate();
+    planner.handleMapClick(click(CIC_HUT));
+    await settle();
+    expect(last().received).toBeNull();
+  });
+
+  it('forgets them when another route replaces it', async () => {
+    planner.load({ name: 'x', coords, waypoints, legs, received });
+    planner.load({ name: 'y', coords });
+    await settle();
+    expect(last().received).toBeNull();
+  });
+
+  it('has no link behind a route planned here', async () => {
+    planner.load({ name: 'x', coords, waypoints, legs });
+    await settle();
+    expect(last().received).toBeNull();
+  });
+});
+
 describe('avalanche terrain', () => {
   const coords: LngLat[] = [ACHINTEE, SUMMIT];
   const alpine = (): Region => ({

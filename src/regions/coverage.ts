@@ -12,12 +12,22 @@ import {
   type RegionManifest,
 } from './manifest';
 import { listArtifactNames } from './opfs-store';
-import { contains, regionAt, renderFootprints, visibleFootprints, type Footprint } from './region-footprints';
+import {
+  contains,
+  regionAt,
+  regionCovering,
+  renderFootprints,
+  visibleFootprints,
+  type Footprint,
+} from './region-footprints';
 import { restoreDownloadedRegions } from './regions-ui';
 
 // What detail the map has, and where more could come from: the downloaded regions restored
 // onto the map, the coverage outlines, and the notice that says when the map is being
 // stretched past its data (§8.2 catalog-only makes that reachable).
+
+/** What {@link RegionCoverage.regionOfferFor} found for a route with no map under it. */
+export type RouteRegionOffer = { kind: 'region'; region: Region } | { kind: 'spans' };
 
 export interface RegionCoverageOptions {
   map: MLMap;
@@ -239,6 +249,21 @@ export class RegionCoverage {
   }
 
   /** Current coverage, downloaded state and all. */
+  /**
+   * What to download for a route that arrived with no map under it.
+   *
+   * Null when a downloaded region already covers it, or when the catalogue has not loaded
+   * and there is nothing true to say. `spans` when no single region holds it, because the
+   * router, the profile and the samplers all work within one region at a time.
+   */
+  regionOfferFor(points: readonly [number, number][]): RouteRegionOffer | null {
+    const footprints = this.footprints();
+    if (footprints.length === 0) return null;
+    if (regionCovering(footprints, points, { downloaded: true })) return null;
+    const region = regionCovering(footprints, points);
+    return region ? { kind: 'region', region } : { kind: 'spans' };
+  }
+
   private footprints(): Footprint[] {
     const have = new Set(this.downloaded.map((region) => region.id));
     return this.catalogue.map((region) => ({ region, downloaded: have.has(region.id) }));

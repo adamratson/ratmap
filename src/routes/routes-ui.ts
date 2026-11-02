@@ -1,14 +1,25 @@
-import { formatDistance, type LngLat } from './geo';
+import { formatDistance, pathLengthMetres, type LngLat } from './geo';
 import { formatWalkingTime, naismithSeconds } from './naismith';
 import { formatElevationChange } from './profile';
 import { renderProfileChart } from './profile-chart';
-import { parseRouteFile, toGeoJson, toGpx } from './gpx';
+import { parseRouteFile, toGeoJson, toGpx, type ImportedRoute } from './gpx';
+import {
+  decodeRouteLink,
+  encodeRouteLink,
+  LinkTooLong,
+  payloadFromText,
+  routeLinkUrl,
+  type LinkRoute,
+} from './share-link';
 import { deleteRoute, listRoutes, saveRoute, type SavedRoute } from './route-store';
 import type { RoutePlanner, RouteSummary } from './route-planner';
 import { SAC_GRADES, sacCssColor, sacGradeInfo } from '../overlays/sac';
 import { AVALANCHE_TERRAIN_ONLY, slopeCssColor } from '../overlays/avalanche';
 import { avalancheClassBreakdown } from './avalanche-sampler';
 import { isLayerVisible } from '../map/layers';
+import { isStandalone } from '../app/storage';
+import { formatBytes } from '../regions/manifest';
+import type { RouteRegionOffer } from '../regions/coverage';
 import { fillReadout } from '../ui/readout';
 
 // The route planner's interface: a panel that lives over the map while planning or
@@ -35,6 +46,10 @@ export interface RoutesUiDeps {
    * undo has to outlive an ordinary confirmation and needs somewhere to put its button.
    */
   onUndoableStatus?(message: string, action: { label: string; onSelect(): void }): void;
+  /** What to download for a route with no map under it, if anything. */
+  regionOffer?(points: readonly [number, number][]): RouteRegionOffer | null;
+  /** Open the offline regions sheet, searched for one region. */
+  onGetRegion?(name: string): void;
 }
 
 // --- Planning panel -------------------------------------------------------------------
@@ -107,6 +122,9 @@ function planSection(
 
   section.append(statsRow(summary));
 
+  const received = receivedSection(summary, planner, deps);
+  if (received) section.append(received);
+
   if (summary.pendingLegs > 0) {
     section.append(el('p', 'route-note', 'Working out the route…'));
   }
@@ -150,6 +168,10 @@ function planSection(
   save.disabled = !ready;
   actions.append(save);
 
+  const share = buttonEl('Share', () => openShareDialog(currentRoute(planner), onStatus));
+  share.disabled = !ready;
+  actions.append(share);
+
   // Following is what a planned route is *for*, so it is the one action that leads.
   const follow = buttonEl('Follow', () => planner.startFollowing());
   follow.disabled = !ready;
@@ -187,6 +209,68 @@ function planSection(
   if (carriedSave && ready) openSaveForm(section, planner, deps, onStatus, carriedSave);
 
   return section;
+}
+
+/**
+ * What a route that arrived as a link can do before the person holding it has the map.
+ *
+ * A link draws, follows and exports with no region (C10), but it cannot be measured, so the
+ * sender's climb stands in, labelled as theirs, until a downloaded region gives a real
+ * profile. Save as GPX makes the link useful to someone who never installs ratmap.
+ */
+function receivedSection(
+  summary: RouteSummary,
+  planner: RoutePlanner,
+  deps: RoutesUiDeps,
+): HTMLElement | null {
+  const received = summary.received;
+  if (!received) return null;
+
+  const block = el('div', 'route-received');
+  block.append(el('h3', '', 'Shared route'));
+
+  if (received.stats && !summary.profile) {
+    block.append(
+      el(
+        'p',
+        'route-note',
+        `Their figures: ${formatElevationChange(received.stats.ascentM)} up, ` +
+          `${formatElevationChange(received.stats.descentM)} down, measured on the sender’s map.`,
+      ),
+    );
+  }
+
+  const coords = planner.getDraft().coordinates();
+  const middle = coords[Math.floor(coords.length / 2)];
+  const offer = deps.regionOffer?.(
+    [coords[0], middle, coords[coords.length - 1]].map(([lng, lat]) => [lng, lat]),
+  );
+  if (offer?.kind === 'spans') {
+    block.append(
+      el('p', 'route-note', 'This route crosses more than one region. Download them to see it in detail.'),
+    );
+  }
+
+  const actions = el('div', 'route-received-actions');
+  if (offer?.kind === 'region') {
+    const { region } = offer;
+    actions.append(
+      buttonEl(`Get ${region.name} (${formatBytes(region.totalBytes)})`, () => deps.onGetRegion?.(region.name)),
+    );
+  }
+  actions.append(
+    buttonEl('Save as GPX', () => void shareOrDownload(currentRoute(planner), 'gpx', deps.onStatus)),
+  );
+  // A link tapped on an iPhone opens here in Safari, whose storage is not the installed
+  // app's (plans/route-sharing.md §4.5), so the way into the app is to carry the link over.
+  if (!isStandalone()) {
+    actions.append(
+      buttonEl('Copy link', () => void copyLink(routeLinkUrl(received.payload), deps.onStatus)),
+    );
+  }
+  block.append(actions);
+
+  return block;
 }
 
 /**
@@ -581,6 +665,7 @@ export async function renderRoutesSheet(deps: RoutesUiDeps): Promise<void> {
     }),
   );
   toolbar.append(importControl(deps));
+  toolbar.append(pasteControl(container, deps));
 
   const list = container.querySelector<HTMLUListElement>('.routes-list')!;
 
@@ -634,10 +719,7 @@ function routeRow(route: SavedRoute, deps: RoutesUiDeps): HTMLLIElement {
   item.append(open);
 
   const actions = el('div', 'route-row-actions');
-  actions.append(
-    buttonEl('GPX', () => void shareOrDownload(route, 'gpx', onStatus)),
-    buttonEl('GeoJSON', () => void shareOrDownload(route, 'geojson', onStatus)),
-  );
+  actions.append(buttonEl('Share', () => openShareDialog(route, onStatus)));
 
   const remove = buttonEl('×', () => {
     void deleteRoute(route.id).then(
@@ -682,19 +764,7 @@ function importControl(deps: RoutesUiDeps): HTMLElement {
     void file
       .text()
       .then((text) => {
-        const imported = parseRouteFile(text, file.name);
-        const putBack = deps.planner.load({
-          name: imported.name,
-          coords: imported.coords,
-          waypoints: imported.waypoints,
-          legs: imported.legs,
-        });
-        deps.planner.activate();
-        deps.onPlanStarted();
-        const message = imported.note
-          ? `Opened “${imported.name}”. ${imported.note}`
-          : `Opened “${imported.name}”`;
-        if (!offerPlanBack(putBack, message, deps)) deps.onStatus(message, imported.note ? 'warn' : 'ok');
+        openImported(parseRouteFile(text, file.name), deps);
       })
       .catch((err: Error) => deps.onStatus(`Could not import: ${err.message}`, 'error'))
       .finally(() => {
@@ -705,6 +775,87 @@ function importControl(deps: RoutesUiDeps): HTMLElement {
 
   label.append(input);
   return label;
+}
+
+function openImported(imported: ImportedRoute, deps: RoutesUiDeps): void {
+  const putBack = deps.planner.load({
+    name: imported.name,
+    coords: imported.coords,
+    waypoints: imported.waypoints,
+    legs: imported.legs,
+  });
+  deps.planner.activate();
+  deps.onPlanStarted();
+  const message = imported.note
+    ? `Opened “${imported.name}”. ${imported.note}`
+    : `Opened “${imported.name}”`;
+  if (!offerPlanBack(putBack, message, deps)) deps.onStatus(message, imported.note ? 'warn' : 'ok');
+}
+
+/**
+ * Open a route link in the planner. Throws what {@link decodeRouteLink} throws, with nothing
+ * loaded: the callers say so in their own way.
+ *
+ * Saves nothing, the same as an import.
+ */
+export function openRouteLink(payload: string, deps: RoutesUiDeps): void {
+  const route = decodeRouteLink(payload);
+  const putBack = deps.planner.load({
+    name: route.name,
+    coords: route.coords,
+    waypoints: route.waypoints,
+    legs: route.legs,
+    received: { payload, stats: route.stats },
+  });
+  deps.planner.activate();
+  deps.onPlanStarted();
+  const message = `Opened “${route.name}”`;
+  if (!offerPlanBack(putBack, message, deps)) deps.onStatus(message, 'ok');
+}
+
+/**
+ * A field for a route link, or the text of a GPX or GeoJSON file.
+ *
+ * The way a link gets into the installed app on iOS, where tapping one opens Safari
+ * instead (plans/route-sharing.md §4.5). A text field rather than a clipboard read, because
+ * it needs no permission and no prompt.
+ */
+function pasteControl(container: HTMLElement, deps: RoutesUiDeps): HTMLElement {
+  const control = buttonEl('Paste a route', () => {
+    if (container.querySelector('.route-paste-form')) return;
+
+    const form = document.createElement('form');
+    form.className = 'route-paste-form';
+
+    const input = document.createElement('textarea');
+    input.rows = 3;
+    input.placeholder = 'Paste a ratmap link, or GPX or GeoJSON text';
+    input.setAttribute('aria-label', 'Route link or file text');
+    form.append(input);
+
+    const open = document.createElement('button');
+    open.type = 'submit';
+    open.textContent = 'Open';
+    form.append(open);
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      try {
+        const payload = payloadFromText(text);
+        if (payload !== null) openRouteLink(payload, deps);
+        else openImported(parseRouteFile(text, 'pasted route'), deps);
+      } catch (err) {
+        deps.onStatus((err as Error).message, 'error');
+      }
+    });
+
+    container.querySelector('.routes-toolbar')!.after(form);
+    input.focus();
+  });
+  control.className = 'route-paste';
+  return control;
 }
 
 /**
@@ -725,6 +876,160 @@ function offerPlanBack(putBack: (() => boolean) | null, message: string, deps: R
   return true;
 }
 
+/** What sending a route needs: a saved record, or the one on the planner right now. */
+type ShareableRoute = Pick<
+  SavedRoute,
+  'name' | 'coords' | 'waypoints' | 'legs' | 'ascentM' | 'descentM' | 'createdAt'
+>;
+
+function currentRoute(planner: RoutePlanner): ShareableRoute {
+  const draft = planner.getDraft();
+  const profile = planner.getProfile();
+  return {
+    name: planner.getName(),
+    coords: draft.coordinates(),
+    waypoints: draft.getWaypoints(),
+    legs: draft.getLegs(),
+    ascentM: profile ? profile.ascentM : null,
+    descentM: profile ? profile.descentM : null,
+    createdAt: Date.now(),
+  };
+}
+
+/**
+ * A route in the shape a link carries.
+ *
+ * A record with no usable editing state, one saved before legs were stored, goes as a single
+ * leg between its own ends: the geometry is authoritative (C10), and the same shape
+ * `RoutePlanner.load` gives it on opening.
+ */
+function linkRouteFrom(route: ShareableRoute): LinkRoute {
+  const stats =
+    route.ascentM !== null && route.descentM !== null
+      ? { ascentM: route.ascentM, descentM: route.descentM }
+      : null;
+
+  const legs = route.legs?.filter((leg) => leg !== null) ?? [];
+  if (route.waypoints && route.waypoints.length >= 2 && legs.length === route.waypoints.length - 1) {
+    return { name: route.name, waypoints: route.waypoints, legs, stats };
+  }
+
+  const start = route.coords[0];
+  const end = route.coords[route.coords.length - 1];
+  return {
+    name: route.name,
+    waypoints: [
+      { lng: start[0], lat: start[1] },
+      { lng: end[0], lat: end[1] },
+    ],
+    legs: [{ coords: route.coords, distanceM: pathLengthMetres(route.coords), kind: 'snapped' }],
+    stats,
+  };
+}
+
+/**
+ * Past this a link is long enough that a messenger might cut it.
+ *
+ * A round figure, not a measured one: which apps truncate at what length has not been tried
+ * yet (plans/route-sharing.md §2.3 spike 4). A cut link says it is damaged rather than
+ * opening wrong, so this only warns the sender that the file may be the safer choice.
+ */
+const LONG_LINK_CHARS = 2000;
+
+/**
+ * The one way out for a route: a link or a file.
+ *
+ * A dialog on the page rather than a form in the panel, because the panel is redrawn on
+ * every GPS fix and this has to hold still while someone reads the warning. That warning is
+ * not optional: a link is the first way a route leaves the phone that cannot be recalled.
+ */
+function openShareDialog(route: ShareableRoute, onStatus: RoutesUiDeps['onStatus']): void {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'share-dialog';
+  dialog.setAttribute('aria-label', `Share ${route.name}`);
+
+  const close = (): void => dialog.remove();
+  dialog.addEventListener('close', close);
+
+  dialog.append(
+    el('h2', '', route.name),
+    el('p', '', 'Anyone with this link can see this route, and it can’t be taken back.'),
+  );
+
+  // Encoded here rather than on the tap, so a route too long for a link never offers one.
+  // It is synchronous either way, which matters: navigator.share needs the tap's user
+  // activation, and an async pause before it can cost that.
+  let url: string | null = null;
+  try {
+    url = routeLinkUrl(encodeRouteLink(linkRouteFrom(route)));
+  } catch (err) {
+    if (!(err instanceof LinkTooLong)) throw err;
+    dialog.append(el('p', 'share-note', `${err.message} Send it as a file instead.`));
+  }
+
+  if (url && url.length > LONG_LINK_CHARS) {
+    dialog.append(
+      el(
+        'p',
+        'share-note',
+        `This link is ${url.length.toLocaleString('en-GB')} characters, and some apps may cut a ` +
+          'link that long. A cut link says it’s damaged rather than opening wrong.',
+      ),
+    );
+  }
+
+  const actions = el('div', 'share-actions');
+  if (url) {
+    const link = url;
+    const send = buttonEl('Send link', () => {
+      void sendLink(link, route.name, onStatus).then(close);
+    });
+    send.classList.add('primary');
+    actions.append(send);
+  }
+  actions.append(
+    buttonEl('GPX', () => {
+      void shareOrDownload(route, 'gpx', onStatus).then(close);
+    }),
+    buttonEl('GeoJSON', () => {
+      void shareOrDownload(route, 'geojson', onStatus).then(close);
+    }),
+    buttonEl('Cancel', close),
+  );
+  dialog.append(actions);
+
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
+/** Through the OS share sheet where there is one, otherwise onto the clipboard. */
+async function sendLink(
+  url: string,
+  title: string,
+  onStatus: RoutesUiDeps['onStatus'],
+): Promise<void> {
+  if (navigator.share) {
+    try {
+      await navigator.share({ url, title });
+      return;
+    } catch (err) {
+      // A user-cancelled share is not a failure worth reporting.
+      if ((err as Error)?.name === 'AbortError') return;
+      // Anything else: the clipboard is still a way out.
+    }
+  }
+  await copyLink(url, onStatus);
+}
+
+async function copyLink(url: string, onStatus: RoutesUiDeps['onStatus']): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(url);
+    onStatus('Copied link', 'ok');
+  } catch (err) {
+    onStatus(`Could not copy the link: ${(err as Error).message}`, 'error');
+  }
+}
+
 /**
  * Hand the route to the OS share sheet where that exists, otherwise download it.
  *
@@ -734,7 +1039,7 @@ function offerPlanBack(putBack: (() => boolean) | null, message: string, deps: R
  * sharing but not necessarily for sharing *files*.
  */
 async function shareOrDownload(
-  route: SavedRoute,
+  route: ShareableRoute,
   format: 'gpx' | 'geojson',
   onStatus: RoutesUiDeps['onStatus'],
 ): Promise<void> {

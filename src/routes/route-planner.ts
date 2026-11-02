@@ -21,6 +21,7 @@ import {
   type AvalancheCell,
   type AvalancheSummary,
 } from './avalanche-sampler';
+import type { SenderStats } from './share-link';
 import { RouteFollower, type FollowState } from './follow';
 import { onPressHold } from './press-hold';
 import { WakeLock } from '../app/wake-lock';
@@ -76,6 +77,8 @@ export interface RouteSummary {
   avalanche: AvalancheSummary | null;
   /** Why there is no avalanche terrain breakdown, when reading it failed. */
   avalancheNote: string | null;
+  /** Set while the route on screen is one that arrived as a link, untouched. */
+  received: ReceivedLink | null;
   follow: FollowState | null;
   following: boolean;
   /**
@@ -84,6 +87,14 @@ export interface RouteSummary {
    * this route to mean anything (see {@link NEARBY_ROUTE_M}).
    */
   currentDistanceM: number | null;
+}
+
+/** What a route that arrived as a link brought with it, beyond the route itself. */
+export interface ReceivedLink {
+  /** The link's own payload, so it can be passed on exactly as it came. */
+  payload: string;
+  /** The sender's climb, measured on their map. Null if they had none to send. */
+  stats: SenderStats | null;
 }
 
 /**
@@ -99,6 +110,7 @@ export interface LoadableRoute {
   coords: LngLat[];
   waypoints?: Waypoint[];
   legs?: LegSlot[];
+  received?: ReceivedLink;
 }
 
 export interface RoutePlannerOptions {
@@ -211,6 +223,8 @@ export class RoutePlanner {
   private sacNote: string | null = null;
   private avalanche: AvalancheSummary | null = null;
   private avalancheNote: string | null = null;
+  /** The link the current draft came from. Tied to that draft: see {@link receivedLink}. */
+  private received: (ReceivedLink & { draft: RouteDraft }) | null = null;
 
   private follower: RouteFollower | null = null;
   private followState: FollowState | null = null;
@@ -460,10 +474,24 @@ export class RoutePlanner {
       });
     }
 
+    this.received = route.received ? { ...route.received, draft: this.draft } : null;
+
     this.showDraft(previousLine);
 
     const opened = this.draft;
     return replaced ? () => this.reinstate(replaced, opened) : null;
+  }
+
+  /**
+   * The link behind the route on screen, while it still is that route.
+   *
+   * Goes as soon as the route is edited or replaced: the sender's climb belongs to the line
+   * they sent, and offering their figures against a different one would be a wrong number
+   * with someone else's name on it.
+   */
+  private receivedLink(): ReceivedLink | null {
+    if (this.received?.draft !== this.draft || this.draft.canUndo) return null;
+    return { payload: this.received.payload, stats: this.received.stats };
   }
 
   /** What opening `route` would throw away — null when the answer is nothing. */
@@ -983,6 +1011,7 @@ export class RoutePlanner {
       sacNote: this.sacNote,
       avalanche: this.avalanche,
       avalancheNote: this.avalancheNote,
+      received: this.receivedLink(),
       follow: this.followState,
       following: this.follower !== null,
       currentDistanceM: this.currentDistanceM(),

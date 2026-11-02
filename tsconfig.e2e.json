@@ -7,5 +7,6 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["e2e", "test", "playwright.config.ts", "vite.config.ts"]
+  // vite-env.d.ts: the real-archive tests in `test/` import app code that reads import.meta.env.
+  "include": ["e2e", "test", "playwright.config.ts", "vite.config.ts", "src/vite-env.d.ts"]
 }

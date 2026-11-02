@@ -1,10 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { renderRoutePanel } from './routes-ui';
+import { openRouteLink, renderRoutePanel, renderRoutesSheet } from './routes-ui';
+import { encodeRouteLink, LinkDamaged } from './share-link';
 import { summariseAvalancheTerrain } from './avalanche-sampler';
+import { pathLengthMetres } from './geo';
 import type { LngLat } from './geo';
 
 const avalancheLayerOn = vi.hoisted(() => ({ value: false }));
 vi.mock('../map/layers', () => ({ isLayerVisible: () => avalancheLayerOn.value }));
+
+const installed = vi.hoisted(() => ({ value: false }));
+vi.mock('../app/storage', () => ({ isStandalone: () => installed.value }));
+vi.mock('./route-store', () => ({
+  deleteRoute: vi.fn(),
+  listRoutes: vi.fn(async () => []),
+  saveRoute: vi.fn(),
+}));
+
+// jsdom has no <dialog> behaviour. What matters here is what goes in it.
+HTMLDialogElement.prototype.showModal ??= function showModal(this: HTMLDialogElement) {
+  this.open = true;
+};
 import type { RoutePlanner, RouteSummary } from './route-planner';
 
 function deps(container: HTMLElement) {
@@ -37,6 +52,7 @@ const BASE: RouteSummary = {
   sacNote: null,
   avalanche: null,
   avalancheNote: null,
+  received: null,
 };
 
 function render(summary: Partial<RouteSummary>): HTMLElement {
@@ -83,7 +99,7 @@ describe('the planning panel', () => {
     const panel = render({});
     const inRow = [...panel.querySelectorAll('.route-actions button')].map((b) => b.textContent);
 
-    expect(inRow).toEqual(['Undo', 'Save', 'Follow', 'Done', 'Clear']);
+    expect(inRow).toEqual(['Undo', 'Save', 'Share', 'Follow', 'Done', 'Clear']);
     const clear = panel.querySelector('.route-actions button.destructive')!;
     expect(clear.textContent).toBe('Clear');
     expect(clear.classList.contains('primary')).toBe(false);
@@ -471,5 +487,265 @@ describe('avalanche terrain in the panel', () => {
     avalancheLayerOn.value = true;
     const panel = render({ avalancheNote: 'Could not read avalanche terrain: boom' });
     expect(panel.textContent).toMatch(/Could not read avalanche terrain: boom/);
+  });
+});
+
+describe('a route that arrived as a link', () => {
+  const line: LngLat[] = [
+    [-5.09, 56.81],
+    [-5.05, 56.8],
+    [-5.0, 56.797],
+  ];
+  const planner = (name = 'Ben Nevis') =>
+    ({
+      getDraft: () => ({
+        coordinates: () => line,
+        getWaypoints: () => [],
+        getLegs: () => [],
+        hasStraightLegs: () => false,
+      }),
+      getProfile: () => null,
+      getName: () => name,
+    }) as unknown as RoutePlanner;
+
+  function panel(summary: Partial<RouteSummary>, extra: Partial<Parameters<typeof renderRoutePanel>[1]> = {}) {
+    const container = document.createElement('div');
+    renderRoutePanel({ ...BASE, ...summary }, { ...deps(container), planner: planner(), ...extra });
+    return container;
+  }
+  const received = { payload: 'abc', stats: { ascentM: 1340, descentM: 12 } };
+
+  it('shows nothing extra for a route planned here', () => {
+    expect(panel({}).querySelector('.route-received')).toBeNull();
+  });
+
+  it('labels the sender’s climb as theirs until there is a profile of its own', () => {
+    expect(panel({ received }).querySelector('.route-received')!.textContent).toMatch(
+      /Their figures: 1340 m up, 12 m down, measured on the sender’s map\./,
+    );
+
+    const measured = panel({
+      received,
+      profile: { points: [], ascentM: 1, descentM: 1, minEle: 0, maxEle: 1, coverage: 1 },
+    });
+    expect(measured.querySelector('.route-received')!.textContent).not.toMatch(/Their figures/);
+  });
+
+  it('offers the region that covers it, with its size', () => {
+    const onGetRegion = vi.fn();
+    const region = { id: 'scotland', name: 'Scotland', totalBytes: 1_412_000_000 } as never;
+    const container = panel(
+      { received },
+      { regionOffer: () => ({ kind: 'region', region }), onGetRegion },
+    );
+    const button = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.startsWith('Get Scotland'),
+    )!;
+    expect(button.textContent).toBe('Get Scotland (1.4 GB)');
+    button.click();
+    expect(onGetRegion).toHaveBeenCalledWith('Scotland');
+  });
+
+  it('says when no one region holds the route', () => {
+    const container = panel({ received }, { regionOffer: () => ({ kind: 'spans' }) });
+    expect(container.textContent).toMatch(/crosses more than one region/);
+  });
+
+  it('offers no region when one is already here', () => {
+    const container = panel({ received }, { regionOffer: () => null });
+    expect([...container.querySelectorAll('button')].map((b) => b.textContent)).not.toContain(
+      expect.stringMatching(/^Get /),
+    );
+  });
+
+  it('turns itself into a file for someone who never installs ratmap', () => {
+    const labels = [...panel({ received }).querySelectorAll('.route-received button')].map((b) => b.textContent);
+    expect(labels).toContain('Save as GPX');
+  });
+
+  it('offers to copy the link in the browser, where the installed app can’t be reached', () => {
+    const buttons = () =>
+      [...panel({ received }).querySelectorAll('.route-received button')].map((b) => b.textContent);
+    expect(buttons()).toContain('Copy link');
+
+    installed.value = true;
+    expect(buttons()).not.toContain('Copy link');
+    installed.value = false;
+  });
+});
+
+describe('sharing from the panel', () => {
+  const line: LngLat[] = [
+    [-5.09, 56.81],
+    [-5.0, 56.797],
+  ];
+  const planner = {
+    getDraft: () => ({
+      coordinates: () => line,
+      getWaypoints: () => [
+        { id: 'a', lng: line[0][0], lat: line[0][1] },
+        { id: 'b', lng: line[1][0], lat: line[1][1] },
+      ],
+      getLegs: () => [{ coords: line, distanceM: pathLengthMetres(line), kind: 'snapped', wayNames: [] }],
+    }),
+    getProfile: () => null,
+    getName: () => 'Ben Nevis',
+  } as unknown as RoutePlanner;
+
+  function shareButton(summary: Partial<RouteSummary> = {}) {
+    const container = document.createElement('div');
+    renderRoutePanel({ ...BASE, ...summary }, { ...deps(container), planner });
+    return [...container.querySelectorAll('button')].find((b) => b.textContent === 'Share')!;
+  }
+
+  afterEach(() => {
+    document.querySelectorAll('dialog').forEach((dialog) => dialog.remove());
+  });
+
+  it('waits until the route is complete', () => {
+    expect(shareButton({ pendingLegs: 1 }).disabled).toBe(true);
+    expect(shareButton().disabled).toBe(false);
+  });
+
+  it('says a link can’t be taken back before anything is sent', () => {
+    shareButton().click();
+    expect(document.querySelector('dialog')!.textContent).toMatch(
+      /Anyone with this link can see this route, and it can’t be taken back\./,
+    );
+  });
+
+  it('offers a link and both file formats', () => {
+    shareButton().click();
+    const labels = [...document.querySelectorAll('dialog button')].map((b) => b.textContent);
+    expect(labels).toEqual(['Send link', 'GPX', 'GeoJSON', 'Cancel']);
+  });
+
+  it('falls back to the clipboard where there is no share sheet', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { ...navigator, share: undefined, clipboard: { writeText } });
+    shareButton().click();
+    (document.querySelector('.share-actions button.primary') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0]).toEqual([expect.stringContaining('#r=')]);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('opening a link', () => {
+  const coords: LngLat[] = [
+    [-5.09, 56.81],
+    [-5.0, 56.797],
+  ];
+  const payload = encodeRouteLink({
+    name: 'Ben Nevis',
+    waypoints: coords.map(([lng, lat]) => ({ lng, lat })),
+    legs: [{ coords, distanceM: pathLengthMetres(coords), kind: 'straight' }],
+    stats: null,
+  });
+
+  function plannerStub() {
+    return {
+      load: vi.fn((): (() => boolean) | null => null),
+      activate: vi.fn(),
+      clear: vi.fn(),
+    };
+  }
+
+  it('loads the route with its link attached, and saves nothing', () => {
+    const planner = plannerStub();
+    const opened = deps(document.createElement('div'));
+    openRouteLink(payload, { ...opened, planner: planner as unknown as RoutePlanner });
+
+    expect(planner.load).toHaveBeenCalledTimes(1);
+    expect(planner.load.mock.calls[0]).toEqual([
+      expect.objectContaining({ name: 'Ben Nevis', received: { payload, stats: null } }),
+    ]);
+    expect(opened.onPlanStarted).toHaveBeenCalled();
+    expect(opened.onStatus).toHaveBeenCalledWith('Opened “Ben Nevis”', 'ok');
+  });
+
+  it('offers back the plan it replaced', () => {
+    const planner = plannerStub();
+    planner.load.mockReturnValue(() => true);
+    const onUndoableStatus = vi.fn();
+    openRouteLink(payload, {
+      ...deps(document.createElement('div')),
+      planner: planner as unknown as RoutePlanner,
+      onUndoableStatus,
+    });
+    expect(onUndoableStatus).toHaveBeenCalledWith(
+      'Opened “Ben Nevis”',
+      expect.objectContaining({ label: 'Undo' }),
+    );
+  });
+
+  it('loads nothing from a damaged link', () => {
+    const planner = plannerStub();
+    expect(() =>
+      openRouteLink(payload.slice(0, -3), {
+        ...deps(document.createElement('div')),
+        planner: planner as unknown as RoutePlanner,
+      }),
+    ).toThrow(LinkDamaged);
+    expect(planner.load).not.toHaveBeenCalled();
+  });
+});
+
+describe('pasting a route', () => {
+  const coords: LngLat[] = [
+    [-5.09, 56.81],
+    [-5.0, 56.797],
+  ];
+
+  async function sheet() {
+    const container = document.createElement('div');
+    const planner = { load: vi.fn(() => null), activate: vi.fn(), clear: vi.fn() };
+    const opened = { ...deps(container), planner: planner as unknown as RoutePlanner };
+    await renderRoutesSheet(opened);
+    const paste = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Paste a route')!;
+    paste.click();
+    return { container, planner, opened };
+  }
+
+  function submit(container: HTMLElement, text: string) {
+    container.querySelector('textarea')!.value = text;
+    container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+  }
+
+  it('opens a pasted link', async () => {
+    const { container, planner } = await sheet();
+    const payload = encodeRouteLink({
+      name: 'Pasted',
+      waypoints: coords.map(([lng, lat]) => ({ lng, lat })),
+      legs: [{ coords, distanceM: pathLengthMetres(coords), kind: 'straight' }],
+      stats: null,
+    });
+    submit(container, `  https://elsewhere.example/ratmap/#r=${payload}\n`);
+    expect(planner.load).toHaveBeenCalledWith(expect.objectContaining({ name: 'Pasted' }));
+  });
+
+  it('opens pasted GPX text', async () => {
+    const { container, planner } = await sheet();
+    submit(
+      container,
+      `<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Filed</name><trkseg>
+        <trkpt lat="56.81" lon="-5.09"></trkpt><trkpt lat="56.797" lon="-5.0"></trkpt>
+      </trkseg></trk></gpx>`,
+    );
+    expect(planner.load).toHaveBeenCalledWith(expect.objectContaining({ name: 'Filed' }));
+  });
+
+  it('says what is wrong with a damaged link, and opens nothing', async () => {
+    const { container, planner, opened } = await sheet();
+    submit(container, 'https://example.org/#r=AAAA');
+    expect(planner.load).not.toHaveBeenCalled();
+    expect(opened.onStatus).toHaveBeenCalledWith(expect.stringMatching(/damaged/), 'error');
+  });
+
+  it('ignores an empty field', async () => {
+    const { container, planner, opened } = await sheet();
+    submit(container, '   ');
+    expect(planner.load).not.toHaveBeenCalled();
+    expect(opened.onStatus).not.toHaveBeenCalled();
   });
 });

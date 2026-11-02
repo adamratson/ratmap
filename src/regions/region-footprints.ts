@@ -29,9 +29,18 @@ export function regionAt(
   point: [number, number],
   { downloaded }: { downloaded?: boolean } = {},
 ): Region | null {
+  return regionCovering(footprints, [point], { downloaded });
+}
+
+/** The smallest region whose box contains every point — see {@link regionAt}. */
+export function regionCovering(
+  footprints: Footprint[],
+  points: readonly [number, number][],
+  { downloaded }: { downloaded?: boolean } = {},
+): Region | null {
   const candidates = footprints
     .filter((f) => (downloaded === undefined ? true : f.downloaded === downloaded))
-    .filter((f) => contains(f.region.bbox, point))
+    .filter((f) => points.every((point) => contains(f.region.bbox, point)))
     .sort((a, b) => area(a.region.bbox) - area(b.region.bbox));
 
   return candidates[0]?.region ?? null;

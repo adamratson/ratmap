@@ -1740,7 +1740,9 @@ textarea {
 }
 
 .route-actions button,
-.route-tools button {
+.route-tools button,
+.route-received-actions button,
+.share-actions button {
   /* Height, not width, is the touch-target constraint here — five short-text pills
      genuinely fit one narrow phone width side by side; measured against the actual
      rendered row (343px available, ~349px needed at the wider padding) rather than
@@ -1760,7 +1762,8 @@ textarea {
 /* One primary action, so finishing and destroying no longer look identical. Only while it
    is actually available — a disabled button has no business advertising itself as the
    thing to do next. */
-.route-actions button.primary:not(:disabled) {
+.route-actions button.primary:not(:disabled),
+.share-actions button.primary {
   background: var(--accent);
   color: var(--surface);
 }
@@ -1827,6 +1830,67 @@ textarea {
   cursor: pointer;
 }
 
+/* A route that arrived as a link: what it can do before the map is on this phone. */
+.route-received {
+  margin: 0.7rem 0 0;
+}
+
+.route-received h3 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.route-received-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+/* On the page rather than in the panel, which redraws on every GPS fix. */
+.share-dialog {
+  width: min(24rem, calc(100vw - 2rem));
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.share-dialog::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+.share-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.share-dialog p {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.share-dialog .share-note {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
 /* Waypoint markers. Numbered rather than plain pins: on a route that doubles back, two
    markers can sit almost on top of each other and the order is the only thing that
    distinguishes them.
@@ -1890,6 +1954,7 @@ textarea {
 
 .routes-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   margin: 0.5rem 0;
 }
@@ -1906,9 +1971,43 @@ textarea {
   cursor: pointer;
 }
 
+.routes-toolbar button.route-paste,
 .route-import {
   background: var(--border);
   color: var(--text);
+}
+
+/* Where a link gets into the installed app on iOS (plans/route-sharing.md §4.5). */
+.route-paste-form {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+}
+
+.route-paste-form textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  /* 16px or iOS zooms the page on focus and leaves it zoomed. */
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.route-paste-form button {
+  align-self: flex-start;
+  padding: 0.45rem 0.8rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* The file input is driven by its label; hiding it with `display: none` would take it out

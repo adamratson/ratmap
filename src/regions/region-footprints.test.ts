@@ -6,6 +6,7 @@ import {
   FOOTPRINT_SOURCE_ID,
   footprintCollection,
   regionAt,
+  regionCovering,
   removeFootprints,
   renderFootprints,
   visibleFootprints,
@@ -29,6 +30,28 @@ const ALL: Footprint[] = [
 ];
 
 const BEN_NEVIS: [number, number] = [-5.0037, 56.7969];
+
+describe('regionCovering', () => {
+  const FORT_WILLIAM: [number, number] = [-5.1, 56.82];
+  const INVERNESS: [number, number] = [-4.22, 57.48];
+
+  it('takes the smallest region holding every point', () => {
+    expect(regionCovering(ALL, [FORT_WILLIAM, [-5.0, 56.8]])?.id).toBe('lochaber');
+  });
+
+  it('widens to the region that holds them all, past one that holds only some', () => {
+    expect(regionCovering(ALL, [FORT_WILLIAM, INVERNESS])?.id).toBe('scotland');
+  });
+
+  it('is null when no one region holds them', () => {
+    expect(regionCovering(ALL, [FORT_WILLIAM, [19.0, 42.5]])).toBeNull();
+  });
+
+  it('can be limited to what is downloaded', () => {
+    expect(regionCovering(ALL, [[19.0, 42.5]], { downloaded: true })?.id).toBe('montenegro');
+    expect(regionCovering(ALL, [FORT_WILLIAM], { downloaded: true })).toBeNull();
+  });
+});
 
 describe('regionAt', () => {
   it('offers the smallest region covering the point', () => {

@@ -272,6 +272,36 @@ describe('saying when the regions on the device change', () => {
   });
 });
 
+describe('what to download for a route with no map under it', () => {
+  const BEN_NEVIS: [number, number] = [-5.0, 56.8];
+  const GLENCOE: [number, number] = [-5.1, 56.68];
+  const AVIEMORE: [number, number] = [-3.8, 57.2];
+
+  it('has nothing to say until the catalogue is known', () => {
+    expect(coverage.regionOfferFor([BEN_NEVIS])).toBeNull();
+  });
+
+  it('names the region that holds the whole route', async () => {
+    await coverage.restore();
+    await vi.waitFor(() =>
+      expect(coverage.regionOfferFor([BEN_NEVIS, GLENCOE])).toEqual({ kind: 'region', region: LOCHABER }),
+    );
+  });
+
+  it('says so when no one region holds it', async () => {
+    await coverage.restore();
+    await vi.waitFor(() =>
+      expect(coverage.regionOfferFor([BEN_NEVIS, AVIEMORE])).toEqual({ kind: 'spans' }),
+    );
+  });
+
+  it('offers nothing once a downloaded region covers it', async () => {
+    deps.restoreDownloadedRegions.mockResolvedValue([LOCHABER]);
+    await coverage.restore();
+    expect(coverage.regionOfferFor([BEN_NEVIS, GLENCOE])).toBeNull();
+  });
+});
+
 describe('drawing the coverage outlines', () => {
   it('waits for a style that will accept them, then draws', async () => {
     // A restore can finish before the style exists; addSource would throw.

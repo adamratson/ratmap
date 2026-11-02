@@ -1,14 +1,19 @@
 # Route sharing — links, QR codes and better files, with no server
 
-**Status (2026-10-01): §3.1–§3.5 fixed; nothing of the sharing itself built yet.** Planned
-2026-09-30, the same day as an ideas pass and a review of those ideas against the code. The
-existing-behaviour fixes §3 calls for landed the next day (§3 says how each was fixed and
-verified); §3.6 waits on §6 decisions 3 and 4, and §3.7 belongs to Stage C. Every size and
-reproducibility figure in §2.1 was measured by running the app's own routing and export
-code over the real Scotland archive. The platform behaviour in §2.2 is documented upstream
-and has not been tried on a phone. Nothing here needs a server, an account or a new
-artifact. Destined for `docs/IMPLEMENTATION.md` as a Phase 4 addendum (number TBD) once §6
-is decided.
+**Status (2026-11-02): Stages A and B built; full links work end to end, not yet tried on a
+phone.** Planned 2026-09-30; §3's fixes landed the next day (§3 says how each was fixed and
+verified), and Stage B on 2026-11-02 (§5 says what was built and what was decided). §3.6
+waits on §6 decisions 3 and 4, and §3.7 belongs to Stage C. Every size and reproducibility
+figure in §2.1 was measured by running the app's own routing and export code over the real
+Scotland archive. The platform behaviour in §2.2 is documented upstream and has not been
+tried on a phone, so **§2.3's spikes are all still open**. Nothing here needs a server, an
+account or a new artifact. Destined for `docs/IMPLEMENTATION.md` as a Phase 4 addendum
+(number TBD); §10's spec changes have not been made.
+
+**Links use the github.io address (§6 decision 1, decided 2026-11-02).** A link names the
+address it was made on, for good, so moving later would leave every link already sent
+depending on a redirect that is not confirmed (§2.2). Paste accepts any origin, so an old
+link can still be opened by pasting it in.
 
 **In one paragraph.** Turning a route into a link is the easy part. The Ben Nevis Mountain
 Path (8.0 km, 521 vertices) is 25.9 KB as the GPX ratmap exports today and 640 characters as
@@ -395,6 +400,42 @@ the two phones differ.
   - a `hashchange` into a running app opens the route, and the plan it replaced comes back
     on Undo.
 
+**Built 2026-11-02, as above, with these differences and decisions:**
+
+- **`share-link.ts`** is as listed, plus `LinkTooLong` for the sender's side. The byte layout
+  is at the top of the file. Legs carry a third kind, freehand, so a leg drawn with snap off
+  comes back as one. Distances are in decimetres, so the total matches "to the metre" (§9.1)
+  rather than drifting by a rounding per leg.
+- **A check §4.2 did not list:** a leg's carried distance must fit its line, within 5% under
+  and 25% over. The figure on screen comes from the link, and a checksum proves nothing about
+  a link someone wrote by hand, so an unchecked one would put any number at all in front of
+  someone planning a day on it.
+- **A too-new link stays in the address** when it is refused, so the update that can read it
+  still finds it. A damaged one is cleared.
+- **Receiving does not wait for the restore** (§4.3 step 1). That step exists for compact
+  links, which have to route. A full link carries its legs, and the profile already
+  re-measures on `onDownloadedChange`. Stage C needs the wait. `hashchange` is only listened
+  for once the style is ready, since opening a route adds to the style and would otherwise
+  throw.
+- **§6 decisions, Adam, 2026-11-02:** 2 m simplification (2); sender's climb carried and
+  labelled, gone as soon as the route is edited (7); no route id for now, with flag bits free
+  for it (5); and §4.6's trim is **not** built: the Share step shows the warning only.
+- **The Share dialog is a `<dialog>`** rather than a form in the panel, because the panel
+  redraws on every GPS fix. It offers Link, GPX and GeoJSON; the QR option is Stage C.
+- **Share takes a sixth place in the action row,** so on a 375 px phone Clear wraps to its
+  own line. Usable, at the cost of one row of height.
+
+Verified: unit tests for the codec, including every truncation of a link and 300 forged
+payloads; `route-sharing.spec.ts` against the production build, including an offline cold
+start and a link arriving in a running app; a size test over the real archive
+(`archive-route.test.ts`): the Mountain Path, 523 vertices, is 690 characters with a name and
+stats, 0.30% shorter than the routed line. In the dev build at 375 px: the dialog, the
+received block, and Get Andorra opening the catalogue searched for it.
+
+**Not verified:** anything on a real phone, including whether a link tapped on Android opens
+the installed app, and how long a link messengers will carry (§2.3 spikes 1, 3 and 4). The
+2,000-character warning in the Share dialog is a round number standing in for spike 4.
+
 ### Stage C — compact links and QR codes
 
 - `ROUTER_VERSION` and the golden-route test (§4.4), rebuilt from the §2.1 harness.
@@ -429,12 +470,13 @@ and the first launch shows the route.
 
 ## 6. Open decisions — ask Adam, do not guess
 
-1. **Decide the domain before links ship?** Every link names the origin forever, and §8
-   item 1 leaves the domain open until Phase 6. Moving later leaves old links depending on a
-   github.io redirect that is not confirmed (§2.2). A custom domain would also stop ratmap
-   sharing an origin, and so its storage, with any other Pages project on the same account.
-2. **Simplification tolerance:** 2 m with exact per-leg distances (recommended), no
-   simplification (about 2.2× the size), or 5 m (about 0.65×).
+1. ~~Decide the domain before links ship?~~ **Decided 2026-11-02: no. Links ship on the
+   github.io address.** This settles the question for links only; §8 item 1 of the spec still
+   leaves a custom domain open until Phase 6. The cost is known: if the app moves later, old
+   links depend on a github.io redirect that is not confirmed (§2.2), though they still open
+   when pasted in. ratmap also goes on sharing an origin, and so its storage, with any other
+   Pages project on the same account.
+2. ~~Simplification tolerance~~ **Decided 2026-11-02: 2 m** with exact per-leg distances.
 3. **Keep heights in `SavedRoute`?** As an additive optional field, a saved route could
    export `<ele>` without its region on the phone. The alternative is to compute heights at
    export and omit them when the region is absent. That alternative puts an async pause
@@ -444,12 +486,12 @@ and the first launch shows the route.
    `<copyright>`: a track imported from another app and exported again is not OSM data
    (§3.6). Credit only routes whose legs were routed here, or use a softer `<link>`/`<desc>`
    line.
-5. **Route id in links**, for "replace your copy": 8 bytes of random id, or accept
-   duplicates in the library.
+5. ~~Route id in links~~ **Decided 2026-11-02: not for now.** Saving a shared route twice
+   makes two copies. The flags byte has room to add it without breaking old links.
 6. **Compact links:** QR only, or offered for messages too? And in-app QR scanning (a JS
    decoder and camera permission), or the camera app plus paste?
-7. **Sender's ascent and descent:** real numbers from their terrain, but not the
-   recipient's. Show them labelled, or keep the §7 rule of drawing nothing without a region?
+7. ~~Sender's ascent and descent~~ **Decided 2026-11-02: carried and shown labelled** as
+   theirs, until the recipient's own region gives a profile.
 8. **The cookie bridge,** if spike 2 passes: acceptable, given the route rides in request
    headers for those minutes?
 9. **Android `share_target`:** worth a service-worker change?

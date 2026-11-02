@@ -4,6 +4,8 @@ import { PMTiles } from 'pmtiles';
 import { PathGraph } from '../src/routes/path-graph';
 import { decodePathLines, tilesForBbox } from '../src/routes/path-tiles';
 import { boundsOf, distanceMetres, type LngLat } from '../src/routes/geo';
+import { decodeRouteLink, encodeRouteLink } from '../src/routes/share-link';
+import { pathLengthMetres } from '../src/routes/geo';
 import { NodeFileSource } from './node-file-source';
 
 // End-to-end check of the offline router against a **real built region archive**, not a
@@ -95,5 +97,35 @@ describe.skipIf(!existsSync(ARCHIVE))('routing over a real region archive', () =
     // Seam stitching is the whole reason for clipping to exact tile bounds; a route this
     // long touching only one tile would mean it never left it.
     expect(tilesTouched.size).toBeGreaterThan(3);
+  });
+
+  it('fits the real Mountain Path in a link a messenger can carry', async () => {
+    const bbox = boundsOf([ACHINTEE, SUMMIT], 1500)!;
+    const graph = await buildGraph(bbox, 15);
+    const leg = graph.routeBetween(ACHINTEE, SUMMIT)!;
+    const coords: LngLat[] = [ACHINTEE, ...leg.coords, SUMMIT];
+    const distanceM = pathLengthMetres(coords);
+
+    const payload = encodeRouteLink({
+      name: 'Ben Nevis',
+      waypoints: [
+        { lng: ACHINTEE[0], lat: ACHINTEE[1] },
+        { lng: SUMMIT[0], lat: SUMMIT[1] },
+      ],
+      legs: [{ coords, distanceM, kind: 'snapped' }],
+      stats: { ascentM: 1340, descentM: 10 },
+    });
+
+    // plans/route-sharing.md §2.1 measured 640 characters for this route at 2 m. A format
+    // change that doubled it would still pass every other test here, and fail in a
+    // messenger instead.
+    expect(payload.length).toBeLessThan(900);
+
+    const back = decodeRouteLink(payload);
+    expect(back.legs[0].distanceM).toBeCloseTo(distanceM, 0);
+    // Shorter, because simplifying always shortens, and not by enough to matter: §2.1 had
+    // 0.35% at 2 m. The carried distance is what is shown.
+    const shortened = 1 - pathLengthMetres(back.coords) / distanceM;
+    expect(Math.abs(shortened)).toBeLessThan(0.01);
   });
 });

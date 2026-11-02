@@ -65,7 +65,8 @@ test.describe('saved routes', () => {
     await openChip(page, 'Routes');
 
     const download = page.waitForEvent('download');
-    await page.locator('.route-row-actions button', { hasText: 'GPX' }).click();
+    await page.locator('.route-row-actions button', { hasText: 'Share' }).click();
+    await page.locator('.share-actions button', { hasText: 'GPX' }).click();
     const file = await download;
 
     expect(file.suggestedFilename()).toBe('export-test.gpx');
@@ -90,7 +91,8 @@ test.describe('saved routes', () => {
     await openChip(page, 'Routes');
 
     const download = page.waitForEvent('download');
-    await page.locator('.route-row-actions button', { hasText: 'GeoJSON' }).click();
+    await page.locator('.route-row-actions button', { hasText: 'Share' }).click();
+    await page.locator('.share-actions button', { hasText: 'GeoJSON' }).click();
     const file = await download;
 
     expect(file.suggestedFilename()).toBe('export-test.geojson');
@@ -128,7 +130,8 @@ test.describe('saved routes', () => {
 
     await openChip(page, 'Routes');
     const download = page.waitForEvent('download');
-    await page.locator('.route-row-actions button', { hasText: 'GPX' }).click();
+    await page.locator('.route-row-actions button', { hasText: 'Share' }).click();
+    await page.locator('.share-actions button', { hasText: 'GPX' }).click();
     const gpx = (await (await (await download).createReadStream()).toArray()).join('');
 
     await page.locator('.route-import input[type=file]').setInputFiles({

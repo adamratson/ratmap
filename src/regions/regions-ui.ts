@@ -110,6 +110,8 @@ export interface RegionsUiDeps {
   theme(): Theme;
   container: HTMLElement;
   onStatus(message: string, kind: 'ok' | 'warn' | 'error'): void;
+  /** Open on this search, when something has already said which region is wanted. */
+  initialQuery?: string;
   /**
    * What is on disk may have changed: after every download attempt, since a paused or
    * failed one can still have completed some artifacts, and after a delete. Not after a
@@ -226,7 +228,8 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   // A download or a delete re-renders this whole sheet. Losing what someone had typed at
   // that moment would throw them back to the nearby list with their region no longer in
   // it — the one search they had already done, undone by finishing.
-  const previousQuery = container.querySelector<HTMLInputElement>('.regions-search')?.value ?? '';
+  const previousQuery =
+    container.querySelector<HTMLInputElement>('.regions-search')?.value ?? deps.initialQuery ?? '';
 
   container.innerHTML = `
     <input class="regions-search" type="search" enterkeyhint="search" autocomplete="off"

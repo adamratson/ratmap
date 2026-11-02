@@ -38,7 +38,13 @@ import { renderRegionsSheet } from './regions/regions-ui';
 import { onPressHold } from './routes/press-hold';
 import { addRouteLayers } from './routes/route-layers';
 import { RoutePlanner, type RouteSummary } from './routes/route-planner';
-import { renderRoutePanel, renderRoutesSheet, type RoutesUiDeps } from './routes/routes-ui';
+import {
+  openRouteLink,
+  renderRoutePanel,
+  renderRoutesSheet,
+  type RoutesUiDeps,
+} from './routes/routes-ui';
+import { LinkTooNew, payloadFromHash } from './routes/share-link';
 import { renderPlacesSheet } from './search/places-view';
 import { regionSearchIndexes } from './search/region-indexes';
 import { SearchBox } from './search/search-view';
@@ -264,7 +270,13 @@ function installAppLayers(): void {
 // on disk. `installAppLayers` only needs a style that will accept sources (see
 // RegionCoverage.setStyleReady), which `styledata` already gives it — the same event the
 // theme-swap path above uses for the same reason.
-map.once('styledata', () => installAppLayers());
+map.once('styledata', () => {
+  installAppLayers();
+  // Not before: opening a route adds to the style, which throws until it will accept
+  // sources, and that would lose the link to a message about map styles.
+  openRouteFromLocation();
+  window.addEventListener('hashchange', openRouteFromLocation);
+});
 
 const coverage = new RegionCoverage({
   map,
@@ -360,7 +372,35 @@ function routesUi(container: HTMLElement = sheet.body): RoutesUiDeps {
     onPlanFinished: () => planner.deactivate(),
     onStatus: (message, kind) => status.toast(message, { kind }),
     onUndoableStatus: (message, action) => status.toast(message, { action }),
+    regionOffer: (points) => coverage.regionOfferFor(points),
+    onGetRegion: (name) => openRegionsView(name),
   };
+}
+
+/**
+ * Open a route link, if the address holds one (plans/route-sharing.md §4.3).
+ *
+ * At startup, and again on `hashchange`: a link tapped on Android with the app already open
+ * is a same-document navigation, which reloads nothing.
+ *
+ * It need not wait for the regions on disk. A full link carries its legs, so nothing here
+ * routes, and the profile re-measures itself when the restore lands (onDownloadedChange).
+ *
+ * The fragment is cleared once read, so a reload does not open the route again over
+ * whatever has happened since. A link from a later ratmap keeps it: the update that can
+ * read it reloads the page, and the link should still be there when it does.
+ */
+function openRouteFromLocation(): void {
+  const payload = payloadFromHash(location.hash);
+  if (payload === null) return;
+
+  try {
+    openRouteLink(payload, routesUi());
+  } catch (err) {
+    status.toast((err as Error).message, { kind: 'error' });
+    if (err instanceof LinkTooNew) return;
+  }
+  history.replaceState(null, '', `${location.pathname}${location.search}`);
 }
 
 // Debug handle, same convention as __ratmapMap above: it lets the e2e suite assert on the
@@ -476,13 +516,14 @@ function openLayersView(): void {
   views.open('layers', (body) => renderLayersView(body, { map, ink: mapInk(theme.get()) }));
 }
 
-function openRegionsView(): void {
+function openRegionsView(initialQuery?: string): void {
   views.open('regions', (body) => {
     void renderRegionsSheet({
       map,
       registry,
       theme: () => theme.get(),
       container: body,
+      ...(initialQuery === undefined ? {} : { initialQuery }),
       onStatus: (message, kind) => status.toast(message, { kind }),
       offlineState: () => appUpdates?.offlineState() ?? 'unsupported',
       onRegionsChanged: () => {

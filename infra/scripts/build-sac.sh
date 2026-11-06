@@ -118,7 +118,9 @@ OUT="$DIST_DIR/sac-global.pmtiles"
 # against 12.74 s with none, on the same input), so this is about the log, not the clock:
 # a line every 10 s still answers "is it alive and where is it", at about 60 kB for a
 # five-hour stage instead of 177 MB.
-tippecanoe -o "$OUT" -Z12 -z15 \
+# -t: tippecanoe writes its temp files to /tmp whatever TMPDIR says, which in the
+# image is the container's own layer, not /work. See build-paths.sh.
+tippecanoe -o "$OUT" -t "$WORK_DIR" -Z12 -z15 \
   --include=t --include=name \
   -l sac -n "ratmap SAC grades" \
   --drop-densest-as-needed --progress-interval=10 --force \

@@ -27,6 +27,17 @@ ARG DEBIAN_TAG=trixie-slim
 # Debian trixie packages tippecanoe 2.53.0; the recorded laptop runs used 2.79.0, and
 # tippecanoe's feature-dropping behaviour is version-sensitive enough that matching it
 # matters more than saving a compile.
+#
+# One patch: the deflate level of tippecanoe's own temp files (compression.cpp), from the
+# zlib default to 1. It has no flag. That deflate was 53% of tippecanoe's CPU on Scotland
+# detail, and at level 1 detail tiled 23% faster and an alpine contour cell 38% faster
+# (2026-11-03, laptop, two alternated runs each), with tiles byte-identical to stock —
+# the tiles' own gzip is mvt.cpp's, untouched. Built here, on Debian, the contour cell
+# went from 43 s to 28 s, again byte-identical to this stage built stock. The cost is temp disk: about 8% more on
+# contours. Level 0 was faster again (40% / 61%) but took 70% more temp disk on
+# contours, which run several regions at once on a /work that is already the tight
+# resource. The grep fails the build if a version bump moves the line, rather than
+# quietly shipping stock.
 ########################################################################
 FROM debian:${DEBIAN_TAG} AS tippecanoe-build
 
@@ -42,6 +53,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN git clone --depth 1 --branch "${TIPPECANOE_VERSION}" \
         https://github.com/felt/tippecanoe.git /src/tippecanoe \
+    && sed -i 's/deflateInit(&zs, Z_DEFAULT_COMPRESSION)/deflateInit(\&zs, 1)/' \
+        /src/tippecanoe/compression.cpp \
+    && grep -q 'deflateInit(&zs, 1)' /src/tippecanoe/compression.cpp \
     && make -C /src/tippecanoe -j"$(nproc)" \
     && make -C /src/tippecanoe install PREFIX=/opt/tippecanoe MANDIR=/opt/tippecanoe/share/man \
     && /opt/tippecanoe/bin/tippecanoe --version
@@ -148,7 +162,9 @@ ENV PATH=/usr/local/go/bin:${PATH} \
 # mktemp, and stage logs. It must be a real volume on a disk with room — see
 # docker/README.md. TMPDIR matters more than it looks: every build script does
 # `mktemp -d`, and left at /tmp a planet run fills the container's writable layer and
-# dies partway through with a confusing ENOSPC.
+# dies partway through with a confusing ENOSPC. tippecanoe does not read TMPDIR (its
+# temp directory is /tmp unless -t says otherwise), so every stage passes it -t with its
+# own work directory.
 #
 # OSM_CACHE_DIR points lib.sh's cached_osm_extract at /osm, a mount of its own for the
 # continent extracts (compose.yml says why they are apart from /work). Without it the

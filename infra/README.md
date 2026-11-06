@@ -191,6 +191,23 @@ the extract size, the reduce step 17 MB, tippecanoe 172 MB at 259 k features and
 so if it lowers the number — including when you asked for more, since the host is what it
 is. On a 4 GB box that means 1, which is what this stage used to be everywhere.
 
+With more than one worker, continents go largest first, and the next starts as soon as one
+finishes. They used to go in batches of three in Geofabrik's order, which never put asia,
+europe and north-america together, so the stage took about as long as those three back to
+back. Against a stub worker that takes time in proportion to extract size, the batches
+took 72 s and this takes 41 s on a 65 GB budget (2026-11-04); how much of that a real run
+keeps depends on how well three tippecanoes share the cores.
+
+The other bound is disk. A worker's scratch peaks at about 0.8× its extract (Scotland:
+from 310 MB, 132 MB of export beside 130 MB of reduced GeoJSON, then that beside 123 MB of
+tippecanoe temp), so those three at once would want ~57 GB. A continent starts only while
+the extract sizes of everything running, its own included, fit in the free space where its
+scratch goes (`TMPDIR`) when the stage began — `PATHS_SCRATCH_MB` to set it yourself. One that does not fit waits
+and a smaller one goes first; the first always starts, so a continent bigger than the
+budget is still built, alone. tippecanoe's temp is in that budget because every stage
+passes it `-t` with its work directory: left alone, tippecanoe writes to `/tmp` whatever
+`TMPDIR` says.
+
 ### Search indexes: one per region, and the app's fallback
 
 `build-places.sh` builds the planet's full index in its work directory — a few hundred MB,

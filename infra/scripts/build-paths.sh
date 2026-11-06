@@ -127,7 +127,10 @@ tile_one_source() {
   reduce_to_path_properties "$work/raw.geojsonl" "$work/final.geojsonl" "$key"
   rm -f "$work/raw.geojsonl"
 
-  tippecanoe -o "$building" -Z12 -z13 \
+  # -t: tippecanoe puts its temp files in /tmp whatever TMPDIR says (main.cpp), which in
+  # the image is the container's own layer rather than /work. Here they sit with the rest
+  # of this worker's scratch, where the disk budget below counts them.
+  tippecanoe -o "$building" -t "$work" -Z12 -z13 \
     --include=kind --include=kind_detail \
     -l paths -n "ratmap low-zoom paths" \
     --simplification=8 --drop-densest-as-needed --progress-interval=10 --force \
@@ -164,28 +167,114 @@ reduce_to_path_properties() {
 LOG_DIR_PATHS="${RATMAP_WORK:-$INFRA_DIR}/logs"
 mkdir -p "$LOG_DIR_PATHS"
 
+# Joined in the order the sources were given, whatever order they are tiled in: tile-join
+# merges a seam tile's features in input order, so this keeps the output independent of
+# the scheduling below.
 tilesets=()
-running=0
 for url in $PATHS_SOURCE_URLS; do
   key="$(basename "${url%.osm.pbf}")"
   tilesets+=("$PATHS_TILE_CACHE/$key-paths.pmtiles")
+done
 
-  if [ "$PATHS_PARALLEL" -le 1 ]; then
+# Scratch one continent needs, in MB, judged by its extract. A worker's files peak at about
+# 0.8x the extract — Scotland, 2026-11-04: from a 310 MB extract, 132 MB of export beside
+# 130 MB of reduced GeoJSON, then that beside 123 MB of tippecanoe temp — counted as 1x
+# for headroom. 0 for a continent already tiled, whose worker only checks the cache, and
+# for one not downloaded yet, which leaves nothing to go on.
+scratch_mb() {
+  local url="$1" key extract
+  key="$(basename "${url%.osm.pbf}")"
+  extract="$OSM_CACHE_DIR/$(basename "${url%%\?*}")"
+  if [ -s "$PATHS_TILE_CACHE/$key-paths.pmtiles" ] || [ ! -s "$extract" ]; then
+    echo 0
+  else
+    echo $(( $(wc -c < "$extract") / 1048576 ))
+  fi
+}
+
+if [ "$PATHS_PARALLEL" -le 1 ]; then
+  for url in $PATHS_SOURCE_URLS; do
     echo "Source: $url"
     tile_one_source "$url" || true
-  else
-    # Each worker's output to its own log: several at once would interleave line by line
-    # into one unreadable stream. Same idiom as the contours stage in build-global.sh.
-    echo "Source: $url (log: $LOG_DIR_PATHS/paths-$key.log)"
-    tile_one_source "$url" > "$LOG_DIR_PATHS/paths-$key.log" 2>&1 &
-    running=$((running + 1))
-    if [ "$running" -ge "$PATHS_PARALLEL" ]; then
-      wait
-      running=0
+  done
+else
+  # Largest first, starting the next as soon as a worker finishes rather than in batches.
+  # Batches of three in the order Geofabrik lists them never ran asia, europe and
+  # north-america together — 71 of the 85 GB — so the stage took about as long as those
+  # three back to back. Largest first, the rest fit in around europe.
+  #
+  # Bounded by disk as well as by workers: those three at once need ~57 GB of scratch
+  # (scaled from Scotland above), against a /work floor of 65 GB that also holds the
+  # caches. So a continent starts only while the scratch of everything running, its own
+  # included, fits in what was free when the stage began; one that does not waits, and a
+  # smaller one goes ahead of it. Whatever is first always starts, so a continent larger
+  # than the budget still gets built, alone, as it would serially.
+  #
+  # Measured where mktemp actually puts a worker's scratch, rather than at TMPDIR: macOS's
+  # mktemp -d does not always go there.
+  probe="$(mktemp -d)"
+  PATHS_SCRATCH_MB="${PATHS_SCRATCH_MB:-$(df -Pk "$probe" | awk 'NR==2 {print int($4 / 1024)}')}"
+  echo "Scratch budget: $((PATHS_SCRATCH_MB / 1024)) GB, free beside $probe"
+  rmdir "$probe"
+
+  queue=()
+  queue_mb=()
+  while read -r mb url; do
+    queue+=("$url")
+    queue_mb+=("$mb")
+  done < <(for url in $PATHS_SOURCE_URLS; do echo "$(scratch_mb "$url") $url"; done | sort -k1,1nr)
+
+  pids=()
+  pids_mb=()
+  held_mb=0
+  while [ "${#queue[@]}" -gt 0 ] || [ "${#pids[@]}" -gt 0 ]; do
+    # Reap whatever has finished and give back its scratch. From bash's own job table, not
+    # kill -0, which a reused pid would answer. Exit codes are not looked at: the artifact
+    # check below is what decides.
+    running_now=" $(jobs -rp | tr '\n' ' ') "
+    still=()
+    still_mb=()
+    for i in "${!pids[@]}"; do
+      if [[ "$running_now" == *" ${pids[$i]} "* ]]; then
+        still+=("${pids[$i]}")
+        still_mb+=("${pids_mb[$i]}")
+      else
+        wait "${pids[$i]}" || true
+        held_mb=$((held_mb - pids_mb[i]))
+      fi
+    done
+    pids=("${still[@]}")
+    pids_mb=("${still_mb[@]}")
+
+    waiting=()
+    waiting_mb=()
+    for i in "${!queue[@]}"; do
+      url="${queue[$i]}"
+      mb="${queue_mb[$i]}"
+      if [ "${#pids[@]}" -lt "$PATHS_PARALLEL" ] &&
+         { [ "${#pids[@]}" -eq 0 ] || [ $((held_mb + mb)) -le "$PATHS_SCRATCH_MB" ]; }; then
+        # Each worker's output to its own log: several at once would interleave line by
+        # line into one unreadable stream. Same idiom as the contours stage in
+        # build-global.sh.
+        key="$(basename "${url%.osm.pbf}")"
+        echo "Source: $url (~$mb MB scratch; log: $LOG_DIR_PATHS/paths-$key.log)"
+        tile_one_source "$url" > "$LOG_DIR_PATHS/paths-$key.log" 2>&1 &
+        pids+=("$!")
+        pids_mb+=("$mb")
+        held_mb=$((held_mb + mb))
+      else
+        waiting+=("$url")
+        waiting_mb+=("$mb")
+      fi
+    done
+    queue=("${waiting[@]}")
+    queue_mb=("${waiting_mb[@]}")
+
+    if [ "${#pids[@]}" -gt 0 ]; then
+      sleep 5
     fi
-  fi
-done
-wait
+  done
+fi
 
 # Checked on the artifacts rather than on worker exit codes: with several running in the
 # background a lost exit status is easy and a missing continent is not — and this same

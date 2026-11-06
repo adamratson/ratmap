@@ -95,7 +95,9 @@ OUT="$DIST_DIR/terrain-features-global.pmtiles"
 # -z15: the basemap's own ceiling.
 #
 # Tiled in the work directory and moved into dist/ after: see move_into_dist in lib.sh.
-tippecanoe -o "$WORK_DIR/terrain-features-global.pmtiles" -Z11 -z15 \
+# -t: tippecanoe writes its temp files to /tmp whatever TMPDIR says, which in the
+# image is the container's own layer, not /work. See build-paths.sh.
+tippecanoe -o "$WORK_DIR/terrain-features-global.pmtiles" -t "$WORK_DIR" -Z11 -z15 \
   --include=kind --include=name \
   -l terrain_features -n "ratmap terrain features (scree, shingle, rock, stone)" \
   --drop-densest-as-needed --progress-interval=10 --force \

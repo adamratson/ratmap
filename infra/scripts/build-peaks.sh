@@ -168,7 +168,9 @@ PARTIAL="$WORK_DIR/peaks-global.pmtiles"
 # until nothing needs dropping; the app and build-region.sh both read the top zoom from
 # the header, so a deeper archive needs no change anywhere else. The tile check below
 # fails the build if anything is still missing.
-tippecanoe -o "$PARTIAL" -zg --drop-densest-as-needed --extend-zooms-if-still-dropping \
+# -t: tippecanoe writes its temp files to /tmp whatever TMPDIR says, which in the
+# image is the container's own layer, not /work. See build-paths.sh.
+tippecanoe -o "$PARTIAL" -t "$WORK_DIR" -zg --drop-densest-as-needed --extend-zooms-if-still-dropping \
   --include=name --include=ele --include=prom --include=prominence --include=wikidata \
   --include=lists \
   -l peaks -n "ratmap peaks" --force \

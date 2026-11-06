@@ -77,7 +77,9 @@ OUT="$DIST_DIR/parking-global.pmtiles"
 # z13 basemap tiles held 8 car parks for the whole central Lake District. Collision in the
 # app does the thinning instead, named and larger first (`size`); a tile that still
 # overflows (a city centre) is cut back by --drop-densest-as-needed.
-tippecanoe -o "$WORK_DIR/parking-global.pmtiles" -Z13 -z15 -r1 \
+# -t: tippecanoe writes its temp files to /tmp whatever TMPDIR says, which in the
+# image is the container's own layer, not /work. See build-paths.sh.
+tippecanoe -o "$WORK_DIR/parking-global.pmtiles" -t "$WORK_DIR" -Z13 -z15 -r1 \
   --include=name --include=customers --include=size \
   -l parking -n "ratmap car parks" \
   --drop-densest-as-needed --progress-interval=10 --force \

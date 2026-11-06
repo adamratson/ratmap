@@ -76,7 +76,9 @@ OUT="$DIST_DIR/detail-global.pmtiles"
 # -r1: no thinning of points by zoom — a gate is either on its path or the walker is
 # looking for one that is not there. The tile-size guard is --drop-densest-as-needed, and
 # it should not fire in open country: see the measurement in docker/README.md.
-tippecanoe -o "$WORK_DIR/detail-global.pmtiles" -Z12 -z15 -r1 \
+# -t: tippecanoe writes its temp files to /tmp whatever TMPDIR says, which in the
+# image is the container's own layer, not /work. See build-paths.sh.
+tippecanoe -o "$WORK_DIR/detail-global.pmtiles" -t "$WORK_DIR" -Z12 -z15 -r1 \
   --include=kind \
   -l detail -n "ratmap field detail (walls, fences, power lines, gates, stiles, fords)" \
   --drop-densest-as-needed --progress-interval=10 --force \

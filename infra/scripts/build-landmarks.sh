@@ -87,7 +87,9 @@ OUT="$DIST_DIR/landmarks-global.pmtiles"
 # top, which would take a lone mast off a z13 hillside at random. Collision in the app does
 # the thinning instead, and keeps named and nearby features over the rest; a tile that
 # still overflows (a city's rooftop masts) is cut back by --drop-densest-as-needed.
-tippecanoe -o "$WORK_DIR/landmarks-global.pmtiles" -Z13 -z15 -r1 \
+# -t: tippecanoe writes its temp files to /tmp whatever TMPDIR says, which in the
+# image is the container's own layer, not /work. See build-paths.sh.
+tippecanoe -o "$WORK_DIR/landmarks-global.pmtiles" -t "$WORK_DIR" -Z13 -z15 -r1 \
   --include=kind --include=name \
   -l landmarks -n "ratmap landmarks (masts, towers, trig pillars, cairns, lighthouses, wind turbines)" \
   --drop-densest-as-needed --progress-interval=10 --force \

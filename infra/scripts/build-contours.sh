@@ -153,7 +153,9 @@ echo "==> tiling"
 # have, until this was found on 2026-09-23. The same trap build-paths.sh's comment
 # describes, with the same fix.
 TMP_OUT="$WORK_DIR/$REGION_ID-contours.pmtiles"
-tippecanoe -o "$TMP_OUT" \
+# -t: tippecanoe writes its temp files to /tmp whatever TMPDIR says, which in the
+# image is the container's own layer, not /work. See build-paths.sh.
+tippecanoe -o "$TMP_OUT" -t "$WORK_DIR" \
   -Z"$CONTOUR_MINZOOM" -z"$CONTOUR_MAXZOOM" \
   --simplification=4 \
   --no-tile-size-limit \

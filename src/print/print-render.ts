@@ -1,4 +1,5 @@
 import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
+import { declinationLine, magneticField } from '../location/declination';
 import { buildBaseStyle } from '../map/base-style';
 import { applyAllStoredVisibility } from '../map/layers';
 import { supplyParkingIcons } from '../map/parking';
@@ -269,8 +270,27 @@ function drawFooter(
   ctx.font = font(600, 2.6, '"Barlow Semi Condensed"');
   ctx.fillText('N', px(northX), px(top + 10.6));
 
-  // Attribution, right-aligned, wrapped into what is left of the strip.
+  // Magnetic north, under the scale bar and the arrow, for the centre of the sheet on the
+  // day it is printed — the date is on the sheet, and the drift a year beside it, so the
+  // line stays usable for years. Nothing when the model has expired (declination.ts).
   const textLeft = northX + 6;
+  const field = magneticField(sheet.centre[1], sheet.centre[0], new Date());
+  if (field) {
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = 'left';
+    let size = 2.3;
+    const line = declinationLine(field);
+    ctx.font = font(400, size);
+    // Shrink rather than run into the attribution: the near-pole caution is the long one.
+    const room = px(textLeft - 1.5 - barX);
+    while (ctx.measureText(line).width > room && size > 1.6) {
+      size -= 0.1;
+      ctx.font = font(400, size);
+    }
+    ctx.fillText(line, px(barX), px(top + 13));
+  }
+
+  // Attribution, right-aligned, wrapped into what is left of the strip.
   const width = footer.x + footer.w - textLeft;
   ctx.fillStyle = MUTED;
   ctx.textAlign = 'right';

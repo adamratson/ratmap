@@ -549,7 +549,10 @@ function openSettingsView(): void {
 }
 
 function openLegendView(): void {
-  views.open('legend', (body) => renderLegend(body, mapInk(theme.get())));
+  views.open('legend', (body) => {
+    const { lat, lng } = map.getCenter();
+    renderLegend(body, mapInk(theme.get()), { lat, lng });
+  });
 }
 
 function openLayersView(): void {

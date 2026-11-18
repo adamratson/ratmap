@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mapInk } from '../map/flavor';
 import { SAC_GRADES } from '../overlays/sac';
 import { SLOPE_CLASSES } from '../overlays/avalanche';
-import { legendRow, lineSwatch, renderLegend } from './legend-view';
+import { legendRow, lineSwatch, magneticNote, renderLegend } from './legend-view';
 
 function legendFor(theme: 'light' | 'dark'): HTMLElement {
   const body = document.createElement('div');
@@ -69,5 +69,32 @@ describe('legendRow', () => {
     expect(row.querySelector('.legend-swatch svg')).not.toBeNull();
     expect(row.querySelector('.legend-row-label')!.textContent).toBe('Footpath');
     expect(row.querySelector('.legend-row-note')!.textContent).toBe('Dashed.');
+  });
+});
+
+describe('magnetic north', () => {
+  const now = new Date('2026-11-18T12:00:00Z');
+
+  it('is worked out for the map centre, with what to do about it', () => {
+    // Ben Nevis: 1.1° W in late 2026 (WMM2025).
+    expect(magneticNote({ lat: 56.797, lng: -5.004, now })).toBe(
+      'At the map centre, today. The map is drawn to true north. ' +
+        'Magnetic north is 1.1° west of true north, moving 0.2° east a year. ' +
+        'Add 1.1° to a bearing taken from the map before following it on a compass.',
+    );
+  });
+
+  it('says the model has run out, rather than showing a value gone stale', () => {
+    expect(magneticNote({ lat: 56.797, lng: -5.004, now: new Date('2030-03-01T00:00:00Z') })).toBe(
+      'The magnetic model in this version of ratmap ran out on 1 January 2030. Update the app for current values.',
+    );
+  });
+
+  it('has a section only when the legend knows where the map is', () => {
+    const body = document.createElement('div');
+    renderLegend(body, mapInk('light'));
+    expect(body.querySelector('.legend-magnetic')).toBeNull();
+    renderLegend(body, mapInk('light'), { lat: 46.02, lng: 7.75, now });
+    expect(body.querySelector('.legend-magnetic')!.textContent).toContain('3.4° east of true north');
   });
 });

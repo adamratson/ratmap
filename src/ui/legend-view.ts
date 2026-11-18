@@ -6,6 +6,7 @@ import { HUTS_WATER_LEGEND, hutsWaterSwatch } from '../overlays/huts-water';
 import { ROUTES_LEGEND, routeSwatch } from '../overlays/routes';
 import { DETAIL_LEGEND } from '../overlays/detail';
 import { AVALANCHE_TERRAIN_ONLY, SLOPE_CLASSES, slopeCssColor } from '../overlays/avalanche';
+import { compassAdvice, describeDeclination, magneticField, magneticModel } from '../location/declination';
 
 // The map legend: every symbol the map draws, in the colours it draws them.
 
@@ -45,8 +46,39 @@ export function lineSwatch(
   );
 }
 
-/** Fill `body` with the legend, drawn in `ink` — the theme showing now. */
-export function renderLegend(body: HTMLElement, ink: MapInk): void {
+/** Where the map is looking, for the one legend entry that depends on it. */
+export interface LegendPlace {
+  lat: number;
+  lng: number;
+  now?: Date;
+}
+
+/**
+ * Magnetic north at the map centre, today: the note a paper map prints in its margin,
+ * worked out for wherever this map is looking (src/location/declination.ts).
+ */
+export function magneticNote({ lat, lng, now = new Date() }: LegendPlace): string {
+  const field = magneticField(lat, lng, now);
+  if (!field) {
+    const { validUntil } = magneticModel();
+    return now >= validUntil
+      ? `The magnetic model in this version of ratmap ran out on ${validUntil.toLocaleDateString('en-GB', {
+          dateStyle: 'long',
+          timeZone: 'UTC',
+        })}. Update the app for current values.`
+      : 'Not available here.';
+  }
+  const advice = compassAdvice(field);
+  return `At the map centre, today. The map is drawn to true north. ${describeDeclination(field)}${
+    advice ? ` ${advice}` : ''
+  }`;
+}
+
+/**
+ * Fill `body` with the legend, drawn in `ink` — the theme showing now. `place` is the map
+ * centre, for magnetic north; without it that section is left out.
+ */
+export function renderLegend(body: HTMLElement, ink: MapInk, place?: LegendPlace): void {
   // The swatches read the same inks the map layers do, for the theme showing now. A
   // hardcoded swatch is how the legend drifted from the map last time: violet summits
   // and a blue route, long after the map had moved on.
@@ -197,6 +229,15 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
         'The way back to the route while following.',
       )}
     </div>
+
+    ${
+      place
+        ? `<div class="legend-section">
+      <h3>Magnetic north</h3>
+      <p class="legend-note legend-magnetic">${magneticNote(place)}</p>
+    </div>`
+        : ''
+    }
 
     <div class="legend-section">
       <h3>Offline coverage</h3>

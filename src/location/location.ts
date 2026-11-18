@@ -19,6 +19,13 @@ export interface LocationControllerOptions {
   onDotClick?(position: GeolocationPosition): void;
 }
 
+/**
+ * How close the locate button brings the map: hiking zoom, where the paths, contours and
+ * buildings around you are readable. Only ever zooms in — someone already closer than
+ * this chose to be.
+ */
+export const LOCATE_ZOOM = 15;
+
 export class LocationController {
   private readonly map: MLMap;
   private readonly onStateChange?: (state: LocationState) => void;
@@ -30,6 +37,11 @@ export class LocationController {
   private heading: number | null = null;
   /** When true the camera recentres on each fix; any user pan cancels it. */
   private follow = false;
+  /**
+   * Set by {@link start}: the next centring also zooms in to {@link LOCATE_ZOOM}. Once,
+   * not on every fix — a follow that kept resetting the zoom would undo every pinch.
+   */
+  private zoomIn = false;
   private state: LocationState = { status: 'idle' };
   /** The fix behind the dot right now, for `onDotClick` to hand back on tap. */
   private lastPosition: GeolocationPosition | null = null;
@@ -56,6 +68,7 @@ export class LocationController {
     }
 
     this.follow = true;
+    this.zoomIn = true;
     if (this.watchId !== null) {
       // Already watching: just recentre on the last known fix.
       if (this.state.status === 'tracking') this.centreOn(this.state.position);
@@ -77,6 +90,7 @@ export class LocationController {
       this.watchId = null;
     }
     this.follow = false;
+    this.zoomIn = false;
     this.marker?.remove();
     this.marker = null;
     this.heading = null;
@@ -103,6 +117,8 @@ export class LocationController {
   cancelFollow(): void {
     if (!this.follow) return;
     this.follow = false;
+    // A pan while the first fix is still coming means "leave the camera alone".
+    this.zoomIn = false;
     this.onStateChange?.(this.state);
   }
 
@@ -124,10 +140,20 @@ export class LocationController {
   }
 
   private centreOn(position: GeolocationPosition): void {
-    this.map.easeTo({
-      center: [position.coords.longitude, position.coords.latitude],
-      duration: 500,
-    });
+    const center: [number, number] = [position.coords.longitude, position.coords.latitude];
+    if (this.zoomIn) {
+      this.zoomIn = false;
+      // flyTo rather than easeTo: from the country view this is a jump of nine zoom
+      // levels, and easing straight across that is a blur. Capped so a far-away fix does
+      // not turn into a long tour.
+      this.map.flyTo({
+        center,
+        zoom: Math.max(this.map.getZoom(), LOCATE_ZOOM),
+        maxDuration: 2000,
+      });
+      return;
+    }
+    this.map.easeTo({ center, duration: 500 });
   }
 
   private renderMarker(position: GeolocationPosition): void {

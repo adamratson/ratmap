@@ -173,38 +173,39 @@ test.describe('theme', () => {
     await clearConditions(page);
   });
 
-  test('follows the device until someone chooses, then remembers the choice', async ({
+  test('follows the device until someone chooses, remembers it, and can hand it back', async ({
     page,
   }) => {
     const root = page.locator('html');
-    const toggle = page.locator('#light-theme-toggle');
+    // Each radio is laid invisibly over its segment, so it is the radio that takes the tap.
+    const option = (name: string) => page.getByRole('radio', { name });
 
     // The project runs with the device in dark mode (see the emulation below), and with
     // nothing stored the app takes it. The peek row has no theme control at all.
     await expect(root).toHaveAttribute('data-theme', 'dark');
     await expect(page.locator('#theme-btn')).toHaveCount(0);
 
-    // Still following: the device flipping to light takes the app with it, switch
-    // included, without anything being stored.
+    // Following: the device flipping to light takes the app with it.
     await page.locator('#settings-btn').click();
-    await expect(toggle).not.toBeChecked();
+    await expect(option('Device')).toBeChecked();
     await page.emulateMedia({ colorScheme: 'light' });
     await expect(root).toHaveAttribute('data-theme', 'light');
-    await expect(toggle).toBeChecked();
 
-    // Choosing commits: back to dark explicitly, while the device still says light.
-    await toggle.uncheck();
+    // A manual choice wins over the device.
+    await option('Dark').check();
     await expect(root).toHaveAttribute('data-theme', 'dark');
 
-    // Stored, not re-derived on every launch — and the device no longer overrides it.
+    // Stored, not re-derived on every launch — the device still says light.
     await page.reload();
     await page.locator('#map').waitFor();
     await expect(root).toHaveAttribute('data-theme', 'dark');
 
+    // And handed back: Device follows the device again.
     await page.locator('#settings-btn').click();
-    await expect(page.locator('#light-theme-toggle')).not.toBeChecked();
-    await page.locator('#light-theme-toggle').check();
+    await option('Device').check();
     await expect(root).toHaveAttribute('data-theme', 'light');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(root).toHaveAttribute('data-theme', 'dark');
   });
 
   test('keeps the app’s own layers across a theme change', async ({ page }) => {
@@ -218,9 +219,9 @@ test.describe('theme', () => {
 
     // Switch away from the default and back, so the style really is replaced twice.
     await page.locator('#settings-btn').click();
-    await page.locator('#light-theme-toggle').check();
+    await page.getByRole('radio', { name: 'Light' }).check();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    await page.locator('#light-theme-toggle').uncheck();
+    await page.getByRole('radio', { name: 'Dark' }).check();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
     await expect

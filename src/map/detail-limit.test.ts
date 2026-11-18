@@ -42,10 +42,12 @@ describe('describeDetailLimit', () => {
     expect(describeDetailLimit(15, 13).detail).toContain('zoom 13');
   });
 
-  it('does not send the user off to download more past a downloaded region’s own ceiling', () => {
-    const state = describeDetailLimit(18, 15, { fromRegion: true });
-    expect(state.overzoomed).toBe(true);
-    expect(state.detail).toContain('zoom 15');
-    expect(state.detail).not.toMatch(/offline region/i);
+  it('says nothing past a downloaded region’s own ceiling — there is nothing to fetch', () => {
+    // A banner the user can do nothing about, over the one place the map is at its best.
+    expect(describeDetailLimit(18, 15, { fromRegion: true })).toEqual({
+      overzoomed: false,
+      label: null,
+      detail: null,
+    });
   });
 });

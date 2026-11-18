@@ -73,6 +73,31 @@ describe('regionAt', () => {
   it('includes the boundary, so an edge case is covered rather than uncovered', () => {
     expect(regionAt([{ region: LOCHABER, downloaded: false }], [-5.6, 56.5])?.id).toBe('lochaber');
   });
+
+  it('still offers the inner region at its very edge, where nesting decides it', () => {
+    expect(regionAt(ALL, [-5.59, 56.51])?.id).toBe('lochaber');
+  });
+
+  describe('where neighbouring boxes overlap', () => {
+    // The catalogue's real boxes (infra/regions.json). Ireland's is the smaller, and its
+    // north-east corner reaches across the sea to Fort William.
+    const REAL_SCOTLAND = region('scotland', [-14.8615, 54.54, 0.2161, 61.1356]);
+    const IRELAND = region('ireland-and-northern-ireland', [-14.4022, 49.6, -5.0593, 56.8655]);
+    const BOTH: Footprint[] = [
+      { region: REAL_SCOTLAND, downloaded: false },
+      { region: IRELAND, downloaded: false },
+    ];
+
+    it('offers Scotland at Fort William, not the box whose corner it is in', () => {
+      expect(regionAt(BOTH, [-5.1121, 56.8167])?.id).toBe('scotland');
+      expect(regionAt(BOTH, BEN_NEVIS)?.id).toBe('scotland');
+    });
+
+    it('still offers Ireland in Ireland', () => {
+      expect(regionAt(BOTH, [-6.26, 53.35])?.id).toBe('ireland-and-northern-ireland'); // Dublin
+      expect(regionAt(BOTH, [-5.93, 54.6])?.id).toBe('ireland-and-northern-ireland'); // Belfast
+    });
+  });
 });
 
 describe('footprintCollection', () => {

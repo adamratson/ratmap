@@ -7,8 +7,8 @@
 //
 // The explicit choice still wins and is still stored, because the device setting is a
 // blunt instrument outdoors: dusk on a hill arrives long before the phone's schedule
-// thinks it has, and the person holding it is the one who can tell. Settings carries a
-// single Light theme switch; flipping it commits to that theme and stops following.
+// thinks it has, and the person holding it is the one who can tell. Settings offers
+// Device / Light / Dark, so a manual choice can always be handed back to the device.
 
 export type Theme = 'light' | 'dark';
 
@@ -56,6 +56,8 @@ export class ThemeController {
   private preference: ThemePreference = readStored();
   private readonly listeners = new Set<(theme: Theme) => void>();
   private readonly query = globalThis.matchMedia?.('(prefers-color-scheme: dark)');
+  /** What was last put on screen, so listeners hear only about real changes. */
+  private shown: Theme | null = null;
 
   constructor() {
     // Always bound, not only while the preference is 'system': someone who switches back
@@ -108,6 +110,10 @@ export class ThemeController {
     const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (meta) meta.content = theme === 'dark' ? '#0e1114' : '#1c2127';
 
+    // Only on a real change. Every listener swap is a whole new map style, and choosing
+    // Device while the device already agrees with what is showing changes nothing.
+    if (theme === this.shown) return;
+    this.shown = theme;
     for (const listener of this.listeners) listener(theme);
   }
 }

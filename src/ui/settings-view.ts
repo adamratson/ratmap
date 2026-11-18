@@ -1,5 +1,5 @@
 import { DebugOverlay, isDebugOverlayEnabled, setDebugOverlayEnabled } from '../app/debug';
-import type { ThemeController } from './theme';
+import type { ThemeController, ThemePreference } from './theme';
 
 // The Settings view: the theme, and the debug overlay.
 
@@ -9,9 +9,6 @@ import type { ThemeController } from './theme';
  * common case of the setting being off.
  */
 let debugOverlay: DebugOverlay | null = null;
-
-/** Unsubscribe for the listener the open settings view holds, if any. */
-let viewCleanup: (() => void) | null = null;
 
 /** Start or stop the debug overlay over `sheetElement`, to match the stored setting. */
 export function syncDebugOverlay(sheetElement: HTMLElement): void {
@@ -25,18 +22,35 @@ export function syncDebugOverlay(sheetElement: HTMLElement): void {
   }
 }
 
+const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: 'system', label: 'Device' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
 export function renderSettingsView(
   body: HTMLElement,
   { theme, sheetElement }: { theme: ThemeController; sheetElement: HTMLElement },
 ): void {
   body.innerHTML = `
     <h2>Settings</h2>
-    <label class="settings-row">
+    <div class="settings-row settings-row-static">
       <span class="settings-row-text">
-        <span class="settings-row-label">Light theme</span>
+        <span class="settings-row-label" id="theme-label">Theme</span>
+        <span class="settings-row-note">
+          Device follows your phone’s light or dark mode.
+        </span>
       </span>
-      <input id="light-theme-toggle" type="checkbox" />
-    </label>
+      <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
+        ${THEME_OPTIONS.map(
+          ({ value, label }) => `
+          <label>
+            <input type="radio" name="theme" value="${value}" />
+            <span>${label}</span>
+          </label>`,
+        ).join('')}
+      </div>
+    </div>
     <label class="settings-row">
       <span class="settings-row-text">
         <span class="settings-row-label">Debug overlay</span>
@@ -48,27 +62,21 @@ export function renderSettingsView(
       <input id="debug-overlay-toggle" type="checkbox" />
     </label>
   `;
-  const light = body.querySelector<HTMLInputElement>('#light-theme-toggle')!;
-  // The switch shows what is on screen, not what has been chosen: until someone touches
-  // it the app follows the device, and a switch sitting at "off" over a light map would
-  // be lying about the state it is there to report.
-  light.checked = theme.get() === 'light';
-  light.addEventListener('change', () => {
-    // Touching it commits: from here the app stays on the chosen theme rather than
-    // following the device. Switching replaces the whole style (Protomaps ships flavours
-    // as whole layer sets); main.ts's installAppLayers puts the app's own layers back —
-    // see its theme.onChange. The settings view itself is untouched, so the toggle stays
-    // under the finger that just moved it.
-    theme.set(light.checked ? 'light' : 'dark');
-  });
-  // While the view is open and still following the device, a system change has to move
-  // the switch with it — otherwise the next tap sends it to the theme already showing.
-  const stopWatchingTheme = theme.onChange((current) => {
-    light.checked = current === 'light';
-  });
-  // Dropped when the view is replaced, so listeners don't pile up one per open.
-  viewCleanup?.();
-  viewCleanup = stopWatchingTheme;
+  // Three choices rather than one switch. A single Light switch could only ever commit to
+  // a theme: once touched there was no way back to following the device, and anyone who
+  // had picked up a stored `dark` was stuck on it in daylight. These show what has been
+  // chosen, not what is on screen, so they never move under the person by themselves.
+  for (const radio of body.querySelectorAll<HTMLInputElement>('input[name="theme"]')) {
+    radio.checked = radio.value === theme.getPreference();
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      // Switching replaces the whole style (Protomaps ships flavours as whole layer
+      // sets); main.ts's installAppLayers puts the app's own layers back — see its
+      // theme.onChange. The settings view itself is untouched, so the control stays
+      // under the finger that just moved it.
+      theme.set(radio.value as ThemePreference);
+    });
+  }
 
   const toggle = body.querySelector<HTMLInputElement>('#debug-overlay-toggle')!;
   toggle.checked = isDebugOverlayEnabled();

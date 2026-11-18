@@ -42,11 +42,13 @@ const { MarkerMock, markerInstances } = vi.hoisted(() => {
 
 vi.mock('maplibre-gl', () => ({ default: { Marker: MarkerMock } }));
 
-const { LocationController } = await import('./location');
+const { LocationController, LOCATE_ZOOM } = await import('./location');
 
-function fakeMap() {
+function fakeMap(zoom = 6) {
   return {
     easeTo: vi.fn(),
+    flyTo: vi.fn(),
+    getZoom: vi.fn().mockReturnValue(zoom),
     addSource: vi.fn(),
     addLayer: vi.fn(),
     getSource: vi.fn().mockReturnValue(undefined),
@@ -108,9 +110,64 @@ describe('LocationController', () => {
 
     expect(controller.getState().status).toBe('tracking');
     expect(markerInstances).toHaveLength(1);
-    expect(map.easeTo).toHaveBeenCalledWith(
+    expect(map.flyTo).toHaveBeenCalledWith(
       expect.objectContaining({ center: [-4.5, 56.8] }),
     );
+
+    // Later fixes only recentre.
+    callbacks.success!(position(56.9, -4.4));
+    expect(map.easeTo).toHaveBeenCalledWith(
+      expect.objectContaining({ center: [-4.4, 56.9] }),
+    );
+  });
+
+  it('zooms in to a close-up on the first fix after the button, and only then', () => {
+    const { callbacks } = stubGeolocation();
+    const map = fakeMap(6);
+    const controller = new LocationController({ map });
+    controller.start();
+    callbacks.success!(position());
+
+    expect(map.flyTo).toHaveBeenCalledTimes(1);
+    expect(map.flyTo).toHaveBeenCalledWith(expect.objectContaining({ zoom: LOCATE_ZOOM }));
+
+    // A follow that kept resetting the zoom would undo every pinch.
+    callbacks.success!(position(56.9, -4.4));
+    expect(map.flyTo).toHaveBeenCalledTimes(1);
+    expect(map.easeTo).not.toHaveBeenCalledWith(expect.objectContaining({ zoom: expect.anything() }));
+  });
+
+  it('never zooms out someone already closer than the close-up', () => {
+    const { callbacks } = stubGeolocation();
+    const map = fakeMap(17);
+    new LocationController({ map }).start();
+    callbacks.success!(position());
+
+    expect(map.flyTo).toHaveBeenCalledWith(expect.objectContaining({ zoom: 17 }));
+  });
+
+  it('zooms in again when the button is pressed again with a fix in hand', () => {
+    const { callbacks } = stubGeolocation();
+    const map = fakeMap(6);
+    const controller = new LocationController({ map });
+    controller.start();
+    callbacks.success!(position());
+    controller.cancelFollow();
+
+    controller.start();
+    expect(map.flyTo).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves the camera alone if the user pans before the first fix arrives', () => {
+    const { callbacks } = stubGeolocation();
+    const map = fakeMap(6);
+    const controller = new LocationController({ map });
+    controller.start();
+    controller.cancelFollow();
+    callbacks.success!(position());
+
+    expect(map.flyTo).not.toHaveBeenCalled();
+    expect(map.easeTo).not.toHaveBeenCalled();
   });
 
   it('reuses one marker across fixes instead of stacking new ones', () => {

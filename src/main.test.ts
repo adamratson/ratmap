@@ -489,26 +489,33 @@ const stubPrefersDark = (dark: boolean): void => {
     expect(store.get('ratmap.theme')).toBeUndefined();
   });
 
-  it('turns the map light from settings, and remembers it', async () => {
-    // The one theme control there is: a toggle in Settings, not a cycling chip in the
-    // peek row. The device is dark here, so the toggle starts off.
+  it('sets the theme by hand from settings, remembers it, and hands it back', async () => {
+    // The one theme control there is: Device / Light / Dark in Settings, not a cycling
+    // chip in the peek row. The device is dark here.
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
     stubPrefersDark(true);
     await loadMainQuietly();
 
     document.querySelector<HTMLButtonElement>('#settings-btn')!.click();
-    const toggle = document.querySelector<HTMLInputElement>('#light-theme-toggle')!;
-    expect(toggle.checked).toBe(false);
+    const radio = (value: string) =>
+      document.querySelector<HTMLInputElement>(`input[name="theme"][value="${value}"]`)!;
+    const choose = (value: string) => {
+      radio(value).checked = true;
+      radio(value).dispatchEvent(new Event('change'));
+    };
+    expect(radio('system').checked).toBe(true);
 
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event('change'));
+    choose('light');
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(store.get('ratmap.theme')).toBe('light');
 
-    toggle.checked = false;
-    toggle.dispatchEvent(new Event('change'));
+    choose('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(store.get('ratmap.theme')).toBe('dark');
+
+    choose('system');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(store.get('ratmap.theme')).toBe('system');
   });
 
   it('switches an overlay off from the Layers tab, on the map and for next time', async () => {

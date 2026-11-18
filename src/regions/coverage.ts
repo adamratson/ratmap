@@ -240,6 +240,12 @@ export class RegionCoverage {
    * Read from the artifacts' real PMTiles zoom ranges rather than a constant — a hardcoded
    * guess drifts from whatever the pipeline last built and made the notice fire over a
    * fully-downloaded region.
+   *
+   * The box is the real coverage, not an approximation of it. Every region artifact is a
+   * `pmtiles extract --bbox` of a worldwide archive, cut with exactly the catalogue's box
+   * (infra/scripts/build-region.sh), so a downloaded Ireland holds full detail at Fort
+   * William, in the corner of its box that reaches into Scotland. Asking the archives
+   * whether a tile exists here would give the same answer at the cost of a read per frame.
    */
   private dataHere(point: [number, number]): { maxZoom: number; fromRegion: boolean } {
     const here = this.downloaded.filter((region) => contains(region.bbox, point));
@@ -296,10 +302,10 @@ export class RegionCoverage {
     // nothing connected the two — you had to open a list of four names and work out for
     // yourself which one you were looking at.
     //
-    // Only where nothing downloaded covers the centre: past a downloaded region's own
-    // ceiling, another region would not add anything.
+    // Never over a downloaded region: describeDetailLimit keeps quiet there, since past
+    // its own ceiling another region would not add anything.
     const covering =
-      state.overzoomed && !data.fromRegion
+      state.overzoomed
         ? regionAt(this.footprints(), point, { downloaded: false })
         : null;
 

@@ -19,10 +19,8 @@ export interface Footprint {
 }
 
 /**
- * The region whose box contains `point`, preferring the smallest.
- *
- * Regions nest — Lochaber sits inside Scotland — and the smaller one is both the more
- * useful answer ("download the bit you are looking at") and the cheaper download.
+ * The region whose box contains `point` — the innermost where regions nest, otherwise the
+ * one `point` sits deepest inside. See {@link regionCovering}.
  */
 export function regionAt(
   footprints: Footprint[],
@@ -32,7 +30,23 @@ export function regionAt(
   return regionCovering(footprints, [point], { downloaded });
 }
 
-/** The smallest region whose box contains every point — see {@link regionAt}. */
+/**
+ * The region whose box contains every point.
+ *
+ * Two different kinds of overlap, answered differently:
+ *
+ * - **Nesting.** Lochaber sits inside Scotland. The inner one is both the more useful
+ *   answer ("download the bit you are looking at") and the cheaper download, so any box
+ *   that wholly contains another candidate is dropped.
+ * - **Neighbours.** Boxes are drawn round irregular countries, so their corners reach far
+ *   into the next one: Ireland's box runs to 56.87°N, −5.06°E, which puts Fort William
+ *   inside it. "Smallest wins" offered Ireland there. Not a false offer — artifacts are cut
+ *   by box, so Ireland would draw Fort William — but the wrong one: someone in Lochaber
+ *   wants the rest of Scotland round them, not a corner of it attached to Ireland. What
+ *   tells them apart is how far in the point is — a sliver from Ireland's corner, well
+ *   inside Scotland's — so among boxes that only partly overlap, the one the points sit
+ *   deepest in (as a share of its size) is the answer.
+ */
 export function regionCovering(
   footprints: Footprint[],
   points: readonly [number, number][],
@@ -41,17 +55,59 @@ export function regionCovering(
   const candidates = footprints
     .filter((f) => (downloaded === undefined ? true : f.downloaded === downloaded))
     .filter((f) => points.every((point) => contains(f.region.bbox, point)))
-    .sort((a, b) => area(a.region.bbox) - area(b.region.bbox));
+    .map((f) => f.region);
 
-  return candidates[0]?.region ?? null;
+  const innermost = candidates.filter(
+    (outer) =>
+      !candidates.some((inner) => inner !== outer && encloses(outer.bbox, inner.bbox)),
+  );
+
+  let best: Region | null = null;
+  let bestDepth = -Infinity;
+  for (const region of innermost) {
+    const depth = Math.min(...points.map((point) => depthIn(region.bbox, point)));
+    if (depth > bestDepth) {
+      best = region;
+      bestDepth = depth;
+    }
+  }
+  return best;
+}
+
+/**
+ * Whether `outer` wholly contains `inner`. Two identical boxes do not enclose each other
+ * — dropping both would leave nothing to offer — and fall through to depth, which ties.
+ */
+function encloses(outer: Region['bbox'], inner: Region['bbox']): boolean {
+  const same = outer.every((value, i) => value === inner[i]);
+  return (
+    !same &&
+    outer[0] <= inner[0] &&
+    outer[1] <= inner[1] &&
+    outer[2] >= inner[2] &&
+    outer[3] >= inner[3]
+  );
+}
+
+/**
+ * How far inside `bbox` a point sits: its distance to the nearest edge as a share of the
+ * box's extent on that axis. 0 on the edge, 0.5 at the centre. Relative, so a big region
+ * is not favoured just for being big.
+ */
+function depthIn(bbox: Region['bbox'], [lng, lat]: [number, number]): number {
+  const [west, south, east, north] = bbox;
+  const width = east - west || Number.EPSILON;
+  const height = north - south || Number.EPSILON;
+  return Math.min(
+    (lng - west) / width,
+    (east - lng) / width,
+    (lat - south) / height,
+    (north - lat) / height,
+  );
 }
 
 export function contains(bbox: Region['bbox'], [lng, lat]: [number, number]): boolean {
   return lng >= bbox[0] && lng <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
-}
-
-function area(bbox: Region['bbox']): number {
-  return Math.abs(bbox[2] - bbox[0]) * Math.abs(bbox[3] - bbox[1]);
 }
 
 /**

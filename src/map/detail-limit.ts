@@ -18,8 +18,9 @@ export interface DetailLimitState {
 
 /**
  * `fromRegion` says whose ceiling `maxDataZoom` is: a downloaded region's, or the worldwide
- * map's. Past a region's own ceiling there is nothing further to download, and the
- * explanation must not send the user off looking for one.
+ * map's. Only the worldwide one is worth a notice. Past a region's own ceiling there is
+ * nothing further to download and nothing the user can do about it, so a banner there is
+ * noise over the one area where the map is at its best.
  */
 export function describeDetailLimit(
   zoom: number,
@@ -28,17 +29,8 @@ export function describeDetailLimit(
 ): DetailLimitState {
   // Fractional zooms below the ceiling still resolve real tiles; only flag once the
   // viewport has genuinely passed it.
-  if (!Number.isFinite(zoom) || zoom <= maxDataZoom + 1) {
+  if (fromRegion || !Number.isFinite(zoom) || zoom <= maxDataZoom + 1) {
     return { overzoomed: false, label: null, detail: null };
-  }
-
-  if (fromRegion) {
-    return {
-      overzoomed: true,
-      label: 'Limited detail at this zoom',
-      detail:
-        `This downloaded region’s data stops at zoom ${maxDataZoom}; this view is enlarged.`,
-    };
   }
 
   return {

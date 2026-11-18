@@ -384,8 +384,8 @@ describe('the detail notice', () => {
       await coverage.restore();
       map.move(18, ...OVERLAP);
 
-      expect(notice.textContent).not.toContain('North West England');
-      expect(notice.title).toContain('downloaded region');
+      // Nothing to download here, so nothing to say.
+      expect(notice.hidden).toBe(true);
       expect(drawnIds()).toEqual(['england-north-east']);
     });
 
@@ -402,6 +402,36 @@ describe('the detail notice', () => {
 
       expect(notice.hidden).toBe(false);
       expect(notice.textContent).toBe('Limited detail here — get North West England');
+    });
+  });
+
+  describe('at Fort William, where Ireland’s box reaches into Scotland', () => {
+    // The catalogue's real boxes (infra/regions.json).
+    const SCOTLAND = region('scotland', 'Scotland', [-14.8615, 54.54, 0.2161, 61.1356]);
+    const IRELAND = region('ireland-and-northern-ireland', 'Ireland and Northern Ireland', [-14.4022, 49.6, -5.0593, 56.8655]);
+    const FORT_WILLIAM: [number, number] = [-5.1121, 56.8167];
+
+    beforeEach(() => {
+      deps.fetchManifest.mockResolvedValue({ ...MANIFEST, regions: [SCOTLAND, IRELAND] });
+    });
+
+    it('offers Scotland, not Ireland', async () => {
+      deps.restoreDownloadedRegions.mockResolvedValue([]);
+      await coverage.restore();
+      map.move(12, ...FORT_WILLIAM);
+
+      expect(notice.textContent).toBe('Limited detail here — get Scotland');
+    });
+
+    it('offers nothing at all once Scotland is downloaded, at any zoom', async () => {
+      deps.restoreDownloadedRegions.mockResolvedValue([SCOTLAND]);
+      await coverage.restore();
+
+      for (const zoom of [12, 15, 18, 22]) {
+        map.move(zoom, ...FORT_WILLIAM);
+        expect(notice.hidden).toBe(true);
+        expect(drawnIds()).toEqual(['scotland']);
+      }
     });
   });
 

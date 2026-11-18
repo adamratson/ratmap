@@ -22,13 +22,9 @@ let settings: typeof import('./settings-view');
 let body: HTMLElement;
 let sheetElement: HTMLElement;
 let theme: {
-  current: 'light' | 'dark';
-  listeners: Set<(theme: 'light' | 'dark') => void>;
-  get: () => 'light' | 'dark';
+  preference: 'system' | 'light' | 'dark';
+  getPreference: () => 'system' | 'light' | 'dark';
   set: ReturnType<typeof vi.fn>;
-  onChange: (listener: (theme: 'light' | 'dark') => void) => () => void;
-  /** Stand in for the device flipping to dark or light while the view is open. */
-  systemChange: (next: 'light' | 'dark') => void;
 };
 
 beforeEach(async () => {
@@ -39,18 +35,9 @@ beforeEach(async () => {
   body = document.createElement('div');
   sheetElement = document.createElement('div');
   theme = {
-    current: 'dark',
-    listeners: new Set(),
-    get: () => theme.current,
-    set: vi.fn((next) => void (theme.current = next)),
-    onChange: (listener) => {
-      theme.listeners.add(listener);
-      return () => theme.listeners.delete(listener);
-    },
-    systemChange: (next) => {
-      theme.current = next;
-      for (const listener of theme.listeners) listener(next);
-    },
+    preference: 'system',
+    getPreference: () => theme.preference,
+    set: vi.fn((next) => void (theme.preference = next)),
   };
 });
 
@@ -67,38 +54,49 @@ const toggle = (id: string) => {
 };
 
 describe('the settings view', () => {
-  it('shows the current theme', () => {
-    theme.current = 'light';
+  const themeRadio = (value: string) =>
+    body.querySelector<HTMLInputElement>(`input[name="theme"][value="${value}"]`)!;
+  const choose = (value: string) => {
+    const radio = themeRadio(value);
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
+  };
+
+  it('starts on Device when nothing has been chosen', () => {
     render();
-    expect(body.querySelector<HTMLInputElement>('#light-theme-toggle')!.checked).toBe(true);
+    expect(themeRadio('system').checked).toBe(true);
+    expect(themeRadio('light').checked).toBe(false);
+    expect(themeRadio('dark').checked).toBe(false);
   });
 
-  it('moves with the device while the app is still following it', () => {
-    // Until someone uses the switch the app follows the device, so a switch that sat
-    // where it was left would misreport the map — and the next tap would then ask for
-    // the theme already on screen.
+  it('shows a stored manual choice', () => {
+    theme.preference = 'light';
     render();
-    expect(body.querySelector<HTMLInputElement>('#light-theme-toggle')!.checked).toBe(false);
-
-    theme.systemChange('light');
-    expect(body.querySelector<HTMLInputElement>('#light-theme-toggle')!.checked).toBe(true);
-    // Reacting to the device is not choosing: nothing was stored.
-    expect(theme.set).not.toHaveBeenCalled();
+    expect(themeRadio('light').checked).toBe(true);
+    expect(themeRadio('system').checked).toBe(false);
   });
 
-  it('drops its theme listener when the view is rendered again', () => {
+  it('sets a manual light or dark theme', () => {
     render();
-    render();
-    expect(theme.listeners.size).toBe(1);
-  });
-
-  it('switches the theme from the toggle', () => {
-    render();
-    toggle('#light-theme-toggle');
-    expect(theme.set).toHaveBeenCalledWith('light');
-
-    toggle('#light-theme-toggle');
+    choose('light');
+    expect(theme.set).toHaveBeenLastCalledWith('light');
+    choose('dark');
     expect(theme.set).toHaveBeenLastCalledWith('dark');
+  });
+
+  it('hands a manual choice back to the device', () => {
+    // The old single switch could only ever commit; there was no way back.
+    theme.preference = 'dark';
+    render();
+    choose('system');
+    expect(theme.set).toHaveBeenLastCalledWith('system');
+  });
+
+  it('is one labelled radio group', () => {
+    render();
+    const group = body.querySelector('[role="radiogroup"]')!;
+    expect(group.getAttribute('aria-labelledby')).toBe('theme-label');
+    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(3);
   });
 
   it('starts the debug overlay when switched on, and stops it when switched off', () => {

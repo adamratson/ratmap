@@ -169,6 +169,18 @@ const NIGHT: Flavor = {
   },
 };
 
+/**
+ * The edge drawn round every building (src/map/landuse.ts). Protomaps fills buildings at
+ * half opacity in a colour a step off the ground, which by day reads as a faint smudge and
+ * at night does not read at all. An outline gives each footprint a shape: a step darker
+ * than the day casing ink, and by night a lift off graphite — kept below the road fills so
+ * a row of houses never reads as a street.
+ */
+export const BUILDING_OUTLINE: Record<Theme, string> = {
+  light: '#a49e93',
+  dark: '#2f363e',
+};
+
 export function ratmapFlavor(theme: Theme): Flavor {
   return theme === 'dark' ? NIGHT : DAY;
 }

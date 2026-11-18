@@ -1,0 +1,42 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.999, 56.8]}, "properties": {"tourism": "wilderness_hut", "amenity": "shelter", "name": "Corrour Bothy", "@type": "node", "@id": 1}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.998, 56.8]}, "properties": {"tourism": "alpine_hut", "name": "Charles Inglis Clark Memorial Hut", "access": "customers", "@type": "node", "@id": 2}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.997, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "basic_hut", "@type": "node", "@id": 3}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.996, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "weather_shelter", "@type": "node", "@id": 4}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.995, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "lean_to", "@type": "node", "@id": 5}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.994, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "rock_shelter", "@type": "node", "@id": 6}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.993, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "picnic_shelter", "@type": "node", "@id": 7}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.992, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "informal", "@type": "node", "@id": 8}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.991, 56.8]}, "properties": {"amenity": "shelter", "name": "Shelter <&> \"Stone\"", "@type": "node", "@id": 9}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.99, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "public_transport", "@type": "node", "@id": 10}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.989, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "gazebo", "@type": "node", "@id": 11}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.988, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "pergola", "@type": "node", "@id": 12}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.987, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "pavilion", "@type": "node", "@id": 13}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.986, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "smoking", "@type": "node", "@id": 14}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.985, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "field_shelter", "@type": "node", "@id": 15}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.984, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "animal_shelter", "@type": "node", "@id": 16}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.983, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "trolley", "@type": "node", "@id": 17}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.982, 56.8]}, "properties": {"amenity": "shelter", "shelter_type": "trolley_park", "@type": "node", "@id": 18}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[-5.0, 56.8], [-4.999, 56.8], [-4.999, 56.801], [-5.0, 56.801], [-5.0, 56.8]]]]}, "properties": {"tourism": "camp_site", "name": "Glen Nevis", "@type": "way", "@id": 19}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.98, 56.8]}, "properties": {"tourism": "camp_site", "tents": "yes", "@type": "node", "@id": 20}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.979, 56.8]}, "properties": {"tourism": "camp_site", "tents": "only", "@type": "node", "@id": 21}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[-5.0, 56.8], [-4.999, 56.8], [-4.999, 56.801], [-5.0, 56.801], [-5.0, 56.8]]]]}, "properties": {"tourism": "camp_site", "tents": "no", "@type": "way", "@id": 22}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.977, 56.8]}, "properties": {"amenity": "drinking_water", "@type": "node", "@id": 23}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.976, 56.8]}, "properties": {"amenity": "drinking_water", "drinking_water": "yes", "@type": "node", "@id": 24}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.975, 56.8]}, "properties": {"amenity": "drinking_water", "drinking_water": "no", "@type": "node", "@id": 25}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.974, 56.8]}, "properties": {"amenity": "water_point", "@type": "node", "@id": 26}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.973, 56.8]}, "properties": {"man_made": "water_tap", "drinking_water": "yes", "@type": "node", "@id": 27}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.972, 56.8]}, "properties": {"man_made": "water_tap", "@type": "node", "@id": 28}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.971, 56.8]}, "properties": {"man_made": "water_tap", "drinking_water": "no", "@type": "node", "@id": 29}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.97, 56.8]}, "properties": {"natural": "spring", "name": "Well of the Lecht", "@type": "node", "@id": 30}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.969, 56.8]}, "properties": {"natural": "spring", "drinking_water": "no", "@type": "node", "@id": 31}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.968, 56.8]}, "properties": {"natural": "spring", "amenity": "drinking_water", "@type": "node", "@id": 32}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.967, 56.8]}, "properties": {"tourism": "wilderness_hut", "access": "private", "@type": "node", "@id": 33}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.966, 56.8]}, "properties": {"tourism": "wilderness_hut", "access": "no", "@type": "node", "@id": 34}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.965, 56.8]}, "properties": {"tourism": "camp_site", "access": "yes", "@type": "node", "@id": 35}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.964, 56.8]}, "properties": {"tourism": "camp_site", "access": "permissive", "@type": "node", "@id": 36}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.963, 56.8]}, "properties": {"tourism": "camp_site", "access": "permit", "@type": "node", "@id": 37}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.962, 56.8]}, "properties": {"tourism": "camp_site", "access": "customers", "@type": "node", "@id": 38}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.961, 56.8]}, "properties": {"amenity": "bench", "@type": "node", "@id": 39}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.96, 56.8]}, "properties": {"tourism": "caravan_site", "@type": "node", "@id": 40}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.959, 56.8]}, "properties": {"tourism": "wilderness_hut", "amenity": "shelter", "name": "Corrour Bothy", "@type": "node", "@id": 1}}
+{"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[[[-5.0, 56.8], [-4.999, 56.8], [-4.999, 56.801], [-5.0, 56.801], [-5.0, 56.8]]]]}, "properties": {"natural": "spring", "@type": "way", "@id": 1}}

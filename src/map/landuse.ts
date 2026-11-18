@@ -2,6 +2,7 @@ import type { LayerSpecification } from 'maplibre-gl';
 import { layers as basemapLayers, type Flavor } from '@protomaps/basemaps';
 import type { Theme } from '../ui/theme';
 import { BUILDING_OUTLINE, ratmapFlavor } from './flavor';
+import { PROTOMAPS_HUTS_WATER_KINDS } from '../overlays/huts-water';
 
 /**
  * @protomaps/basemaps' own id for the settlement layer (city/town/village/hamlet, styled
@@ -65,6 +66,22 @@ function buildingOutlineLayer(
 }
 
 /**
+ * Protomaps' POI layer, minus what src/overlays/huts-water.ts draws from the huts
+ * artifact. Upstream draws `drinking_water` with its own sprite icon, from z16 where its
+ * `min_zoom` says, so left alone a tap would show twice, in two styles. Every huts-and-water
+ * kind is excluded, not just that one, so a later basemaps version that starts drawing a
+ * hut cannot double it either. Wrapped rather than edited, so upstream's own filter stays whole whatever its
+ * shape.
+ */
+function withoutHutsWater(pois: LayerSpecification): LayerSpecification {
+  if (!('filter' in pois) || !pois.filter) return pois;
+  return {
+    ...pois,
+    filter: ['all', pois.filter, ['!', ['in', ['get', 'kind'], ['literal', PROTOMAPS_HUTS_WATER_KINDS]]]],
+  } as LayerSpecification;
+}
+
+/**
  * Protomaps' generated basemap layers, in ratmap's flavour, with what upstream leaves
  * unpainted spliced back in: the bare-rock fill right after `landuse_park` (same
  * source-layer, same z-order as the rest of the landuse fills, under roads and labels),
@@ -73,6 +90,7 @@ function buildingOutlineLayer(
  *
  * Car parks are not drawn from here any more, though the basemap carries some: they come
  * from their own artifact, which has the small ones the basemap drops (see parking.ts).
+ * Drinking water comes out of the POI layer too: huts-water.ts draws it with the huts.
  */
 export function ratmapBasemapLayers(
   source: string,
@@ -94,5 +112,7 @@ export function ratmapBasemapLayers(
       buildingOutlineLayer(source, theme, generated[buildingsIndex]),
     );
   }
+  const poisIndex = generated.findIndex((layer) => layer.id === 'pois');
+  if (poisIndex >= 0) generated[poisIndex] = withoutHutsWater(generated[poisIndex]);
   return generated;
 }

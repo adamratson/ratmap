@@ -1,0 +1,26 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-5.0, 56.8]}, "properties": {"kind": "hut"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.999, 56.8]}, "properties": {"kind": "hut"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.998, 56.8]}, "properties": {"kind": "shelter"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.997, 56.8]}, "properties": {"kind": "shelter"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.996, 56.8]}, "properties": {"kind": "shelter"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.995, 56.8]}, "properties": {"kind": "shelter"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.994, 56.8]}, "properties": {"kind": "shelter"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.993, 56.8]}, "properties": {"kind": "shelter"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.992, 56.8]}, "properties": {"kind": "shelter"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.991, 56.8]}, "properties": {"kind": "shelter"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.99, 56.8]}, "properties": {"kind": "campsite"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.989, 56.8]}, "properties": {"kind": "campsite"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.988, 56.8]}, "properties": {"kind": "campsite"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.987, 56.8]}, "properties": {"kind": "campsite"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.986, 56.8]}, "properties": {"kind": "campsite"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.985, 56.8]}, "properties": {"kind": "campsite"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.984, 56.8]}, "properties": {"kind": "water"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.983, 56.8]}, "properties": {"kind": "water"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.982, 56.8]}, "properties": {"kind": "water"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.981, 56.8]}, "properties": {"kind": "water"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.98, 56.8]}, "properties": {"kind": "water"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.979, 56.8]}, "properties": {"kind": "water"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.978, 56.8]}, "properties": {"kind": "spring"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.977, 56.8]}, "properties": {"kind": "spring"}}
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-4.976, 56.8]}, "properties": {"kind": "spring"}}
+{"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[-4.8, 56.8], [-4.7989999999999995, 56.8], [-4.7989999999999995, 56.801], [-4.8, 56.8]]]}, "properties": {"kind": "spring"}}

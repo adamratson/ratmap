@@ -153,6 +153,9 @@ cached_osm_extract() {
 #   w/barrier=wall,fence nw/barrier=gate,kissing_gate,stile,cattle_grid
 #   w/power=line,minor_line n/power=tower nw/ford       build-detail.sh
 #   nwr/amenity=parking                                 build-parking.sh
+#   nwr/tourism=alpine_hut,wilderness_hut,camp_site
+#   nwr/amenity=shelter,drinking_water,water_point
+#   nwr/natural=spring nwr/man_made=water_tap           build-huts.sh
 #
 # Each stage used to run its own tags-filter over the full extract, which at planet scale
 # is 85 GB per stage and nine or ten passes in all (a node-only filter reads the input
@@ -176,6 +179,9 @@ RATMAP_OSM_SUBSET_FILTER="
   w/barrier=wall,fence nw/barrier=gate,kissing_gate,stile,cattle_grid
   w/power=line,minor_line n/power=tower nw/ford
   nwr/amenity=parking
+  nwr/tourism=alpine_hut,wilderness_hut,camp_site
+  nwr/amenity=shelter,drinking_water,water_point
+  nwr/natural=spring nwr/man_made=water_tap
 "
 
 # osm_subset <extract.osm.pbf> <this stage's tags-filter expressions...>

@@ -2,6 +2,7 @@ import type { MapInk } from '../map/flavor';
 import { SAC_GRADES, sacCssColor } from '../overlays/sac';
 import { TERRAIN_FEATURE_KINDS, terrainSwatch } from '../overlays/terrain-features';
 import { LANDMARK_KINDS, landmarkSwatch } from '../overlays/landmarks';
+import { HUTS_WATER_LEGEND, hutsWaterSwatch } from '../overlays/huts-water';
 import { DETAIL_LEGEND } from '../overlays/detail';
 import { AVALANCHE_TERRAIN_ONLY, SLOPE_CLASSES, slopeCssColor } from '../overlays/avalanche';
 
@@ -132,6 +133,15 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
         partial.
       </p>
       ${LANDMARK_KINDS.map((entry) => legendRow(landmarkSwatch(entry.icon, ink), entry.label, entry.note)).join('')}
+    </div>
+
+    <div class="legend-section">
+      <h3>Huts, camping and water</h3>
+      <p class="legend-note">
+        From zoom 13 in downloaded regions, named from 15. OpenStreetMap coverage is
+        partial, and a symbol is not a promise: check before relying on one.
+      </p>
+      ${HUTS_WATER_LEGEND.map((entry) => legendRow(hutsWaterSwatch(entry.icon, ink), entry.label, entry.note)).join('')}
     </div>
 
     <div class="legend-section">

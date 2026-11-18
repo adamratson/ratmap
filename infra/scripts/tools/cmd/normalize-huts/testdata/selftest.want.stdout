@@ -1,0 +1,2 @@
+  kept 9 (hut x3, shelter x2, campsite x1, water x2, spring x1; 2 named); skipped 1 unrecognized, 1 shelters that are not cover, 1 campsites without tents, 2 not drinking water, 1 restricted, 1 already seen (continent seams)
+  normalize-huts self-test OK (16 cases)

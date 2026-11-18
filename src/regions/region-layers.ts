@@ -16,6 +16,7 @@ import { addSacLayers, sacBandLayerId } from '../overlays/sac';
 import { addAvalancheLayer, avalancheSourceSpec } from '../overlays/avalanche';
 import { addTerrainFeatureLayers } from '../overlays/terrain-features';
 import { addLandmarkLayers } from '../overlays/landmarks';
+import { addHutsWaterLayer } from '../overlays/huts-water';
 import { addDetailLayers } from '../overlays/detail';
 import { parkingLayer } from '../map/parking';
 import { applyAllStoredVisibility } from '../map/layers';
@@ -621,6 +622,12 @@ function addKindLayers(
     // Car parks (see src/map/parking.ts), the basemap's own no longer drawn.
     map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
     map.addLayer(parkingLayer(sourceId, theme, minzoom), aboveBasemapPois(map));
+  } else if (kind === 'huts') {
+    // Huts, bothies, shelters, campsites and water (see src/overlays/huts-water.ts), the
+    // basemap's own left undrawn. Above the basemap's POIs like the car parks, so a bothy
+    // places before a bench or a cafe claims its spot.
+    map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+    addHutsWaterLayer(map, sourceId, { ink, minzoom, before: aboveBasemapPois(map) });
   } else if (kind === 'detail') {
     // Walls, fences, power lines, gates, stiles and fords (see src/overlays/detail.ts).
     // The lines are ground detail like the scree, so under the paths; the gates and fords

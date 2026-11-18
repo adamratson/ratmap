@@ -25,3 +25,6 @@ parking-ok	parking	testdata/parking-ok.geojsonl
 parking-few	parking	testdata/parking-few.geojsonl
 parking-area	parking	testdata/parking-area.geojsonl
 parking-unsized	parking	testdata/parking-unsized.geojsonl
+huts-ok	huts	testdata/huts-ok.geojsonl
+huts-few	huts	testdata/huts-few.geojsonl
+huts-area	huts	testdata/huts-area.geojsonl

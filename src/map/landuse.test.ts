@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { layers as basemapLayers } from '@protomaps/basemaps';
 import { ratmapFlavor } from './flavor';
 import { ratmapBasemapLayers, TOWN_LABEL_LAYER_ID } from './landuse';
+import { PROTOMAPS_HUTS_WATER_KINDS } from '../overlays/huts-water';
 
 describe('ratmapBasemapLayers', () => {
   const flavor = ratmapFlavor('light');
@@ -49,6 +50,21 @@ describe('ratmapBasemapLayers', () => {
     const layers = ratmapBasemapLayers('region-x-basemap', 'light');
     const rock = layers.find((l) => l.id === 'landuse_bare_rock');
     expect(rock).toMatchObject({ source: 'region-x-basemap', 'source-layer': 'landuse' });
+  });
+
+  it('leaves drinking water and every other huts-and-water kind to huts-water.ts', () => {
+    // Upstream draws drinking_water itself; kept, every tap would show twice.
+    const upstream = basemapLayers('basemap', flavor, { lang: 'en' }).find((l) => l.id === 'pois')!;
+    const pois = ratmapBasemapLayers('basemap', 'light', { lang: 'en' }).find((l) => l.id === 'pois')!;
+    const filter = (pois as { filter?: unknown }).filter;
+    expect(filter).toEqual([
+      'all',
+      (upstream as { filter?: unknown }).filter,
+      ['!', ['in', ['get', 'kind'], ['literal', PROTOMAPS_HUTS_WATER_KINDS]]],
+    ]);
+    expect(PROTOMAPS_HUTS_WATER_KINDS).toContain('drinking_water');
+    // Anchored by id, like the rock: a rename upstream would silently skip the wrap.
+    expect(JSON.stringify((upstream as { filter?: unknown }).filter)).toContain('drinking_water');
   });
 
   it('names a town label layer the basemap actually has', () => {

@@ -43,8 +43,8 @@ wants() {
 
 for requested in ${ONLY//,/ }; do
   case "$requested" in
-    basemap|paths|peaks|sac|terrain|terrain-features|landmarks|detail|parking) ;;
-    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features, landmarks, detail, parking)" >&2
+    basemap|paths|peaks|sac|terrain|terrain-features|landmarks|detail|parking|huts) ;;
+    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features, landmarks, detail, parking, huts)" >&2
        exit 2 ;;
   esac
 done
@@ -160,6 +160,18 @@ else
   PARKING_SOURCE=""
 fi
 
+# Huts, shelters, campsites and water (build-huts.sh), resolved the same way. The basemap
+# cannot tell a bothy from a bus shelter — see that script's header.
+if [ -n "${HUTS_SOURCE_URL:-}" ]; then
+  HUTS_SOURCE="$HUTS_SOURCE_URL"
+elif [ -s "$DIST_DIR/huts-global.pmtiles" ]; then
+  HUTS_SOURCE="$DIST_DIR/huts-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  HUTS_SOURCE="$PUBLIC_BASE_URL/huts-global.pmtiles"
+else
+  HUTS_SOURCE=""
+fi
+
 # Measured for Scotland (2026-08-21): basemap z12 ~84 MB / z13 ~175 MB; terrain z10
 # ~107 MB / z11 ~340 MB. Raster terrain grows far faster than vector basemap per level,
 # hence the different ceilings. Override per build if a region needs more.
@@ -201,6 +213,10 @@ DETAIL_MAXZOOM="$BASEMAP_MAXZOOM"
 # Car parks, as landmarks: parking-global.pmtiles holds z13-15.
 PARKING_MAXZOOM="$BASEMAP_MAXZOOM"
 [ "$PARKING_MAXZOOM" -gt 15 ] && PARKING_MAXZOOM=15
+
+# Huts and water, as car parks: huts-global.pmtiles holds z13-15.
+HUTS_MAXZOOM="$BASEMAP_MAXZOOM"
+[ "$HUTS_MAXZOOM" -gt 15 ] && HUTS_MAXZOOM=15
 
 # paths-global.pmtiles only holds z12-13 — it exists to fill the gap below where the
 # basemap starts carrying paths, not to duplicate it.
@@ -459,6 +475,21 @@ else
   # and docker/build-global.sh's cut_from_global.
   extract_verified "$PARKING_SOURCE" "$OUT_DIR/$REGION_ID-parking-1.pmtiles" \
     "$PARKING_MAXZOOM" --allow-empty
+fi
+
+if ! wants huts; then
+  :
+elif [ -z "$HUTS_SOURCE" ]; then
+  echo "==> huts and water: skipped (no huts-global.pmtiles — run ./scripts/build-huts.sh)"
+elif [ "$HUTS_MAXZOOM" -lt 13 ]; then
+  # As for car parks: the global archive starts at z13 (build-huts.sh).
+  echo "==> huts and water: skipped (basemap capped at z$HUTS_MAXZOOM, huts start at z13)"
+else
+  echo "==> huts, shelters, campsites and water"
+  # Versioned like car parks; bump together with tools/cmd/build-manifest's artifactKinds
+  # and docker/build-global.sh's cut_from_global.
+  extract_verified "$HUTS_SOURCE" "$OUT_DIR/$REGION_ID-huts-1.pmtiles" \
+    "$HUTS_MAXZOOM" --allow-empty
 fi
 
 if ! wants terrain; then

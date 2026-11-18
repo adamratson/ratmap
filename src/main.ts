@@ -48,10 +48,12 @@ import { LinkTooNew, payloadFromHash } from './routes/share-link';
 import { renderPlacesSheet } from './search/places-view';
 import { regionSearchIndexes } from './search/region-indexes';
 import { SearchBox } from './search/search-view';
+import { PrintController } from './print/print-view';
+import { ROUTE_SOURCE_ID } from './routes/route-layers';
 import { setUpCompass } from './ui/compass';
 import { renderLayersView } from './ui/layers-view';
 import { renderLegend } from './ui/legend-view';
-import { isCoarsePointer } from './ui/pointer';
+import { isCoarsePointer, prefersDockedSheet } from './ui/pointer';
 import { renderSettingsView, syncDebugOverlay } from './ui/settings-view';
 import { BottomSheet } from './ui/sheet';
 import { SheetViews } from './ui/sheet-views';
@@ -110,6 +112,9 @@ reportUncaughtErrors(status);
 
 const sheetElement = document.querySelector<HTMLDivElement>('#sheet')!;
 
+/** The Print view's frame over the map. Made once the map exists; the sheet reads it first. */
+let printer: PrintController | null = null;
+
 const sheet = new BottomSheet({
   element: sheetElement,
   onLayout: () => {
@@ -117,6 +122,8 @@ const sheet = new BottomSheet({
     // legally required and must never sit underneath it), toasts, and the detail notice.
     document.documentElement.style.setProperty('--sheet-visible', `${sheet.visibleHeight()}px`);
     views.renderChips();
+    // The frame sits in the middle of the map the sheet leaves showing.
+    printer?.layoutChanged();
   },
 });
 
@@ -144,6 +151,10 @@ const views = new SheetViews({
   sheet,
   chipsHost: sheet.peek.querySelector<HTMLDivElement>('#chips')!,
   iconButtons: { legend: legendBtn, settings: settingsBtn },
+  onViewChange: (view) => {
+    if (view === 'print') printer?.show();
+    else printer?.hide();
+  },
 });
 
 views.setDestinations([
@@ -151,6 +162,7 @@ views.setDestinations([
   { view: 'regions', label: 'Offline', open: () => openRegionsView() },
   { view: 'places', label: 'Saved', open: () => void openPlacesView() },
   { view: 'layers', label: 'Layers', open: () => openLayersView() },
+  { view: 'print', label: 'Print', open: () => openPrintView() },
 ]);
 
 /**
@@ -289,6 +301,34 @@ const coverage = new RegionCoverage({
   // Startup included: a route can be open before the regions on disk have been read back,
   // and it was measured against none of them.
   onDownloadedChange: () => planner.invalidateRegions(),
+});
+
+// --- Printing ------------------------------------------------------------------------
+
+printer = new PrintController({
+  map,
+  registry,
+  visibleArea: () => {
+    // In map-container px: the map minus the sheet, inset so the frame clears the edges.
+    const box = map.getContainer().getBoundingClientRect();
+    const inset = 16;
+    const left = prefersDockedSheet()
+      ? Math.max(0, sheetElement.getBoundingClientRect().right - box.left)
+      : 0;
+    return {
+      left: left + inset,
+      top: inset,
+      right: box.width - inset,
+      bottom: box.height - sheet.visibleHeight() - inset,
+    };
+  },
+  downloadedRegions: () => coverage.downloadedRegions(),
+  regionOffer: (points) => coverage.regionOfferFor(points),
+  route: async () => {
+    const source = map.getSource<maplibregl.GeoJSONSource>(ROUTE_SOURCE_ID);
+    return source ? await source.getData() : null;
+  },
+  onStatus: (message, kind) => status.toast(message, { kind }),
 });
 
 // --- Route planning (Phase 4) --------------------------------------------------------
@@ -537,6 +577,10 @@ function openRegionsView(initialQuery?: string): void {
       },
     });
   });
+}
+
+function openPrintView(): void {
+  views.open('print', (body) => printer!.render(body));
 }
 
 async function openRoutesView(): Promise<void> {

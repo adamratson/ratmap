@@ -2300,6 +2300,61 @@ textarea {
   }
 }
 
+/* --- Print ----------------------------------------------------------------------------
+   The A4 sheet's footprint at the chosen scale, over the map while the Print view is open
+   (src/print/print-view.ts sizes and places it). Clicks go through to the map, which is
+   what moves the sheet. The shade outside the frame is a spread shadow, clipped by the map
+   container's own overflow, so it never covers the chrome. */
+.print-frame {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 100vmax var(--scrim);
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.print-frame[hidden] {
+  display: none;
+}
+
+.print-frame-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 0.15rem 0.45rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.print-coverage {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--warn-text);
+}
+
+.sheet-actions button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* The map the sheet is drawn from (print-render.ts): sized to the paper, laid out by the
+   browser so MapLibre can measure it, and kept off-screen. */
+.print-render {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  pointer-events: none;
+}
+
 /* --- Desktop (docked panel) ----------------------------------------------------------
    A bottom sheet with drag detents solves a problem — limited *vertical* space — that a
    wide, mouse-driven browser window doesn't have. See plans/desktop-ux-review.md for the

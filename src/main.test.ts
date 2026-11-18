@@ -64,6 +64,10 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances 
     getCanvasContainer(): HTMLElement {
       return document.createElement('div');
     }
+    container = document.createElement('div');
+    getContainer(): HTMLElement {
+      return this.container;
+    }
     unproject(): { lat: number; lng: number } {
       return { lat: 56.8, lng: -4.5 };
     }
@@ -346,7 +350,7 @@ describe('app bootstrap', () => {
     await loadMainQuietly();
 
     const chips = [...document.querySelectorAll('#chips .chip')].map((c) => c.textContent);
-    expect(chips).toEqual(['Routes', 'Offline', 'Saved', 'Layers']);
+    expect(chips).toEqual(['Routes', 'Offline', 'Saved', 'Layers', 'Print']);
 
     const sheet = document.querySelector<HTMLElement>('#sheet')!;
     expect(sheet.classList.contains('at-peek')).toBe(true);
@@ -547,6 +551,7 @@ const stubPrefersDark = (dark: boolean): void => {
       'sac',
       'terrainFeatures',
       'landmarks',
+      'hutsWater',
       'boundaries',
       'powerLines',
       'avalanche',

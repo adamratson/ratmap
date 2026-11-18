@@ -18,6 +18,7 @@ import { AVALANCHE_TERRAIN_ONLY, slopeCssColor } from '../overlays/avalanche';
 import { avalancheClassBreakdown } from './avalanche-sampler';
 import { isLayerVisible } from '../map/layers';
 import { isStandalone } from '../app/storage';
+import { shareOrDownload } from '../app/share-file';
 import { formatBytes } from '../regions/manifest';
 import type { RouteRegionOffer } from '../regions/coverage';
 import { fillReadout } from '../ui/readout';
@@ -259,7 +260,7 @@ function receivedSection(
     );
   }
   actions.append(
-    buttonEl('Save as GPX', () => void shareOrDownload(currentRoute(planner), 'gpx', deps.onStatus)),
+    buttonEl('Save as GPX', () => void exportRoute(currentRoute(planner), 'gpx', deps.onStatus)),
   );
   // A link tapped on an iPhone opens here in Safari, whose storage is not the installed
   // app's (plans/route-sharing.md §4.5), so the way into the app is to carry the link over.
@@ -989,10 +990,10 @@ function openShareDialog(route: ShareableRoute, onStatus: RoutesUiDeps['onStatus
   }
   actions.append(
     buttonEl('GPX', () => {
-      void shareOrDownload(route, 'gpx', onStatus).then(close);
+      void exportRoute(route, 'gpx', onStatus).then(close);
     }),
     buttonEl('GeoJSON', () => {
-      void shareOrDownload(route, 'geojson', onStatus).then(close);
+      void exportRoute(route, 'geojson', onStatus).then(close);
     }),
     buttonEl('Cancel', close),
   );
@@ -1030,15 +1031,8 @@ async function copyLink(url: string, onStatus: RoutesUiDeps['onStatus']): Promis
   }
 }
 
-/**
- * Hand the route to the OS share sheet where that exists, otherwise download it.
- *
- * Share first because on iOS a downloaded file is awkward to get at from an installed
- * Home Screen app, while the share sheet puts it straight into Files, Mail or another
- * walking app. `canShare` is checked with the actual file — Safari reports support for
- * sharing but not necessarily for sharing *files*.
- */
-async function shareOrDownload(
+/** Hand the route to the OS share sheet where that exists, otherwise download it. */
+async function exportRoute(
   route: ShareableRoute,
   format: 'gpx' | 'geojson',
   onStatus: RoutesUiDeps['onStatus'],
@@ -1060,26 +1054,9 @@ async function shareOrDownload(
   const filename = `${slug(route.name)}.${extension}`;
   const file = new File([text], filename, { type: mime });
 
-  if (navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: route.name });
-      return;
-    } catch (err) {
-      // A user-cancelled share is not a failure worth reporting.
-      if ((err as Error)?.name === 'AbortError') return;
-      // Anything else: fall through to a download rather than leaving them with nothing.
-    }
+  if ((await shareOrDownload(file, route.name)) === 'downloaded') {
+    onStatus(`Exported ${filename}`, 'ok');
   }
-
-  const url = URL.createObjectURL(file);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-  onStatus(`Exported ${filename}`, 'ok');
 }
 
 function slug(name: string): string {

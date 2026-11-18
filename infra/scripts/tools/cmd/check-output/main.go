@@ -9,6 +9,7 @@
 //	check-output landmarks FILE          # build-landmarks.sh: every kind present, all points
 //	check-output detail FILE             # build-detail.sh: every kind present, right shapes
 //	check-output parking FILE            # build-parking.sh: enough car parks, all sized points
+//	check-output huts FILE               # build-huts.sh: every kind present, all points
 //
 // Each prints a line per assertion and exits 1 with a FAIL line when one fails. The
 // expected values and why each was chosen are documented beside the calls in the scripts.
@@ -37,7 +38,7 @@ func (f failure) Error() string { return string(f) }
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts FILE")
 		os.Exit(2)
 	}
 	checks := map[string]func(string, io.Writer) error{
@@ -45,10 +46,11 @@ func main() {
 		"landmarks": landmarks,
 		"detail":    detail,
 		"parking":   parking,
+		"huts":      huts,
 	}
 	check, ok := checks[os.Args[1]]
 	if !ok {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts FILE")
 		os.Exit(2)
 	}
 	if err := check(os.Args[2], os.Stdout); err != nil {
@@ -452,6 +454,53 @@ func parking(path string, out io.Writer) error {
 	}
 	if total < minimum {
 		return failure(fmt.Sprintf("FAIL: implausibly few car parks (%d < %d) — filter or normalize step likely broken", total, minimum))
+	}
+	return nil
+}
+
+// huts checks build-huts.sh's output the way landmarks does: every kind present in
+// meaningful numbers, every feature a Point. Thresholds are two orders of magnitude below
+// Scotland alone (normalize-huts over scotland-latest.osm.pbf, 2026-11-18; the counts are
+// beside each), loose enough for a narrow test extract, tight enough that a broken filter,
+// which produces zero, still fails.
+func huts(path string, out io.Writer) error {
+	minimum := []struct {
+		kind string
+		n    int
+	}{{"hut", 1}, {"shelter", 5}, {"campsite", 4}, {"water", 4}, {"spring", 3}}
+	histogram := map[string]int{}
+	notPoints := 0
+	err := eachFeature(path, func(p map[string]json.RawMessage, geometry string) error {
+		kv, ok := p["kind"]
+		if !ok {
+			return errors.New(`no "kind"`)
+		}
+		histogram[rawjson.Text(kv)]++
+		if geometry != "Point" {
+			notPoints++
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	parts := make([]string, len(minimum))
+	for i, m := range minimum {
+		parts[i] = fmt.Sprintf("%s x%d", m.kind, histogram[m.kind])
+	}
+	fmt.Fprintf(out, "  by kind: %s\n", strings.Join(parts, ", "))
+	if notPoints > 0 {
+		return failure(fmt.Sprintf("FAIL: %d features are not points — normalize-huts' centroid step likely broken", notPoints))
+	}
+	var missing []string
+	for _, m := range minimum {
+		if histogram[m.kind] < m.n {
+			missing = append(missing, fmt.Sprintf("%s (%d < %d)", m.kind, histogram[m.kind], m.n))
+		}
+	}
+	if len(missing) > 0 {
+		return failure("FAIL: implausibly few features for " + strings.Join(missing, ", ") +
+			" — filter or normalize step likely broken")
 	}
 	return nil
 }

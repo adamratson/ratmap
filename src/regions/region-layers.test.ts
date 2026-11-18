@@ -18,6 +18,7 @@ const ZOOMS: Record<string, [number, number]> = {
   detail: [12, 15],
   landmarks: [13, 15],
   parking: [13, 15],
+  huts: [13, 15],
   paths: [12, 13],
   peaks: [0, 7],
   sac: [12, 15],
@@ -701,6 +702,53 @@ describe('car parks', () => {
     await addRegionToMap(map as unknown as MLMap, registry, other, 'light');
 
     expect(map.layers.filter((l) => l.source === sid('parking'))).toHaveLength(1);
+  });
+});
+
+describe('huts, camping and water', () => {
+  const withHuts: Region = {
+    ...region,
+    artifacts: [...region.artifacts, { kind: 'huts', filename: 'lochaber-huts-1.pmtiles', path: 'p8', bytes: 1 }],
+  };
+
+  it('draws them from their own artifact, just above the basemap’s POIs', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, withHuts, 'light');
+
+    const ids = map.layers.map((l) => String(l.id));
+    expect(map.sources.has(sid('huts'))).toBe(true);
+    expect(map.layers.find((l) => l.id === `${sid('huts')}-symbols`)).toMatchObject({
+      source: sid('huts'),
+      'source-layer': 'huts',
+      minzoom: 13,
+    });
+    // Above the POIs, so a bothy places before a bench claims its spot.
+    expect(ids.indexOf(`${sid('huts')}-symbols`)).toBe(ids.indexOf(`${sid('basemap')}-pois`) + 1);
+    // And nothing drawn from the basemap's own POIs any more.
+    expect(map.layers.filter((l) => String(l.id).includes('huts')).map((l) => l.source)).toEqual([sid('huts')]);
+  });
+
+  it('draws nothing for a region downloaded before the artifact existed', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
+
+    expect(map.layers.some((l) => String(l.id).includes('huts'))).toBe(false);
+  });
+
+  it('shares one source and one layer between overlapping regions', async () => {
+    const map = fakeMap();
+    const other: Region = {
+      ...withHuts,
+      id: 'glencoe',
+      artifacts: withHuts.artifacts.map((a) => ({ ...a, filename: a.filename.replace('lochaber', 'glencoe') })),
+    };
+
+    await addRegionToMap(map as unknown as MLMap, registry, withHuts, 'light');
+    await addRegionToMap(map as unknown as MLMap, registry, other, 'light');
+
+    expect(map.layers.filter((l) => l.source === sid('huts'))).toHaveLength(1);
   });
 });
 

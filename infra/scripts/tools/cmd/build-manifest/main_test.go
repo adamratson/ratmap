@@ -65,6 +65,8 @@ func TestArtifactKind(t *testing.T) {
 		"x-detail.pmtiles":                    "",
 		"x-parking-1.pmtiles":                 "parking",
 		"x-parking.pmtiles":                   "",
+		"x-huts-1.pmtiles":                    "huts",
+		"x-huts.pmtiles":                      "",
 		".scotland-contours.building.pmtiles": "",
 		"scotland-contours.pmtiles":           "contours",
 		"scotland-places-1.sqlite":            "places",

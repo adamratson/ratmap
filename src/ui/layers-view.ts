@@ -10,6 +10,7 @@ import {
 import { SAC_GRADES, sacCssColor } from '../overlays/sac';
 import { terrainSwatch } from '../overlays/terrain-features';
 import { landmarkSwatch } from '../overlays/landmarks';
+import { hutsWaterSwatch } from '../overlays/huts-water';
 import { powerSwatch, wallSwatch } from '../overlays/detail';
 import { slopeCssColor } from '../overlays/avalanche';
 import { lineSwatch } from './legend-view';
@@ -58,6 +59,11 @@ const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink
     label: 'Landmarks',
     note: 'Masts, trig points, cairns, lighthouses and wind turbines.',
     swatch: (ink) => landmarkSwatch('mast', ink),
+  },
+  hutsWater: {
+    label: 'Huts, camping and water',
+    note: 'Huts, bothies, shelters, campsites, drinking water and springs.',
+    swatch: (ink) => hutsWaterSwatch('hut', ink),
   },
   boundaries: {
     label: 'Walls, fences and gates',

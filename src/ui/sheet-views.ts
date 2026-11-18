@@ -14,7 +14,8 @@ export type View =
   | 'install'
   | 'settings'
   | 'legend'
-  | 'layers';
+  | 'layers'
+  | 'print';
 
 /** What a screen reader should call the sheet's contents, per view. */
 const VIEW_LABEL: Record<View, string> = {
@@ -29,6 +30,7 @@ const VIEW_LABEL: Record<View, string> = {
   settings: 'Settings',
   legend: 'Map legend',
   layers: 'Map layers',
+  print: 'Print',
 };
 
 /**
@@ -58,6 +60,8 @@ export class SheetViews {
   private readonly iconButtons: Partial<Record<View, HTMLElement>>;
   private destinations: Destination[] = [];
   private current: View | null = null;
+  /** Told whenever the view changes, after the new one has rendered. */
+  private readonly onViewChange: ((view: View | null) => void) | undefined;
 
   /**
    * Whether a route is being planned or followed, and which — null when neither.
@@ -72,8 +76,15 @@ export class SheetViews {
     sheet: BottomSheet;
     chipsHost: HTMLElement;
     iconButtons: Partial<Record<View, HTMLElement>>;
+    /**
+     * For a view that puts something on the map while it is open — Print's frame — and
+     * has to take it away again however the view was left: its chip, Escape, or another
+     * view replacing it.
+     */
+    onViewChange?: (view: View | null) => void;
   }) {
     this.sheet = options.sheet;
+    this.onViewChange = options.onViewChange;
     this.chipsHost = options.chipsHost;
     this.iconButtons = options.iconButtons;
     this.chipsHost.addEventListener('scroll', () => this.updateOverflowCue(), { passive: true });
@@ -125,6 +136,7 @@ export class SheetViews {
     }
     this.renderChips();
     if (focus) this.sheet.body.focus({ preventScroll: true });
+    if (entering) this.onViewChange?.(name);
   }
 
   close(): void {
@@ -134,6 +146,7 @@ export class SheetViews {
     this.sheet.body.innerHTML = '';
     this.sheet.collapse();
     this.renderChips();
+    this.onViewChange?.(null);
   }
 
   /** Same rule as every destination chip: tapping the one that's already open closes it. */

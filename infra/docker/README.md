@@ -435,9 +435,12 @@ set, and are held to what the box can hold:
 RATMAP_CONTOURS_PARALLEL=1 RATMAP_CONTOURS_CELL_WORKERS=16 docker compose run --rm infra global contours manifest
 ```
 
-Not measured on a large region yet: tippecanoe on the joined output. It sorts on disk, and
-the paths stage's tippecanoe stayed under 250 MB at a million features, but contours for
-the largest regions will be far more than that.
+Tiling no longer grows with the region either: each cell is tiled by the worker that
+traced it, then `tile-join` puts the cells together. tippecanoe on switzerland's densest
+cells peaked at 283 MB, inside a cell's 1 GB budget; the join held ~285 MB of its own
+plus the cell tilesets it maps in (830 MB resident for switzerland's 10). Not measured
+on a large region yet: the join for morocco's ~290 cells, whose mapped-in tilesets will
+be far more than that, although they are file pages the kernel can drop.
 
 What does *not* need to wait for tracing is the DEM. Each region's build is a fetch
 (network-bound) and then `gdal_contour` (cpu-bound), and in sequence every region paid for
@@ -462,7 +465,7 @@ raise them.
 | `paths`, `sac` — `osmium tags-filter` | id bitmap over OSM's *global* id space | **1.89 GB** on a 33 MB extract, **1.96 GB** on a 310 MB one | nothing — it is flat, which is why 33 GB europe passes on a box this size |
 | `paths` — reduce step (`tools/cmd/reduce-paths`) | streams a line at a time | 10 MB (the Python it replaced, 17 MB) | nothing |
 | `paths` — `tippecanoe` | disk-backed sort | 172 MB at 259 k features, 227 MB at 1.04 M | sublinearly |
-| `contours` — `gdal_contour`, one cell | lines open in the sweep, within one 3600-pixel cell | **373 MB** worst measured (the densest Swiss alpine cell; `contour-cell` after it, 32 MB); budgeted 1 GB | nothing: every region is cells. It was ~6.4 GB (Corsica) and grew with the region, when it wrote GeoJSON in one pass |
+| `contours` — `gdal_contour`, one cell | lines open in the sweep, within one 3600-pixel cell | **373 MB** worst measured (the densest Swiss alpine cell; `contour-cell` after it, 32 MB; then that cell's tippecanoe, 283 MB); budgeted 1 GB | nothing: every region is cells. It was ~6.4 GB (Corsica) and grew with the region, when it wrote GeoJSON in one pass |
 | `places` — `build-places-db` (scripts/tools) | the dedupe set; rows stream into SQLite | ~210 B a row: 349 MB on 1.5 M, ~1.1 GB for the planet (the Python held rows too: ~1.6 GB) | feature count |
 | `peaks` — prominence scoring (`tools/cmd/compute-prominence`) | one region's 90 m DEM and an int32 union-find of the same shape | **~73 MB + 7.8 bytes/px**: 1.12 GB on Scotland's 143 Mpx, 3.26 GB on 429 Mpx, 8.1-8.2 bytes/px all told from 118 Mpx up; budgeted at 8.5. Its DEM conversion caps GDAL's block cache at 512 MB — uncapped, the image's 2048 took a 118 Mpx region to 11.6 bytes/px | the region's bbox — svalbard-janmayen's 712 Mpx is ~5.6 GB |
 | `peaks` — DEM fetch (`fetch-dem.sh`), `PROM_FETCH_WORKERS` of them | `gdal_translate`'s block cache (capped at 512 MB) + the VSI cache | **229 MB** for Bosnia at 90 m; ~1.25 GB at most | region size, up to the cap |

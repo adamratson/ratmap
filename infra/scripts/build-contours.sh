@@ -15,6 +15,7 @@ SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$SCRIPT_DIR/lib.sh"
 require_cmd gdal_contour
 require_cmd tippecanoe
+require_cmd tile-join
 require_cmd go
 
 REGION_ID="${1:?Usage: build-contours.sh <region-id>}"
@@ -111,6 +112,24 @@ go_run contour-cells "$WORK_DIR/clip.tif" "$CONTOUR_CELL_PX" > "$WORK_DIR/cells.
 CELLS="$(wc -l < "$WORK_DIR/cells.txt" | tr -d ' ')"
 echo "  $CELLS cell(s) of up to ${CONTOUR_CELL_PX} px, $CONTOUR_WORKERS at a time"
 
+# Each cell is tiled as soon as it is traced, by the same worker, and the cells' tilesets
+# are joined below — rather than one tippecanoe over the whole region's GeoJSON once every
+# cell is done. That one tippecanoe averaged ~3.5 of 8 cores and ran after all the
+# tracing; per cell, the tiling runs alongside the other cells' tracing. This whole
+# script on switzerland's 10 cells, DEM cached, the image's level-1 tippecanoe, old and
+# new alternated (2026-11-16, a laptop too noisy to trust anything but the pairs): 312 s
+# against 220, 259 against 163, 179 against 141, and in an earlier set 231 against 187
+# but 173 against 194. Tiling every cell only after all the tracing was no better (224,
+# 146, 145), and holds every cell's GeoJSON at once. Same 36,537 tiles; 36,527 hold the
+# same features, the order within a tile aside. The other 10 are z11 tiles where 16-38
+# of their ~2,000 lines take a vertex more or less where they meet the tile edge, and one
+# has a line more — cause not found. A region of one cell is tile-for-tile identical.
+#
+# A cell's tiling comes after its tracing has exited, so a worker's memory is still one
+# phase at a time and CONTOUR_CELL_GB still covers it: tippecanoe on switzerland's
+# densest cells peaked at 283 MB. -t: tippecanoe writes its temp files to /tmp whatever
+# TMPDIR says, which in the image is the container's own layer, not /work. See
+# build-paths.sh.
 trace_cell() {  # trace_cell <n> <xoff> <yoff> <xsize> <ysize> <xmin> <xmax> <ymin> <ymax>
   local n="$1" base="$WORK_DIR/cell-$1"
   gdal_translate -q -of VRT -srcwin "$2" "$3" "$4" "$5" "$WORK_DIR/clip.tif" "$base.vrt" \
@@ -119,21 +138,21 @@ trace_cell() {  # trace_cell <n> <xoff> <yoff> <xsize> <ysize> <xmin> <xmax> <ym
     && "$CONTOUR_CELL_BIN" "$base.csv" "$base.geojsonl" \
          "$INDEX_EVERY" "$6" "$7" "$8" "$9" \
     && rm -f "$base.vrt" "$base.csv" \
+    && tippecanoe -q -o "$base.pmtiles" -t "$WORK_DIR" \
+         -Z"$CONTOUR_MINZOOM" -z"$CONTOUR_MAXZOOM" \
+         --simplification=4 \
+         --no-tile-size-limit \
+         -l contours -n "ratmap contours $REGION_ID" --force \
+         "$base.geojsonl" \
+    && rm -f "$base.geojsonl" \
     || { echo "  cell $n failed" >&2; return 1; }
 }
 export -f trace_cell
-export WORK_DIR CONTOUR_CELL_BIN CONTOUR_INTERVAL INDEX_EVERY
+export WORK_DIR CONTOUR_CELL_BIN CONTOUR_INTERVAL INDEX_EVERY \
+  CONTOUR_MINZOOM CONTOUR_MAXZOOM REGION_ID
 xargs -P "$CONTOUR_WORKERS" -L 1 bash -c 'trace_cell "$@"' _ < "$WORK_DIR/cells.txt"
 
-# Joined in cell order, each deleted as it goes: the output is the same whatever order
-# the cells finished in, and the disk holds one extra cell at most, not a second copy.
-: > "$WORK_DIR/contours-idx.geojsonl"
-for n in $(seq 1 "$CELLS"); do
-  cat "$WORK_DIR/cell-$n.geojsonl" >> "$WORK_DIR/contours-idx.geojsonl"
-  rm -f "$WORK_DIR/cell-$n.geojsonl"
-done
-
-echo "==> tiling"
+echo "==> joining"
 # Written in the work directory and only moved to $OUT after verification — same reason as
 # build-region.sh's extract_verified(): tippecanoe writing straight to the final path
 # means a run killed mid-write (OOM, timeout, an interrupted docker compose) leaves a
@@ -153,14 +172,22 @@ echo "==> tiling"
 # have, until this was found on 2026-09-23. The same trap build-paths.sh's comment
 # describes, with the same fix.
 TMP_OUT="$WORK_DIR/$REGION_ID-contours.pmtiles"
-# -t: tippecanoe writes its temp files to /tmp whatever TMPDIR says, which in the
-# image is the container's own layer, not /work. See build-paths.sh.
-tippecanoe -o "$TMP_OUT" -t "$WORK_DIR" \
-  -Z"$CONTOUR_MINZOOM" -z"$CONTOUR_MAXZOOM" \
-  --simplification=4 \
-  --no-tile-size-limit \
-  -l contours -n "ratmap contours $REGION_ID" --force \
-  "$WORK_DIR/contours-idx.geojsonl" 2>&1 | tail -1
+#
+# Joined in cell order, so the output is the same whatever order the cells finished in.
+# -pk because there is no tile size limit to apply: the cells were tiled without one, and
+# tile-join's default 500 KB would drop features from a dense seam tile. A region of one
+# cell has nothing to join. tile-join maps every cell's tileset in and holds ~285 MB of
+# its own on top (switzerland: 830 MB resident, 285 MB of it not file-backed).
+CELL_TILESETS=()
+for n in $(seq 1 "$CELLS"); do
+  CELL_TILESETS+=("$WORK_DIR/cell-$n.pmtiles")
+done
+if [ "$CELLS" -eq 1 ]; then
+  mv "${CELL_TILESETS[0]}" "$TMP_OUT"
+else
+  tile-join -q -o "$TMP_OUT" -pk --force -n "ratmap contours $REGION_ID" "${CELL_TILESETS[@]}"
+  rm -f "${CELL_TILESETS[@]}"
+fi
 
 if ! pmtiles verify "$TMP_OUT" >/dev/null 2>&1; then
   echo "FAILED verification: $(basename "$OUT") is not a valid PMTiles archive" >&2

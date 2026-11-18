@@ -33,3 +33,7 @@ routes-few	routes	testdata/routes-few.geojsonl
 routes-area	routes	testdata/routes-area.geojsonl
 routes-unnamed	routes	testdata/routes-unnamed.geojsonl
 routes-network	routes	testdata/routes-network.geojsonl
+access-ok	access	testdata/access-ok.geojsonl
+access-few	access	testdata/access-few.geojsonl
+access-unadmitted	access	testdata/access-unadmitted.geojsonl
+access-area	access	testdata/access-area.geojsonl

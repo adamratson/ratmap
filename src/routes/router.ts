@@ -1,7 +1,8 @@
 import type { PMTiles } from 'pmtiles';
 import { boundsOf, distanceMetres, pathLengthMetres, type Bbox, type LngLat } from './geo';
 import { PathGraph, type RouteLeg } from './path-graph';
-import { decodePathLines, tilesForBbox, type PathLine, type TileCoord } from './path-tiles';
+import { decodePathLines, globalToLngLat, tilesForBbox, type PathLine, type TileCoord } from './path-tiles';
+import { admitRestricted, decodeAccessLines } from './walkable-access';
 import type { Region } from '../regions/manifest';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 
@@ -91,7 +92,11 @@ export interface OfflineRouterOptions {
 export class OfflineRouter {
   private readonly registry: TileSourceRegistry;
   private readonly downloadedRegions: () => Region[];
-  /** Decoded lines by `${filename}/${z}/${x}/${y}`. Decoding dominates the cost. */
+  /**
+   * Decoded lines by `${filename}[+${access filename}]/${z}/${x}/${y}`. Decoding dominates
+   * the cost. The access artifact is part of the key because it changes the answer: the
+   * same basemap tile routes over more ways once the region carries one.
+   */
   private readonly tileCache = new Map<string, PathLine[]>();
   private readonly cacheSize: number;
 
@@ -193,6 +198,21 @@ export class OfflineRouter {
     return this.registry.get(basemap.filename) ?? null;
   }
 
+  /**
+   * The region's walkable-access archive (walkable-access.ts), when it has one on disk.
+   *
+   * Absent on a region downloaded before the artifact existed, or one with no such ways;
+   * the router then drops every restricted way, exactly as it always has. Only an archive
+   * that reaches the routing zoom counts: build-access.sh tiles it at z15 alone.
+   */
+  private accessFor(region: Region): { archive: PMTiles; filename: string } | null {
+    const artifact = region.artifacts.find((candidate) => candidate.kind === 'access');
+    if (!artifact) return null;
+    if (typeof artifact.maxzoom === 'number' && artifact.maxzoom < ROUTING_ZOOM) return null;
+    const archive = this.registry.get(artifact.filename);
+    return archive ? { archive, filename: artifact.filename } : null;
+  }
+
   private async buildGraph(
     archive: PMTiles,
     region: Region,
@@ -200,6 +220,7 @@ export class OfflineRouter {
     signal?: AbortSignal,
   ): Promise<PathGraph> {
     const basemap = region.artifacts.find((artifact) => artifact.kind === 'basemap')!;
+    const access = this.accessFor(region);
     const graph = new PathGraph(4096 * 2 ** ROUTING_ZOOM);
 
     for (const tile of tiles) {
@@ -208,8 +229,10 @@ export class OfflineRouter {
       // instead of finishing a few hundred tile decodes nobody is waiting for.
       if (signal?.aborted) throw new DOMException('Route cancelled', 'AbortError');
 
-      const key = `${basemap.filename}/${tile.z}/${tile.x}/${tile.y}`;
-      const lines = this.tileCache.get(key) ?? (await this.readTile(archive, key, tile, signal));
+      const source = access ? `${basemap.filename}+${access.filename}` : basemap.filename;
+      const key = `${source}/${tile.z}/${tile.x}/${tile.y}`;
+      const lines =
+        this.tileCache.get(key) ?? (await this.readTile(archive, key, tile, signal, access?.archive));
       for (const line of lines) graph.addLine(line);
     }
 
@@ -231,11 +254,15 @@ export class OfflineRouter {
     key: string,
     tile: TileCoord,
     signal?: AbortSignal,
+    access?: PMTiles,
   ): Promise<PathLine[]> {
     let lines: PathLine[];
     try {
       const response = await archive.getZxy(tile.z, tile.x, tile.y, signal);
-      lines = response ? decodePathLines(response.data, tile).lines : [];
+      lines = response ? decodePathLines(response.data, tile, { keepRestricted: !!access }).lines : [];
+      if (access && lines.some((line) => line.restricted)) {
+        lines = await this.admitWalkable(lines, access, tile, signal);
+      }
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') throw err;
       // An unreadable tile routes as empty for this leg, but is asked again next time.
@@ -250,6 +277,26 @@ export class OfflineRouter {
     }
     this.tileCache.set(key, lines);
     return lines;
+  }
+
+  /**
+   * Replace each restricted line with the stretches of it the access tile opens on foot,
+   * and drop the rest.
+   *
+   * A failed access read throws like a failed basemap read, so `readTile` does not cache
+   * the tile with its restricted ways missing, and asks again next time.
+   */
+  private async admitWalkable(
+    lines: PathLine[],
+    access: PMTiles,
+    tile: TileCoord,
+    signal?: AbortSignal,
+  ): Promise<PathLine[]> {
+    const response = await access.getZxy(tile.z, tile.x, tile.y, signal);
+    const open = response ? decodeAccessLines(response.data, tile) : [];
+    const world = 4096 * 2 ** tile.z;
+    const lat = globalToLngLat((tile.x + 0.5) * 4096, (tile.y + 0.5) * 4096, world)[1];
+    return lines.flatMap((line) => (line.restricted ? admitRestricted(line, open, world, lat) : [line]));
   }
 }
 

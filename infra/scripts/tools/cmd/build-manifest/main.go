@@ -95,6 +95,9 @@ var artifactKinds = []struct{ suffix, kind string }{
 	// Versioned for the same reason; bump together with build-region.sh and
 	// docker/build-global.sh's cut_from_global.
 	{"-routes-1.pmtiles", "routes"},
+	// Versioned for the same reason; bump together with build-region.sh and
+	// docker/build-global.sh's cut_from_global.
+	{"-access-1.pmtiles", "access"},
 	// The region's search index (tools/cmd/build-places-db/cut.go), a SQLite file rather
 	// than an archive: the app searches it and draws nothing from it. Versioned for the
 	// same reason again; bump together with build-places-db's regionIndexName.

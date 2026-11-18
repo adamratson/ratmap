@@ -130,3 +130,69 @@ describe('OfflineRouter', () => {
     expect(getZxy.mock.calls.length).toBe(firstPass);
   });
 });
+
+describe('OfflineRouter and ways tagged private', () => {
+  // The College Valley road: a track the basemap tags `access=private`, which is a public
+  // bridleway on foot. The only way between the two ends.
+  const PRIVATE_TILE = fromGeojsonVt(
+    {
+      roads: {
+        features: [
+          {
+            type: 2,
+            geometry: [[[200, 2048], [3900, 2048]]],
+            tags: { kind: 'path', kind_detail: 'track', access: 'private' },
+          },
+        ],
+      },
+    },
+    { version: 2, extent: EXTENT },
+  );
+  const ACCESS_FILENAME = 'test-access-1.pmtiles';
+
+  function accessTile(geometry: number[][]): Uint8Array {
+    return fromGeojsonVt(
+      { access: { features: [{ type: 2, geometry: [geometry], tags: { foot: 'designated' } }] } },
+      { version: 2, extent: EXTENT },
+    );
+  }
+
+  function routerFor(access: Uint8Array | null): OfflineRouter {
+    const basemap = {
+      getZxy: async (_z: number, x: number, y: number) =>
+        `${x}/${y}` === TILE_KEY ? { data: PRIVATE_TILE.buffer as ArrayBuffer } : undefined,
+    } as unknown as PMTiles;
+    const accessArchive = {
+      getZxy: async (_z: number, x: number, y: number) =>
+        access && `${x}/${y}` === TILE_KEY ? { data: access.buffer as ArrayBuffer } : undefined,
+    } as unknown as PMTiles;
+    const region: Region = {
+      ...REGION,
+      artifacts: access
+        ? [
+            ...REGION.artifacts,
+            { kind: 'access', filename: ACCESS_FILENAME, path: ACCESS_FILENAME, bytes: 1, maxzoom: 15 },
+          ]
+        : REGION.artifacts,
+    };
+    const registry = {
+      get: (key: string) => (key === FILENAME ? basemap : key === ACCESS_FILENAME ? accessArchive : undefined),
+    } as unknown as TileSourceRegistry;
+    return new OfflineRouter({ registry, downloadedRegions: () => [region] });
+  }
+
+  it('does not route over a private way on a region without the access artifact', async () => {
+    expect((await routerFor(null).computeLeg(FROM, TO)).kind).toBe('straight');
+  });
+
+  it('routes over a private way the access artifact opens on foot', async () => {
+    const leg = await routerFor(accessTile([[200, 2048], [3900, 2048]])).computeLeg(FROM, TO);
+    expect(leg.kind).toBe('snapped');
+  });
+
+  it('still refuses a private way when the open one beside it is a different way', async () => {
+    // 100 units is ~16 m here: a public path beside the private track, not the track.
+    const leg = await routerFor(accessTile([[200, 2148], [3900, 2148]])).computeLeg(FROM, TO);
+    expect(leg.kind).toBe('straight');
+  });
+});

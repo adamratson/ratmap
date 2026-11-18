@@ -11,6 +11,7 @@
 //	check-output parking FILE            # build-parking.sh: enough car parks, all sized points
 //	check-output huts FILE               # build-huts.sh: every kind present, all points
 //	check-output routes FILE             # build-routes.sh: every network present, lines, named
+//	check-output access FILE             # build-access.sh: enough ways, all lines, all admitted
 //
 // Each prints a line per assertion and exits 1 with a FAIL line when one fails. The
 // expected values and why each was chosen are documented beside the calls in the scripts.
@@ -39,7 +40,7 @@ func (f failure) Error() string { return string(f) }
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts|routes FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts|routes|access FILE")
 		os.Exit(2)
 	}
 	checks := map[string]func(string, io.Writer) error{
@@ -49,10 +50,11 @@ func main() {
 		"parking":   parking,
 		"huts":      huts,
 		"routes":    routes,
+		"access":    access,
 	}
 	check, ok := checks[os.Args[1]]
 	if !ok {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts|routes FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts|routes|access FILE")
 		os.Exit(2)
 	}
 	if err := check(os.Args[2], os.Stdout); err != nil {
@@ -574,6 +576,52 @@ func routes(path string, out io.Writer) error {
 	}
 	if majorNamed*2 < major {
 		return failure(fmt.Sprintf("FAIL: only %d of %d international, national and regional route lines are named — normalize-routes' label step likely broken", majorNamed, major))
+	}
+	return nil
+}
+
+// access checks build-access.sh's output: enough ways, every one a line, and every one
+// admitted by a walkable `foot` or, with no `foot`, a right-of-way `designation` — the two
+// properties normalize-access carries, so a filter or normalizer change that lets a bare
+// private drive through fails here rather than routing someone up it. The floor is two
+// orders of magnitude below Scotland alone (876 such ways in scotland-latest.osm.pbf,
+// 2026-11-18): loose enough for a narrow test extract, and a broken filter produces zero.
+func access(path string, out io.Writer) error {
+	walkableFoot := map[string]bool{"yes": true, "designated": true, "permissive": true}
+	publicDesignation := map[string]bool{
+		"public_footpath": true, "public_bridleway": true, "restricted_byway": true,
+		"byway_open_to_all_traffic": true, "core_path": true,
+	}
+	const minimum = 5
+	total, byFoot, notLines, unadmitted := 0, 0, 0, 0
+	err := eachFeature(path, func(p map[string]json.RawMessage, geometry string) error {
+		total++
+		if geometry != "LineString" && geometry != "MultiLineString" {
+			notLines++
+		}
+		foot, hasFoot := rawjson.String(p["foot"])
+		designation, _ := rawjson.String(p["designation"])
+		switch {
+		case hasFoot && walkableFoot[foot]:
+			byFoot++
+		case !hasFoot && publicDesignation[designation]:
+		default:
+			unadmitted++
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "  %d ways open on foot (%d by foot, %d by designation alone)\n", total, byFoot, total-byFoot-unadmitted)
+	if notLines > 0 {
+		return failure(fmt.Sprintf("FAIL: %d features are not lines — the export's geometry filter likely broken", notLines))
+	}
+	if unadmitted > 0 {
+		return failure(fmt.Sprintf("FAIL: %d ways neither foot nor designation opens to walkers — normalize-access likely broken", unadmitted))
+	}
+	if total < minimum {
+		return failure(fmt.Sprintf("FAIL: implausibly few ways (%d < %d) — filter or normalize step likely broken", total, minimum))
 	}
 	return nil
 }

@@ -1,0 +1,8 @@
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-2.18,55.52],[-2.17,55.53]]},"properties":{"foot":"designated","designation":"public_bridleway"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-2.18,55.52],[-2.17,55.53]]},"properties":{"foot":"yes"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-2.18,55.52],[-2.17,55.53]]},"properties":{"foot":"permissive"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-2.18,55.52],[-2.17,55.53]]},"properties":{"designation":"public_footpath"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-2.18,55.52],[-2.17,55.53]]},"properties":{"designation":"core_path"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-2.18,55.52],[-2.17,55.53]]},"properties":{"foot":"yes"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-2.18,55.52],[-2.17,55.53]]},"properties":{"foot":"no","designation":"public_footpath"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-2.18,55.52],[-2.17,55.53]]},"properties":{}}

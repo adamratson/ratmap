@@ -157,6 +157,7 @@ cached_osm_extract() {
 #   nwr/amenity=shelter,drinking_water,water_point
 #   nwr/natural=spring nwr/man_made=water_tap           build-huts.sh
 #   r/route=hiking,foot                                 build-routes.sh
+#   w/access=private,no                                 build-access.sh
 #
 # Each stage used to run its own tags-filter over the full extract, which at planet scale
 # is 85 GB per stage and nine or ten passes in all (a node-only filter reads the input
@@ -184,6 +185,7 @@ RATMAP_OSM_SUBSET_FILTER="
   nwr/amenity=shelter,drinking_water,water_point
   nwr/natural=spring nwr/man_made=water_tap
   r/route=hiking,foot
+  w/access=private,no
 "
 
 # osm_subset <extract.osm.pbf> <this stage's tags-filter expressions...>

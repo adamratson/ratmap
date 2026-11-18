@@ -43,8 +43,8 @@ wants() {
 
 for requested in ${ONLY//,/ }; do
   case "$requested" in
-    basemap|paths|peaks|sac|terrain|terrain-features|landmarks|detail|parking|huts|routes) ;;
-    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features, landmarks, detail, parking, huts, routes)" >&2
+    basemap|paths|peaks|sac|terrain|terrain-features|landmarks|detail|parking|huts|routes|access) ;;
+    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features, landmarks, detail, parking, huts, routes, access)" >&2
        exit 2 ;;
   esac
 done
@@ -184,6 +184,18 @@ else
   ROUTES_SOURCE=""
 fi
 
+# Restricted ways open on foot (build-access.sh), resolved the same way. The basemap
+# carries `access` but not `foot` — see that script's header.
+if [ -n "${ACCESS_SOURCE_URL:-}" ]; then
+  ACCESS_SOURCE="$ACCESS_SOURCE_URL"
+elif [ -s "$DIST_DIR/access-global.pmtiles" ]; then
+  ACCESS_SOURCE="$DIST_DIR/access-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  ACCESS_SOURCE="$PUBLIC_BASE_URL/access-global.pmtiles"
+else
+  ACCESS_SOURCE=""
+fi
+
 # Measured for Scotland (2026-08-21): basemap z12 ~84 MB / z13 ~175 MB; terrain z10
 # ~107 MB / z11 ~340 MB. Raster terrain grows far faster than vector basemap per level,
 # hence the different ceilings. Override per build if a region needs more.
@@ -233,6 +245,11 @@ HUTS_MAXZOOM="$BASEMAP_MAXZOOM"
 # Walking routes, as huts: routes-global.pmtiles holds z8-15.
 ROUTES_MAXZOOM="$BASEMAP_MAXZOOM"
 [ "$ROUTES_MAXZOOM" -gt 15 ] && ROUTES_MAXZOOM=15
+
+# Restricted ways open on foot: access-global.pmtiles holds z15 only, the zoom the router
+# reads the basemap's network at.
+ACCESS_MAXZOOM="$BASEMAP_MAXZOOM"
+[ "$ACCESS_MAXZOOM" -gt 15 ] && ACCESS_MAXZOOM=15
 
 # paths-global.pmtiles only holds z12-13 — it exists to fill the gap below where the
 # basemap starts carrying paths, not to duplicate it.
@@ -521,6 +538,21 @@ else
   # and docker/build-global.sh's cut_from_global.
   extract_verified "$ROUTES_SOURCE" "$OUT_DIR/$REGION_ID-routes-1.pmtiles" \
     "$ROUTES_MAXZOOM" --allow-empty
+fi
+
+if ! wants access; then
+  :
+elif [ -z "$ACCESS_SOURCE" ]; then
+  echo "==> restricted ways open on foot: skipped (no access-global.pmtiles — run ./scripts/build-access.sh)"
+elif [ "$ACCESS_MAXZOOM" -lt 15 ]; then
+  # The global archive is z15 only (build-access.sh), and so is the router's network.
+  echo "==> restricted ways open on foot: skipped (basemap capped at z$ACCESS_MAXZOOM, routing reads z15)"
+else
+  echo "==> restricted ways open on foot"
+  # Versioned like huts; bump together with tools/cmd/build-manifest's artifactKinds
+  # and docker/build-global.sh's cut_from_global.
+  extract_verified "$ACCESS_SOURCE" "$OUT_DIR/$REGION_ID-access-1.pmtiles" \
+    "$ACCESS_MAXZOOM" --allow-empty
 fi
 
 if ! wants terrain; then

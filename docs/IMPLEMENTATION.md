@@ -61,6 +61,7 @@ background geolocation and no background downloads — accepted, see §7.
 | GDAL reads a VRT's sources on parallel threads by default, and on abutting Copernicus tiles the threads race for the 1° seam pixels. So `fetch-dem.sh` (prominence, contours, avalanche) returned a different DEM every run until it pinned `VRT_NUM_THREADS=1` (2026-09-23). Two identical fetches differed by up to 109 m on seams, so `prom`, and any rule-derived list thresholded on it (Phase 3.5), could flip between builds of the same data | Read `frmts/vrt/vrtdataset.cpp` at v3.10.3 (`NUM_THREADS` → `VRT_NUM_THREADS` → `GDAL_NUM_THREADS`, default `ALL_CPUS`); reproduced run-to-run on Scotland and Switzerland, and single-threaded fetches came out byte-identical — see `infra/README.md` |
 | A printed sheet's scale is only true if the print map is built for it (2026-11-18, `src/print/`). MapLibre lowers `pixelRatio` without a word once a canvas passes `maxCanvasSize` (default 4096², `Map._resize`), so the page raster is held to 10 px/mm. The canvas can only be read back after its frame with `canvasContextAttributes.preserveDrawingBuffer` (the v5 home of that flag). The style's detail is gated by zoom for screens, so at screen symbol sizes a 1:25 000 sheet in Scotland renders at z12.7, under the z13 where every contour starts; the print map renders half a zoom higher with smaller type (`DETAIL_BOOST`). Even so, 1:50 000 gets index contours only. The sheet is delivered as a PDF, not `window.print()`, whose behaviour in an installed iOS web app could not be confirmed | Read `src/ui/map.ts` and `geojson_source.ts` at 5.24.0; rendered 1:25 000 and 1:50 000 sheets over the Andorra region in headless Chromium and checked them with `pdfinfo`/`pdftoppm`; `e2e/print.spec.ts` measures the on-screen frame against MapLibre's own `distanceTo` |
 | "Open in" links must carry a label for Apple Maps and a wrapped longitude for all three (2026-11-02). `https://maps.apple.com/?ll=…` alone only centres the map; `?ll=…&q=…` places a labelled pin. The newer `/place?coordinate=` form needs iOS 18.4, above this app's iOS 17 floor. `map.unproject`, so every click's `lngLat`, does not wrap: a tap on a repeated world copy reports a longitude past ±180 | Followed `maps.apple.com` redirects with an iPhone user agent (`?ll=` → `/frame?center=`, `?ll=&q=` → `/place?coordinate=&name=`), read Apple's unified Maps URLs reference, read `MercatorCoordinate.toLngLat` via `mercator_transform.ts`; `www.waze.com` serves an `apple-app-site-association` covering `/ul` |
+| The Protomaps `roads` layer carries `access` but no `foot` or `designation`, and its z15 geometry can drop a T-junction's shared vertex (2026-11-18, Phase 4). Both broke routing in the College Valley: the valley road is `access=private` yet a public bridleway, and Red Cribs ends 0.1 m from the Pennine Way's line but 29 m from its nearest vertex | Decoded every `roads` feature in the valley's z15 tiles of `scotland-basemap.pmtiles` (keys: `kind`, `kind_detail`, `access`, `name`, `ref`, `is_bridge`, …); read ways 34571653, 723066310 and 1433102090 on openstreetmap.org; ran `OfflineRouter` over ten real legs before and after each fix |
 
 ### Documented upstream, not tested here
 
@@ -613,9 +614,45 @@ kind_detail=path`, with its name.
 offline, follow against the GPS dot, off-route distance with two thresholds so it cannot
 flap at the boundary, GPX import. Foreground only, and the panel says so (§7).
 
+**The tiles' network has two gaps of its own, found in the College Valley (2026-11-18).**
+Reported as "the path mapping isn't great for snap to paths"; running the real router over
+ten legs there on `scotland-basemap.pmtiles` turned most into straight lines, and the one
+that did snap, Hethpool → Mounthooly, came back as 15.6 km over the border ridge for a 5.9 km
+walk up the valley, with nothing on screen to say so.
+
+- **Junctions missing their shared vertex.** A way that meets another at a T in OSM can
+  arrive with the junction vertex gone from the through-way, its end lying on the line
+  0-0.3 m off but tens of metres from any vertex, which the vertex-to-vertex gap bridge
+  cannot see. 11 such dead ends in the valley, among them Red Cribs onto the Pennine Way
+  (OSM way 1433102090 shares nodes with it at both ends). `PathGraph` now cuts the through-way at
+  any dead end lying within 1 m of it (`JUNCTION_JOIN_M`), before gap bridging. No geometry
+  is moved or invented: the junction is the side way's own end.
+- **Private ways open on foot.** The basemap carries a way's `access` and nothing else
+  about who may use it, so the router dropped every `private`/`no` way, the valley road
+  among them: `highway=track access=private foot=designated designation=public_bridleway`
+  (way 34571653). Keeping them all is no fix, since only 10% (Cumbria) to 12% (Scotland) of
+  restricted paths and tracks say a walker may use them. So
+  `infra/scripts/build-access.sh` builds `access-global.pmtiles`: the restricted highways
+  whose `foot` (yes/designated/permissive) or, with no `foot`, right-of-way
+  `designation` opens them (`tools/cmd/normalize-access`), at z15 and unsimplified, cut
+  per region as `<id>-access-1.pmtiles`. The router keeps a restricted way only along the
+  stretches one of those lies on (`src/routes/walkable-access.ts`): within 4 m and 25° at
+  every sample, five metres apart, so a public path crossing or running beside a private
+  drive opens nothing. The tolerance is measured, not chosen: of the restricted segments
+  near an open way in Scotland, 16,522 (479 km) lie within 0.5 m all along, and the thin
+  tail to 4 m is ways edited since the basemap's OSM snapshot. A region without the
+  artifact routes exactly as before. Additive under C16.
+
+With both, every one of the ten legs routes, Hethpool → Mounthooly as 5.9 km up the valley
+road. Measured with the Northumberland extract, which the Scotland region's OSM-derived
+artifacts do not otherwise include. The global build reads the continent extracts, so the
+production region covers it.
+
 **What this costs, honestly.** On-device routing over tile geometry is not Valhalla. It has
 no turn restrictions, no one-way handling, no ferry or barrier logic, no access-time
-conditions, and no idea about surface or gradient beyond what `kind_detail` carries. It
+conditions, and no idea about surface or gradient beyond what `kind_detail` carries. Access
+is read from the way's `access` tag plus the exceptions above, so a way barred on foot by
+`foot=no` alone, with no `access` tag, is still routed over. It
 routes within **one** downloaded region — a leg spanning two regions falls back to a
 straight line rather than stitching two archives. For a hill map, where the question is
 "which path goes up this mountain", that is the right trade; for street navigation it

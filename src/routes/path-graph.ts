@@ -77,6 +77,26 @@ const GAP_BRIDGE_M = 20;
 /** How many nearby nodes `bridgeGaps` considers per dead end before picking the closest. */
 const GAP_BRIDGE_CANDIDATE_LIMIT = 6;
 
+/**
+ * How close a dead end must lie to the *line* of another way to be joined into it, in
+ * metres.
+ *
+ * The case: a way that meets another at a T-junction in OSM — a shared node, a real
+ * junction — arrives in the tile with the junction vertex missing from the through-way.
+ * The side way's end is still exactly on the line, but nothing in the tile geometry marks
+ * the connection, and gap bridging cannot see it either: that measures vertex to vertex,
+ * and the through-way's nearest remaining vertex can be tens of metres off along a straight
+ * flagstone section. Measured in the College Valley (scotland-basemap.pmtiles, 2026-11-18):
+ * 11 dead ends 0-0.3 m from another way's line and 20-166 m from its nearest vertex, among
+ * them the path up Red Cribs, which OSM joins to the Pennine Way at both ends (way
+ * 1433102090). Leaving them split made Mounthooly → The Schil unroutable.
+ *
+ * One metre is several times what the measured cases need (tile units are ~0.17 m there)
+ * and an order of magnitude below the gap bridge, so it adds junctions that are in the
+ * data and invents none that a person would see as a gap.
+ */
+const JUNCTION_JOIN_M = 1;
+
 export interface RouteLeg {
   coords: LngLat[];
   distanceM: number;
@@ -312,6 +332,10 @@ export class PathGraph {
     if (this.gapsBridged) return;
     this.gapsBridged = true;
 
+    // First, so a dead end that is really a T-junction is joined where it actually meets
+    // the other way, rather than bridged to that way's nearest vertex — or not at all.
+    this.joinJunctions();
+
     const deadEnds: number[] = [];
     for (let id = 0; id < this.nodeX.length; id++) {
       if (this.adjacency[id].length === 1) deadEnds.push(id);
@@ -326,6 +350,106 @@ export class PathGraph {
       const match = candidates.find((candidate) => candidate.id !== id && this.find(candidate.id) !== root);
       if (match) this.addGapEdge(id, match.id, match.distanceM);
     }
+  }
+
+  /**
+   * Split another way's edge at each dead end lying on it — see JUNCTION_JOIN_M.
+   *
+   * The dead end itself becomes the junction: the edge it lies on is cut in two there. No
+   * vertex is moved or invented, so the route passes through a point that is in the tile
+   * data, at most JUNCTION_JOIN_M off the line it was drawn along.
+   *
+   * Only a projection that lands strictly inside the edge counts. One landing on (or within
+   * the merge tolerance of) the edge's own end is a vertex-to-vertex gap, which is
+   * `bridgeGaps`' job and is measured with its own, wider tolerance.
+   */
+  private joinJunctions(): void {
+    // Edges by the snap cells their bounding box covers. Tolerance is far below a cell, so
+    // a dead end need only look in its own cell and the eight around it.
+    const cells = new Map<string, number[]>();
+    const index = (edge: number): void => {
+      const a = this.edgeA[edge];
+      const b = this.edgeB[edge];
+      const x0 = Math.floor(Math.min(this.nodeX[a], this.nodeX[b]) / SNAP_CELL_UNITS);
+      const x1 = Math.floor(Math.max(this.nodeX[a], this.nodeX[b]) / SNAP_CELL_UNITS);
+      const y0 = Math.floor(Math.min(this.nodeY[a], this.nodeY[b]) / SNAP_CELL_UNITS);
+      const y1 = Math.floor(Math.max(this.nodeY[a], this.nodeY[b]) / SNAP_CELL_UNITS);
+      for (let x = x0; x <= x1; x++) {
+        for (let y = y0; y <= y1; y++) {
+          const key = `${x}:${y}`;
+          const bucket = cells.get(key);
+          if (bucket) bucket.push(edge);
+          else cells.set(key, [edge]);
+        }
+      }
+    };
+    for (let edge = 0; edge < this.edgeA.length; edge++) index(edge);
+
+    for (let id = 0; id < this.nodeX.length; id++) {
+      if (this.adjacency[id].length !== 1) continue;
+
+      const px = this.nodeX[id];
+      const py = this.nodeY[id];
+      const tolerance = metresToUnits(JUNCTION_JOIN_M, this.nodeLngLat(id)[1], this.world);
+      const cx = Math.floor(px / SNAP_CELL_UNITS);
+      const cy = Math.floor(py / SNAP_CELL_UNITS);
+
+      let best = -1;
+      let bestDistance = tolerance;
+      const checked = new Set<number>();
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (const edge of cells.get(`${cx + dx}:${cy + dy}`) ?? []) {
+            if (checked.has(edge)) continue;
+            checked.add(edge);
+            const a = this.edgeA[edge];
+            const b = this.edgeB[edge];
+            if (a === id || b === id) continue;
+
+            const ax = this.nodeX[a];
+            const ay = this.nodeY[a];
+            const vx = this.nodeX[b] - ax;
+            const vy = this.nodeY[b] - ay;
+            const length = Math.hypot(vx, vy);
+            if (length === 0) continue;
+            // Distance along the edge from `a`, in units: strictly inside, clear of both ends.
+            const along = ((px - ax) * vx + (py - ay) * vy) / length;
+            if (along <= MERGE_TOLERANCE_UNITS || along >= length - MERGE_TOLERANCE_UNITS) continue;
+
+            const distance = Math.abs((px - ax) * vy - (py - ay) * vx) / length;
+            if (distance <= bestDistance) {
+              bestDistance = distance;
+              best = edge;
+            }
+          }
+        }
+      }
+
+      if (best >= 0) index(this.splitEdge(best, id));
+    }
+  }
+
+  /** Cut edge `edge` (a–b) at node `at` into a–at and at–b. Returns the new at–b edge. */
+  private splitEdge(edge: number, at: number): number {
+    const a = this.edgeA[edge];
+    const b = this.edgeB[edge];
+
+    this.edgeB[edge] = at;
+    this.edgeLengthM[edge] = distanceMetres(this.nodeLngLat(a), this.nodeLngLat(at));
+
+    const id = this.edgeA.length;
+    this.edgeA.push(at);
+    this.edgeB.push(b);
+    this.edgeLengthM.push(distanceMetres(this.nodeLngLat(at), this.nodeLngLat(b)));
+    this.edgeKind.push(this.edgeKind[edge]);
+    this.edgeDetail.push(this.edgeDetail[edge]);
+    this.edgeName.push(this.edgeName[edge]);
+
+    const atB = this.adjacency[b].indexOf(edge);
+    this.adjacency[b][atB] = id;
+    this.adjacency[at].push(edge, id);
+    this.union(a, at);
+    return id;
   }
 
   /** A synthetic edge from `bridgeGaps()`. Costed like anything else unlisted — see costMultiplier. */

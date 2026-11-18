@@ -101,6 +101,16 @@ describe('decodePathLines', () => {
     expect(lines.map((l) => l.kind)).toEqual(['minor_road']);
   });
 
+  it('keeps barred ways, marked, for a caller that can tell which are open on foot', () => {
+    const bytes = encodeTile([
+      { points: [[10, 10], [20, 20]], tags: { kind: 'path', access: 'private' } },
+      { points: [[10, 30], [20, 40]], tags: { kind: 'path', access: 'no' } },
+      { points: [[10, 50], [20, 60]], tags: { kind: 'minor_road', access: 'destination' } },
+    ]);
+    const { lines } = decodePathLines(bytes, tile, { keepRestricted: true });
+    expect(lines.map((l) => l.restricted ?? false)).toEqual([true, true, false]);
+  });
+
   it('carries the way name through for the route description', () => {
     const bytes = encodeTile([
       {

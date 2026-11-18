@@ -10,6 +10,10 @@ import Pbf from 'pbf';
 // draw the map from is the network we route over. No new bytes, no new build step, and
 // nothing to keep in sync.
 //
+// The one thing the network needs that the basemap cannot say is which of its private ways
+// a walker may use — it carries `access` but no `foot`. That comes from a small artifact
+// of our own, read beside these tiles: see walkable-access.ts.
+//
 // Everything here works in **global tile units** — `tile.x * extent + localX` at a fixed
 // zoom — rather than in degrees. That is deliberate: it is an integer grid shared by every
 // tile at that zoom, so a way that crosses a tile boundary yields byte-identical
@@ -30,6 +34,12 @@ export interface PathLine {
   kind: string;
   kindDetail: string | null;
   name: string | null;
+  /**
+   * Set only on a way tagged `access=private` or `no`, and only when the decode was asked
+   * to keep those (`keepRestricted`). The router admits such a way only where its
+   * walkable-access artifact says the public may walk it — see walkable-access.ts.
+   */
+  restricted?: true;
 }
 
 /**
@@ -47,12 +57,22 @@ const ROUTABLE_KINDS = new Set(['path', 'minor_road', 'medium_road', 'major_road
  *
  * `destination` is deliberately *not* in this set — it means through-traffic is barred,
  * which is a motoring restriction, and the lane is still a legitimate approach on foot.
+ *
+ * This is all the basemap says about access: it carries no `foot`, so a public right of
+ * way across a private estate arrives here as `private` like any farm drive. The
+ * exceptions come from our own artifact (walkable-access.ts); keep this set the same as
+ * `restricted` in infra/scripts/tools/cmd/normalize-access, which builds it.
  */
 const BLOCKED_ACCESS = new Set(['private', 'no']);
 
 export interface DecodeOptions {
   /** Layer holding the network. Protomaps v4 calls it `roads`. */
   sourceLayer?: string;
+  /**
+   * Return `access=private`/`no` ways marked `restricted` instead of dropping them, for a
+   * caller that can tell which of them are open on foot. Default false: dropped.
+   */
+  keepRestricted?: boolean;
 }
 
 /**
@@ -87,7 +107,8 @@ export function decodePathLines(
     if (!ROUTABLE_KINDS.has(kind)) continue;
 
     const access = typeof props.access === 'string' ? props.access : '';
-    if (BLOCKED_ACCESS.has(access)) continue;
+    const restricted = BLOCKED_ACCESS.has(access);
+    if (restricted && !options.keepRestricted) continue;
 
     const kindDetail = typeof props.kind_detail === 'string' ? props.kind_detail : null;
     const name = typeof props.name === 'string' ? props.name : null;
@@ -99,7 +120,8 @@ export function decodePathLines(
       }
       // Clip away the tile's rendering buffer — see clipToBounds().
       for (const piece of clipToBounds(global, originX, originY, originX + extent, originY + extent)) {
-        if (piece.length >= 4) lines.push({ coords: piece, kind, kindDetail, name });
+        if (piece.length < 4) continue;
+        lines.push(restricted ? { coords: piece, kind, kindDetail, name, restricted } : { coords: piece, kind, kindDetail, name });
       }
     }
   }

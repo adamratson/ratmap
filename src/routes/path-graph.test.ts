@@ -229,6 +229,48 @@ describe('PathGraph gap bridging', () => {
   });
 });
 
+describe('PathGraph junctions missing their shared vertex', () => {
+  // The College Valley case (way 1433102090 onto the Pennine Way): a side path ends on the
+  // through-way's line, but the through-way has no vertex there — A to C is one long
+  // segment. Its nearest vertices are ~600 m away, far outside the gap bridge.
+  const metresNorth = (point: LngLat, metres: number): LngLat => [point[0], point[1] + metres / 111_320];
+  const SIDE_END: LngLat = [-5.0, 56.8];
+
+  function teeGraph(offsetM: number): { graph: PathGraph; side: number; a: number; c: number } {
+    const graph = new PathGraph(WORLD);
+    graph.addLine(line([A, C], { name: 'Pennine Way' }));
+    graph.addLine(line([SIDE_END, metresNorth(B, offsetM)]));
+    return { graph, a: 0, c: 1, side: 2 };
+  }
+
+  it('joins a dead end lying on another way into it, at the dead end', () => {
+    const { graph, a, side } = teeGraph(0.3);
+    const leg = graph.route(side, a);
+    expect(leg).not.toBeNull();
+    // Along the side path to the junction, then along the through-way: no detour, no
+    // invented point — the junction is the side path's own end.
+    const expected = distanceMetres(SIDE_END, B) + distanceMetres(B, A);
+    expect(leg!.distanceM).toBeCloseTo(expected, -1);
+    expect(leg!.coords).toHaveLength(3);
+    expect(leg!.wayNames).toEqual(['Pennine Way']);
+  });
+
+  it('keeps the through-way whole after cutting it', () => {
+    const { graph, a, c } = teeGraph(0.3);
+    graph.route(2, a); // runs the join
+    const leg = graph.route(a, c);
+    expect(leg).not.toBeNull();
+    expect(leg!.distanceM).toBeCloseTo(distanceMetres(A, C), -1);
+  });
+
+  it('leaves a dead end a few metres off the line alone', () => {
+    // A path stopping 5 m short of a road it does not meet is a gap for the vertex-based
+    // bridge to judge, not a junction in the data.
+    const { graph, a, side } = teeGraph(5);
+    expect(graph.route(side, a)).toBeNull();
+  });
+});
+
 describe('global unit conversion', () => {
   it('round-trips a coordinate', () => {
     const [gx, gy] = lngLatToGlobal(-5.0037, 56.7969, WORLD);

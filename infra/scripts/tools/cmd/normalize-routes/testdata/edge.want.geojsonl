@@ -1,0 +1,20 @@
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[1,0],[1,1]]},"properties":{"network":"nwn","name":"Grand Tour"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[2,0],[2,1]]},"properties":{"network":"nwn","name":"Grand Tour"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[3,0],[3,1]]},"properties":{"network":"nwn","name":"Grand Tour"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[10,0],[10,1]]},"properties":{"network":"rwn","name":"Regional Stage"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[11,0],[11,1]]},"properties":{"network":"iwn","name":"Pilgrim Way"}}
+{"type":"Feature","tippecanoe":{"minzoom":12},"geometry":{"type":"LineString","coordinates":[[12,0],[12,1]]},"properties":{"network":"lwn","name":"Loop of Loops"}}
+{"type":"Feature","tippecanoe":{"minzoom":12},"geometry":{"type":"LineString","coordinates":[[13,0],[13,1]]},"properties":{"network":"lwn","name":"Loop of Loops"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[14,0],[14,1]]},"properties":{"network":"rwn","name":"Cycle A"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[20,0],[20,1]]},"properties":{"network":"iwn","name":"E Path"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[21,0],[21,1]]},"properties":{"network":"rwn","name":"Zeta"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[22,0],[22,1]]},"properties":{"network":"rwn","name":"102"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[23,0],[23,1]]},"properties":{"network":"rwn"}}
+{"type":"Feature","tippecanoe":{"minzoom":12},"geometry":{"type":"LineString","coordinates":[[24,0],[24,1]]},"properties":{"network":"lwn","name":"Town Walk"}}
+{"type":"Feature","tippecanoe":{"minzoom":12},"geometry":{"type":"LineString","coordinates":[[25,0],[25,1]]},"properties":{"network":"lwn","name":"Mis-tagged"}}
+{"type":"Feature","tippecanoe":{"minzoom":12},"geometry":{"type":"LineString","coordinates":[[29,0],[29,1]]},"properties":{"network":"lwn","name":"Sentiero 1, a=b 100% Peška"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[40,0],[41,0],[42,0],[43,0]]},"properties":{"network":"nwn","name":"Merge Trail"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[50,0],[51,0]]},"properties":{"network":"rwn","name":"Fork Trail"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[51,0],[52,0]]},"properties":{"network":"rwn","name":"Fork Trail"}}
+{"type":"Feature","tippecanoe":{"minzoom":8},"geometry":{"type":"LineString","coordinates":[[51,0],[51,1]]},"properties":{"network":"rwn","name":"Fork Trail"}}
+{"type":"Feature","tippecanoe":{"minzoom":12},"geometry":{"type":"LineString","coordinates":[[60,0],[61,0],[60,0]]},"properties":{"network":"lwn","name":"Loop Walk"}}

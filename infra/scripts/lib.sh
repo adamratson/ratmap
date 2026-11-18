@@ -141,7 +141,7 @@ cached_osm_extract() {
   echo "$dest"
 }
 
-# Everything the eight OSM stages filter for, as one `osmium tags-filter` expression list:
+# Everything the OSM stages filter for, as one `osmium tags-filter` expression list:
 #
 #   n/natural=peak,volcano,saddle n/mountain_pass=yes   build-peaks.sh, build-places.sh
 #   n/place=city,town,village,hamlet,suburb             build-places.sh
@@ -156,6 +156,7 @@ cached_osm_extract() {
 #   nwr/tourism=alpine_hut,wilderness_hut,camp_site
 #   nwr/amenity=shelter,drinking_water,water_point
 #   nwr/natural=spring nwr/man_made=water_tap           build-huts.sh
+#   r/route=hiking,foot                                 build-routes.sh
 #
 # Each stage used to run its own tags-filter over the full extract, which at planet scale
 # is 85 GB per stage and nine or ten passes in all (a node-only filter reads the input
@@ -182,6 +183,7 @@ RATMAP_OSM_SUBSET_FILTER="
   nwr/tourism=alpine_hut,wilderness_hut,camp_site
   nwr/amenity=shelter,drinking_water,water_point
   nwr/natural=spring nwr/man_made=water_tap
+  r/route=hiking,foot
 "
 
 # osm_subset <extract.osm.pbf> <this stage's tags-filter expressions...>
@@ -231,7 +233,7 @@ osm_subset() {
 
   mkdir -p "$dir"
   rm -f "$dir/$base".*.osm.pbf
-  echo "  building the shared OSM subset of $base (one pass for all eight OSM stages)" >&2
+  echo "  building the shared OSM subset of $base (one pass for all the OSM stages)" >&2
   # Still ends in .osm.pbf: osmium picks the output format from the extension. The
   # leading dot keeps a half-written file out of the glob above and out of the cache.
   tmp="$dir/.$base.$key.$$.osm.pbf"

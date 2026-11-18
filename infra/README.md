@@ -37,6 +37,7 @@ changed.
 ./scripts/build-detail.sh          # detail-global.pmtiles — walls, fences, power lines, gates, stiles, fords
 ./scripts/build-parking.sh         # parking-global.pmtiles — car parks, the laybys the basemap drops included
 ./scripts/build-huts.sh            # huts-global.pmtiles — huts, bothies, shelters, campsites, drinking water, springs
+./scripts/build-routes.sh          # routes-global.pmtiles — named walking routes, international to local
 ./scripts/build-places.sh          # search indexes (C9): one per region, and the app's fallback
 ```
 

@@ -11,6 +11,7 @@ import { SAC_GRADES, sacCssColor } from '../overlays/sac';
 import { terrainSwatch } from '../overlays/terrain-features';
 import { landmarkSwatch } from '../overlays/landmarks';
 import { hutsWaterSwatch } from '../overlays/huts-water';
+import { routeSwatch } from '../overlays/routes';
 import { powerSwatch, wallSwatch } from '../overlays/detail';
 import { slopeCssColor } from '../overlays/avalanche';
 import { lineSwatch } from './legend-view';
@@ -64,6 +65,11 @@ const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink
     label: 'Huts, camping and water',
     note: 'Huts, bothies, shelters, campsites, drinking water and springs.',
     swatch: (ink) => hutsWaterSwatch('hut', ink),
+  },
+  routes: {
+    label: 'Walking routes',
+    note: 'Named and waymarked routes, from long-distance trails to local walks.',
+    swatch: (ink) => routeSwatch('national', ink),
   },
   boundaries: {
     label: 'Walls, fences and gates',

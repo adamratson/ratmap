@@ -552,6 +552,7 @@ const stubPrefersDark = (dark: boolean): void => {
       'terrainFeatures',
       'landmarks',
       'hutsWater',
+      'routes',
       'boundaries',
       'powerLines',
       'avalanche',

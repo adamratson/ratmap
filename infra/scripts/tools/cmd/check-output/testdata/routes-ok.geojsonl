@@ -1,0 +1,148 @@
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-5.0, 56.801]]}, "properties": {"network": "iwn", "name": "iwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.999, 56.8], [-4.999, 56.801]]}, "properties": {"network": "iwn", "name": "iwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.998, 56.8], [-4.998, 56.801]]}, "properties": {"network": "iwn", "name": "iwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-5.0, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.999, 56.8], [-4.999, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.998, 56.8], [-4.998, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.997, 56.8], [-4.997, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.996, 56.8], [-4.996, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.995, 56.8], [-4.995, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.994, 56.8], [-4.994, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.993, 56.8], [-4.993, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.992, 56.8], [-4.992, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.991, 56.8], [-4.991, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.99, 56.8], [-4.99, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.989, 56.8], [-4.989, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.988, 56.8], [-4.988, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.987, 56.8], [-4.987, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.986, 56.8], [-4.986, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.985, 56.8], [-4.985, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.984, 56.8], [-4.984, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.983, 56.8], [-4.983, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.982, 56.8], [-4.982, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.981, 56.8], [-4.981, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.98, 56.8], [-4.98, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.979, 56.8], [-4.979, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.978, 56.8], [-4.978, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.977, 56.8], [-4.977, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.976, 56.8], [-4.976, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.975, 56.8], [-4.975, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.974, 56.8], [-4.974, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.973, 56.8], [-4.973, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.972, 56.8], [-4.972, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.971, 56.8], [-4.971, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.97, 56.8], [-4.97, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.969, 56.8], [-4.969, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.968, 56.8], [-4.968, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.967, 56.8], [-4.967, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.966, 56.8], [-4.966, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.965, 56.8], [-4.965, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.964, 56.8], [-4.964, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.963, 56.8], [-4.963, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.962, 56.8], [-4.962, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.961, 56.8], [-4.961, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.96, 56.8], [-4.96, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.959, 56.8], [-4.959, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.958, 56.8], [-4.958, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.957, 56.8], [-4.957, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.956, 56.8], [-4.956, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.955, 56.8], [-4.955, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.954, 56.8], [-4.954, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.953, 56.8], [-4.953, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.952, 56.8], [-4.952, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.951, 56.8], [-4.951, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.95, 56.8], [-4.95, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.949, 56.8], [-4.949, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.948, 56.8], [-4.948, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.947, 56.8], [-4.947, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.946, 56.8], [-4.946, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.945, 56.8], [-4.945, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.944, 56.8], [-4.944, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.943, 56.8], [-4.943, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.942, 56.8], [-4.942, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.941, 56.8], [-4.941, 56.801]]}, "properties": {"network": "nwn", "name": "nwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-5.0, 56.801]]}, "properties": {"network": "rwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.999, 56.8], [-4.999, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.998, 56.8], [-4.998, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.997, 56.8], [-4.997, 56.801]]}, "properties": {"network": "rwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.996, 56.8], [-4.996, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.995, 56.8], [-4.995, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.994, 56.8], [-4.994, 56.801]]}, "properties": {"network": "rwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.993, 56.8], [-4.993, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.992, 56.8], [-4.992, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.991, 56.8], [-4.991, 56.801]]}, "properties": {"network": "rwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.99, 56.8], [-4.99, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.989, 56.8], [-4.989, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.988, 56.8], [-4.988, 56.801]]}, "properties": {"network": "rwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.987, 56.8], [-4.987, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.986, 56.8], [-4.986, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.985, 56.8], [-4.985, 56.801]]}, "properties": {"network": "rwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.984, 56.8], [-4.984, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.983, 56.8], [-4.983, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.982, 56.8], [-4.982, 56.801]]}, "properties": {"network": "rwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.981, 56.8], [-4.981, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.98, 56.8], [-4.98, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.979, 56.8], [-4.979, 56.801]]}, "properties": {"network": "rwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.978, 56.8], [-4.978, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.977, 56.8], [-4.977, 56.801]]}, "properties": {"network": "rwn", "name": "rwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 8}, "geometry": {"type": "LineString", "coordinates": [[-4.976, 56.8], [-4.976, 56.801]]}, "properties": {"network": "rwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-5.0, 56.8], [-5.0, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.999, 56.8], [-4.999, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.998, 56.8], [-4.998, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.997, 56.8], [-4.997, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.996, 56.8], [-4.996, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.995, 56.8], [-4.995, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.994, 56.8], [-4.994, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.993, 56.8], [-4.993, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.992, 56.8], [-4.992, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.991, 56.8], [-4.991, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.99, 56.8], [-4.99, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.989, 56.8], [-4.989, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.988, 56.8], [-4.988, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.987, 56.8], [-4.987, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.986, 56.8], [-4.986, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.985, 56.8], [-4.985, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.984, 56.8], [-4.984, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.983, 56.8], [-4.983, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.982, 56.8], [-4.982, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.981, 56.8], [-4.981, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.98, 56.8], [-4.98, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.979, 56.8], [-4.979, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.978, 56.8], [-4.978, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.977, 56.8], [-4.977, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.976, 56.8], [-4.976, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.975, 56.8], [-4.975, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.974, 56.8], [-4.974, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.973, 56.8], [-4.973, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.972, 56.8], [-4.972, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.971, 56.8], [-4.971, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.97, 56.8], [-4.97, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.969, 56.8], [-4.969, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.968, 56.8], [-4.968, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.967, 56.8], [-4.967, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.966, 56.8], [-4.966, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.965, 56.8], [-4.965, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.964, 56.8], [-4.964, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.963, 56.8], [-4.963, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.962, 56.8], [-4.962, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.961, 56.8], [-4.961, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.96, 56.8], [-4.96, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.959, 56.8], [-4.959, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.958, 56.8], [-4.958, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.957, 56.8], [-4.957, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.956, 56.8], [-4.956, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.955, 56.8], [-4.955, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.954, 56.8], [-4.954, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 4"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.953, 56.8], [-4.953, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.952, 56.8], [-4.952, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 6"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.951, 56.8], [-4.951, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.95, 56.8], [-4.95, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 1"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.949, 56.8], [-4.949, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.948, 56.8], [-4.948, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 3"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.947, 56.8], [-4.947, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.946, 56.8], [-4.946, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 5"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.945, 56.8], [-4.945, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.944, 56.8], [-4.944, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 0"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.943, 56.8], [-4.943, 56.801]]}, "properties": {"network": "lwn"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.942, 56.8], [-4.942, 56.801]]}, "properties": {"network": "lwn", "name": "lwn route 2"}}
+{"type": "Feature", "tippecanoe": {"minzoom": 12}, "geometry": {"type": "LineString", "coordinates": [[-4.941, 56.8], [-4.941, 56.801]]}, "properties": {"network": "lwn"}}

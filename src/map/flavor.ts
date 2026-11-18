@@ -262,6 +262,16 @@ export interface MapInk {
   boundary: string;
   power: string;
   ford: string;
+  /**
+   * Named walking routes (src/overlays/routes.ts). Teal, the one hue left free: magenta is
+   * the planned route, and the SAC ramp, avalanche shading and car parks hold blue, green,
+   * amber, orange, red and purple. `walkRoute` is the line below z12; the tints, national,
+   * regional and local, are the opaque corridor round the path from z12 — pale by day,
+   * deep at night, each a step nearer the ground than the last; the label ink holds as text.
+   */
+  walkRoute: string;
+  walkRouteTint: readonly [string, string, string];
+  walkRouteText: string;
 }
 
 const DAY_INK: MapInk = {
@@ -294,6 +304,9 @@ const DAY_INK: MapInk = {
   boundary: '#7d776e',
   power: '#454a52',
   ford: '#2f6b86',
+  walkRoute: '#00838a',
+  walkRouteTint: ['#93d0cb', '#b0ddd9', '#cbe8e5'],
+  walkRouteText: '#005c61',
 };
 
 // Contrast against night earth (#161a1f): path 6.3:1, contour label 6.5:1, route 5.8:1,
@@ -329,6 +342,9 @@ const NIGHT_INK: MapInk = {
   boundary: '#7a8189',
   power: '#aeb5be',
   ford: '#7fb3c9',
+  walkRoute: '#3cc4bc',
+  walkRouteTint: ['#1f5754', '#1b4846', '#193a39'],
+  walkRouteText: '#7fd8d1',
 };
 
 export function mapInk(theme: Theme): MapInk {

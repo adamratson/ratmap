@@ -28,3 +28,8 @@ parking-unsized	parking	testdata/parking-unsized.geojsonl
 huts-ok	huts	testdata/huts-ok.geojsonl
 huts-few	huts	testdata/huts-few.geojsonl
 huts-area	huts	testdata/huts-area.geojsonl
+routes-ok	routes	testdata/routes-ok.geojsonl
+routes-few	routes	testdata/routes-few.geojsonl
+routes-area	routes	testdata/routes-area.geojsonl
+routes-unnamed	routes	testdata/routes-unnamed.geojsonl
+routes-network	routes	testdata/routes-network.geojsonl

@@ -3,6 +3,7 @@ import { SAC_GRADES, sacCssColor } from '../overlays/sac';
 import { TERRAIN_FEATURE_KINDS, terrainSwatch } from '../overlays/terrain-features';
 import { LANDMARK_KINDS, landmarkSwatch } from '../overlays/landmarks';
 import { HUTS_WATER_LEGEND, hutsWaterSwatch } from '../overlays/huts-water';
+import { ROUTES_LEGEND, routeSwatch } from '../overlays/routes';
 import { DETAIL_LEGEND } from '../overlays/detail';
 import { AVALANCHE_TERRAIN_ONLY, SLOPE_CLASSES, slopeCssColor } from '../overlays/avalanche';
 
@@ -76,6 +77,15 @@ export function renderLegend(body: HTMLElement, ink: MapInk): void {
         'Car park',
         'From zoom 13 in downloaded regions, named from 15.',
       )}
+    </div>
+
+    <div class="legend-section">
+      <h3>Walking routes</h3>
+      <p class="legend-note">
+        A halo around the path; below zoom 12, a line. Named along the route. In downloaded
+        regions, from OpenStreetMap: what counts as national or local varies by country.
+      </p>
+      ${ROUTES_LEGEND.map((entry) => legendRow(routeSwatch(entry.tier, ink), entry.label, entry.note)).join('')}
     </div>
 
     <div class="legend-section">

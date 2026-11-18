@@ -73,7 +73,7 @@ MIN_DIST_GB="${RATMAP_MIN_DIST_GB:-20}"
 MIN_MEM_GB="${RATMAP_MIN_MEM_GB:-4}"
 REC_MEM_GB=8
 
-ALL_STAGES=(prefetch world terrain peaks sac paths terrain-features landmarks detail parking huts places regions contours avalanche manifest)
+ALL_STAGES=(prefetch world terrain peaks sac paths terrain-features landmarks detail parking huts routes places regions contours avalanche manifest)
 FORCE=""
 DRY_RUN=""
 SKIP_PREFLIGHT=""
@@ -89,7 +89,7 @@ for arg in "$@"; do
     --preflight-only)  PREFLIGHT_ONLY=1 ;;
     --repin)           REPIN=1 ;;
     all)               stages=("${ALL_STAGES[@]}") ;;
-    prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|parking|huts|places|regions|contours|avalanche|manifest) stages+=("$arg") ;;
+    prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|parking|huts|routes|places|regions|contours|avalanche|manifest) stages+=("$arg") ;;
     -*)  echo "Unknown flag: $arg" >&2; exit 2 ;;
     *)   echo "Unknown stage: $arg (known: ${ALL_STAGES[*]}, all)" >&2; exit 2 ;;
   esac
@@ -780,6 +780,16 @@ stage_huts() {
   HUTS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-huts.sh"
 }
 
+stage_routes() {
+  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/routes-global.pmtiles" ]; then
+    log "routes: already built — --force to redo"
+    return 0
+  fi
+  # Named walking routes, joined from their relations — the basemap carries none (see
+  # build-routes.sh's own header). Before `regions`, same reason as `terrain-features`.
+  ROUTES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-routes.sh"
+}
+
 stage_places() {
   # Built means both outputs: a places.sqlite from before the region indexes existed is
   # not a finished stage, and skipping it would leave every region without its index.
@@ -834,6 +844,7 @@ stage_regions() {
     detail:detail-global.pmtiles:detail-1
     parking:parking-global.pmtiles:parking-1
     huts:huts-global.pmtiles:huts-1
+    routes:routes-global.pmtiles:routes-1
     peaks:peaks-global.pmtiles:peaks-1
   )
 

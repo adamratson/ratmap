@@ -22,7 +22,7 @@ ratmap infra toolchain
   global [stages...] [--force] [--dry-run]   run the planet-scale pipeline
                                              stages: prefetch world terrain peaks sac
                                                      paths terrain-features landmarks
-                                                     detail parking huts places regions
+                                                     detail parking huts routes places regions
                                                      contours avalanche manifest all
   <script>.sh [args...]                      run one infra/scripts entry directly, e.g.
                                                build-region.sh scotland --dry-run
@@ -100,7 +100,7 @@ case "$cmd" in
     ls -1 "$SCRIPTS_DIR" | sed 's/^/  /' >&2
     exit 1
     ;;
-  prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|parking|huts|places|regions|contours|avalanche|manifest|all)
+  prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|parking|huts|routes|places|regions|contours|avalanche|manifest|all)
     # A stage name on its own. Without this it falls through to the catch-all below and
     # dies as `exec: regions: not found`, which says nothing about the one word missing.
     echo "\"$cmd\" is a stage of the pipeline, not a command. Run it through 'global':" >&2

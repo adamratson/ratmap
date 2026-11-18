@@ -23,6 +23,7 @@ export type LayerGroup =
   | 'terrainFeatures'
   | 'landmarks'
   | 'hutsWater'
+  | 'routes'
   | 'boundaries'
   | 'powerLines'
   | 'avalanche'
@@ -37,6 +38,7 @@ export const LAYER_GROUP_ORDER: readonly LayerGroup[] = [
   'terrainFeatures',
   'landmarks',
   'hutsWater',
+  'routes',
   'boundaries',
   'powerLines',
   'avalanche',
@@ -57,6 +59,7 @@ const DEFAULT_VISIBLE: Record<LayerGroup, boolean> = {
   terrainFeatures: true,
   landmarks: true,
   hutsWater: true,
+  routes: true,
   boundaries: true,
   powerLines: true,
   avalanche: false,
@@ -89,6 +92,7 @@ const LAYER_ID_SUFFIXES: Record<LayerGroup, readonly string[]> = {
   ],
   landmarks: ['-landmarks-symbols', '-landmarks-symbols-overlap'],
   hutsWater: ['-huts-symbols'],
+  routes: ['-routes-line', '-routes-labels'],
   boundaries: ['-detail-walls', '-detail-fences', '-detail-gates'],
   powerLines: ['-detail-power-lines', '-detail-pylons'],
   avalanche: ['-avalanche-shade'],

@@ -43,8 +43,8 @@ wants() {
 
 for requested in ${ONLY//,/ }; do
   case "$requested" in
-    basemap|paths|peaks|sac|terrain|terrain-features|landmarks|detail|parking|huts) ;;
-    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features, landmarks, detail, parking, huts)" >&2
+    basemap|paths|peaks|sac|terrain|terrain-features|landmarks|detail|parking|huts|routes) ;;
+    *) echo "Unknown artifact kind in --only: $requested (known: basemap, paths, peaks, sac, terrain, terrain-features, landmarks, detail, parking, huts, routes)" >&2
        exit 2 ;;
   esac
 done
@@ -172,6 +172,18 @@ else
   HUTS_SOURCE=""
 fi
 
+# Walking routes (build-routes.sh), resolved the same way. The basemap carries no route
+# relations — see that script's header.
+if [ -n "${ROUTES_SOURCE_URL:-}" ]; then
+  ROUTES_SOURCE="$ROUTES_SOURCE_URL"
+elif [ -s "$DIST_DIR/routes-global.pmtiles" ]; then
+  ROUTES_SOURCE="$DIST_DIR/routes-global.pmtiles"
+elif [ -n "${PUBLIC_BASE_URL:-}" ]; then
+  ROUTES_SOURCE="$PUBLIC_BASE_URL/routes-global.pmtiles"
+else
+  ROUTES_SOURCE=""
+fi
+
 # Measured for Scotland (2026-08-21): basemap z12 ~84 MB / z13 ~175 MB; terrain z10
 # ~107 MB / z11 ~340 MB. Raster terrain grows far faster than vector basemap per level,
 # hence the different ceilings. Override per build if a region needs more.
@@ -217,6 +229,10 @@ PARKING_MAXZOOM="$BASEMAP_MAXZOOM"
 # Huts and water, as car parks: huts-global.pmtiles holds z13-15.
 HUTS_MAXZOOM="$BASEMAP_MAXZOOM"
 [ "$HUTS_MAXZOOM" -gt 15 ] && HUTS_MAXZOOM=15
+
+# Walking routes, as huts: routes-global.pmtiles holds z8-15.
+ROUTES_MAXZOOM="$BASEMAP_MAXZOOM"
+[ "$ROUTES_MAXZOOM" -gt 15 ] && ROUTES_MAXZOOM=15
 
 # paths-global.pmtiles only holds z12-13 — it exists to fill the gap below where the
 # basemap starts carrying paths, not to duplicate it.
@@ -490,6 +506,21 @@ else
   # and docker/build-global.sh's cut_from_global.
   extract_verified "$HUTS_SOURCE" "$OUT_DIR/$REGION_ID-huts-1.pmtiles" \
     "$HUTS_MAXZOOM" --allow-empty
+fi
+
+if ! wants routes; then
+  :
+elif [ -z "$ROUTES_SOURCE" ]; then
+  echo "==> walking routes: skipped (no routes-global.pmtiles — run ./scripts/build-routes.sh)"
+elif [ "$ROUTES_MAXZOOM" -lt 8 ]; then
+  # As for huts: the global archive starts at z8 (build-routes.sh).
+  echo "==> walking routes: skipped (basemap capped at z$ROUTES_MAXZOOM, routes start at z8)"
+else
+  echo "==> walking routes"
+  # Versioned like huts; bump together with tools/cmd/build-manifest's artifactKinds
+  # and docker/build-global.sh's cut_from_global.
+  extract_verified "$ROUTES_SOURCE" "$OUT_DIR/$REGION_ID-routes-1.pmtiles" \
+    "$ROUTES_MAXZOOM" --allow-empty
 fi
 
 if ! wants terrain; then

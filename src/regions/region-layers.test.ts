@@ -19,6 +19,7 @@ const ZOOMS: Record<string, [number, number]> = {
   landmarks: [13, 15],
   parking: [13, 15],
   huts: [13, 15],
+  routes: [8, 15],
   paths: [12, 13],
   peaks: [0, 7],
   sac: [12, 15],
@@ -749,6 +750,102 @@ describe('huts, camping and water', () => {
     await addRegionToMap(map as unknown as MLMap, registry, other, 'light');
 
     expect(map.layers.filter((l) => l.source === sid('huts'))).toHaveLength(1);
+  });
+});
+
+describe('walking routes', () => {
+  const routesArtifact = { kind: 'routes', filename: 'lochaber-routes-1.pmtiles', path: 'p9', bytes: 1 };
+  const sacArtifact = { kind: 'sac', filename: 'lochaber-sac.pmtiles', path: 'p4', bytes: 1 };
+  const withRoutes: Region = { ...region, artifacts: [...region.artifacts, routesArtifact] };
+
+  it('draws the routes and their names from their own artifact', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, withRoutes, 'light');
+
+    expect(map.sources.has(sid('routes'))).toBe(true);
+    expect(map.layers.find((l) => l.id === `${sid('routes')}-line`)).toMatchObject({
+      type: 'line',
+      source: sid('routes'),
+      'source-layer': 'routes',
+      minzoom: 8,
+    });
+    expect(map.layers.find((l) => l.id === `${sid('routes')}-labels`)).toMatchObject({
+      type: 'symbol',
+      source: sid('routes'),
+      minzoom: 11,
+    });
+  });
+
+  it('tints under the grade band, the paths and the relief, whichever arrives first', async () => {
+    for (const artifacts of [
+      [...region.artifacts, sacArtifact, routesArtifact],
+      [...region.artifacts, routesArtifact, sacArtifact],
+    ]) {
+      const map = fakeMap();
+
+      await addRegionToMap(map as unknown as MLMap, registry, { ...region, artifacts }, 'light');
+
+      const ids = map.layers.map((l) => String(l.id));
+      const line = ids.indexOf(`${sid('routes')}-line`);
+      expect(line).toBeGreaterThan(-1);
+      expect(line).toBeLessThan(ids.indexOf(`${sid('sac')}-band`));
+      expect(line).toBeLessThan(ids.indexOf(`${sid('basemap')}-paths-casing`));
+      // Under the relief and contours, which read across the opaque tint.
+      expect(line).toBeLessThan(ids.indexOf(`${sid('terrain')}-hillshade`));
+      expect(line).toBeLessThan(ids.indexOf(`${sid('contours')}-lines`));
+      // Over the basemap's own ground.
+      expect(line).toBeGreaterThan(ids.indexOf(`${sid('basemap')}-earth`));
+    }
+  });
+
+  it('draws ground detail that arrives later over it', async () => {
+    const map = fakeMap();
+    const later: Region = {
+      ...withRoutes,
+      artifacts: [
+        ...withRoutes.artifacts,
+        { kind: 'terrain-features', filename: 'lochaber-terrain-features.pmtiles', path: 'p6', bytes: 1 },
+      ],
+    };
+
+    await addRegionToMap(map as unknown as MLMap, registry, later, 'light');
+
+    const ids = map.layers.map((l) => String(l.id));
+    const scree = ids.indexOf(`${sid('terrain-features')}-scree`);
+    expect(scree).toBeGreaterThan(-1);
+    expect(scree).toBeGreaterThan(ids.indexOf(`${sid('routes')}-line`));
+  });
+
+  it('puts the names with the region’s labels, over the paths', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, withRoutes, 'light');
+
+    const ids = map.layers.map((l) => String(l.id));
+    expect(ids.indexOf(`${sid('routes')}-labels`)).toBeGreaterThan(ids.indexOf(`${sid('basemap')}-paths`));
+  });
+
+  it('draws nothing for a region downloaded before the artifact existed', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
+
+    expect(map.layers.some((l) => String(l.id).includes('routes'))).toBe(false);
+  });
+
+  it('shares one source and one pair of layers between overlapping regions', async () => {
+    const map = fakeMap();
+    const other: Region = {
+      ...withRoutes,
+      id: 'glencoe',
+      artifacts: withRoutes.artifacts.map((a) => ({ ...a, filename: a.filename.replace('lochaber', 'glencoe') })),
+    };
+
+    await addRegionToMap(map as unknown as MLMap, registry, withRoutes, 'light');
+    await addRegionToMap(map as unknown as MLMap, registry, other, 'light');
+
+    expect(map.layers.filter((l) => l.source === sid('routes'))).toHaveLength(2);
   });
 });
 

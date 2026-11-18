@@ -10,6 +10,7 @@
 //	check-output detail FILE             # build-detail.sh: every kind present, right shapes
 //	check-output parking FILE            # build-parking.sh: enough car parks, all sized points
 //	check-output huts FILE               # build-huts.sh: every kind present, all points
+//	check-output routes FILE             # build-routes.sh: every network present, lines, named
 //
 // Each prints a line per assertion and exits 1 with a FAIL line when one fails. The
 // expected values and why each was chosen are documented beside the calls in the scripts.
@@ -38,7 +39,7 @@ func (f failure) Error() string { return string(f) }
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts|routes FILE")
 		os.Exit(2)
 	}
 	checks := map[string]func(string, io.Writer) error{
@@ -47,10 +48,11 @@ func main() {
 		"detail":    detail,
 		"parking":   parking,
 		"huts":      huts,
+		"routes":    routes,
 	}
 	check, ok := checks[os.Args[1]]
 	if !ok {
-		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts FILE")
+		fmt.Fprintln(os.Stderr, "usage: check-output peaks|munros|sac|terrain-features|landmarks|detail|parking|huts|routes FILE")
 		os.Exit(2)
 	}
 	if err := check(os.Args[2], os.Stdout); err != nil {
@@ -501,6 +503,77 @@ func huts(path string, out io.Writer) error {
 	if len(missing) > 0 {
 		return failure("FAIL: implausibly few features for " + strings.Join(missing, ", ") +
 			" — filter or normalize step likely broken")
+	}
+	return nil
+}
+
+// routes checks build-routes.sh's output: every feature a LineString on one of the four
+// networks, national, regional and local routes all present in meaningful numbers, and
+// most of the national and regional ones named — a broken parent or label step leaves
+// names off while every count still passes. No floor for international routes: Scotland
+// has none of its own ways at that level (its E-path pieces are national stages).
+//
+// Counted in lines, after normalize-routes has joined each route's ways. Floors are 30 to
+// 80 times below Scotland alone (normalize-routes over scotland-latest.osm.pbf,
+// 2026-11-18: 195 national, 158 regional and 1,559 local lines), loose enough for a narrow
+// test extract, tight enough that a broken filter, which produces zero, still fails.
+func routes(path string, out io.Writer) error {
+	minimum := []struct {
+		network string
+		n       int
+	}{{"nwn", 5}, {"rwn", 5}, {"lwn", 20}}
+	histogram, named := map[string]int{}, map[string]int{}
+	notLines, unknown := 0, 0
+	err := eachFeature(path, func(p map[string]json.RawMessage, geometry string) error {
+		net, ok := rawjson.String(p["network"])
+		if !ok {
+			return errors.New(`no "network"`)
+		}
+		switch net {
+		case "iwn", "nwn", "rwn", "lwn":
+		default:
+			unknown++
+		}
+		histogram[net]++
+		if _, ok := rawjson.String(p["name"]); ok {
+			named[net]++
+		}
+		if geometry != "LineString" {
+			notLines++
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	parts := []string{}
+	for _, net := range []string{"iwn", "nwn", "rwn", "lwn"} {
+		parts = append(parts, fmt.Sprintf("%s x%d (%d named)", net, histogram[net], named[net]))
+	}
+	fmt.Fprintf(out, "  lines by network: %s\n", strings.Join(parts, ", "))
+	if unknown > 0 {
+		return failure(fmt.Sprintf("FAIL: %d features have a network the app does not draw — normalize-routes' level step likely broken", unknown))
+	}
+	if notLines > 0 {
+		return failure(fmt.Sprintf("FAIL: %d features are not LineStrings — the way export likely changed", notLines))
+	}
+	var missing []string
+	for _, m := range minimum {
+		if histogram[m.network] < m.n {
+			missing = append(missing, fmt.Sprintf("%s (%d < %d)", m.network, histogram[m.network], m.n))
+		}
+	}
+	if len(missing) > 0 {
+		return failure("FAIL: implausibly few lines for " + strings.Join(missing, ", ") +
+			" — filter or join step likely broken")
+	}
+	major, majorNamed := 0, 0
+	for _, net := range []string{"iwn", "nwn", "rwn"} {
+		major += histogram[net]
+		majorNamed += named[net]
+	}
+	if majorNamed*2 < major {
+		return failure(fmt.Sprintf("FAIL: only %d of %d international, national and regional route lines are named — normalize-routes' label step likely broken", majorNamed, major))
 	}
 	return nil
 }

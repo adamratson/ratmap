@@ -17,6 +17,7 @@ import { addAvalancheLayer, avalancheSourceSpec } from '../overlays/avalanche';
 import { addTerrainFeatureLayers } from '../overlays/terrain-features';
 import { addLandmarkLayers } from '../overlays/landmarks';
 import { addHutsWaterLayer } from '../overlays/huts-water';
+import { addRoutesLayers } from '../overlays/routes';
 import { addDetailLayers } from '../overlays/detail';
 import { parkingLayer } from '../map/parking';
 import { applyAllStoredVisibility } from '../map/layers';
@@ -110,6 +111,24 @@ function beneathPaths(map: MLMap): string | undefined {
     );
   };
   return downloadedLayerIds(map).find(isAnchor) ?? beneathLabels(map);
+}
+
+/**
+ * Where the walking routes' tint belongs: under everything drawn over the ground — relief,
+ * contours, slope, scree, walls — so they all still read across it, and so under the paths
+ * and the grade band too. Only the basemap is beneath it.
+ */
+function beneathGround(map: MLMap): string | undefined {
+  // The kinds drawn over the ground, all of them under the paths (beneathPaths) — and the
+  // paths' own casing, for a region with none of them yet.
+  const ground = ['-terrain', '-avalanche', '-contours', '-terrain-features', '-detail', '-sac'];
+  return (
+    downloadedLayerIds(map).find((id) => {
+      if (map.getLayer(id)?.type === 'symbol') return false;
+      const source = layerSource(map, id);
+      return ground.some((kind) => source.endsWith(kind)) || id === `${source}-paths-casing`;
+    }) ?? beneathPaths(map)
+  );
 }
 
 /**
@@ -628,6 +647,18 @@ function addKindLayers(
     // places before a bench or a cafe claims its spot.
     map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
     addHutsWaterLayer(map, sourceId, { ink, minzoom, before: aboveBasemapPois(map) });
+  } else if (kind === 'routes') {
+    // Named walking routes (see src/overlays/routes.ts): an opaque tint round the path,
+    // so beneath everything drawn over the ground (beneathGround) — and the names with the
+    // rest of the region's text. Ground shading that arrives later goes under the paths
+    // (beneathPaths), which is above this.
+    map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
+    addRoutesLayers(map, sourceId, {
+      ink,
+      minzoom,
+      beforeLine: beneathGround(map),
+      beforeLabels: beneathLabels(map),
+    });
   } else if (kind === 'detail') {
     // Walls, fences, power lines, gates, stiles and fords (see src/overlays/detail.ts).
     // The lines are ground detail like the scree, so under the paths; the gates and fords

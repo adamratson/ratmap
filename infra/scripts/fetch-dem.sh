@@ -86,22 +86,17 @@ export CPL_VSIL_CURL_ALLOWED_EXTENSIONS=.tif
 # Overridable so the retry paths can be exercised without waiting for them.
 DEM_RETRY_WAITS="${DEM_RETRY_WAITS:-15 60 180}"
 
-# Bump the version whenever anything below changes what a given bbox fetches — tile
-# selection, ordering, resampling — so no cache written by older logic is ever reused.
-# v1: sorted tile list, single-threaded VRT (see VRT_NUM_THREADS below).
-# v2: a downsampled fetch really takes the maximum (gdalwarp; see translate below).
-# Mapterhorn's key carries the pinned ETag, so a re-pin never reuses an older release.
-# mapterhorn v1: zoom by latitude, absent tiles as sea level, bilinear to 4326.
+# The cache key. Its versions, and when to bump them, are in lib.sh beside
+# dem_cache_key_is_current, which prune-caches.sh uses to tell a key this builds from one
+# it no longer does.
 mapterhorn_key() {  # mapterhorn_key <res or empty>
-  local pin
-  pin="$(printf '%s' "$MAPTERHORN_PLANET_ETAG" | tr -cd 'A-Za-z0-9' | cut -c1-12)"
-  printf 'mapterhorn-z%s-%s-v1_%s_%s_%s_%s_%s' "$MAPTERHORN_DEM_ZOOM" "$pin" \
-    "$WEST" "$SOUTH" "$EAST" "$NORTH" "${1:-native}"
+  printf 'mapterhorn-z%s-%s-%s_%s_%s_%s_%s_%s' "$MAPTERHORN_DEM_ZOOM" "$(mapterhorn_pin)" \
+    "$DEM_CACHE_MAPTERHORN_VERSION" "$WEST" "$SOUTH" "$EAST" "$NORTH" "${1:-native}"
 }
 if [ "$DEM_SOURCE" = mapterhorn ]; then
   CACHE_KEY="$(mapterhorn_key "$RES")"
 else
-  CACHE_KEY="glo30-v2_${WEST}_${SOUTH}_${EAST}_${NORTH}_${RES:-native}"
+  CACHE_KEY="glo30-${DEM_CACHE_GLO30_VERSION}_${WEST}_${SOUTH}_${EAST}_${NORTH}_${RES:-native}"
 fi
 CACHED=""
 if [ -n "${DEM_CACHE_DIR:-}" ]; then

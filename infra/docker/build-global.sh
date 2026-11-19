@@ -1198,6 +1198,51 @@ stage_manifest() {
 # run
 ########################################################################
 
+# One run at a time, and what the runs before it left behind. Nothing in the pipeline
+# removes what it has stopped needing: a killed run leaves its scratch, a key bump or a
+# re-pin leaves the DEM clips and OSM subsets of the old key, and a filename bump leaves
+# the old region file beside the new one. On 2026-11-19 a run filled its disk that way.
+#
+# Clearing any of it is safe only when no other run is using it, so a run holds this lock
+# for its whole life (fd 9, inherited by every stage; the kernel drops it when the last
+# holder exits, killed or not). The volume is shared by every container of the compose
+# project, and flock holds across them: they share the VM's kernel.
+#
+# Holding it, a run's scratch goes in a directory of its own, and a previous run's there
+# is necessarily dead: removed whole. Scratch outside it — a one-off `docker compose run`
+# of a single build script — could still be live, so it is only reported. Then
+# prune-caches.sh, which has the rest. Before the preflight, so its free-space check sees
+# what was freed. --dry-run reports instead of removing; --preflight-only takes no lock.
+if [ -z "$PREFLIGHT_ONLY" ] && [ "${#stages[@]}" -gt 0 ]; then
+  exec 9>"$WORK_DIR/.global.lock"
+  if flock -n 9; then
+    RUN_TMP="$WORK_DIR/tmp/global"
+    hr
+    log "pruning what earlier runs left${DRY_RUN:+ (dry run: nothing removed)}"
+    if [ -d "$RUN_TMP" ] && [ -n "$(ls -A "$RUN_TMP")" ]; then
+      echo "  scratch     $(du -sh "$RUN_TMP" | cut -f1)  $RUN_TMP (a previous run's)"
+      [ -n "$DRY_RUN" ] || rm -rf "$RUN_TMP"
+    fi
+    mkdir -p "$RUN_TMP"
+    export TMPDIR="$RUN_TMP"
+    others_kb="$(find "$WORK_DIR/tmp" -mindepth 1 -maxdepth 1 ! -path "$RUN_TMP" \
+      -exec du -sk {} + | awk '{ s += $1 } END { print s + 0 }')"
+    if [ "$others_kb" -gt 0 ]; then
+      echo "  ~ $WORK_DIR/tmp also holds $((others_kb / 1024)) MB outside $RUN_TMP," \
+        "from single-script runs (or runs from before 2026-11-19)."
+      echo "    Left alone, since one may still be running; remove it by hand when none is."
+    fi
+    "$SCRIPTS_DIR/prune-caches.sh" ${DRY_RUN:+--dry-run} \
+      || echo "  ! prune-caches.sh failed; carrying on without it" >&2
+  elif [ -n "$DRY_RUN" ]; then
+    log "another global run holds $WORK_DIR/.global.lock: dry run without pruning"
+  else
+    echo "Another global run is using $WORK_DIR (it holds $WORK_DIR/.global.lock)." >&2
+    echo "Two at once would race on the same caches and dist/; wait for it, or stop it." >&2
+    exit 1
+  fi
+fi
+
 # The catalogue queries above (catalogue_dist_gb, peaks_mem_gb, region_ids, region_bboxes)
 # are Go, scripts/tools/cmd/catalog, built here once from the working copy like every Go
 # tool in the pipeline. This driver does not source lib.sh (see the note on the sizing

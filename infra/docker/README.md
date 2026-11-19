@@ -77,6 +77,30 @@ Neither is in the `/work` floor. A run that is going to build contours and avala
 everywhere wants `RATMAP_MIN_WORK_GB` raised to match, or `DEM_CACHE_DIR=` to not keep
 the 30 m clips.
 
+**What a run prunes.** Every `global` run starts by removing what no build will read
+again, before the preflight measures free space (from 2026-11-19, after a run filled its
+disk on what the runs before it had left behind). `scripts/prune-caches.sh` has the full
+list and why each item is safe to remove:
+
+- **DEM cache:** clips under a key `fetch-dem.sh` no longer builds, after a key-version bump
+  or a Mapterhorn re-pin. That includes every GLO-30 v1 clip since the move to Mapterhorn.
+- **OSM subsets:** a continent's subset whose extract or filter has changed since it was
+  built.
+- **dist/:** region files an older build named, such as `-contours` once contours are
+  `-contours-1`. The bucket keeps the copies the live catalogue points at.
+- **Partial files:** files killed runs left behind, once untouched for an hour.
+- **Scratch:** the previous global run's whole scratch directory, `/work/tmp/global`.
+
+A run holds `/work/.global.lock` for its whole life, so a second `global` refuses to start
+alongside it instead of pruning under it. A `--dry-run` reports what it would remove.
+Scratch elsewhere in `/work/tmp`, from a single build script run on its own, is reported
+but never removed, since it may still be in use. Current DEM clips are kept: the next run
+reads them. To prune without running a stage, when nothing else is building:
+
+```bash
+docker compose run --rm infra prune-caches.sh --dry-run
+```
+
 **Disk is the binding constraint here, not memory.** That is a deliberate result: the
 GeoJSON intermediates are line-delimited (`osmium export -f geojsonseq`) and every
 consumer streams them a feature at a time, so nothing in the pipeline scales its memory

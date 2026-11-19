@@ -29,6 +29,8 @@ ratmap infra toolchain
                                                build-region.sh scotland --dry-run
                                                build-world-catalog.sh
                                                upload.sh
+                                               prune-caches.sh --dry-run   (global runs
+                                               prune by themselves; see docker/README.md)
   build-catalog.sh [args...]                 regenerate regions.json from Geofabrik's
                                              index — writes to the mounted host file, and
                                              caches its measurements under /work

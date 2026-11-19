@@ -137,6 +137,8 @@ FROM debian:${DEBIAN_TAG}
 #                  SQLite (modernc.org/sqlite), so its FTS5 does not hang on Debian's flags
 # libsqlite3-0/zlib1g/libstdc++6 -> explicit, because tippecanoe is copied in rather than
 #                  apt-installed and so pulls no dependencies of its own
+# util-linux    -> flock, build-global.sh's run lock. Essential in Debian, so already in
+#                  the base image; named so that stays a declared dependency
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
         ca-certificates \
@@ -147,6 +149,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libstdc++6 \
         osmium-tool \
         sqlite3 \
+        util-linux \
         awscli \
         zlib1g \
     && rm -rf /var/lib/apt/lists/*

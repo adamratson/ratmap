@@ -121,7 +121,8 @@ type failure string
 
 func (f failure) Error() string { return string(f) }
 
-const usage = `usage: build-manifest [--base MANIFEST_JSON_OR_URL | --base-live] [--prune] [--only REGEX] [DIST_DIR]`
+const usage = `usage: build-manifest [--base MANIFEST_JSON_OR_URL | --base-live] [--prune] [--only REGEX] [DIST_DIR]
+       build-manifest --superseded [DIST_DIR]`
 
 func main() {
 	fs := flag.NewFlagSet("build-manifest", flag.ExitOnError)
@@ -129,6 +130,7 @@ func main() {
 	baseLive := fs.Bool("base-live", false, "merge into $PUBLIC_BASE_URL/regions/manifest.json (environment, then infra/.env)")
 	prune := fs.Bool("prune", false, "with --base/--base-live: also drop base regions no longer in regions.json")
 	onlyFlag := fs.String("only", "", "only consider region directories whose id matches this regex (RE2 syntax)")
+	superseded := fs.Bool("superseded", false, "list region files an older build named, one path a line, and build nothing (see superseded.go)")
 	args := cli.Parse(fs, usage, os.Args[1:])
 	usageErr := func(msg string) { cli.Fail(fs, "%s", msg) }
 	given := cli.Given(fs)
@@ -141,6 +143,9 @@ func main() {
 	if *prune && !given["base"] && !*baseLive {
 		usageErr("--prune only makes sense together with --base or --base-live")
 	}
+	if *superseded && (given["base"] || *baseLive || *prune || given["only"]) {
+		usageErr("--superseded takes no other flags")
+	}
 	infraDir, err := infra.Dir()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "build-manifest:", err)
@@ -149,6 +154,17 @@ func main() {
 	distDir := filepath.Join(infraDir, "dist")
 	if len(args) == 1 {
 		distDir = args[0]
+	}
+	if *superseded {
+		paths, err := supersededFiles(distDir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "build-manifest:", err)
+			os.Exit(1)
+		}
+		for _, p := range paths {
+			fmt.Println(p)
+		}
+		return
 	}
 
 	var base string

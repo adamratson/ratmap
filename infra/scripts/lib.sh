@@ -202,6 +202,14 @@ RATMAP_OSM_SUBSET_FILTER="
 # the extract's size and mtime, not its path, so a copy that keeps mtimes keeps them valid.
 OSM_SUBSET_DIR="${OSM_SUBSET_DIR:-$CACHE_ROOT/osm/subsets}"
 
+# osm_subset_path <extract.osm.pbf> — where its subset for the current filter union
+# lives, built or not. prune-caches.sh keeps only these.
+osm_subset_path() {
+  local src="$1" key
+  key="$(go_run util subset-key "$src" " $(echo $RATMAP_OSM_SUBSET_FILTER) ")"
+  echo "$OSM_SUBSET_DIR/$(basename "${src%.osm.pbf}").$key.osm.pbf"
+}
+
 osm_subset() {
   local src="$1"
   shift
@@ -222,10 +230,11 @@ osm_subset() {
   fi
 
   local key base dir out tmp
-  key="$(go_run util subset-key "$src" "$union")"
+  out="$(osm_subset_path "$src")"
+  key="${out%.osm.pbf}"
+  key="${key##*.}"
   base="$(basename "${src%.osm.pbf}")"
   dir="$OSM_SUBSET_DIR"
-  out="$dir/$base.$key.osm.pbf"
 
   if [ -s "$out" ]; then
     echo "  shared subset $(basename "$out") ($(du -h "$out" | cut -f1))" >&2
@@ -259,6 +268,28 @@ DEM_CACHE_DIR="${DEM_CACHE_DIR-$CACHE_ROOT/dem}"
 # is changed on purpose.
 MAPTERHORN_PLANET_URL="${MAPTERHORN_PLANET_URL:-https://download.mapterhorn.com/planet.pmtiles}"
 MAPTERHORN_PLANET_ETAG="${MAPTERHORN_PLANET_ETAG:-\"fa356a37f6efbb757fe00d1767bddf01-2650\"}"
+
+# The DEM cache's key versions. Here rather than in fetch-dem.sh, which builds the keys,
+# so that prune-caches.sh can tell a current entry from one no build will read again.
+# Bump whenever anything changes what a given bbox fetches — tile selection, ordering,
+# resampling — so no cache written by older logic is ever reused.
+#   glo30 v1: sorted tile list, single-threaded VRT (see VRT_NUM_THREADS in fetch-dem.sh).
+#   glo30 v2: a downsampled fetch really takes the maximum (gdalwarp; see translate there).
+#   mapterhorn v1: zoom by latitude, absent tiles as sea level, bilinear to 4326.
+# Mapterhorn's key also carries the pinned ETag, so a re-pin never reuses an older release.
+DEM_CACHE_GLO30_VERSION=v2
+DEM_CACHE_MAPTERHORN_VERSION=v1
+mapterhorn_pin() { printf '%s' "$MAPTERHORN_PLANET_ETAG" | tr -cd 'A-Za-z0-9' | cut -c1-12; }
+
+# dem_cache_key_is_current <key> — whether fetch-dem.sh, as it stands, can still produce
+# and read this key (a cache file's name without .tif or .txt).
+dem_cache_key_is_current() {
+  case "$1" in
+    "mapterhorn-z"*"-$(mapterhorn_pin)-${DEM_CACHE_MAPTERHORN_VERSION}_"*) return 0 ;;
+    "glo30-${DEM_CACHE_GLO30_VERSION}_"*) return 0 ;;
+  esac
+  return 1
+}
 
 # Memory this process may actually use, in whole GB.
 #

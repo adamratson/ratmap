@@ -34,8 +34,12 @@ function findArchive(): string | null {
   const root = 'infra/dist/regions';
   if (!existsSync(root)) return null;
   for (const region of readdirSync(root).sort()) {
-    const path = join(root, region, `${region}-avalanche-1.pmtiles`);
-    if (existsSync(path)) return path;
+    // Newest version first: -2 is slope from Mapterhorn (infra/scripts/fetch-dem.sh), -1
+    // the GLO-30 build before it. The channel layout is the same in both.
+    for (const version of [2, 1]) {
+      const path = join(root, region, `${region}-avalanche-${version}.pmtiles`);
+      if (existsSync(path)) return path;
+    }
   }
   return null;
 }

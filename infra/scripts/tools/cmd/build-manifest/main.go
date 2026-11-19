@@ -68,18 +68,21 @@ const schemaVersion = 1
 var artifactKinds = []struct{ suffix, kind string }{
 	{"-basemap.pmtiles", "basemap"},
 	{"-terrain.pmtiles", "terrain"},
-	{"-contours.pmtiles", "contours"},
+	// Versioned since contours moved to Mapterhorn's DEM (fetch-dem.sh), for the reason
+	// the avalanche line gives; bump together with build-contours.sh.
+	{"-contours-1.pmtiles", "contours"},
 	{"-paths.pmtiles", "paths"},
 	{"-sac.pmtiles", "sac"},
 	{"-terrain-features.pmtiles", "terrain-features"},
 	// Versioned in the filename, unlike every other kind: `downloadArtifact` skips an
 	// artifact whose name is already in OPFS, so a rebuild under an unchanged name never
-	// reaches anyone who already holds the region. Stage B's runout channel replaces this
-	// line with "-avalanche-2.pmtiles" rather than adding to it — two versions mapping to
-	// one kind would race in the merge below.
-	{"-avalanche-1.pmtiles", "avalanche"},
-	// Versioned for the same reason; bump together with build-region.sh.
-	{"-peaks-1.pmtiles", "peaks"},
+	// reaches anyone who already holds the region. A new version replaces the line rather
+	// than adding one — two versions mapping to one kind would race in the merge below.
+	// -2: slope from Mapterhorn's DEM (fetch-dem.sh). Stage B's runout channel is -3.
+	{"-avalanche-2.pmtiles", "avalanche"},
+	// Versioned for the same reason; bump together with build-region.sh. -2: prominence
+	// from Mapterhorn's DEM, with the true maximum of each cell.
+	{"-peaks-2.pmtiles", "peaks"},
 	// Versioned for the same reason; bump together with build-region.sh and
 	// docker/build-global.sh's cut_from_global.
 	{"-landmarks-1.pmtiles", "landmarks"},

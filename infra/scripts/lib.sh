@@ -252,6 +252,14 @@ osm_subset() {
 # `-` rather than `:-`, so an explicitly empty DEM_CACHE_DIR= switches caching off.
 DEM_CACHE_DIR="${DEM_CACHE_DIR-$CACHE_ROOT/dem}"
 
+# Mapterhorn's planet.pmtiles, which fetch-dem.sh reads its DEMs from, pinned by ETag
+# (C13: a dependency we do not control is pinned, never tracked). The file is republished
+# in place, so the ETag is the release: this one is version 0.0.13 in Mapterhorn's
+# download_urls.json, last modified 2026-09-11. A republish fails fetch-dem.sh until this
+# is changed on purpose.
+MAPTERHORN_PLANET_URL="${MAPTERHORN_PLANET_URL:-https://download.mapterhorn.com/planet.pmtiles}"
+MAPTERHORN_PLANET_ETAG="${MAPTERHORN_PLANET_ETAG:-\"fa356a37f6efbb757fe00d1767bddf01-2650\"}"
+
 # Memory this process may actually use, in whole GB.
 #
 # Smallest of: a cgroup v2 limit, a cgroup v1 limit, and the host's own total. Under

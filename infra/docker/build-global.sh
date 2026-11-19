@@ -845,7 +845,7 @@ stage_regions() {
   # "<kind>:<global file>[:<file suffix>]". All additive (C16), so a missing one is a
   # region built before that kind existed, not a broken region. The suffix is the
   # region file's name after "<id>-" when it is not simply the kind — peaks is versioned
-  # (`<id>-peaks-1.pmtiles`, see build-region.sh), and without it this would look for a
+  # (`<id>-peaks-2.pmtiles`, see build-region.sh), and without it this would look for a
   # file that never exists and re-cut peaks on every run.
   local -a cut_from_global=(
     sac:sac-global.pmtiles
@@ -857,7 +857,7 @@ stage_regions() {
     huts:huts-global.pmtiles:huts-1
     routes:routes-global.pmtiles:routes-1
     access:access-global.pmtiles:access-1
-    peaks:peaks-global.pmtiles:peaks-1
+    peaks:peaks-global.pmtiles:peaks-2
   )
 
   # Not a failure — but worth one line up front rather than a "skipped" per region,
@@ -979,7 +979,7 @@ stage_contours() {
   local id
   local -a ids=()
   while read -r id _; do
-    if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-contours.pmtiles" ]; then
+    if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-contours-1.pmtiles" ]; then
       log "contours/$id: already built — --force to redo"
       continue
     fi
@@ -1099,7 +1099,7 @@ stage_avalanche() {
   local id
   local -a ids=()
   while read -r id _; do
-    if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-avalanche-1.pmtiles" ]; then
+    if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-avalanche-2.pmtiles" ]; then
       log "avalanche/$id: already built — --force to redo"
       continue
     fi

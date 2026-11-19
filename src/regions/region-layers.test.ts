@@ -199,6 +199,18 @@ describe('addRegionToMap', () => {
     );
   });
 
+  it('credits the DEM for the contours — Mapterhorn and Copernicus, never OSM', async () => {
+    const map = fakeMap();
+
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
+
+    const calls = map.addSource.mock.calls as unknown as Array<[string, { attribution?: string }]>;
+    const attribution = String(calls.find(([id]) => id === sid('contours'))?.[1].attribution);
+    expect(attribution).toContain('Mapterhorn');
+    expect(attribution).toContain('Copernicus');
+    expect(attribution).not.toContain('OpenStreetMap');
+  });
+
   it('puts relief and contours beneath the region labels, not over them', async () => {
     const map = fakeMap();
 

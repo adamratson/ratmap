@@ -596,6 +596,13 @@ its own, before the fetches running ahead (the container's preflight adds those 
 
 ### The DEM fetch is deterministic, and cached
 
+Since 2026-11-18 `fetch-dem.sh` reads Mapterhorn's `planet.pmtiles` (lidar and national
+models over GLO-30), pinned by ETag in `lib.sh`; a Mapterhorn republish fails the fetch
+until it is re-pinned on purpose. `DEM_SOURCE=glo30` reads Copernicus GLO-30 as below.
+Contours, avalanche and summits built from it carry new filenames (`-contours-1`,
+`-avalanche-2`, `-peaks-2`) so they reach regions already downloaded. What follows was
+written about the GLO-30 path; the cache and the retries apply to both.
+
 `fetch-dem.sh` — prominence, contours and avalanche all go through it — used to return a
 slightly different DEM every time. GDAL reads a VRT's sources on parallel threads by
 default; the Copernicus tiles abut, so at every 1° seam both neighbours write the same

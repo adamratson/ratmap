@@ -462,7 +462,8 @@ The half that makes the layer a decision aid rather than an overlay, and the ans
   published, open source, and does exactly this with a priority-queue propagation; a naive
   all-pairs alpha-angle search is O(n²) and will not finish on a region. GPL, but it is a
   build-time tool processing our data, not linked into the shipped app.
-- Ships as `-avalanche-2.pmtiles` (A9), the B channel filled in. Nothing else changes.
+- Ships as `-avalanche-3.pmtiles` (A9), the B channel filled in. Nothing else changes. (`-2`
+  was taken on 2026-11-18 by the move from GLO-30 to Mapterhorn's DEM, infra/scripts/fetch-dem.sh.)
 
 **Verify before building on it:** Flow-Py's runtime and memory on a full region bbox is
 unknown here, and the contour build already taught this pipeline that a per-region raster
@@ -515,7 +516,7 @@ Airplane Mode throughout, region downloaded:
 5. The tap sheet and legend both state that the layer is terrain only and has not seen the
    snow, and the sheet links to the relevant national avalanche service.
 6. Force-quit, relaunch, still offline → all of the above, unchanged.
-7. Rebuild the artifact as `-avalanche-2.pmtiles` and confirm the catalogue row offers
+7. Rebuild the artifact as `-avalanche-3.pmtiles` and confirm the catalogue row offers
    **Update** quoting only the new file's bytes (the §4.5 `update`-vs-`partial` path).
 
 ### Cost

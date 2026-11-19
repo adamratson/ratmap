@@ -267,7 +267,8 @@ checked in a real browser (headless Chromium against the production build). Note
   static versioned manifest of name, bbox, per-artifact size, build date (C16). Unique
   filenames (C3).
 - Terrain per region needs **no generation** — an extract from Mapterhorn.
-- Contours per region: `gdal_contour` over Copernicus GLO-30 → `tippecanoe`. Carry `ele`
+- Contours per region: `gdal_contour` over Mapterhorn's DEM (GLO-30 until 2026-11-18; see
+  `infra/scripts/fetch-dem.sh`) → `tippecanoe`. Carry `ele`
   per line; tag index contours (every 5th) at generation time. **Fine-interval global
   contours are hundreds of GB — never build them.** Coarse 100 m global is optional.
 - App: chunked resumable downloader writing into OPFS, with Wake Lock, progress, storage
@@ -314,8 +315,11 @@ region (`lochaber`, 44.1 MB — basemap z13 + terrain z11 + contours z11–14):
   `durableStorage` reports success but changes nothing), so the *downloader itself* was
   exercised with persistence stubbed in the harness.
 
-**Contours** come from Copernicus GLO-30 read as COG through GDAL's `/vsicurl`, so only
-the region's bbox is fetched rather than the global DEM. 10 m interval with every 5th
+**Contours** came from Copernicus GLO-30 read as COG through GDAL's `/vsicurl`, so only
+the region's bbox is fetched rather than the global DEM. (Since 2026-11-18 they, the
+avalanche layer and prominence read Mapterhorn's DEM instead, which carries lidar and
+national models wherever they are published: median summit error 2.4 m against GLO-30's
+4.7 m on the central Lakes. `infra/scripts/fetch-dem.sh` has the measurements.) 10 m interval with every 5th
 (50 m) tagged as an index contour at generation time. Adding them required **no app
 change** — the manifest, downloader and layer code all iterate declared artifacts, which
 is exactly what C16 exists to buy.

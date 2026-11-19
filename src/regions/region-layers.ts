@@ -6,7 +6,7 @@ import { isTileArchive, type Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 import {
-  COPERNICUS_ATTRIBUTION,
+  DEM_ATTRIBUTION,
   OSM_ATTRIBUTION,
   PEAKS_PMTILES_URL,
   TERRAIN_ATTRIBUTION,
@@ -509,10 +509,9 @@ function addKindLayers(
       before: beneathBasemapLabels(map),
     });
   } else if (kind === 'contours') {
-    // Copernicus, not OSM. These lines are traced from Copernicus GLO-30 by
-    // build-contours.sh; crediting OpenStreetMap for them was both wrong and a licence
-    // gap, since the Copernicus terms require attribution of their own.
-    map.addSource(sourceId, { type: 'vector', url, attribution: COPERNICUS_ATTRIBUTION });
+    // The DEM's credit, not OSM's: these lines are traced from a DEM by build-contours.sh,
+    // and crediting OpenStreetMap for them was both wrong and a licence gap.
+    map.addSource(sourceId, { type: 'vector', url, attribution: DEM_ATTRIBUTION });
 
     // z11-z13 preview: index contours only (every 5th — see the `idx` note below),
     // giving a coarse sense of relief before full 10 m detail arrives. `maxzoom` is
@@ -584,7 +583,7 @@ function addKindLayers(
     // Slope shading from the region's own DEM derivative (Phase 4.6). Same source type
     // as the hillshade, different decoding: see AVALANCHE_ENCODING for why the channel
     // factors are what they are.
-    map.addSource(sourceId, avalancheSourceSpec(url, COPERNICUS_ATTRIBUTION));
+    map.addSource(sourceId, avalancheSourceSpec(url, DEM_ATTRIBUTION));
 
     addAvalancheLayer(map, sourceId, {
       minzoom,

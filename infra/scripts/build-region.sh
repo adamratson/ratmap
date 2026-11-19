@@ -436,8 +436,9 @@ elif [ -n "$PEAKS_SOURCE" ]; then
     | go_run pmtiles-header maxzoom)"
   # Versioned like the avalanche artifact: a region already downloaded only fetches a
   # file whose name it does not hold, so a rebuilt summit set needs a new name to reach it.
-  # Bump the number here and in tools/cmd/build-manifest's artifactKinds together.
-  extract_verified "$PEAKS_SOURCE" "$OUT_DIR/$REGION_ID-peaks-1.pmtiles" "$PEAKS_MAXZOOM" --allow-empty
+  # Bump the number here and in tools/cmd/build-manifest's artifactKinds together. -2:
+  # prominence from Mapterhorn, with the true maximum of each cell (fetch-dem.sh).
+  extract_verified "$PEAKS_SOURCE" "$OUT_DIR/$REGION_ID-peaks-2.pmtiles" "$PEAKS_MAXZOOM" --allow-empty
 else
   echo "==> summits: skipped (no peaks-global.pmtiles — run ./scripts/build-peaks.sh)"
 fi

@@ -3,14 +3,12 @@
 #
 #   ./build-contours.sh <region-id>
 #
-# Source is Copernicus GLO-30 on AWS Open Data, read as Cloud-Optimized GeoTIFF through
-# GDAL's /vsicurl — so only the bytes covering the region's bbox are fetched, not the
-# whole global DEM. Same posture as the pmtiles extracts: no giant download, and nothing
-# generated in the browser (C14).
-#
-# Note this is a *different* DEM from the hillshade terrain (Mapterhorn/terrarium). Both
-# ultimately derive from Copernicus, but hillshade needs pre-encoded raster tiles while
-# contours need real elevation values to trace lines through.
+# Source is fetch-dem.sh's DEM: Mapterhorn's terrain, the same the hillshade is cut from —
+# lidar or a national model wherever a country publishes one, Copernicus GLO-30 elsewhere
+# — decoded from its Terrarium tiles into real elevations to trace lines through. Only
+# the region's bbox is fetched, and nothing is generated in the browser (C14). Until
+# 2026-11-18 this read GLO-30 directly, a 30 m surface model that traced the tops of
+# forests; fetch-dem.sh has the measurements behind the change.
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$SCRIPT_DIR/lib.sh"
 require_cmd gdal_contour
@@ -52,7 +50,11 @@ CONTOUR_WORKERS="${CONTOUR_WORKERS:-$(workers_for_budget "$CONTOUR_CELL_GB")}"
 
 OUT_DIR="$DIST_DIR/regions/$REGION_ID"
 mkdir -p "$OUT_DIR"
-OUT="$OUT_DIR/$REGION_ID-contours.pmtiles"
+# Versioned in the filename since the source moved to Mapterhorn (2026-11-18): a region
+# already downloaded only fetches a file whose name it does not hold, so contours traced
+# from a new DEM need a new name to reach anyone. Bump with tools/cmd/build-manifest's
+# artifactKinds and docker/build-global.sh's "already built" check.
+OUT="$OUT_DIR/$REGION_ID-contours-1.pmtiles"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -171,7 +173,7 @@ echo "==> joining"
 # then failed `pmtiles verify` — as any contours build since 0c483f6 (2026-09-04) would
 # have, until this was found on 2026-09-23. The same trap build-paths.sh's comment
 # describes, with the same fix.
-TMP_OUT="$WORK_DIR/$REGION_ID-contours.pmtiles"
+TMP_OUT="$WORK_DIR/$REGION_ID-contours-1.pmtiles"
 #
 # Joined in cell order, so the output is the same whatever order the cells finished in.
 # -pk because there is no tile size limit to apply: the cells were tiled without one, and

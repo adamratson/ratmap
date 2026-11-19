@@ -9,8 +9,9 @@ import type { Map as MLMap, SourceSpecification } from 'maplibre-gl';
 // as a bulletin's danger scale) and every string in the UI. Someone reading a terrain
 // layer as a forecast can die of it.
 //
-// The data is a per-region raster built by infra/scripts/build-avalanche.sh from Copernicus
-// GLO-30 — no third-party live feed anywhere, and nothing computed in the browser (C14).
+// The data is a per-region raster built by infra/scripts/build-avalanche.sh from
+// Mapterhorn's DEM (Copernicus GLO-30 until 2026-11-18, infra/scripts/fetch-dem.sh) — no
+// third-party live feed anywhere, and nothing computed in the browser (C14).
 
 /** Layer id suffix, used to find these layers for toggling and removal. */
 const SHADE_SUFFIX = '-shade';

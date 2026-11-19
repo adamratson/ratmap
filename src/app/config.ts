@@ -45,15 +45,22 @@ export const USE_FALLBACK_TERRAIN = import.meta.env.VITE_USE_FALLBACK_TERRAIN ==
 
 export const OSM_ATTRIBUTION =
   '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>';
-// Contours and the avalanche terrain layer are both traced from Copernicus GLO-30 (see
-// infra/scripts/build-contours.sh and build-avalanche.sh), not from OSM. Its licence is
-// free worldwide *with attribution required*, so these sources must not keep borrowing
-// the OSM credit the way the contours source did before 2026-09-08.
+// Copernicus GLO-30: free worldwide *with attribution required*. Contours and the
+// avalanche layer were traced from it directly until 2026-11-18, and it is still the base
+// of the Mapterhorn DEM they are traced from now — see DEM_ATTRIBUTION.
 export const COPERNICUS_ATTRIBUTION =
   '<a href="https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex.pdf" target="_blank" rel="noreferrer">© Copernicus DEM</a>';
 
 export const TERRAIN_ATTRIBUTION =
   '<a href="https://mapterhorn.com/attribution" target="_blank" rel="noreferrer">© Mapterhorn</a>';
+
+// Contours and the avalanche layer, which are traced from a DEM rather than from OSM, so
+// they must never borrow the OSM credit (as the contours source did before 2026-09-08).
+// Built from Mapterhorn's DEM since 2026-11-18 (infra/scripts/fetch-dem.sh), whose page
+// credits the ~150 national sources under it; from Copernicus GLO-30 before that. A shared
+// source can draw both kinds of file until every region is updated, and Copernicus is
+// Mapterhorn's base layer either way, so both are credited.
+export const DEM_ATTRIBUTION = `${TERRAIN_ATTRIBUTION} ${COPERNICUS_ATTRIBUTION}`;
 
 // The global fallback search index (C9): the largest cities and towns and the best-known
 // summits, for search before any region is downloaded. Shipped in public/ and precached

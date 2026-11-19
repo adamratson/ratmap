@@ -3,16 +3,16 @@
 #
 #   ./build-avalanche.sh <region-id>
 #
-# Output: dist/regions/<id>/<id>-avalanche-1.pmtiles — a raster pyramid carrying
+# Output: dist/regions/<id>/<id>-avalanche-2.pmtiles — a raster pyramid carrying
 # R = slope in whole degrees, G = aspect octant, B = runout (0 until Stage B).
 #
 # **This layer shows avalanche *terrain*, never avalanche *risk*.** Danger is terrain x
 # snowpack x weather and this pipeline has one of the three, permanently. See
 # plans/avalanche-terrain.md §1 — the naming is a safety property, not a preference.
 #
-# Source is Copernicus GLO-30 read as COG through GDAL's /vsicurl, exactly like
-# build-contours.sh: only the region's bbox moves, nothing is generated in the browser
-# (C14), and no third-party live feed is involved anywhere.
+# Source is fetch-dem.sh's DEM (Mapterhorn's terrain; GLO-30 until 2026-11-18), exactly
+# like build-contours.sh: only the region's bbox moves, nothing is generated in the
+# browser (C14), and no third-party live feed is involved anywhere.
 #
 # Gated on `"avalanche": true` in regions.json — this is a mountain artifact and building
 # it for the whole global catalogue would be CPU and bytes spent on flat ground.
@@ -20,7 +20,8 @@
 # The trailing `-1` in the filename is a **content version**, and it is load-bearing:
 # `downloadArtifact` skips an artifact whose filename is already in OPFS
 # (src/regions/downloader.ts:355), so a rebuilt file under an unchanged name would never
-# reach anyone who already has the region. Stage B's runout channel publishes `-2`.
+# reach anyone who already has the region. `-2` is slope from Mapterhorn's DEM instead of
+# GLO-30 (fetch-dem.sh, 2026-11-18); Stage B's runout channel publishes `-3`.
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$SCRIPT_DIR/lib.sh"
 require_cmd gdalwarp
@@ -37,7 +38,9 @@ require_cmd go
 ZMIN="${AVALANCHE_MINZOOM:-8}"
 
 # The maximum zoom is a property of the source data, not a preference (constraint A5).
-# Copernicus GLO-30 is ~30 m; publishing finer than that would present interpolation as
+# fetch-dem.sh's DEM is read at the zoom whose pixel is no coarser than 30 m, so 30 m is
+# still the resolution to claim — even where the lidar under it is far finer, it reaches
+# this pipeline averaged to that pixel. Publishing finer would present interpolation as
 # measurement. Web Mercator ground resolution at 512 px tiles is
 # 40075017*cos(lat)/(2^z*512), so the cap is latitude-dependent — z11 in Scotland, z12 in
 # the Alps and nearer the equator.
@@ -48,7 +51,7 @@ eval "$REGION_VARS"
 
 OUT_DIR="$DIST_DIR/regions/$REGION_ID"
 mkdir -p "$OUT_DIR"
-OUT="$OUT_DIR/$REGION_ID-avalanche-1.pmtiles"
+OUT="$OUT_DIR/$REGION_ID-avalanche-2.pmtiles"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT

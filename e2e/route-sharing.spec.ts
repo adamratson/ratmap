@@ -92,7 +92,12 @@ test('the fragment is cleared once read, so a reload does not open the route aga
   expect(new URL(page.url()).hash).toBe('');
   await page.reload();
   await page.locator('#map').waitFor();
-  expect((await plannerState(page)).waypoints).toBe(0);
+
+  // The route comes back, as the route that was on screen (draft-store.ts) — not opened
+  // from the link a second time, which would offer to put back what it replaced.
+  await expect.poll(async () => (await plannerState(page)).waypoints).toBe(3);
+  expect(new URL(page.url()).hash).toBe('');
+  await expect(page.locator('.toast', { hasText: 'Opened' })).toHaveCount(0);
 });
 
 test('the map moves to a route opened from a link', async ({ page }) => {

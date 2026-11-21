@@ -568,6 +568,10 @@ export class RoutePlanner {
    * Put a {@link snapshot} back on screen, in planning: what was on screen before the page
    * went away. Following is not restarted — that needs the GPS, which is the caller's to ask
    * for (and on iOS, from a tap).
+   *
+   * The map is left where it is. It opens where it was closed (map/last-view.ts), which is
+   * the view the route was last seen in; fitting the whole route over that would move
+   * someone off the stretch they were looking at.
    */
   restore(saved: DraftSnapshot): void {
     this.stopFollowing();
@@ -584,7 +588,7 @@ export class RoutePlanner {
       this.active = true;
     }
     this.map.getCanvas().style.cursor = this.isEditing() ? 'crosshair' : '';
-    this.showDraft([]);
+    this.showDraft([], { fit: false });
   }
 
   /**
@@ -702,7 +706,7 @@ export class RoutePlanner {
    * chart on every save. `recompute` then measures, after first filling in any leg the
    * draft arrived without, which nothing else would.
    */
-  private showDraft(previousLine: readonly LngLat[]): void {
+  private showDraft(previousLine: readonly LngLat[], { fit = true }: { fit?: boolean } = {}): void {
     if (!sameLine(previousLine, this.draft.coordinates())) {
       this.profile = null;
       this.profileNote = null;
@@ -716,7 +720,7 @@ export class RoutePlanner {
     // After emit, which is what brings the route panel up: the route is fitted into the
     // map that panel leaves showing, not the one before it opened.
     this.emit();
-    this.fitToRoute();
+    if (fit) this.fitToRoute();
     this.draftChanged();
     void this.recompute();
   }

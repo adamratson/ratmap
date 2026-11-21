@@ -922,6 +922,20 @@ describe('keeping the route across a reload', () => {
     expect(copy).toMatchObject({ routeId: null, following: false, snapToPath: true });
   });
 
+  it('leaves the map where it reopened, rather than fitting the whole route over it', async () => {
+    planner.activate();
+    planner.handleMapClick(click(ACHINTEE));
+    planner.handleMapClick(click(SUMMIT));
+    await settle();
+    const copy = JSON.parse(JSON.stringify(planner.snapshot()));
+    planner.close();
+    map.fitBounds.mockClear();
+
+    planner.restore(copy);
+
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+
   it('has nothing to keep when there is no route', () => {
     expect(planner.snapshot()).toBeNull();
   });

@@ -21,6 +21,9 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances 
     on(event: string, cb: (e: unknown) => void): void {
       (handlers[event] ??= []).push(cb);
     }
+    off(event: string, cb: (e: unknown) => void): void {
+      handlers[event] = (handlers[event] ?? []).filter((handler) => handler !== cb);
+    }
     once(event: string, cb: (e: unknown) => void): void {
       (handlers[event] ??= []).push(cb);
     }
@@ -67,6 +70,9 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances 
     container = document.createElement('div');
     getContainer(): HTMLElement {
       return this.container;
+    }
+    project(): { x: number; y: number } {
+      return { x: 0, y: 0 };
     }
     unproject(): { lat: number; lng: number; wrap(): { lat: number; lng: number } } {
       const at = { lat: 56.8, lng: -4.5 };

@@ -33,6 +33,7 @@ import { addPeaksLayer, peakAt } from './overlays/peaks';
 import { sacPathAt } from './overlays/sac';
 import { setUpLocation } from './location/location-ui';
 import { NO_INSET, type ViewInset } from './map/view-inset';
+import { readLastView, rememberView } from './map/last-view';
 import type { PeakProperties } from './overlays/peaks';
 import { RegionCoverage } from './regions/coverage';
 import { downloadsInFlight } from './regions/downloader';
@@ -225,15 +226,22 @@ function viewInset(): ViewInset {
 
 // --- The map ------------------------------------------------------------------------
 
+// Where it was when ratmap was last closed (see last-view.ts).
+const lastView = readLastView();
+
 const map = new maplibregl.Map({
   container: 'map',
-  center: [-4.5, 56.8],
-  zoom: 6,
+  center: lastView.center,
+  zoom: lastView.zoom,
+  bearing: lastView.bearing,
+  pitch: lastView.pitch,
   // Attribution is legally required (ODbL) and must not be auto-hidden without user
   // action — so it stays expanded rather than collapsing to an "i" on narrow screens.
   attributionControl: { compact: false },
   style: buildBaseStyle(theme.get(), registry),
 });
+
+rememberView(map);
 
 theme.onChange((next) => {
   // Protomaps flavours are whole layer sets, so switching means replacing the style —

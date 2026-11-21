@@ -43,6 +43,21 @@ test.describe('the sheet', () => {
     expect(await overflow()).toBeLessThanOrEqual(0);
   });
 
+  test('opens where it was closed', async ({ page }) => {
+    await jumpTo(page, BEN_NEVIS, 13.5);
+    // Saved when the map comes to rest; jumpTo has, by the time it returns.
+    await page.reload();
+    await page.locator('#map').waitFor();
+
+    const view = await page.evaluate(() => {
+      const map = (window as unknown as { __ratmapMap: { getCenter(): { lng: number; lat: number }; getZoom(): number } }).__ratmapMap;
+      return { ...map.getCenter(), zoom: map.getZoom() };
+    });
+    expect(view.lng).toBeCloseTo(BEN_NEVIS[0], 4);
+    expect(view.lat).toBeCloseTo(BEN_NEVIS[1], 4);
+    expect(view.zoom).toBeCloseTo(13.5, 1);
+  });
+
   test('opens a destination from its chip, and closes it from the same chip', async ({ page }) => {
     const routes = page.locator('#chips .chip', { hasText: 'Routes' });
     await expect(routes).toHaveAttribute('aria-expanded', 'false');

@@ -1,6 +1,7 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import { formatElevation } from '../overlays/peaks';
 import type { StatusCentre } from '../ui/status';
+import { insetOffset, NO_INSET, type ViewInset } from '../map/view-inset';
 import { deletePlace, listPlaces, savePlace, type SavedPlace } from './saved-places';
 
 // The Saved view: every saved place, to fly to or delete.
@@ -8,8 +9,10 @@ import { deletePlace, listPlaces, savePlace, type SavedPlace } from './saved-pla
 export interface PlacesViewDeps {
   map: MLMap;
   status: Pick<StatusCentre, 'toast'>;
-  /** Called after flying to a place. */
+  /** Called when a place is chosen, before the map moves to it. */
   onGoTo: () => void;
+  /** What covers the map once onGoTo has run, so the place lands where it can be seen. */
+  viewInset?: () => ViewInset;
 }
 
 export async function renderPlacesSheet(body: HTMLElement, deps: PlacesViewDeps): Promise<void> {
@@ -44,10 +47,14 @@ export async function renderPlacesSheet(body: HTMLElement, deps: PlacesViewDeps)
     const ele = formatElevation(place.ele);
     goto.textContent = ele ? `${place.name} · ${ele}` : place.name;
     goto.addEventListener('click', () => {
-      map.easeTo({ center: [place.lng, place.lat], zoom: Math.max(map.getZoom(), 10) });
       // Out of the way, but still one drag from the list — going to a place is usually
-      // the first of several.
+      // the first of several. First, so the move below centres on the map it leaves.
       deps.onGoTo();
+      map.easeTo({
+        center: [place.lng, place.lat],
+        zoom: Math.max(map.getZoom(), 10),
+        offset: insetOffset((deps.viewInset ?? (() => NO_INSET))()),
+      });
     });
 
     const remove = document.createElement('button');

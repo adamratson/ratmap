@@ -46,7 +46,6 @@ async function render(): Promise<void> {
     planner: {} as RoutePlanner,
     container,
     onPlanStarted: vi.fn(),
-    onPlanFinished: vi.fn(),
     onStatus,
     onUndoableStatus,
   });
@@ -137,7 +136,6 @@ describe('opening a route over the one being planned', () => {
       planner: { load, activate: vi.fn() } as unknown as RoutePlanner,
       container,
       onPlanStarted: vi.fn(),
-      onPlanFinished: vi.fn(),
       onStatus,
       onUndoableStatus,
     });

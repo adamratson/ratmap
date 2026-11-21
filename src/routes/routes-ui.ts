@@ -39,8 +39,6 @@ export interface RoutesUiDeps {
   container: HTMLElement;
   /** Switch the sheet to the planner — opening a saved route, or starting a new one. */
   onPlanStarted(): void;
-  /** Leave the planner and put the map back. */
-  onPlanFinished(): void;
   onStatus(message: string, kind: 'ok' | 'warn' | 'error'): void;
   /**
    * Report something the user can take back. Distinct from {@link onStatus} because an
@@ -111,6 +109,8 @@ function planSection(
 ): HTMLElement {
   const section = el('div', 'route-panel-body');
 
+  if (summary.waypointCount > 0) section.append(routeStatus(summary));
+
   if (summary.waypointCount === 0) {
     section.append(
       el(
@@ -179,9 +179,11 @@ function planSection(
   follow.classList.add('primary');
   actions.append(follow);
 
-  // The mode exit. It has to stay: while planning, a tap on the map means "waypoint"
-  // rather than "open this summit", and there must be an obvious way back.
-  actions.append(buttonEl('Done', () => deps.onPlanFinished()));
+  // The way out. It has to stay: while planning, a tap on the map means "waypoint" rather
+  // than "open this summit", and there must be an obvious way back. It takes the route off
+  // the map with it — it used to be "Done", which only stopped editing and left the route
+  // drawn, unreachable, and (unsaved) one "New route" away from being wiped unseen.
+  actions.append(buttonEl('Close', () => closeRoute(summary, deps)));
 
   const clear = buttonEl('Clear', () => {
     // Immediate, not a confirmation dialog in front of every clear — the same "act now,
@@ -210,6 +212,98 @@ function planSection(
   if (carriedSave && ready) openSaveForm(section, planner, deps, onStatus, carriedSave);
 
   return section;
+}
+
+/**
+ * Which route this is and whether it is saved — the one thing that says an edit has not
+ * reached the routes list yet, before Close or a reload would lose it.
+ */
+function routeStatus(summary: RouteSummary): HTMLElement {
+  const line = el('p', 'route-status');
+  line.append(el('span', 'route-status-name', summary.name));
+  const state = !summary.saved ? 'Not saved' : summary.unsaved ? 'Unsaved changes' : 'Saved';
+  line.append(el('span', summary.unsaved ? 'route-status-state unsaved' : 'route-status-state', state));
+  return line;
+}
+
+/**
+ * Leave the planner, taking the route off the map.
+ *
+ * Nothing to lose — a saved route as it was saved, an empty plan — and it simply closes:
+ * the saved route is one tap away in Routes. A route with something unsaved asks first,
+ * in a dialog rather than the panel because the panel is redrawn on every GPS fix. A lone
+ * waypoint is not worth a question, and goes with an Undo.
+ */
+function closeRoute(summary: RouteSummary, deps: RoutesUiDeps): void {
+  const { planner } = deps;
+  if (!summary.unsaved) {
+    planner.close();
+    return;
+  }
+  if (summary.waypointCount < 2) {
+    discard(summary, deps);
+    return;
+  }
+
+  const dialog = document.createElement('dialog');
+  dialog.className = 'share-dialog close-dialog';
+  dialog.setAttribute('aria-label', 'Close route');
+  const done = (): void => dialog.remove();
+  dialog.addEventListener('close', done);
+
+  dialog.append(
+    el('h2', '', summary.saved ? `Save changes to “${summary.name}”?` : `Save “${summary.name}”?`),
+    el(
+      'p',
+      '',
+      summary.saved
+        ? 'You’ve changed this route since it was saved.'
+        : 'This route isn’t saved. Closing takes it off the map.',
+    ),
+  );
+
+  const actions = el('div', 'share-actions');
+  const save = buttonEl('Save', () => {
+    dialog.close();
+    void persist(planner, planner.getName(), deps).then(
+      (route) => {
+        planner.close();
+        deps.onStatus(`Saved “${route.name}”`, 'ok');
+      },
+      (err: Error) => deps.onStatus(`Could not save: ${err.message}`, 'error'),
+    );
+  });
+  save.classList.add('primary');
+  // A leg still being worked out would save with a hole in it — the same rule as the
+  // panel's own Save.
+  save.disabled = summary.pendingLegs > 0;
+
+  const drop = buttonEl(summary.saved ? 'Discard changes' : 'Discard', () => {
+    dialog.close();
+    discard(summary, deps);
+  });
+  drop.classList.add('destructive');
+
+  actions.append(save, drop, buttonEl('Keep editing', () => dialog.close()));
+  dialog.append(actions);
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
+/** Close without saving, with the way back every other destructive action here offers. */
+function discard(summary: RouteSummary, deps: RoutesUiDeps): void {
+  const putBack = deps.planner.close();
+  if (!putBack) return;
+  const what = summary.saved ? `changes to “${summary.name}”` : `“${summary.name}”`;
+  if (deps.onUndoableStatus) {
+    deps.onUndoableStatus(`Discarded ${what}`, {
+      label: 'Undo',
+      onSelect: () => {
+        if (putBack()) deps.onPlanStarted();
+        else deps.onStatus('Can’t undo: another route is open now.', 'warn');
+      },
+    });
+  }
 }
 
 /**
@@ -660,9 +754,14 @@ export async function renderRoutesSheet(deps: RoutesUiDeps): Promise<void> {
   const toolbar = container.querySelector<HTMLDivElement>('.routes-toolbar')!;
   toolbar.append(
     buttonEl('New route', () => {
-      planner.clear();
+      // Whatever is open closes first. An unsaved one used to be cleared without a word —
+      // usually one stranded on the map by the old Done — so it goes with an Undo now.
+      const unsaved = planner.hasUnsavedChanges();
+      const name = planner.getName();
+      const putBack = planner.close();
       planner.activate();
       deps.onPlanStarted();
+      if (unsaved) offerPlanBack(putBack, `Closed “${name}”`, deps);
     }),
   );
   toolbar.append(importControl(deps));

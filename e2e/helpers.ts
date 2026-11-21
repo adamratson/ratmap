@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from '@playwright/test';
+import { expect, type BrowserContext, type Page } from '@playwright/test';
 import type { Map as MLMap } from 'maplibre-gl';
 
 /**
@@ -306,7 +306,8 @@ export async function startNewRoute(page: Page): Promise<void> {
 }
 
 /**
- * Empty the local record stores — saved places and saved routes.
+ * Empty the local record stores — saved places, saved routes, and the route kept across a
+ * reload.
  *
  * The stores are cleared rather than the database deleted: the app holds an open
  * connection from startup, and `deleteDatabase` against a live connection blocks
@@ -317,9 +318,9 @@ export async function clearSavedData(page: Page): Promise<void> {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       // Same name and version as src/app/db.ts. Opening at a *lower* version than the app
       // uses would throw; opening at the same one just joins the existing database.
-      const request = indexedDB.open('ratmap', 2);
+      const request = indexedDB.open('ratmap', 3);
       // This usually runs before the app has opened the database at all, and creating it
-      // empty would leave the app holding a v2 connection with no stores in it — every
+      // empty would leave the app holding a v3 connection with no stores in it — every
       // read and write then fails with NotFoundError and no upgrade is ever triggered to
       // repair it. So mirror src/app/db.ts's schema here.
       request.onupgradeneeded = () => {
@@ -327,9 +328,11 @@ export async function clearSavedData(page: Page): Promise<void> {
         for (const [store, index] of [
           ['saved-places', 'savedAt'],
           ['routes', 'updatedAt'],
+          ['route-draft', null],
         ] as const) {
           if (created.objectStoreNames.contains(store)) continue;
-          created.createObjectStore(store, { keyPath: 'id' }).createIndex(index, index);
+          const made = created.createObjectStore(store, { keyPath: 'id' });
+          if (index) made.createIndex(index, index);
         }
       };
       request.onsuccess = () => resolve(request.result);
@@ -337,7 +340,7 @@ export async function clearSavedData(page: Page): Promise<void> {
     });
 
     const stores = [...db.objectStoreNames].filter((name) =>
-      ['saved-places', 'routes'].includes(name),
+      ['saved-places', 'routes', 'route-draft'].includes(name),
     );
     if (stores.length > 0) {
       await new Promise<void>((resolve, reject) => {
@@ -358,6 +361,59 @@ export async function mapView(page: Page): Promise<{ lng: number; lat: number; z
     const centre = map.getCenter();
     return { lng: centre.lng, lat: centre.lat, zoom: map.getZoom() };
   });
+}
+
+/**
+ * How far, in px, `point` is drawn from the middle of the map the sheet leaves showing —
+ * which is where the app puts whatever it moves to, rather than the middle of the whole
+ * map, under the sheet.
+ */
+export async function pxFromVisibleCentre(page: Page, point: { lng: number; lat: number }): Promise<number> {
+  return page.evaluate(({ lng, lat }) => {
+    const w = window as unknown as { __ratmapMap: MLMap; __ratmapSheet: { visibleHeight(): number } };
+    const map = w.__ratmapMap;
+    const box = map.getContainer().getBoundingClientRect();
+    const sheet = document.querySelector('#sheet')!.getBoundingClientRect();
+    // The sheet reports no height when it is docked down the left (sheet.ts).
+    const docked = w.__ratmapSheet.visibleHeight() === 0;
+    const left = docked ? Math.max(0, sheet.right - box.left) : 0;
+    const bottom = docked ? 0 : w.__ratmapSheet.visibleHeight();
+    const at = map.project([lng, lat]);
+    return Math.hypot(at.x - (left + box.width) / 2, at.y - (box.height - bottom) / 2);
+  }, point);
+}
+
+/**
+ * How many waypoints the route kept across a reload has — 0 when none is kept. Read from
+ * IndexedDB directly, so a test can wait for the copy to land before leaving the page.
+ */
+export async function storedDraftWaypoints(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('ratmap', 3);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      if (!db.objectStoreNames.contains('route-draft')) return 0;
+      const record = await new Promise<{ waypoints?: unknown[] } | undefined>((resolve, reject) => {
+        const request = db.transaction('route-draft').objectStore('route-draft').get('current');
+        request.onsuccess = () => resolve(request.result as { waypoints?: unknown[] } | undefined);
+        request.onerror = () => reject(request.error);
+      });
+      return record?.waypoints?.length ?? 0;
+    } finally {
+      db.close();
+    }
+  });
+}
+
+/** Close the route on screen without saving it, and wait until no copy of it is kept. */
+export async function discardRoute(page: Page): Promise<void> {
+  await page.locator('.route-actions button', { hasText: 'Close' }).click();
+  const discard = page.locator('dialog button', { hasText: /^Discard/ });
+  if (await discard.isVisible()) await discard.click();
+  await expect.poll(() => storedDraftWaypoints(page)).toBe(0);
 }
 
 /** Move the map without a fitBounds, for tests about what a given zoom shows. */

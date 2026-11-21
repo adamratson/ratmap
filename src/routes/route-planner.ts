@@ -8,6 +8,7 @@ import {
   clearRouteGeometry,
   ROUTE_CASING_LAYER_ID,
   ROUTE_LINE_LAYER_ID,
+  ROUTE_SOURCE_ID,
   setOffRouteLine,
   setRouteGeometry,
 } from './route-layers';
@@ -29,6 +30,7 @@ import type { PMTiles } from 'pmtiles';
 import type { Region, RegionArtifact } from '../regions/manifest';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 import type { Theme } from '../ui/theme';
+import { insetPadding, NO_INSET, type ViewInset } from '../map/view-inset';
 
 // Ties the pieces together: the draft (route-model), the offline router (router), the
 // elevation profile (terrain-sampler + profile), the map layers and the draggable markers.
@@ -79,6 +81,15 @@ export interface RouteSummary {
   avalancheNote: string | null;
   /** Set while the route on screen is one that arrived as a link, untouched. */
   received: ReceivedLink | null;
+  /** What the route is called: its saved name, or the one Save would suggest. */
+  name: string;
+  /** Whether the route on screen is a saved one (edited or not). */
+  saved: boolean;
+  /**
+   * Whether the route on screen holds anything no saved record does: a route never saved,
+   * or a saved one edited since. What Close asks about before taking it off the map.
+   */
+  unsaved: boolean;
   follow: FollowState | null;
   following: boolean;
   /**
@@ -123,6 +134,32 @@ export interface RoutePlannerOptions {
   onStatus?: (message: string, kind: 'ok' | 'warn' | 'error') => void;
   /** Read at the moment the route layers are (re)created, since the theme can change. */
   theme: () => Theme;
+  /**
+   * The route changed in a way worth keeping a copy of — see {@link RoutePlanner.snapshot}.
+   * Not on every GPS fix, which `onChange` is: the copy is the route, not where you are on it.
+   */
+  onDraftChange?: () => void;
+  /** What covers the map, so a route is fitted into what is left showing. */
+  viewInset?: () => ViewInset;
+}
+
+/**
+ * The route on screen, as kept across a reload — see {@link RoutePlanner.snapshot}.
+ *
+ * Its own record rather than a SavedRoute: an unsaved route has no id, an edited saved one
+ * is not what the saved record says, and neither may be written over the routes list.
+ */
+export interface DraftSnapshot {
+  waypoints: Waypoint[];
+  legs: LegSlot[];
+  /** The saved route this is, edited or not. Null for one never saved. */
+  routeId: string | null;
+  name: string | null;
+  /** What the saved route's waypoints were, to tell an edit from none after a reload. */
+  savedSignature: string | null;
+  snapToPath: boolean;
+  following: boolean;
+  received: ReceivedLink | null;
 }
 
 /**
@@ -161,6 +198,17 @@ interface ReplacedPlan {
   draft: RouteDraft;
   id: string | null;
   name: string | null;
+  savedSignature: string | null;
+}
+
+/**
+ * The route's shape, as far as saving goes: where its waypoints are and how each leg was
+ * drawn. Legs are not in it — they follow from the waypoints, and arrive after them.
+ */
+function signatureOf(draft: RouteDraft): string {
+  return JSON.stringify(
+    draft.getWaypoints().map((w) => [w.lng, w.lat, w.name ?? null, w.freehand === true]),
+  );
 }
 
 /** Whether two lines are the same, vertex for vertex. */
@@ -197,6 +245,8 @@ export class RoutePlanner {
   private readonly onChange: (summary: RouteSummary) => void;
   private readonly onStatus?: (message: string, kind: 'ok' | 'warn' | 'error') => void;
   private readonly theme: () => Theme;
+  private readonly onDraftChange?: () => void;
+  private readonly viewInset: () => ViewInset;
 
   private readonly router: OfflineRouter;
   private draft = new RouteDraft();
@@ -242,6 +292,12 @@ export class RoutePlanner {
   /** Id of the saved route currently loaded, so Save updates rather than duplicates. */
   private loadedRouteId: string | null = null;
   private loadedName: string | null = null;
+  /**
+   * {@link signatureOf} the saved route as it was opened or last saved. The route has
+   * unsaved changes when the draft's own differs. Compared rather than read off the undo
+   * history, which is capped: fifty-one edits undone fifty times is not the saved route.
+   */
+  private savedSignature: string | null = null;
 
   constructor(options: RoutePlannerOptions) {
     this.map = options.map;
@@ -251,6 +307,8 @@ export class RoutePlanner {
     this.onChange = options.onChange;
     this.onStatus = options.onStatus;
     this.theme = options.theme;
+    this.onDraftChange = options.onDraftChange;
+    this.viewInset = options.viewInset ?? (() => NO_INSET);
     this.router = new OfflineRouter({
       registry: options.registry,
       downloadedRegions: options.downloadedRegions,
@@ -294,6 +352,13 @@ export class RoutePlanner {
     return this.loadedName ?? this.suggestName();
   }
 
+  /** See {@link RouteSummary.unsaved}. */
+  hasUnsavedChanges(): boolean {
+    if (this.draft.waypointCount === 0) return false;
+    if (this.loadedRouteId === null) return true;
+    return signatureOf(this.draft) !== this.savedSignature;
+  }
+
   isSnappingToPath(): boolean {
     return this.snapToPath;
   }
@@ -302,6 +367,7 @@ export class RoutePlanner {
     if (this.snapToPath === snap) return;
     this.snapToPath = snap;
     this.emit();
+    this.draftChanged();
   }
 
   activate(): void {
@@ -409,6 +475,7 @@ export class RoutePlanner {
     this.draft.clear();
     this.loadedRouteId = null;
     this.loadedName = null;
+    this.savedSignature = null;
     this.profile = null;
     this.profileNote = null;
     this.sac = null;
@@ -417,6 +484,107 @@ export class RoutePlanner {
     this.avalancheNote = null;
     this.stopFollowing();
     this.afterEdit();
+  }
+
+  /**
+   * Take the route off the map and leave planning — the planner's way out.
+   *
+   * Returns a way to put the route back, or null when there was none. Leaving planning used
+   * to leave the route drawn, its markers numbered, with nothing on screen that led back to
+   * it: no chip, no panel, a tap on the line opening whatever summit was underneath. An
+   * unsaved one was then wiped, silently, by the next "New route".
+   */
+  close(): (() => boolean) | null {
+    const closed: ReplacedPlan | null =
+      this.draft.waypointCount > 0
+        ? { draft: this.draft, id: this.loadedRouteId, name: this.loadedName, savedSignature: this.savedSignature }
+        : null;
+
+    this.stopFollowing();
+    this.inflight?.abort();
+    this.inflight = null;
+    this.draft = new RouteDraft();
+    this.loadedRouteId = null;
+    this.loadedName = null;
+    this.savedSignature = null;
+    this.received = null;
+    this.profile = null;
+    this.profileNote = null;
+    this.sac = null;
+    this.sacNote = null;
+    this.avalanche = null;
+    this.avalancheNote = null;
+    this.active = false;
+    // Only if anything was ever drawn: with no source yet there is nothing to take off, and
+    // adding one before the style is ready throws.
+    if (this.map.getSource(ROUTE_SOURCE_ID)) this.renderGeometry();
+    this.syncEditing();
+    this.emit();
+    this.draftChanged();
+
+    return closed ? () => this.reopen(closed) : null;
+  }
+
+  /**
+   * Put back a route {@link close} took away. Declines, returning false, once another route
+   * has been started or opened: putting this one back would take that one away instead.
+   */
+  private reopen(closed: ReplacedPlan): boolean {
+    if (this.draft.waypointCount > 0) return false;
+    this.draft = closed.draft;
+    this.loadedRouteId = closed.id;
+    this.loadedName = closed.name;
+    this.savedSignature = closed.savedSignature;
+    if (!this.active) {
+      addRouteLayers(this.map, this.theme());
+      this.active = true;
+    }
+    this.map.getCanvas().style.cursor = this.isEditing() ? 'crosshair' : '';
+    this.showDraft([]);
+    return true;
+  }
+
+  /**
+   * A copy of the route on screen, to keep across a reload — or null when there is none.
+   *
+   * iOS ends a backgrounded web app whenever it wants the memory, and an update reloads the
+   * page; either used to lose a route being planned, or the one being followed on a hill.
+   */
+  snapshot(): DraftSnapshot | null {
+    if (this.draft.waypointCount === 0) return null;
+    const received = this.receivedLink();
+    return {
+      ...this.draft.toState(),
+      routeId: this.loadedRouteId,
+      name: this.loadedName,
+      savedSignature: this.savedSignature,
+      snapToPath: this.snapToPath,
+      following: this.follower !== null,
+      received,
+    };
+  }
+
+  /**
+   * Put a {@link snapshot} back on screen, in planning: what was on screen before the page
+   * went away. Following is not restarted — that needs the GPS, which is the caller's to ask
+   * for (and on iOS, from a tap).
+   */
+  restore(saved: DraftSnapshot): void {
+    this.stopFollowing();
+    this.inflight?.abort();
+    this.inflight = null;
+    this.draft = new RouteDraft({ waypoints: saved.waypoints, legs: saved.legs });
+    this.loadedRouteId = saved.routeId;
+    this.loadedName = saved.name;
+    this.savedSignature = saved.savedSignature;
+    this.snapToPath = saved.snapToPath;
+    this.received = saved.received ? { ...saved.received, draft: this.draft } : null;
+    if (!this.active) {
+      addRouteLayers(this.map, this.theme());
+      this.active = true;
+    }
+    this.map.getCanvas().style.cursor = this.isEditing() ? 'crosshair' : '';
+    this.showDraft([]);
   }
 
   /**
@@ -475,6 +643,8 @@ export class RoutePlanner {
     }
 
     this.received = route.received ? { ...route.received, draft: this.draft } : null;
+    // Opened from the saved record, so it holds exactly what the record does.
+    this.savedSignature = route.id ? signatureOf(this.draft) : null;
 
     this.showDraft(previousLine);
 
@@ -498,8 +668,13 @@ export class RoutePlanner {
   private replaceablePlan(route: LoadableRoute): ReplacedPlan | null {
     if (this.draft.waypointCount === 0) return null;
     // Opening the saved route that is already open, unedited, loses nothing.
-    if (route.id !== undefined && route.id === this.loadedRouteId && !this.draft.canUndo) return null;
-    return { draft: this.draft, id: this.loadedRouteId, name: this.loadedName };
+    if (route.id !== undefined && route.id === this.loadedRouteId && !this.hasUnsavedChanges()) return null;
+    return {
+      draft: this.draft,
+      id: this.loadedRouteId,
+      name: this.loadedName,
+      savedSignature: this.savedSignature,
+    };
   }
 
   /** Put back the plan an open replaced — see {@link load}. */
@@ -513,6 +688,7 @@ export class RoutePlanner {
     this.draft = previous.draft;
     this.loadedRouteId = previous.id;
     this.loadedName = previous.name;
+    this.savedSignature = previous.savedSignature;
     this.showDraft(previousLine);
     return true;
   }
@@ -537,8 +713,11 @@ export class RoutePlanner {
     }
     this.renderGeometry();
     this.renderMarkers();
-    this.fitToRoute();
+    // After emit, which is what brings the route panel up: the route is fitted into the
+    // map that panel leaves showing, not the one before it opened.
     this.emit();
+    this.fitToRoute();
+    this.draftChanged();
     void this.recompute();
   }
 
@@ -551,7 +730,7 @@ export class RoutePlanner {
         [bounds[0], bounds[1]],
         [bounds[2], bounds[3]],
       ],
-      { padding: 60, duration: 600 },
+      { padding: insetPadding(this.viewInset(), 60), duration: 600 },
     );
   }
 
@@ -568,6 +747,7 @@ export class RoutePlanner {
     void this.wakeLock.acquire();
     this.syncEditing();
     this.emit();
+    this.draftChanged();
   }
 
   stopFollowing(): void {
@@ -578,6 +758,7 @@ export class RoutePlanner {
     setOffRouteLine(this.map, null, null);
     this.syncEditing();
     this.emit();
+    this.draftChanged();
   }
 
   /**
@@ -600,7 +781,12 @@ export class RoutePlanner {
     this.renderGeometry();
     this.renderMarkers();
     this.emit();
+    this.draftChanged();
     void this.recompute();
+  }
+
+  private draftChanged(): void {
+    this.onDraftChange?.();
   }
 
   private async recompute(): Promise<void> {
@@ -628,6 +814,9 @@ export class RoutePlanner {
         this.draft.setLeg(index, leg);
         this.renderGeometry();
         this.emit();
+        // The computed line is what renders and follows with no router (C10); a copy
+        // without it would come back as straight lines, or not at all offline.
+        this.draftChanged();
       }
 
       await this.refreshProfile(controller.signal);
@@ -1012,6 +1201,9 @@ export class RoutePlanner {
       avalanche: this.avalanche,
       avalancheNote: this.avalancheNote,
       received: this.receivedLink(),
+      name: this.getName(),
+      saved: this.loadedRouteId !== null,
+      unsaved: this.hasUnsavedChanges(),
       follow: this.followState,
       following: this.follower !== null,
       currentDistanceM: this.currentDistanceM(),

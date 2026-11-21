@@ -70,7 +70,7 @@ describe('the saved places sheet', () => {
     await render();
     body.querySelector<HTMLButtonElement>('.place-goto')!.click();
 
-    expect(map.easeTo).toHaveBeenCalledWith({ center: [-5, 56.8], zoom: 10 });
+    expect(map.easeTo).toHaveBeenCalledWith({ center: [-5, 56.8], zoom: 10, offset: [0, 0] });
     expect(onGoTo).toHaveBeenCalled();
   });
 

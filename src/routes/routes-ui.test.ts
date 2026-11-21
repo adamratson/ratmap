@@ -20,6 +20,10 @@ vi.mock('./route-store', () => ({
 HTMLDialogElement.prototype.showModal ??= function showModal(this: HTMLDialogElement) {
   this.open = true;
 };
+HTMLDialogElement.prototype.close ??= function close(this: HTMLDialogElement) {
+  this.open = false;
+  this.dispatchEvent(new Event('close'));
+};
 import type { RoutePlanner, RouteSummary } from './route-planner';
 
 function deps(container: HTMLElement) {
@@ -27,7 +31,6 @@ function deps(container: HTMLElement) {
     planner: { } as unknown as RoutePlanner,
     container,
     onPlanStarted: vi.fn(),
-    onPlanFinished: vi.fn(),
     onStatus: vi.fn(),
   };
 }
@@ -53,6 +56,9 @@ const BASE: RouteSummary = {
   avalanche: null,
   avalancheNote: null,
   received: null,
+  name: 'Ben Nevis',
+  saved: false,
+  unsaved: true,
 };
 
 function render(summary: Partial<RouteSummary>): HTMLElement {
@@ -73,7 +79,6 @@ function renderClearable(summary: Partial<RouteSummary>) {
       planner,
       container,
       onPlanStarted: vi.fn(),
-      onPlanFinished: vi.fn(),
       onStatus: vi.fn(),
       onUndoableStatus,
     },
@@ -91,7 +96,7 @@ describe('the planning panel', () => {
     expect(primary[0].textContent).toBe('Follow');
   });
 
-  it('marks Clear as destructive rather than styling it like Done', () => {
+  it('marks Clear as destructive rather than styling it like Close', () => {
     // They used to be identical grey pills sitting side by side — one finishes, one
     // wipes the route, and nothing distinguished them. Sharing a row again (finding a
     // dedicated row cost real vertical space for one short link), but the styling still
@@ -99,20 +104,113 @@ describe('the planning panel', () => {
     const panel = render({});
     const inRow = [...panel.querySelectorAll('.route-actions button')].map((b) => b.textContent);
 
-    expect(inRow).toEqual(['Undo', 'Save', 'Share', 'Follow', 'Done', 'Clear']);
+    expect(inRow).toEqual(['Undo', 'Save', 'Share', 'Follow', 'Close', 'Clear']);
     const clear = panel.querySelector('.route-actions button.destructive')!;
     expect(clear.textContent).toBe('Clear');
     expect(clear.classList.contains('primary')).toBe(false);
   });
 
-  it('keeps the mode exit available even on an empty route', () => {
+  it('keeps the way out available even on an empty route', () => {
     // While planning, a tap on the map means "waypoint" rather than "open this summit".
     // There must always be a way back.
-    const panel = render({ waypointCount: 0, canUndo: false });
-    const done = [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Done');
+    const panel = render({ waypointCount: 0, canUndo: false, unsaved: false });
+    const close = [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Close');
 
-    expect(done).toBeDefined();
-    expect(done!.disabled).toBe(false);
+    expect(close).toBeDefined();
+    expect(close!.disabled).toBe(false);
+  });
+
+  it('says whether the route is saved', () => {
+    const status = (summary: Partial<RouteSummary>) =>
+      render(summary).querySelector('.route-status')?.textContent;
+    expect(status({ saved: false, unsaved: true })).toBe('Ben NevisNot saved');
+    expect(status({ saved: true, unsaved: true })).toBe('Ben NevisUnsaved changes');
+    expect(status({ saved: true, unsaved: false })).toBe('Ben NevisSaved');
+    expect(status({ waypointCount: 0, unsaved: false })).toBeUndefined();
+  });
+
+  describe('closing the route', () => {
+    afterEach(() => document.querySelectorAll('dialog').forEach((d) => d.remove()));
+
+    function renderClosable(summary: Partial<RouteSummary>) {
+      const container = document.createElement('div');
+      const putBack = vi.fn(() => true);
+      const planner = {
+        close: vi.fn(() => putBack),
+        getName: () => 'Ben Nevis',
+      } as unknown as RoutePlanner;
+      const onUndoableStatus = vi.fn();
+      const onPlanStarted = vi.fn();
+      renderRoutePanel(
+        { ...BASE, ...summary },
+        { planner, container, onPlanStarted, onStatus: vi.fn(), onUndoableStatus },
+      );
+      const close = [...container.querySelectorAll<HTMLButtonElement>('.route-actions button')].find(
+        (b) => b.textContent === 'Close',
+      )!;
+      return { close, planner, putBack, onUndoableStatus, onPlanStarted };
+    }
+
+    const dialogButton = (label: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('dialog button')].find((b) => b.textContent === label);
+
+    it('takes a saved, unedited route off the map without asking', () => {
+      const { close, planner, onUndoableStatus } = renderClosable({ saved: true, unsaved: false });
+      close.click();
+      expect(planner.close).toHaveBeenCalled();
+      expect(document.querySelector('dialog')).toBeNull();
+      expect(onUndoableStatus).not.toHaveBeenCalled();
+    });
+
+    it('asks before closing a route that was never saved', () => {
+      const { close, planner } = renderClosable({ saved: false, unsaved: true });
+      close.click();
+      expect(planner.close).not.toHaveBeenCalled();
+      expect(document.querySelector('dialog h2')?.textContent).toBe('Save “Ben Nevis”?');
+      expect(dialogButton('Save')).toBeDefined();
+      expect(dialogButton('Discard')).toBeDefined();
+      expect(dialogButton('Keep editing')).toBeDefined();
+    });
+
+    it('asks about the changes to a saved route', () => {
+      const { close } = renderClosable({ saved: true, unsaved: true });
+      close.click();
+      expect(document.querySelector('dialog h2')?.textContent).toBe('Save changes to “Ben Nevis”?');
+      expect(dialogButton('Discard changes')).toBeDefined();
+    });
+
+    it('discards with an Undo that brings the route back', () => {
+      const { close, planner, putBack, onUndoableStatus, onPlanStarted } = renderClosable({});
+      close.click();
+      dialogButton('Discard')!.click();
+
+      expect(planner.close).toHaveBeenCalled();
+      expect(onUndoableStatus).toHaveBeenCalledWith('Discarded “Ben Nevis”', expect.objectContaining({ label: 'Undo' }));
+      onUndoableStatus.mock.calls[0][1].onSelect();
+      expect(putBack).toHaveBeenCalled();
+      expect(onPlanStarted).toHaveBeenCalled();
+    });
+
+    it('keeps editing when asked to', () => {
+      const { close, planner } = renderClosable({});
+      close.click();
+      dialogButton('Keep editing')!.click();
+      expect(planner.close).not.toHaveBeenCalled();
+    });
+
+    it('will not save a route with a leg still being worked out', () => {
+      const { close } = renderClosable({ pendingLegs: 1 });
+      close.click();
+      expect(dialogButton('Save')!.disabled).toBe(true);
+    });
+
+    it('drops a lone waypoint without a question, but with an Undo', () => {
+      const { close, planner, onUndoableStatus } = renderClosable({ waypointCount: 1 });
+      close.click();
+      expect(document.querySelector('dialog')).toBeNull();
+      expect(planner.close).toHaveBeenCalled();
+      expect(onUndoableStatus).toHaveBeenCalled();
+    });
   });
 
   it('does not offer to clear a route that has nothing in it', () => {

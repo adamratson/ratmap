@@ -1,4 +1,4 @@
-import type { Map as MLMap } from 'maplibre-gl';
+import type { LngLat, Map as MLMap } from 'maplibre-gl';
 import { shareOrDownload } from '../app/share-file';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 import type { RouteRegionOffer } from '../regions/coverage';
@@ -16,7 +16,9 @@ import {
 
 // The Print view, and the frame it draws over the map: the A4 sheet's true footprint at
 // the chosen scale, so what is inside the frame is what is on the paper. The map moves
-// under it; the frame stays put in the middle of whatever the sheet leaves visible.
+// under it; the frame stays put in the middle of whatever the sheet leaves visible — and
+// when the sheet moves, the map moves with the frame, so the frame never slides onto
+// different ground.
 
 export interface PrintDeps {
   map: MLMap;
@@ -41,10 +43,13 @@ const STORAGE_KEY = 'ratmap.print';
 /** How much of the visible map the frame fills when the view opens. */
 const FIT_FRACTION = 0.8;
 
+/** The sheet's own snap (style.css, #sheet.sheet-animating), so the map keeps pace with it. */
+const FOLLOW_SHEET_MS = 260;
+
 type State =
   | { kind: 'idle' }
   | { kind: 'making' }
-  | { kind: 'ready'; file: File; complete: boolean };
+  | { kind: 'ready'; file: File; complete: boolean; centre: [number, number] };
 
 export class PrintController {
   private readonly deps: PrintDeps;
@@ -57,6 +62,19 @@ export class PrintController {
   private body: HTMLElement | null = null;
   /** Bumped on hide, so a sheet finished after the view closed is dropped. */
   private generation = 0;
+  /**
+   * The ground at the frame's centre. The frame is drawn over this, not over the middle of
+   * the visible map: the two are the same except while the map is catching up with a
+   * sheet that has moved, when the frame has to ride with the ground rather than sit still
+   * over whatever slides under it.
+   */
+  private anchor: LngLat | null = null;
+  /** True while the map is being moved to bring the anchor back to the middle. */
+  private recentring = false;
+  /** Which of those moves is the current one — see {@link moveTo}. */
+  private move = 0;
+  /** The zoom a fit is heading for, until it gets there. */
+  private fitZoom: number | undefined = undefined;
 
   constructor(deps: PrintDeps) {
     this.deps = deps;
@@ -75,6 +93,9 @@ export class PrintController {
     if (this.active) return;
     this.active = true;
     this.frame.hidden = false;
+    this.anchor = null;
+    this.recentring = false;
+    this.fitZoom = undefined;
     this.deps.map.on('move', this.place);
     this.deps.map.on('moveend', this.moved);
     this.fit();
@@ -89,13 +110,36 @@ export class PrintController {
     this.frame.hidden = true;
     this.deps.map.off('move', this.place);
     this.deps.map.off('moveend', this.moved);
+    this.anchor = null;
+    this.recentring = false;
+    this.fitZoom = undefined;
+    this.move++;
     this.body = null;
     this.state = { kind: 'idle' };
   }
 
-  /** The sheet moved under the frame (a drag, or the sheet's own layout changing). */
+  /**
+   * The sheet moved (a drag, a view opening, its contents growing), so the middle of the
+   * visible map is somewhere else. Move the map to bring the frame's ground there, in step
+   * with the sheet.
+   *
+   * The frame used to jump to the new middle instead and stay over whatever ground was
+   * there: dragging the sheet up to reach "Make PDF" moved the sheet's area 3–4 km north,
+   * and the PDF was of somewhere the person had never chosen.
+   */
   layoutChanged(): void {
-    if (this.active) this.place();
+    if (!this.active) return;
+    if (!this.anchor) {
+      this.place();
+      return;
+    }
+    const at = this.deps.map.project(this.anchor);
+    const target = this.areaCentre();
+    // Most layout calls are a re-render that moved nothing.
+    if (Math.hypot(at.x - target.x, at.y - target.y) < 1) return;
+    // A fit still under way keeps its zoom: this move replaces it, and would otherwise
+    // leave the sheet at whatever zoom the fit had reached.
+    this.moveTo(this.anchor, this.fitZoom);
   }
 
   render(body: HTMLElement): void {
@@ -164,7 +208,7 @@ export class PrintController {
   /** The sheet the frame shows now. */
   sheet(): PrintSheet {
     const { x, y } = this.areaCentre();
-    const centre = this.deps.map.unproject([x, y]).wrap();
+    const centre = (this.anchor ?? this.deps.map.unproject([x, y])).wrap();
     return { centre: [centre.lng, centre.lat], ...this.options };
   }
 
@@ -189,14 +233,15 @@ export class PrintController {
     const generation = this.generation;
     this.state = { kind: 'making' };
     this.renderAction();
+    const sheet = this.sheet();
     try {
-      const printed = await renderSheet(this.sheet(), {
+      const printed = await renderSheet(sheet, {
         registry: this.deps.registry,
         regions: this.deps.downloadedRegions(),
         route: await this.deps.route(),
       });
       if (generation !== this.generation) return;
-      this.state = { kind: 'ready', ...printed };
+      this.state = { kind: 'ready', ...printed, centre: sheet.centre };
       if (!printed.complete) {
         this.deps.onStatus('Part of the map hadn’t loaded in time — check the sheet before printing.', 'warn');
       }
@@ -243,16 +288,35 @@ export class PrintController {
         : 'Some of this sheet is outside any one downloaded region, and may print with very little detail there.';
   }
 
-  private readonly moved = (): void => {
-    this.reset();
+  private readonly moved = (event: { printMove?: number }): void => {
+    // A recentring move ends here, or ended because something else stopped it — a drag,
+    // say, which is someone choosing the area again.
+    if (this.recentring && event.printMove === this.move) {
+      this.recentring = false;
+      this.fitZoom = undefined;
+      this.place();
+    }
+    // Only a move that changed the area makes the finished PDF out of date. The sheet
+    // moving takes the map with it, and the PDF is still of exactly this ground.
+    if (this.state.kind === 'ready') {
+      const [lng, lat] = this.sheet().centre;
+      const [madeLng, madeLat] = this.state.centre;
+      if (Math.abs(lng - madeLng) > 1e-7 || Math.abs(lat - madeLat) > 1e-7) this.reset();
+    }
     this.renderCoverage();
   };
 
   /** Size and place the frame for the map as it is now. Runs on every move. */
   private readonly place = (): void => {
     const { map } = this.deps;
-    const { x, y } = this.areaCentre();
-    const lat = map.unproject([x, y]).lat;
+    // Any move but the recentring is someone choosing the area: the ground under the middle
+    // is the sheet's from now on.
+    if (!this.recentring || !this.anchor) {
+      const middle = this.areaCentre();
+      this.anchor = map.unproject([middle.x, middle.y]);
+    }
+    const { x, y } = map.project(this.anchor);
+    const lat = this.anchor.lat;
     const ground = groundSize(sheetLayout(this.options.orientation), this.options.scale);
     const metresPerPx = metresPerCssPx(map.getZoom(), lat);
     const w = ground.w / metresPerPx;
@@ -273,7 +337,7 @@ export class PrintController {
     const { map } = this.deps;
     const area = this.deps.visibleArea();
     const { x, y } = this.areaCentre();
-    const around = map.unproject([x, y]);
+    const around = this.anchor ?? map.unproject([x, y]);
     const ground = groundSize(sheetLayout(this.options.orientation), this.options.scale);
     const fitPx = Math.min(
       (area.right - area.left) / ground.w,
@@ -284,13 +348,39 @@ export class PrintController {
     // No room at all — a hidden or zero-sized window — gives log2(0). A NaN zoom handed to
     // MapLibre does not throw; it breaks the map until a reload.
     if (!Number.isFinite(zoom)) return;
-    map.easeTo({
-      zoom: Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), zoom)),
-      bearing: 0,
-      pitch: 0,
-      around,
-      duration: 300,
-    });
+    this.fitZoom = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), zoom));
+    this.moveTo(around, this.fitZoom);
+  }
+
+  /**
+   * Bring `anchor` to the middle of the visible map, at `zoom` if given, north up.
+   *
+   * Each move is tagged through MapLibre's eventData, and only the latest one's moveend
+   * ends the recentring. Starting a move stops the one before, which fires *that* move's
+   * moveend: answered by any moveend, it ended this one too, and from then on every frame
+   * of it re-read the frame's ground off the middle of the map — the very thing the move
+   * is there to put right. A listener added after easeTo instead would miss a move with
+   * reduced motion on, which finishes inside the call.
+   */
+  private moveTo(anchor: LngLat, zoom: number | undefined): void {
+    const { map } = this.deps;
+    const target = this.areaCentre();
+    const container = map.getContainer();
+    const move = ++this.move;
+    this.anchor = anchor;
+    this.recentring = true;
+    map.easeTo(
+      {
+        center: anchor,
+        // From the middle of the map to the middle of what the sheet leaves of it.
+        offset: [target.x - container.clientWidth / 2, target.y - container.clientHeight / 2],
+        ...(zoom === undefined ? {} : { zoom }),
+        bearing: 0,
+        pitch: 0,
+        duration: FOLLOW_SHEET_MS,
+      },
+      { printMove: move },
+    );
   }
 
   private areaCentre(): { x: number; y: number } {

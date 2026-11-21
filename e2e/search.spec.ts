@@ -3,6 +3,7 @@ import {
   clearConditions,
   gotoApp,
   mapView,
+  pxFromVisibleCentre,
   searchFor,
   waitForServiceWorkerControl,
 } from './helpers';
@@ -40,16 +41,11 @@ test.describe('search', () => {
     await searchFor(page, 'Ben Nev');
     await page.locator('#search-results li button').first().click();
 
-    // easeTo is animated, so poll rather than reading once.
-    await expect
-      .poll(async () => {
-        const view = await mapView(page);
-        return Math.max(
-          Math.abs(view.lng - BEN_NEVIS.lng),
-          Math.abs(view.lat - BEN_NEVIS.lat),
-        );
-      })
-      .toBeLessThan(0.01);
+    // In the middle of the map the sheet leaves showing — not the middle of the whole map,
+    // which put it under the sheet. easeTo is animated, so poll rather than reading once.
+    await expect.poll(() => pxFromVisibleCentre(page, BEN_NEVIS)).toBeLessThan(2);
+    // A summit opens its card, as a tap on it does.
+    await expect(page.locator('#sheet h2')).toHaveText('Ben Nevis');
 
     // Zoomed in far enough to be useful — a jump that kept z6 would land you on the
     // right pixel of a blurry map. Polled, not read once: easeTo is still animating when

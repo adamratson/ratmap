@@ -5,7 +5,7 @@ import {
   clickPeak,
   emptyMapPoint,
   gotoApp,
-  mapView,
+  pxFromVisibleCentre,
   openChip,
   showArea,
 } from './helpers';
@@ -86,12 +86,8 @@ test.describe('summits and saved places', () => {
     await openChip(page, 'Saved');
     await page.locator('.place-goto').first().click();
 
-    await expect
-      .poll(async () => {
-        const view = await mapView(page);
-        return Math.max(Math.abs(view.lng - peak.lng), Math.abs(view.lat - peak.lat));
-      })
-      .toBeLessThan(0.01);
+    // In the middle of the map the sheet leaves showing, not under the sheet.
+    await expect.poll(() => pxFromVisibleCentre(page, peak)).toBeLessThan(2);
 
     // Out of the way, but still one drag from the list — going to a place is usually the
     // first of several.

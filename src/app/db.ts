@@ -8,11 +8,12 @@
 
 const DB_NAME = 'ratmap';
 
-/** v1: saved-places. v2: routes (Phase 4). */
-const DB_VERSION = 2;
+/** v1: saved-places. v2: routes (Phase 4). v3: the route on screen, kept across a reload. */
+const DB_VERSION = 3;
 
 export const PLACES_STORE = 'saved-places';
 export const ROUTES_STORE = 'routes';
+export const DRAFT_STORE = 'route-draft';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -22,7 +23,17 @@ export function openDb(): Promise<IDBDatabase> {
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => upgrade(request.result);
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      // A newer build opening a newer version (in another tab, or the page an update is
+      // reloading into) waits for every older connection to close. Left open, this one
+      // would hang that build's first read with no error at all.
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      resolve(db);
+    };
     request.onerror = () => reject(request.error ?? new Error('Failed to open IndexedDB'));
   });
 
@@ -49,6 +60,9 @@ function upgrade(db: IDBDatabase): void {
   }
   if (!db.objectStoreNames.contains(ROUTES_STORE)) {
     db.createObjectStore(ROUTES_STORE, { keyPath: 'id' }).createIndex('updatedAt', 'updatedAt');
+  }
+  if (!db.objectStoreNames.contains(DRAFT_STORE)) {
+    db.createObjectStore(DRAFT_STORE, { keyPath: 'id' });
   }
 }
 

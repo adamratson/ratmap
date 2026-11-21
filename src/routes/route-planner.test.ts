@@ -806,3 +806,179 @@ describe('suggested names', () => {
     expect(planner.getName()).toMatch(/ route$/);
   });
 });
+
+describe('closing a route', () => {
+  async function plan(): Promise<void> {
+    planner.activate();
+    planner.handleMapClick(click(ACHINTEE));
+    planner.handleMapClick(click(SUMMIT));
+    await settle();
+  }
+
+  it('takes the route off the map and leaves planning', async () => {
+    await plan();
+    planner.close();
+
+    expect(last()).toMatchObject({ active: false, waypointCount: 0, following: false });
+    expect(fakes.markers.filter((m) => !m.removed)).toHaveLength(0);
+    // A tap on the map is a tap on the map again, not a waypoint.
+    expect(planner.handleMapClick(click(CIC_HUT))).toBe(false);
+  });
+
+  it('stops following on the way out', async () => {
+    await plan();
+    planner.startFollowing();
+    planner.close();
+
+    expect(planner.isFollowing()).toBe(false);
+    expect(fakes.wakeLock.release).toHaveBeenCalled();
+  });
+
+  it('puts the route back, in planning, with its undo history', async () => {
+    await plan();
+    const putBack = planner.close()!;
+
+    expect(putBack()).toBe(true);
+    expect(last()).toMatchObject({ active: true, waypointCount: 2 });
+    planner.undo();
+    expect(planner.getDraft().waypointCount).toBe(1);
+  });
+
+  it('will not put it back over another route', async () => {
+    await plan();
+    const putBack = planner.close()!;
+    planner.activate();
+    planner.handleMapClick(click(CIC_HUT));
+
+    expect(putBack()).toBe(false);
+    expect(planner.getDraft().getWaypoints()).toHaveLength(1);
+  });
+
+  it('has nothing to put back for an empty plan', () => {
+    planner.activate();
+    expect(planner.close()).toBeNull();
+  });
+});
+
+describe('unsaved changes', () => {
+  const saved = {
+    id: 'route-1',
+    name: 'Ben Nevis',
+    coords: [ACHINTEE, SUMMIT],
+    waypoints: [
+      { id: 'a', lng: ACHINTEE[0], lat: ACHINTEE[1] },
+      { id: 'b', lng: SUMMIT[0], lat: SUMMIT[1], name: 'Ben Nevis' },
+    ],
+    legs: [snapped(ACHINTEE, SUMMIT)],
+  };
+
+  it('counts a route never saved as unsaved', async () => {
+    planner.activate();
+    expect(planner.hasUnsavedChanges()).toBe(false);
+    planner.handleMapClick(click(ACHINTEE));
+    expect(planner.hasUnsavedChanges()).toBe(true);
+    expect(last()).toMatchObject({ unsaved: true, saved: false });
+  });
+
+  it('counts a saved route as saved until it is edited', async () => {
+    planner.load(saved);
+    planner.activate();
+    expect(last()).toMatchObject({ unsaved: false, saved: true, name: 'Ben Nevis' });
+
+    planner.handleMapClick(click(CIC_HUT));
+    expect(last()).toMatchObject({ unsaved: true, saved: true });
+
+    // Undoing the edit is the saved route again.
+    planner.undo();
+    expect(planner.hasUnsavedChanges()).toBe(false);
+  });
+
+  it('counts an import as unsaved', () => {
+    planner.load({ name: 'From a file', coords: [ACHINTEE, SUMMIT] });
+    expect(planner.hasUnsavedChanges()).toBe(true);
+  });
+});
+
+describe('keeping the route across a reload', () => {
+  it('copies the route on screen, legs and all', async () => {
+    const onDraftChange = vi.fn();
+    planner = new RoutePlanner({
+      map: map as unknown as MLMap,
+      registry: registry as unknown as TileSourceRegistry,
+      downloadedRegions: () => regions,
+      onChange: (summary) => summaries.push(summary),
+      theme: () => 'dark',
+      onDraftChange,
+    });
+    planner.activate();
+    planner.handleMapClick(click(ACHINTEE));
+    planner.handleMapClick(click(SUMMIT));
+    await settle();
+
+    expect(onDraftChange).toHaveBeenCalled();
+    const copy = planner.snapshot()!;
+    expect(copy.waypoints).toHaveLength(2);
+    expect(copy.legs[0]?.coords).toEqual([ACHINTEE, SUMMIT]);
+    expect(copy).toMatchObject({ routeId: null, following: false, snapToPath: true });
+  });
+
+  it('has nothing to keep when there is no route', () => {
+    expect(planner.snapshot()).toBeNull();
+  });
+
+  it('does not count a GPS fix as a change to keep', async () => {
+    const onDraftChange = vi.fn();
+    planner = new RoutePlanner({
+      map: map as unknown as MLMap,
+      registry: registry as unknown as TileSourceRegistry,
+      downloadedRegions: () => regions,
+      onChange: () => {},
+      theme: () => 'dark',
+      onDraftChange,
+    });
+    planner.activate();
+    planner.handleMapClick(click(ACHINTEE));
+    planner.handleMapClick(click(SUMMIT));
+    await settle();
+    onDraftChange.mockClear();
+
+    planner.updatePosition(CIC_HUT);
+    expect(onDraftChange).not.toHaveBeenCalled();
+  });
+
+  it('brings a copy back as it was, edited saved route included, without re-routing it', async () => {
+    planner.load({
+      id: 'route-1',
+      name: 'Ben Nevis',
+      coords: [ACHINTEE, SUMMIT],
+      waypoints: [
+        { id: 'a', lng: ACHINTEE[0], lat: ACHINTEE[1] },
+        { id: 'b', lng: SUMMIT[0], lat: SUMMIT[1] },
+      ],
+      legs: [snapped(ACHINTEE, SUMMIT)],
+    });
+    planner.activate();
+    planner.handleMapClick(click(CIC_HUT));
+    await settle();
+    planner.startFollowing();
+    const copy = JSON.parse(JSON.stringify(planner.snapshot()));
+    expect(copy.following).toBe(true);
+
+    fakes.computeLeg.mockClear();
+    planner.close();
+    planner.restore(copy);
+    await settle();
+
+    expect(fakes.computeLeg).not.toHaveBeenCalled();
+    expect(last()).toMatchObject({
+      active: true,
+      waypointCount: 3,
+      saved: true,
+      unsaved: true,
+      name: 'Ben Nevis',
+      // Following waits to be asked for: it needs the GPS.
+      following: false,
+    });
+    expect(planner.getLoadedRouteId()).toBe('route-1');
+  });
+});

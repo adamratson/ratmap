@@ -3,6 +3,7 @@ import {
   clearConditions,
   clearSavedData,
   clickMapAt,
+  discardRoute,
   gotoApp,
   mapView,
   openChip,
@@ -22,7 +23,7 @@ const RIDGE: [number, number] = [1.7, 42.575];
 const TEST_AREA: [number, number, number, number] = [1.66, 42.45, 1.76, 42.6];
 
 /** Plan a three-waypoint route and read its link off the Share dialog. */
-async function linkFromPlanner(page: Page): Promise<string> {
+async function linkFromPlanner(page: Page, { keep = false } = {}): Promise<string> {
   await showArea(page, TEST_AREA);
   await startNewRoute(page);
   await clickMapAt(page, ...TRAILHEAD);
@@ -36,7 +37,11 @@ async function linkFromPlanner(page: Page): Promise<string> {
   // Headless Chromium has no share sheet, so this lands on the clipboard stub.
   await page.locator('.share-actions button', { hasText: 'Send link' }).click();
   await expect(page.locator('.toast.ok', { hasText: 'Copied link' })).toBeVisible();
-  return page.evaluate(() => (window as unknown as { __copied: string }).__copied);
+  const link = await page.evaluate(() => (window as unknown as { __copied: string }).__copied);
+  // Off the map, and so not brought back on the next load: these tests are about what the
+  // link opens, not the route the app keeps across a reload.
+  if (!keep) await discardRoute(page);
+  return link;
 }
 
 test.beforeEach(async ({ context, page }) => {
@@ -58,9 +63,10 @@ test.beforeEach(async ({ context, page }) => {
 test('a link opens the same route, with the same leg kinds and the exact distance', async ({
   page,
 }) => {
-  const link = await linkFromPlanner(page);
+  const link = await linkFromPlanner(page, { keep: true });
   expect(link).toMatch(/#r=[A-Za-z0-9_-]+$/);
   const sent = await plannerState(page);
+  await discardRoute(page);
 
   await page.goto('about:blank');
   await page.goto(link);

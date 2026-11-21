@@ -5,7 +5,7 @@ import { vi } from 'vitest';
  *
  * jsdom has no IndexedDB. The stores' own logic — ids, timestamps, ordering, what they
  * refuse — does not need one: `tx` hands `run` an object store, and this one keeps records
- * in a Map and answers the three calls the stores make.
+ * in a Map and answers the calls the stores make.
  */
 export function memoryDb() {
   const stores = new Map<string, Map<string, unknown>>();
@@ -19,6 +19,7 @@ export function memoryDb() {
     const store = {
       put: (record: { id: string }) => records.set(record.id, structuredClone(record)),
       getAll: () => [...records.values()].map((record) => structuredClone(record)),
+      get: (id: string) => (records.has(id) ? structuredClone(records.get(id)) : undefined),
       delete: (id: string) => records.delete(id),
     };
     return run(store);

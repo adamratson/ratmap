@@ -2,6 +2,7 @@ import type { Map as MLMap } from 'maplibre-gl';
 import { formatElevation } from '../overlays/peaks';
 import { compassBearing, distanceMetres, formatDistance } from '../routes/geo';
 import type { StatusCentre } from '../ui/status';
+import { insetOffset, NO_INSET, type ViewInset } from '../map/view-inset';
 import { parseLatLng } from './coords';
 import { PlacesSearch, type RegionIndex, type SearchResult } from './search';
 
@@ -21,6 +22,13 @@ export interface SearchBoxOptions {
    * every search, so a region downloaded or deleted since is searched, or not, at once.
    */
   regionIndexes?: () => RegionIndex[];
+  /**
+   * A result was chosen. Called before the map moves to it, so whatever this opens or closes
+   * over the map is already there when {@link viewInset} is read.
+   */
+  onResult?: (result: SearchResult) => void;
+  /** What covers the map, so a result lands where it can be seen, not under the sheet. */
+  viewInset?: () => ViewInset;
 }
 
 export class SearchBox {
@@ -30,6 +38,8 @@ export class SearchBox {
   private readonly status: Pick<StatusCentre, 'toast'>;
   private readonly onCoordinates: (coords: { lat: number; lng: number }) => void;
   private readonly regionIndexes: () => RegionIndex[];
+  private readonly onResult: (result: SearchResult) => void;
+  private readonly viewInset: () => ViewInset;
   private readonly search = new PlacesSearch();
   private seq = 0;
 
@@ -50,6 +60,8 @@ export class SearchBox {
     this.status = options.status;
     this.onCoordinates = options.onCoordinates;
     this.regionIndexes = options.regionIndexes ?? (() => []);
+    this.onResult = options.onResult ?? (() => {});
+    this.viewInset = options.viewInset ?? (() => NO_INSET);
 
     this.input.addEventListener('input', () => {
       void this.run(this.input.value);
@@ -231,15 +243,27 @@ export class SearchBox {
 
     button.append(name, meta);
     button.addEventListener('click', (event) => {
-      this.map.easeTo({ center: [coords.lng, coords.lat], zoom: Math.max(this.map.getZoom(), 11) });
       this.hideResults();
       this.releaseInput(event);
       this.onCoordinates(coords);
+      this.moveTo(coords.lng, coords.lat);
     });
 
     item.append(button);
     this.results.append(item);
     this.showResults();
+  }
+
+  /**
+   * Bring a chosen result to the middle of the map left showing. It used to go to the
+   * middle of the whole map — under the sheet, for a sheet half open.
+   */
+  private moveTo(lng: number, lat: number): void {
+    this.map.easeTo({
+      center: [lng, lat],
+      zoom: Math.max(this.map.getZoom(), 11),
+      offset: insetOffset(this.viewInset()),
+    });
   }
 
   private renderResults(results: SearchResult[]): void {
@@ -287,9 +311,10 @@ export class SearchBox {
 
       button.append(name, meta);
       button.addEventListener('click', (event) => {
-        this.map.easeTo({ center: [result.lon, result.lat], zoom: Math.max(this.map.getZoom(), 11) });
         this.hideResults();
         this.releaseInput(event);
+        this.onResult(result);
+        this.moveTo(result.lon, result.lat);
       });
 
       item.append(button);

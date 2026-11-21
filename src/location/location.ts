@@ -1,5 +1,6 @@
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
+import { insetOffset, NO_INSET, type ViewInset } from '../map/view-inset';
 
 // Foreground-only location. §7: there is no background geolocation on any platform — not
 // iOS, not Android — so this deliberately makes no attempt at track recording. The UI must
@@ -17,6 +18,8 @@ export interface LocationControllerOptions {
   onStateChange?(state: LocationState): void;
   /** The user tapped their own position dot — usually to read off its coordinates. */
   onDotClick?(position: GeolocationPosition): void;
+  /** What covers the map, so the dot is centred in what is left of it. */
+  viewInset?: () => ViewInset;
 }
 
 /**
@@ -30,6 +33,7 @@ export class LocationController {
   private readonly map: MLMap;
   private readonly onStateChange?: (state: LocationState) => void;
   private readonly onDotClick?: (position: GeolocationPosition) => void;
+  private readonly viewInset: () => ViewInset;
   private watchId: number | null = null;
   private marker: maplibregl.Marker | null = null;
   private accuracyCircleId = 'user-location-accuracy';
@@ -50,6 +54,7 @@ export class LocationController {
     this.map = options.map;
     this.onStateChange = options.onStateChange;
     this.onDotClick = options.onDotClick;
+    this.viewInset = options.viewInset ?? (() => NO_INSET);
   }
 
   getState(): LocationState {
@@ -141,6 +146,8 @@ export class LocationController {
 
   private centreOn(position: GeolocationPosition): void {
     const center: [number, number] = [position.coords.longitude, position.coords.latitude];
+    // In the middle of the map the sheet leaves showing, not under the sheet.
+    const offset = insetOffset(this.viewInset());
     if (this.zoomIn) {
       this.zoomIn = false;
       // flyTo rather than easeTo: from the country view this is a jump of nine zoom
@@ -149,11 +156,12 @@ export class LocationController {
       this.map.flyTo({
         center,
         zoom: Math.max(this.map.getZoom(), LOCATE_ZOOM),
+        offset,
         maxDuration: 2000,
       });
       return;
     }
-    this.map.easeTo({ center, duration: 500 });
+    this.map.easeTo({ center, offset, duration: 500 });
   }
 
   private renderMarker(position: GeolocationPosition): void {

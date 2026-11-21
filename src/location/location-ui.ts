@@ -1,6 +1,7 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import type { StatusCentre } from '../ui/status';
 import { HeadingWatcher } from './heading';
+import type { ViewInset } from '../map/view-inset';
 import { LocationController, type LocationState } from './location';
 
 // The rail's locate button: the dot, follow mode, the compass cone, and what to say when
@@ -14,13 +15,31 @@ export interface LocationUiOptions {
   onPosition: (lngLat: [number, number]) => void;
   /** The location dot was tapped. */
   onDotClick: (lngLat: [number, number]) => void;
+  viewInset?: () => ViewInset;
 }
 
-export function setUpLocation({ map, button, status, onPosition, onDotClick }: LocationUiOptions): LocationController {
+export interface LocationUi {
+  location: LocationController;
+  /**
+   * Show the dot and follow it, as the button does — and the compass with it. Call from a
+   * tap: iOS only asks for the compass from one.
+   */
+  start(): void;
+}
+
+export function setUpLocation({
+  map,
+  button,
+  status,
+  onPosition,
+  onDotClick,
+  viewInset,
+}: LocationUiOptions): LocationUi {
   const location: LocationController = new LocationController({
     map,
     onStateChange: (state) => renderLocationState(state),
     onDotClick: (position) => onDotClick([position.coords.longitude, position.coords.latitude]),
+    ...(viewInset ? { viewInset } : {}),
   });
 
   /**
@@ -33,15 +52,19 @@ export function setUpLocation({ map, button, status, onPosition, onDotClick }: L
    */
   const heading = new HeadingWatcher((degrees) => location.setHeading(degrees));
 
+  const start = (): void => {
+    location.start();
+    // Not awaited and not reported: a missing compass costs the cone and nothing else,
+    // and the dot is the thing that was actually asked for.
+    void heading.start();
+  };
+
   button.addEventListener('click', () => {
     if (location.isFollowing()) {
       location.stop();
       heading.stop();
     } else {
-      location.start();
-      // Not awaited and not reported: a missing compass costs the cone and nothing else,
-      // and the dot is the thing that was actually asked for.
-      void heading.start();
+      start();
     }
   });
 
@@ -94,5 +117,5 @@ export function setUpLocation({ map, button, status, onPosition, onDotClick }: L
     }
   }
 
-  return location;
+  return { location, start };
 }

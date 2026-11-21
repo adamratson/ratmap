@@ -32,9 +32,12 @@ import {
 import { addPeaksLayer, peakAt } from './overlays/peaks';
 import { sacPathAt } from './overlays/sac';
 import { setUpLocation } from './location/location-ui';
+import { NO_INSET, type ViewInset } from './map/view-inset';
+import type { PeakProperties } from './overlays/peaks';
 import { RegionCoverage } from './regions/coverage';
 import { downloadsInFlight } from './regions/downloader';
 import { renderRegionsSheet } from './regions/regions-ui';
+import { DraftKeeper, readDraft } from './routes/draft-store';
 import { onPressHold } from './routes/press-hold';
 import { addRouteLayers } from './routes/route-layers';
 import { RoutePlanner, type RouteSummary } from './routes/route-planner';
@@ -48,6 +51,7 @@ import { LinkTooNew, payloadFromHash } from './routes/share-link';
 import { renderPlacesSheet } from './search/places-view';
 import { regionSearchIndexes } from './search/region-indexes';
 import { SearchBox } from './search/search-view';
+import type { SearchResult } from './search/search';
 import { PrintController } from './print/print-view';
 import { ROUTE_SOURCE_ID } from './routes/route-layers';
 import { setUpCompass } from './ui/compass';
@@ -206,6 +210,20 @@ syncDebugOverlay(sheetElement);
 
 sheet.open('peek');
 
+/**
+ * What the sheet covers of the map, for camera moves to centre on what is left showing:
+ * the bottom of a phone, the left edge of a desktop. Read at the moment of the move, after
+ * whatever the move opens has set the sheet's height (sheet.visibleHeight is where the
+ * sheet is going, not where it is mid-animation).
+ */
+function viewInset(): ViewInset {
+  if (prefersDockedSheet()) {
+    const box = map.getContainer().getBoundingClientRect();
+    return { ...NO_INSET, left: Math.max(0, sheetElement.getBoundingClientRect().right - box.left) };
+  }
+  return { ...NO_INSET, bottom: sheet.visibleHeight() };
+}
+
 // --- The map ------------------------------------------------------------------------
 
 const map = new maplibregl.Map({
@@ -285,9 +303,12 @@ function installAppLayers(): void {
 map.once('styledata', () => {
   installAppLayers();
   // Not before: opening a route adds to the style, which throws until it will accept
-  // sources, and that would lose the link to a message about map styles.
-  openRouteFromLocation();
-  window.addEventListener('hashchange', openRouteFromLocation);
+  // sources, and that would lose the link to a message about map styles. The route that
+  // was on screen comes back first, so a link opened over it offers it back (load()).
+  void restoreDraft().finally(() => {
+    openRouteFromLocation();
+    window.addEventListener('hashchange', openRouteFromLocation);
+  });
 });
 
 const coverage = new RegionCoverage({
@@ -341,6 +362,21 @@ printer = new PrintController({
  */
 let routeInProgress = false;
 
+/** Whether a route was being followed at the last change — to start the GPS with it. */
+let wasFollowing = false;
+
+/**
+ * Keeps a copy of the route on screen, so a reload brings it back (see draft-store.ts).
+ * Lazy about the planner, which is made below.
+ */
+const draftKeeper = new DraftKeeper(
+  () => planner.snapshot(),
+  (err) =>
+    status.toast(`Couldn’t keep a copy of this route: ${err.message}. Save it to be sure of it.`, {
+      kind: 'warn',
+    }),
+);
+
 /**
  * The planner routes over the `roads` layer inside downloaded region archives and samples
  * elevation from their terrain archives — no engine, no server, no network. Both come from
@@ -352,6 +388,8 @@ const planner = new RoutePlanner({
   registry,
   theme: () => theme.get(),
   downloadedRegions: () => coverage.downloadedRegions(),
+  onDraftChange: () => draftKeeper.changed(),
+  viewInset,
   // A tap that lands on a summit makes it a named waypoint, so a route reads
   // "Achintee → Ben Nevis" rather than as a list of coordinates.
   describePoint: (event) => {
@@ -370,6 +408,14 @@ const planner = new RoutePlanner({
   onChange: (summary: RouteSummary) => {
     const starting = !routeInProgress;
     routeInProgress = summary.active || summary.following;
+
+    // Following is nothing without a position, and only the locate button asked for one:
+    // Follow sat on "Waiting for a position fix…" until someone found it. Synchronous with
+    // the tap on Follow (or Resume), which iOS needs before it will offer the compass.
+    if (summary.following && !wasFollowing) locationUi.start();
+    wasFollowing = summary.following;
+    if (summary.following || summary.waypointCount === 0) status.setCondition('resume-follow', null);
+
     views.setPlan(
       routeInProgress
         ? { mode: summary.following ? 'Following' : 'Planning', open: openPlanView }
@@ -409,12 +455,37 @@ function routesUi(container: HTMLElement = sheet.body): RoutesUiDeps {
     planner,
     container,
     onPlanStarted: openPlanView,
-    onPlanFinished: () => planner.deactivate(),
     onStatus: (message, kind) => status.toast(message, { kind }),
     onUndoableStatus: (message, action) => status.toast(message, { action }),
     regionOffer: (points) => coverage.regionOfferFor(points),
     onGetRegion: (name) => openRegionsView(name),
   };
+}
+
+/**
+ * Put back the route that was on screen when the page last went away — an iOS eviction,
+ * an update's reload, a crash. One being followed comes back planned, with a banner to
+ * resume: restarting the GPS unasked, on a page someone may have opened for another
+ * reason, would be its own surprise.
+ */
+async function restoreDraft(): Promise<void> {
+  let saved;
+  try {
+    saved = await readDraft();
+  } catch (err) {
+    console.error('Could not read back the route that was on screen', err);
+    return;
+  }
+  // A route opened some other way while this was being read is the newer intent.
+  if (!saved || planner.getDraft().waypointCount > 0) return;
+  planner.restore(saved);
+  if (saved.following) {
+    status.setCondition('resume-follow', {
+      message: `You were following “${planner.getName()}”.`,
+      kind: 'ok',
+      action: { label: 'Resume', onSelect: () => planner.startFollowing() },
+    });
+  }
 }
 
 /**
@@ -469,10 +540,7 @@ map.on('click', (e) => {
     // carried no geometry — otherwise the sheet reports, and "Save place" stores, the
     // spot the finger landed on rather than the summit.
     const lngLat = hit.lngLat ? new maplibregl.LngLat(...hit.lngLat) : e.lngLat;
-    const avalanche = avalancheReading(lngLat);
-    views.open('peak', (body) =>
-      renderPeakSheet(body, hit.properties, lngLat, { status, ...(avalanche ? { avalanche } : {}) }),
-    );
+    openPeakCard(hit.properties, lngLat);
     return;
   }
 
@@ -486,6 +554,45 @@ map.on('click', (e) => {
     views.closeDetailCard();
   }
 });
+
+function openPeakCard(properties: PeakProperties, lngLat: maplibregl.LngLat): void {
+  const avalanche = avalancheReading(lngLat);
+  views.open('peak', (body) =>
+    renderPeakSheet(body, properties, lngLat, { status, ...(avalanche ? { avalanche } : {}) }),
+  );
+}
+
+/** Bumped per search pick, so a card filled in late is only filled for the pick it was for. */
+let searchPick = 0;
+
+/**
+ * What a search pick opens over the map, before the map moves to it (SearchBox.onResult).
+ *
+ * A summit opens its card, as a tap on it does — the pick used to move the map and open
+ * nothing, so the summit landed unmarked, under a sheet still showing whatever view was up.
+ * Anything else puts the sheet away to show it. Print stays: there, a search is choosing
+ * where the frame goes.
+ */
+function onSearchResult(result: SearchResult): void {
+  const pick = ++searchPick;
+  if (views.view() === 'print') return;
+  if (result.kind !== 'peak' && result.kind !== 'volcano') {
+    views.close();
+    return;
+  }
+
+  const lngLat = new maplibregl.LngLat(result.lon, result.lat);
+  // The search index has the name and height; the summit as the map draws it has the rest
+  // (Wikidata, list membership). Opened with what there is, then filled in once the map
+  // has arrived and drawn it.
+  openPeakCard({ name: result.name, ...(result.ele !== null ? { ele: result.ele } : {}) }, lngLat);
+  map.once('idle', () => {
+    if (pick !== searchPick || views.view() !== 'peak') return;
+    const hit = peakAt(map, map.project(lngLat));
+    if (!hit || hit.properties.name !== result.name) return;
+    openPeakCard(hit.properties, hit.lngLat ? new maplibregl.LngLat(...hit.lngLat) : lngLat);
+  });
+}
 
 function showCoordsSheet(tapped: maplibregl.LngLat, { focus = false } = {}): void {
   // A tap on a repeated world copy reports a longitude past ±180, which the sheet would
@@ -593,7 +700,7 @@ async function openRoutesView(): Promise<void> {
 
 async function openPlacesView(): Promise<void> {
   views.open('places', () => {});
-  await renderPlacesSheet(sheet.body, { map, status, onGoTo: () => sheet.collapse() });
+  await renderPlacesSheet(sheet.body, { map, status, onGoTo: () => sheet.collapse(), viewInset });
 }
 
 // --- Search (C9: local FTS5, no geocoding API) --------------------------------------
@@ -610,12 +717,15 @@ const searchBox = new SearchBox({
     showCoordsSheet(new maplibregl.LngLat(coords.lng, coords.lat), { focus: true }),
   // Every downloaded region's own index, beside the global fallback — see search.ts.
   regionIndexes: () => regionSearchIndexes(coverage.downloadedRegions()),
+  onResult: onSearchResult,
+  viewInset,
 });
 
 // --- Location ----------------------------------------------------------------------
 
-setUpLocation({
+const locationUi = setUpLocation({
   map,
+  viewInset,
   button: document.querySelector<HTMLButtonElement>('#locate-btn')!,
   status,
   onPosition: (lngLat) => planner.updatePosition(lngLat),

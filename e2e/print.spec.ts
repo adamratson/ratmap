@@ -61,6 +61,53 @@ test.describe('printing', () => {
     await expect(frame).toBeHidden();
   });
 
+  test('keeps the frame on the same ground when the sheet moves', async ({ page }) => {
+    // On a phone the sheet is dragged up to reach Make PDF. The frame used to stay in the
+    // middle of whatever map was left, and so slid onto ground nobody chose.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await openChip(page, 'Print');
+    await expect(page.locator('.print-frame')).toBeVisible();
+
+    const frameCentre = () =>
+      page.evaluate(() => {
+        const map = (window as unknown as { __ratmapMap: MLMap }).__ratmapMap;
+        const frame = document.querySelector<HTMLElement>('.print-frame')!.getBoundingClientRect();
+        const origin = map.getContainer().getBoundingClientRect();
+        const { lng, lat } = map.unproject([
+          frame.left + frame.width / 2 - origin.left,
+          frame.top + frame.height / 2 - origin.top,
+        ]);
+        return { lng, lat, top: frame.top };
+      });
+    const settled = async () => {
+      // Two reads a moment apart that agree: the sheet and the map have both stopped.
+      let previous = await frameCentre();
+      await expect
+        .poll(async () => {
+          const now = await frameCentre();
+          const still = Math.abs(now.top - previous.top) < 0.5;
+          previous = now;
+          return still;
+        })
+        .toBe(true);
+      return previous;
+    };
+
+    const before = await settled();
+    const setDetent = (detent: string) =>
+      page.evaluate((d) => {
+        (window as unknown as { __ratmapSheet: { open(d: string): void } }).__ratmapSheet.open(d);
+      }, detent);
+
+    for (const detent of ['peek', 'full', 'content']) {
+      await setDetent(detent);
+      const after = await settled();
+      // A metre or so: the frame's middle, read back through the map's own projection.
+      expect(Math.abs(after.lng - before.lng)).toBeLessThan(0.00002);
+      expect(Math.abs(after.lat - before.lat)).toBeLessThan(0.00002);
+    }
+  });
+
   test('makes an A4 PDF of what is in the frame', async ({ page }) => {
     test.setTimeout(180_000);
     await openChip(page, 'Print');

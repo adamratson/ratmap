@@ -12,6 +12,7 @@ import {
   showArea,
   simulateInstalledPwa,
   startNewRoute,
+  storedDraftWaypoints,
   styleLayers,
 } from './helpers';
 
@@ -290,6 +291,44 @@ test.describe('route planning', () => {
     expect(state.distanceM).toBeGreaterThan(4000);
   });
 
+  test('keeps an unsaved route across a reload', async ({ page }) => {
+    // iOS ends a backgrounded web app when it likes, and an update reloads the page. Either
+    // used to take a route being planned with it.
+    await showArea(page, TEST_AREA);
+    await startNewRoute(page);
+    await clickMapAt(page, ...TRAILHEAD);
+    await clickMapAt(page, ...RIDGE);
+    await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
+    await expect(page.locator('.route-status')).toContainText('Not saved');
+    await expect.poll(() => storedDraftWaypoints(page)).toBe(2);
+
+    await page.reload();
+
+    await expect.poll(async () => (await plannerState(page)).waypoints).toBe(2);
+    await expect(page.locator('#chips .chip-mode')).toHaveText('Planning');
+    await expect(page.locator('.route-status')).toContainText('Not saved');
+  });
+
+  test('asks before closing an unsaved route, and Discard can be undone', async ({ page }) => {
+    await showArea(page, TEST_AREA);
+    await startNewRoute(page);
+    await clickMapAt(page, ...TRAILHEAD);
+    await clickMapAt(page, ...RIDGE);
+    await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
+
+    await page.locator('.route-actions button', { hasText: 'Close' }).click();
+    await expect(page.locator('dialog h2')).toHaveText(/^Save “.+”\?$/);
+    await page.locator('dialog button', { hasText: 'Discard' }).click();
+
+    // Off the map and out of planning — not left drawn with no way back to it.
+    await expect.poll(async () => (await plannerState(page)).waypoints).toBe(0);
+    await expect(page.locator('#chips .chip-mode')).toHaveCount(0);
+
+    await page.locator('.toast button', { hasText: 'Undo' }).click();
+    await expect.poll(async () => (await plannerState(page)).waypoints).toBe(2);
+    await expect(page.locator('#chips .chip-mode')).toHaveText('Planning');
+  });
+
   test('follows a route against a simulated position', async ({ context, page }) => {
     await context.grantPermissions(['geolocation']);
     await showArea(page, TEST_AREA);
@@ -299,7 +338,11 @@ test.describe('route planning', () => {
     await clickMapAt(page, ...RIDGE);
     await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
 
+    await context.setGeolocation({ longitude: ON_ROUTE_FIX[0], latitude: ON_ROUTE_FIX[1] });
     await page.locator('.route-actions button', { hasText: 'Follow' }).click();
+    // Following starts the GPS itself. It used to wait on "Waiting for a position fix…"
+    // until someone found the locate button.
+    await expect(page.locator('#locate-btn')).toHaveClass(/active/);
     // The mode is named in the peek row, where it stays readable with the sheet at rest —
     // a tap on the map means something different in each mode, so it must never be silent.
     await expect(page.locator('#chips .chip-mode')).toHaveText('Following');

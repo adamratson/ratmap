@@ -25,6 +25,8 @@ function fakeDatabase(existing: string[]) {
       return { createIndex: (index: string) => entry.indexes.push(index) };
     },
     transaction: vi.fn(),
+    close: vi.fn(),
+    onversionchange: null as null | (() => void),
   };
 }
 
@@ -62,25 +64,48 @@ afterEach(() => {
 });
 
 describe('openDb', () => {
-  it('creates both stores, keyed by id and indexed by time, on a first install', async () => {
+  it('creates every store, keyed by id, on a first install', async () => {
     const { databases } = stubIndexedDb([{ upgradeFrom: [] }]);
-    const { openDb, PLACES_STORE, ROUTES_STORE } = await import('./db');
+    const { openDb, PLACES_STORE, ROUTES_STORE, DRAFT_STORE } = await import('./db');
 
     await openDb();
 
     expect(databases[0].created).toEqual([
       { name: PLACES_STORE, keyPath: 'id', indexes: ['savedAt'] },
       { name: ROUTES_STORE, keyPath: 'id', indexes: ['updatedAt'] },
+      { name: DRAFT_STORE, keyPath: 'id', indexes: [] },
     ]);
   });
 
   it('adds only what an older version lacked, leaving saved places alone', async () => {
     const { databases } = stubIndexedDb([{ upgradeFrom: ['saved-places'] }]);
-    const { openDb, ROUTES_STORE } = await import('./db');
+    const { openDb, ROUTES_STORE, DRAFT_STORE } = await import('./db');
 
     await openDb();
 
-    expect(databases[0].created.map((store) => store.name)).toEqual([ROUTES_STORE]);
+    expect(databases[0].created.map((store) => store.name)).toEqual([ROUTES_STORE, DRAFT_STORE]);
+  });
+
+  it('adds the draft store to a v2 database, leaving saved routes alone', async () => {
+    const { databases } = stubIndexedDb([{ upgradeFrom: ['saved-places', 'routes'] }]);
+    const { openDb, DRAFT_STORE } = await import('./db');
+
+    await openDb();
+
+    expect(databases[0].created.map((store) => store.name)).toEqual([DRAFT_STORE]);
+  });
+
+  it('lets go of its connection when a newer build needs to upgrade', async () => {
+    const { databases, open } = stubIndexedDb([{}, {}]);
+    const { openDb } = await import('./db');
+
+    const first = await openDb();
+    databases[0].onversionchange!();
+
+    expect(databases[0].close).toHaveBeenCalled();
+    // And opens a fresh one next time, rather than handing out the closed one.
+    expect(await openDb()).not.toBe(first);
+    expect(open).toHaveBeenCalledTimes(2);
   });
 
   it('opens one connection for everyone — two versions from two modules would deadlock', async () => {
@@ -91,7 +116,7 @@ describe('openDb', () => {
 
     expect(a).toBe(b);
     expect(open).toHaveBeenCalledTimes(1);
-    expect(open).toHaveBeenCalledWith('ratmap', 2);
+    expect(open).toHaveBeenCalledWith('ratmap', 3);
   });
 
   it('tries again after a failure rather than failing forever', async () => {

@@ -1665,6 +1665,34 @@ textarea {
   color: var(--warn-text);
 }
 
+/* Which route this is, and whether the routes list has it yet. "Unsaved changes" takes the
+   warning colour: it is the one state that Close, or a reload without the autosave, would
+   cost something. */
+.route-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+  margin: 0;
+}
+
+.route-status-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.route-status-state {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.route-status-state.unsaved {
+  color: var(--warn-text);
+}
+
 .route-stats {
   display: flex;
   flex-wrap: wrap;
@@ -1830,7 +1858,7 @@ textarea {
   color: var(--surface);
 }
 
-/* Clear wipes the route and used to sit immediately beside Done in a row of five
+/* Clear wipes the route and used to sit immediately beside Done (now Close) in a row of five
    identical grey pills — indistinguishable from finishing. Giving it a whole row to
    itself fixed that but cost a full row of height for one short link every time the
    panel is open. Back in the shared row, but still visibly apart: transparent rather
@@ -1841,6 +1869,16 @@ textarea {
   margin-left: auto;
   background: transparent;
   color: var(--danger);
+}
+
+.share-actions button.destructive {
+  background: transparent;
+  color: var(--danger);
+}
+
+.share-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .route-actions button:disabled,

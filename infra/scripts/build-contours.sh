@@ -132,6 +132,13 @@ echo "  $CELLS cell(s) of up to ${CONTOUR_CELL_PX} px, $CONTOUR_WORKERS at a tim
 # densest cells peaked at 283 MB. -t: tippecanoe writes its temp files to /tmp whatever
 # TMPDIR says, which in the image is the container's own layer, not /work. See
 # build-paths.sh.
+#
+# A cell can hold no line at all: one with no ground crossing a 10 m level, as open sea is
+# (a flat 0 m: fetch-dem.sh fills Mapterhorn's absent tiles with sea level). Such a cell
+# gets no tileset and is left out of the join below, rather than handed to tippecanoe,
+# which exits 110 on an empty input ("Did not read any valid geometries"). Per-cell tiling
+# made that reachable (2026-11-16); the 2026-11-21 global run then failed on andalucia,
+# 16 of whose 77 cells are Atlantic or Alborán Sea.
 trace_cell() {  # trace_cell <n> <xoff> <yoff> <xsize> <ysize> <xmin> <xmax> <ymin> <ymax>
   local n="$1" base="$WORK_DIR/cell-$1"
   gdal_translate -q -of VRT -srcwin "$2" "$3" "$4" "$5" "$WORK_DIR/clip.tif" "$base.vrt" \
@@ -140,7 +147,13 @@ trace_cell() {  # trace_cell <n> <xoff> <yoff> <xsize> <ysize> <xmin> <xmax> <ym
     && "$CONTOUR_CELL_BIN" "$base.csv" "$base.geojsonl" \
          "$INDEX_EVERY" "$6" "$7" "$8" "$9" \
     && rm -f "$base.vrt" "$base.csv" \
-    && tippecanoe -q -o "$base.pmtiles" -t "$WORK_DIR" \
+    || { echo "  cell $n failed" >&2; return 1; }
+  if [ ! -s "$base.geojsonl" ]; then
+    echo "  cell $n: no contours (no ground crosses a ${CONTOUR_INTERVAL} m level: open sea, say)"
+    rm -f "$base.geojsonl"
+    return 0
+  fi
+  tippecanoe -q -o "$base.pmtiles" -t "$WORK_DIR" \
          -Z"$CONTOUR_MINZOOM" -z"$CONTOUR_MAXZOOM" \
          --simplification=4 \
          --no-tile-size-limit \
@@ -180,11 +193,22 @@ TMP_OUT="$WORK_DIR/$REGION_ID-contours-1.pmtiles"
 # tile-join's default 500 KB would drop features from a dense seam tile. A region of one
 # cell has nothing to join. tile-join maps every cell's tileset in and holds ~285 MB of
 # its own on top (switzerland: 830 MB resident, 285 MB of it not file-backed).
+#
+# Only the cells that traced something have a tileset (see trace_cell). None at all is a
+# region that is all sea, or a DEM that came back flat: either way not something to
+# publish as contours, so it fails here rather than shipping an empty archive.
 CELL_TILESETS=()
 for n in $(seq 1 "$CELLS"); do
-  CELL_TILESETS+=("$WORK_DIR/cell-$n.pmtiles")
+  [ ! -s "$WORK_DIR/cell-$n.pmtiles" ] || CELL_TILESETS+=("$WORK_DIR/cell-$n.pmtiles")
 done
-if [ "$CELLS" -eq 1 ]; then
+if [ "${#CELL_TILESETS[@]}" -eq 0 ]; then
+  echo "FAILED: no cell of $REGION_ID traced a single contour — is its DEM flat?" >&2
+  exit 1
+fi
+if [ "$CELLS" -gt "${#CELL_TILESETS[@]}" ]; then
+  echo "  $((CELLS - ${#CELL_TILESETS[@]})) of $CELLS cell(s) had no contours"
+fi
+if [ "${#CELL_TILESETS[@]}" -eq 1 ]; then
   mv "${CELL_TILESETS[0]}" "$TMP_OUT"
 else
   tile-join -q -o "$TMP_OUT" -pk --force -n "ratmap contours $REGION_ID" "${CELL_TILESETS[@]}"

@@ -68,8 +68,9 @@ const { MapMock, mapCtorSpy, handlers, addProtocolSpy, MarkerMock, mapInstances 
     getContainer(): HTMLElement {
       return this.container;
     }
-    unproject(): { lat: number; lng: number } {
-      return { lat: 56.8, lng: -4.5 };
+    unproject(): { lat: number; lng: number; wrap(): { lat: number; lng: number } } {
+      const at = { lat: 56.8, lng: -4.5 };
+      return { ...at, wrap: () => at };
     }
   }
 
@@ -350,7 +351,8 @@ describe('app bootstrap', () => {
     await loadMainQuietly();
 
     const chips = [...document.querySelectorAll('#chips .chip')].map((c) => c.textContent);
-    expect(chips).toEqual(['Routes', 'Offline', 'Saved', 'Layers', 'Print']);
+    // Five, so they fit a phone's row: Print and Settings are under More, the legend in Layers.
+    expect(chips).toEqual(['Routes', 'Offline', 'Saved', 'Layers', 'More']);
 
     const sheet = document.querySelector<HTMLElement>('#sheet')!;
     expect(sheet.classList.contains('at-peek')).toBe(true);
@@ -500,7 +502,7 @@ const stubPrefersDark = (dark: boolean): void => {
     stubPrefersDark(true);
     await loadMainQuietly();
 
-    document.querySelector<HTMLButtonElement>('#settings-btn')!.click();
+    document.querySelector<HTMLButtonElement>('#chips [data-chip="settings"]')!.click();
     const radio = (value: string) =>
       document.querySelector<HTMLInputElement>(`input[name="theme"][value="${value}"]`)!;
     const choose = (value: string) => {
@@ -573,11 +575,28 @@ const stubPrefersDark = (dark: boolean): void => {
     expect(JSON.parse(store.get('ratmap:visible-layers')!)).toEqual({ peaks: false });
   });
 
+  it('reaches Print from More, and shows the map key under the layer switches', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+    const body = document.querySelector<HTMLElement>('.sheet-body')!;
+
+    document.querySelector<HTMLButtonElement>('#chips [data-chip="settings"]')!.click();
+    document.querySelector<HTMLButtonElement>('#more-print')!.click();
+    expect(body.getAttribute('aria-label')).toBe('Print');
+    // Print belongs to More: its chip stays lit.
+    const more = document.querySelector<HTMLButtonElement>('#chips [data-chip="settings"]')!;
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+
+    document.querySelector<HTMLButtonElement>('#chips [data-chip="layers"]')!.click();
+    expect(body.querySelector('.layers-key h2')!.textContent).toBe('Key');
+    expect(body.querySelector('.layers-key .legend-section')).not.toBeNull();
+  });
+
   it('keeps avalanche terrain in Layers, not Settings', async () => {
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
     await loadMainQuietly();
 
-    document.querySelector<HTMLButtonElement>('#settings-btn')!.click();
+    document.querySelector<HTMLButtonElement>('#chips [data-chip="settings"]')!.click();
     expect(document.querySelector('.sheet-body')!.textContent).not.toMatch(/avalanche/i);
   });
 

@@ -86,6 +86,30 @@ describe('SheetViews', () => {
     expect(openPlan).toHaveBeenCalledOnce();
   });
 
+  it('shows the mode in the Routes chip’s place, so the row never grows past a phone', () => {
+    views.setDestinations([
+      { view: 'routes', label: 'Routes', open: () => {} },
+      { view: 'layers', label: 'Layers', open: () => {} },
+    ]);
+    views.setPlan({ mode: 'Following', open: () => {} });
+    expect([...chipsHost.children].map((chip) => chip.textContent)).toEqual(['Following', 'Layers']);
+
+    views.setPlan(null);
+    expect([...chipsHost.children].map((chip) => chip.textContent)).toEqual(['Routes', 'Layers']);
+  });
+
+  it('lights a chip for the views reached through it, and closes them from it', () => {
+    views.setDestinations([
+      { view: 'settings', label: 'More', open: () => views.open('settings', () => {}), includes: ['print'] },
+    ]);
+    views.open('print', () => {});
+    const more = chipsHost.querySelector<HTMLButtonElement>('[data-chip="settings"]')!;
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+
+    more.click();
+    expect(views.view()).toBeNull();
+  });
+
   it('names the mode as it changes, and drops the chip when it ends', () => {
     views.setPlan({ mode: 'Planning', open: () => {} });
     views.setPlan({ mode: 'Following', open: () => {} });

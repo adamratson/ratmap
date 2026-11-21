@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import type { Map as MLMap } from 'maplibre-gl';
-import { clearConditions, gotoApp, jumpTo, openChip, preferFileDownloads } from './helpers';
+import { clearConditions, gotoApp, jumpTo, openPrint, preferFileDownloads } from './helpers';
 
 // Printing an A4 sheet: the frame that shows what will be on the paper, and the PDF made
 // from it. Needs no downloaded region — outside one the sheet is drawn from the world
@@ -37,7 +37,7 @@ test.describe('printing', () => {
   });
 
   test('frames an A4 sheet at its true scale, and takes the frame away on close', async ({ page }) => {
-    await openChip(page, 'Print');
+    await openPrint(page);
     const frame = page.locator('.print-frame');
     await expect(frame).toBeVisible();
     await expect(frame).toContainText('1:25');
@@ -57,7 +57,8 @@ test.describe('printing', () => {
     // Outside any downloaded region the sheet would print with very little detail.
     await expect(page.locator('.print-coverage')).toContainText('outside');
 
-    await page.locator('#chips .chip', { hasText: 'Print' }).click();
+    // Print belongs to More, so More's chip is the way out of it.
+    await page.locator('#chips .chip', { hasText: 'More' }).click();
     await expect(frame).toBeHidden();
   });
 
@@ -65,7 +66,7 @@ test.describe('printing', () => {
     // On a phone the sheet is dragged up to reach Make PDF. The frame used to stay in the
     // middle of whatever map was left, and so slid onto ground nobody chose.
     await page.setViewportSize({ width: 375, height: 812 });
-    await openChip(page, 'Print');
+    await openPrint(page);
     await expect(page.locator('.print-frame')).toBeVisible();
 
     const frameCentre = () =>
@@ -110,7 +111,7 @@ test.describe('printing', () => {
 
   test('makes an A4 PDF of what is in the frame', async ({ page }) => {
     test.setTimeout(180_000);
-    await openChip(page, 'Print');
+    await openPrint(page);
     await page.locator('input[name="print-scale"][value="25000"]').check({ force: true });
     await page.locator('input[name="print-orientation"][value="portrait"]').check({ force: true });
 

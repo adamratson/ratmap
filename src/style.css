@@ -746,6 +746,36 @@ textarea {
   cursor: pointer;
 }
 
+/* More's way into Print: a row like the settings below it, that opens rather than sets. */
+.more-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.more-row-chevron {
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+/* The legend, under the layer switches in the Layers view. */
+.layers-key {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
 .settings-row-text {
   display: flex;
   flex-direction: column;
@@ -1082,7 +1112,7 @@ textarea {
   visibility: hidden;
 }
 
-/* The destinations, and the legend and settings buttons pinned at the end of the row. */
+/* The destinations: five chips sharing the row (see .chip). */
 .peek-row {
   display: flex;
   align-items: center;
@@ -1117,11 +1147,15 @@ textarea {
 }
 
 .chip {
-  flex-shrink: 0;
+  /* Sharing the row out between them: five chips fill a phone's width exactly, each as
+     wide as its word needs and the slack split evenly, so none is cut off at the edge.
+     Wider screens just get wider chips. The row still scrolls (above) as a last resort,
+     on a screen too narrow even for that. */
+  flex: 1 0 auto;
   /* 36px — smaller than the 44px rail buttons because these sit in a row with generous
      horizontal padding, which is where a mis-tap actually happens. */
   min-height: 2.25rem;
-  padding: 0.4rem 0.7rem;
+  padding: 0.4rem 0.45rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -1133,17 +1167,6 @@ textarea {
   letter-spacing: 0.05em;
   white-space: nowrap;
   cursor: pointer;
-}
-
-/* Square, because it is an icon rather than a word — and so it does not read as another
-   destination in the row it sits at the end of. */
-.chip-icon {
-  flex-shrink: 0;
-  width: 2.25rem;
-  padding: 0;
-  text-align: center;
-  font-size: 1rem;
-  line-height: 1;
 }
 
 .chip.active {
@@ -1544,10 +1567,15 @@ textarea {
 
 /* Lifted above the sheet. Attribution is legally required (ODbL) and the sheet's resting
    height would otherwise sit right on top of it — "visible if you drag the UI away" is
-   not attribution. --sheet-visible is measured in main.ts as the sheet is dragged. */
+   not attribution. --sheet-visible is measured in main.ts as the sheet is dragged.
+
+   max(), not a sum: the sheet already reaches the bottom of the screen, home indicator
+   included, so --sheet-visible counts that inset already. Added on top, it floated the
+   attribution and scale bar 34pt clear of the sheet on an iPhone. The inset only matters
+   where there is no sheet under them — the docked desktop panel, where it is 0 anyway. */
 .maplibregl-ctrl-bottom-left,
 .maplibregl-ctrl-bottom-right {
-  bottom: calc(var(--sheet-visible, 0px) + env(safe-area-inset-bottom));
+  bottom: max(var(--sheet-visible, 0px), env(safe-area-inset-bottom));
   transition: bottom 0.26s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
@@ -1663,6 +1691,33 @@ textarea {
 
 .route-note.warn {
   color: var(--warn-text);
+}
+
+/* The status line and the way to the saved routes, on one row above the figures. */
+.route-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.route-panel-head .route-status {
+  flex: 1;
+  min-width: 0;
+}
+
+.route-all {
+  margin-left: auto;
+  min-height: 2.25rem;
+  padding: 0 0.1rem;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 /* Which route this is, and whether the routes list has it yet. "Unsaved changes" takes the

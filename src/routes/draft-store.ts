@@ -33,47 +33,55 @@ export async function readDraft(): Promise<DraftSnapshot | null> {
 }
 
 /**
- * Coalesces a burst of changes — a drag, a route's legs arriving one after another — into
- * one write, and writes at once when the page is hidden: the moment before iOS may end it.
+ * Writes every change at once, coalescing only while a write is still in flight: changes
+ * that arrive during one — a route's legs landing one after another — become one more
+ * write of the latest state when it lands.
+ *
+ * Not on a timer. With even half a second's pause, saving a route straight after editing
+ * it and then reloading brought it back as "Not saved": the copy from before the save,
+ * since the one after was still waiting out the pause. A write takes milliseconds.
  */
 export class DraftKeeper {
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  private writing = false;
+  /** A change arrived while a write was in flight. */
+  private pending = false;
   private failed = false;
   private readonly read: () => DraftSnapshot | null;
   private readonly onError: (err: Error) => void;
-  private readonly delayMs: number;
 
-  constructor(read: () => DraftSnapshot | null, onError: (err: Error) => void, delayMs = 500) {
+  constructor(read: () => DraftSnapshot | null, onError: (err: Error) => void) {
     this.read = read;
     this.onError = onError;
-    this.delayMs = delayMs;
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') this.flush();
-    });
-    window.addEventListener('pagehide', () => this.flush());
   }
 
-  /** Something changed: write it soon. */
+  /** Something changed: write it now, or as soon as the write in flight lands. */
   changed(): void {
-    if (this.timer !== null) clearTimeout(this.timer);
-    this.timer = setTimeout(() => this.flush(), this.delayMs);
+    if (this.writing) {
+      this.pending = true;
+      return;
+    }
+    this.write();
   }
 
-  /** Write now, if a write is waiting. */
-  flush(): void {
-    if (this.timer === null) return;
-    clearTimeout(this.timer);
-    this.timer = null;
-    writeDraft(this.read()).then(
-      () => {
-        this.failed = false;
-      },
-      (err: Error) => {
-        // Said once, not on every edit: the route on screen is still there, it just will
-        // not survive a reload until storage works again.
-        if (!this.failed) this.onError(err);
-        this.failed = true;
-      },
-    );
+  private write(): void {
+    this.writing = true;
+    writeDraft(this.read())
+      .then(
+        () => {
+          this.failed = false;
+        },
+        (err: Error) => {
+          // Said once, not on every edit: the route on screen is still there, it just will
+          // not survive a reload until storage works again.
+          if (!this.failed) this.onError(err);
+          this.failed = true;
+        },
+      )
+      .finally(() => {
+        this.writing = false;
+        if (!this.pending) return;
+        this.pending = false;
+        this.write();
+      });
   }
 }

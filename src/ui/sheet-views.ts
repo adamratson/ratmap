@@ -27,7 +27,7 @@ const VIEW_LABEL: Record<View, string> = {
   routes: 'Routes',
   plan: 'Route planner',
   install: 'Add to Home Screen',
-  settings: 'Settings',
+  settings: 'More',
   legend: 'Map legend',
   layers: 'Map layers',
   print: 'Print',
@@ -44,6 +44,11 @@ export interface Destination {
   view: View;
   label: string;
   open: () => void;
+  /**
+   * Other views reached through this one, which light its chip too and close with it:
+   * Print, opened from More.
+   */
+  includes?: View[];
 }
 
 /** The route mode's chip: which mode is on, and the way back to its panel. */
@@ -176,14 +181,8 @@ export class SheetViews {
 
     this.chipsHost.innerHTML = '';
 
-    // Planning is a mode, not a destination: it is entered from the routes list and left
-    // with Done, so its chip only exists while it is on. Without it the mode is invisible
-    // at peek, and a tap on the map silently means something different.
-    //
-    // It stays while another view is open, too, and brings the panel back. It used to go
-    // with the panel, and the only way back was the GPS dragging the panel over whatever
-    // was showing — on every fix.
-    if (this.plan) {
+    const planChip = (): HTMLButtonElement | null => {
+      if (!this.plan) return null;
       const plan = this.plan;
       const showing = this.current === 'plan';
       const chip = chipEl('plan', plan.mode, showing, () => {
@@ -192,11 +191,30 @@ export class SheetViews {
         else this.sheet.collapse();
       });
       chip.classList.add('chip-mode');
-      this.chipsHost.append(chip);
-    }
+      return chip;
+    };
+    let planPlaced = false;
 
     for (const entry of this.destinations) {
-      const active = this.current === entry.view;
+      // Planning is a mode, not a destination: entered from the routes list and left with
+      // Close, so its chip only exists while it is on — in the Routes chip's place. Without
+      // it the mode is invisible at peek, and a tap on the map silently means something
+      // different. In its place rather than beside it: as a sixth chip it pushed the row
+      // past a phone's width, and the last destinations off the edge.
+      //
+      // It stays while another view is open, too, and brings the panel back. It used to go
+      // with the panel, and the only way back was the GPS dragging the panel over whatever
+      // was showing — on every fix.
+      const mode = entry.view === 'routes' ? planChip() : null;
+      if (mode) {
+        this.chipsHost.append(mode);
+        planPlaced = true;
+        continue;
+      }
+
+      const active =
+        this.current !== null &&
+        (this.current === entry.view || (entry.includes ?? []).includes(this.current));
       this.chipsHost.append(
         chipEl(entry.view, entry.label, active, () => {
           // Tapping the open one puts the map back, so every chip is its own way out.
@@ -204,6 +222,12 @@ export class SheetViews {
           else entry.open();
         }),
       );
+    }
+
+    // No Routes chip to stand in for: first, so the mode is still on screen.
+    if (!planPlaced) {
+      const mode = planChip();
+      if (mode) this.chipsHost.prepend(mode);
     }
 
     for (const [name, button] of Object.entries(this.iconButtons)) {

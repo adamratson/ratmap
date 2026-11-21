@@ -1,7 +1,8 @@
 import { DebugOverlay, isDebugOverlayEnabled, setDebugOverlayEnabled } from '../app/debug';
 import type { ThemeController, ThemePreference } from './theme';
 
-// The Settings view: the theme, and the debug overlay.
+// The More view: printing, then the settings — the theme and the debug overlay. The things
+// used now and then, behind one chip, so the everyday destinations all fit a phone's row.
 
 /**
  * Debug overlay lifecycle. Created and destroyed with the setting, not just hidden — it
@@ -30,9 +31,24 @@ const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
 
 export function renderSettingsView(
   body: HTMLElement,
-  { theme, sheetElement }: { theme: ThemeController; sheetElement: HTMLElement },
+  {
+    theme,
+    sheetElement,
+    onPrint,
+  }: { theme: ThemeController; sheetElement: HTMLElement; onPrint?: () => void },
 ): void {
   body.innerHTML = `
+    ${
+      onPrint
+        ? `<button type="button" class="more-row" id="more-print">
+      <span class="settings-row-text">
+        <span class="settings-row-label">Print a map</span>
+        <span class="settings-row-note">An A4 PDF at 1:25 000 or 1:50 000, with a grid.</span>
+      </span>
+      <span class="more-row-chevron" aria-hidden="true">›</span>
+    </button>`
+        : ''
+    }
     <h2>Settings</h2>
     <div class="settings-row settings-row-static">
       <span class="settings-row-text">
@@ -77,6 +93,8 @@ export function renderSettingsView(
       theme.set(radio.value as ThemePreference);
     });
   }
+
+  if (onPrint) body.querySelector('#more-print')!.addEventListener('click', onPrint);
 
   const toggle = body.querySelector<HTMLInputElement>('#debug-overlay-toggle')!;
   toggle.checked = isDebugOverlayEnabled();

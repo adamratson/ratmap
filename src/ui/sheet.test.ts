@@ -68,9 +68,25 @@ function stubOffsetHeights(heights: Record<string, number>): () => void {
  *  the sheet's resize listener runs the identical `applyDetent(this.current, false)`
  *  a ResizeObserver tick would. */
 class ResizeObserverStub {
-  observe(): void {}
+  /** Every observer the sheet made, with what it watches — so a test can fire one. */
+  static made: ResizeObserverStub[] = [];
+  readonly targets: Element[] = [];
+  readonly callback: () => void;
+  constructor(callback: () => void) {
+    this.callback = callback;
+    ResizeObserverStub.made.push(this);
+  }
+  observe(target: Element): void {
+    this.targets.push(target);
+  }
   unobserve(): void {}
   disconnect(): void {}
+  /** Fire the observer watching `target`, as a real one would when it changed size. */
+  static fire(target: Element): void {
+    for (const observer of ResizeObserverStub.made) {
+      if (observer.targets.includes(target)) observer.callback();
+    }
+  }
 }
 
 describe('BottomSheet', () => {
@@ -80,6 +96,7 @@ describe('BottomSheet', () => {
   let restoreInnerHeight: () => void;
 
   beforeEach(() => {
+    ResizeObserverStub.made = [];
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     container = document.createElement('div');
     container.id = 'sheet';
@@ -106,6 +123,60 @@ describe('BottomSheet', () => {
   function transform(): string {
     return container.style.transform;
   }
+
+  it('follows its own box growing, though nothing fires a resize event', () => {
+    // An installed iOS web app starts with the page 62pt short and grows to full height a
+    // moment later, with no resize event (measured on an iPhone 17 Pro simulator). The
+    // sheet kept the short height's offset and sat 62pt too high: dead space under the
+    // peek row until something else made it re-measure.
+    heights['#sheet'] = 638;
+    heights['.sheet-peek'] = 100;
+    const sheet = new BottomSheet({ element: container });
+    sheet.open('peek');
+    expect(transform()).toBe('translateY(518px)');
+
+    heights['#sheet'] = 700;
+    ResizeObserverStub.fire(container);
+
+    expect(transform()).toBe('translateY(580px)');
+    expect(sheet.visibleHeight()).toBe(120);
+  });
+
+  it('eases to a new height when a view’s content arrives after it opened', () => {
+    heights['.sheet-peek'] = 100;
+    const sheet = new BottomSheet({ element: container });
+    sheet.open('content');
+    container.classList.remove('sheet-animating');
+
+    heights['.sheet-body'] = 300;
+    ResizeObserverStub.fire(sheet.body);
+
+    expect(container.classList.contains('sheet-animating')).toBe(true);
+    // 120 of chrome plus 300 of content, from the bottom of a 700px sheet.
+    expect(transform()).toBe('translateY(280px)');
+  });
+
+  it('does not move under a finger dragging it when its content changes', () => {
+    heights['.sheet-peek'] = 100;
+    const sheet = new BottomSheet({ element: container });
+    sheet.open('content');
+    const grip = container.querySelector('.sheet-grip')!;
+    container.setPointerCapture = () => {};
+    const pointer = (type: string, clientY: number) => {
+      const event = new MouseEvent(type, { bubbles: true, clientY }) as MouseEvent & { pointerId: number };
+      Object.defineProperty(event, 'pointerId', { value: 1 });
+      Object.defineProperty(event, 'pointerType', { value: 'touch' });
+      grip.dispatchEvent(event);
+    };
+    pointer('pointerdown', 500);
+    pointer('pointermove', 450);
+    const dragged = transform();
+
+    heights['.sheet-body'] = 300;
+    ResizeObserverStub.fire(sheet.body);
+
+    expect(transform()).toBe(dragged);
+  });
 
   it('does not let a same-target recompute interrupt an in-flight open', () => {
     // Reproduces the actual boot sequence: constructed against an empty peek row (wrong,

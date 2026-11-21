@@ -39,6 +39,12 @@ export interface RoutesUiDeps {
   container: HTMLElement;
   /** Switch the sheet to the planner — opening a saved route, or starting a new one. */
   onPlanStarted(): void;
+  /**
+   * Show the saved routes, leaving the route on screen as it is. While a route is open the
+   * Routes chip is the mode chip and leads back to the planner, so this is the way to the
+   * list from there.
+   */
+  onShowRoutes?(): void;
   onStatus(message: string, kind: 'ok' | 'warn' | 'error'): void;
   /**
    * Report something the user can take back. Distinct from {@link onStatus} because an
@@ -109,7 +115,14 @@ function planSection(
 ): HTMLElement {
   const section = el('div', 'route-panel-body');
 
-  if (summary.waypointCount > 0) section.append(routeStatus(summary));
+  const head = el('div', 'route-panel-head');
+  if (summary.waypointCount > 0) head.append(routeStatus(summary));
+  if (deps.onShowRoutes) {
+    const all = buttonEl('All routes', () => deps.onShowRoutes?.());
+    all.className = 'route-all';
+    head.append(all);
+  }
+  if (head.childElementCount > 0) section.append(head);
 
   if (summary.waypointCount === 0) {
     section.append(

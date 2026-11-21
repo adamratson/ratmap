@@ -100,9 +100,9 @@ export function renderLegend(body: HTMLElement, ink: MapInk, place?: LegendPlace
         'Dashed. In downloaded regions, from zoom 12.',
       )}
       ${legendRow(
-        lineSwatch(ink.pathLine, 3.2, { casing: ink.pathCasing }),
+        lineSwatch(ink.trackFill, 2.6, { casing: ink.pathLine, cap: 'butt' }),
         'Track',
-        'Solid. Vehicle-width.',
+        'A lane between two edges. Vehicle-width.',
       )}
       ${legendRow(
         `<svg viewBox="0 0 40 24"><rect x="13" y="5" width="14" height="14" rx="3" fill="${ink.parkingFill}" stroke="${ink.parkingRim}" stroke-width="1.5"/><text x="20" y="16.2" font-size="10" font-weight="600" fill="${ink.parkingGlyph}" text-anchor="middle">P</text></svg>`,

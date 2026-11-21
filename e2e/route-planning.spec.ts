@@ -247,13 +247,19 @@ test.describe('route planning', () => {
     await page.locator('.route-save-form button').click();
 
     await expect(page.locator('.toast')).toContainText('Andorra test route');
-
     // Reopen from a fresh page: the record has to stand alone (C10), with no in-memory
     // state and no network.
     await page.reload();
     await page.locator('#map').waitFor();
     await clearConditions(page);
 
+    // The route that was on screen comes back first, as the saved route it is — not as
+    // the unsaved copy from before the save.
+    await expect.poll(async () => (await plannerState(page)).waypoints).toBe(2);
+    await expect(page.locator('.route-status')).toContainText('Saved');
+    await expect(page.locator('.route-status')).not.toContainText('Not saved');
+
+    // And the list is still a tap away while it is open.
     await openChip(page, 'Routes');
     await expect(page.locator('.route-name')).toContainText('Andorra test route');
 

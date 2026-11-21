@@ -143,30 +143,31 @@ sheet.peek.innerHTML = `
   </div>
   <div class="peek-row">
     <div id="chips"></div>
-    <button id="legend-btn" type="button" class="chip chip-icon" aria-label="Map legend">▤</button>
-    <button id="settings-btn" type="button" class="chip chip-icon" aria-label="Settings">⚙</button>
   </div>
 `;
 
-const legendBtn = sheet.peek.querySelector<HTMLButtonElement>('#legend-btn')!;
-const settingsBtn = sheet.peek.querySelector<HTMLButtonElement>('#settings-btn')!;
 
 const views = new SheetViews({
   sheet,
   chipsHost: sheet.peek.querySelector<HTMLDivElement>('#chips')!,
-  iconButtons: { legend: legendBtn, settings: settingsBtn },
+  iconButtons: {},
   onViewChange: (view) => {
     if (view === 'print') printer?.show();
     else printer?.hide();
   },
 });
 
+// Five, all of which fit a phone's row. There were seven controls — five chips and two
+// icon buttons — and on an iPhone the row scrolled: Layers cut off at the edge, Print out
+// of sight, with nothing to say they were there. The legend is in Layers now (the same
+// symbols, beside the switches that show them), and Print and Settings, used now and then,
+// are under More.
 views.setDestinations([
   { view: 'routes', label: 'Routes', open: () => void openRoutesView() },
   { view: 'regions', label: 'Offline', open: () => openRegionsView() },
   { view: 'places', label: 'Saved', open: () => void openPlacesView() },
-  { view: 'layers', label: 'Layers', open: () => openLayersView() },
-  { view: 'print', label: 'Print', open: () => openPrintView() },
+  { view: 'layers', label: 'Layers', open: () => openLayersView(), includes: ['legend'] },
+  { view: 'settings', label: 'More', open: () => openSettingsView(), includes: ['print'] },
 ]);
 
 /**
@@ -203,8 +204,6 @@ document.addEventListener('keydown', (event) => {
   searchBox.focus();
 });
 
-settingsBtn.addEventListener('click', () => views.toggle('settings', openSettingsView));
-legendBtn.addEventListener('click', () => views.toggle('legend', openLegendView));
 
 syncDebugOverlay(sheetElement);
 
@@ -455,6 +454,7 @@ function routesUi(container: HTMLElement = sheet.body): RoutesUiDeps {
     planner,
     container,
     onPlanStarted: openPlanView,
+    onShowRoutes: () => void openRoutesView(),
     onStatus: (message, kind) => status.toast(message, { kind }),
     onUndoableStatus: (message, action) => status.toast(message, { action }),
     regionOffer: (points) => coverage.regionOfferFor(points),
@@ -652,18 +652,30 @@ map.on('mouseout', () => peakTooltip.hide());
 // --- Sheet destinations --------------------------------------------------------------
 
 function openSettingsView(): void {
-  views.open('settings', (body) => renderSettingsView(body, { theme, sheetElement }));
+  views.open('settings', (body) =>
+    renderSettingsView(body, { theme, sheetElement, onPrint: () => openPrintView() }),
+  );
 }
 
-function openLegendView(): void {
-  views.open('legend', (body) => {
-    const { lat, lng } = map.getCenter();
-    renderLegend(body, mapInk(theme.get()), { lat, lng });
-  });
-}
-
+/**
+ * The layer switches, then the key to everything else on the map. One view: the legend
+ * had its own button, and showed the same symbols the switches sit beside.
+ */
 function openLayersView(): void {
-  views.open('layers', (body) => renderLayersView(body, { map, ink: mapInk(theme.get()) }));
+  views.open('layers', (body) => {
+    const ink = mapInk(theme.get());
+    renderLayersView(body, { map, ink });
+    const key = document.createElement('section');
+    key.className = 'layers-key';
+    key.setAttribute('aria-label', 'Map key');
+    const heading = document.createElement('h2');
+    heading.textContent = 'Key';
+    const legend = document.createElement('div');
+    const { lat, lng } = map.getCenter();
+    renderLegend(legend, ink, { lat, lng });
+    key.append(heading, legend);
+    body.append(key);
+  });
 }
 
 function openRegionsView(initialQuery?: string): void {

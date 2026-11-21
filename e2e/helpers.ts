@@ -294,8 +294,30 @@ export async function plannerState(page: Page): Promise<PlannerProbe> {
 
 /** Open one of the sheet's destinations from its peek row. */
 export async function openChip(page: Page, label: string): Promise<void> {
-  await page.locator('#chips .chip', { hasText: label }).click();
+  const chip = page.locator('#chips .chip', { hasText: label });
+  if (label === 'Routes' && (await chip.count()) === 0) {
+    // While a route is open the Routes chip is the mode chip, which leads to the planner;
+    // the saved routes are through its "All routes".
+    const mode = page.locator('#chips [data-chip="plan"]');
+    if ((await mode.getAttribute('aria-expanded')) !== 'true') await mode.click();
+    await page.locator('.route-all').click();
+    await page.locator('.routes-toolbar').waitFor();
+  } else {
+    await chip.click();
+  }
   await page.locator('#sheet.at-content, #sheet.at-full').waitFor();
+}
+
+/** Open More: Print, and the settings. */
+export async function openMore(page: Page): Promise<void> {
+  await openChip(page, 'More');
+}
+
+/** Open the Print view, which lives under More. */
+export async function openPrint(page: Page): Promise<void> {
+  await openMore(page);
+  await page.locator('#more-print').click();
+  await page.locator('.print-frame').waitFor();
 }
 
 /** Open the routes sheet and start a fresh route. */

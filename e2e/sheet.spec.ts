@@ -4,7 +4,9 @@ import {
   gotoApp,
   jumpTo,
   openChip,
+  openMore,
   sheetHeight,
+  startNewRoute,
   styleLayers,
 } from './helpers';
 
@@ -25,9 +27,20 @@ test.describe('the sheet', () => {
   test('rests at peek with the controls that must always be in reach', async ({ page }) => {
     await expect(page.locator('#sheet')).toHaveClass(/at-peek/);
     await expect(page.locator('#search-input')).toBeVisible();
-    await expect(page.locator('#chips .chip')).toHaveText(['Routes', 'Offline', 'Saved', 'Layers', 'Print']);
-    await expect(page.locator('#legend-btn')).toBeVisible();
-    await expect(page.locator('#settings-btn')).toBeVisible();
+    await expect(page.locator('#chips .chip')).toHaveText(['Routes', 'Offline', 'Saved', 'Layers', 'More']);
+  });
+
+  test('fits every destination on a phone, without scrolling, planning included', async ({ page }) => {
+    // Seven controls used to share this row; on an iPhone it scrolled, Layers cut off at
+    // the edge and Print out of sight, with nothing to say they were there.
+    await page.setViewportSize({ width: 375, height: 812 });
+    const overflow = () =>
+      page.locator('#chips').evaluate((row) => row.scrollWidth - row.clientWidth);
+    expect(await overflow()).toBeLessThanOrEqual(0);
+
+    await startNewRoute(page);
+    await expect(page.locator('#chips .chip')).toHaveText(['Planning', 'Offline', 'Saved', 'Layers', 'More']);
+    expect(await overflow()).toBeLessThanOrEqual(0);
   });
 
   test('opens a destination from its chip, and closes it from the same chip', async ({ page }) => {
@@ -77,7 +90,7 @@ test.describe('the sheet', () => {
   });
 
   test('turns the debug overlay on from settings, and remembers it', async ({ page }) => {
-    await page.locator('#settings-btn').click();
+    await openMore(page);
     await page.locator('#debug-overlay-toggle').waitFor();
     await expect(page.locator('.debug-overlay')).toHaveCount(0);
 
@@ -186,7 +199,7 @@ test.describe('theme', () => {
     await expect(page.locator('#theme-btn')).toHaveCount(0);
 
     // Following: the device flipping to light takes the app with it.
-    await page.locator('#settings-btn').click();
+    await openMore(page);
     await expect(option('Device')).toBeChecked();
     await page.emulateMedia({ colorScheme: 'light' });
     await expect(root).toHaveAttribute('data-theme', 'light');
@@ -201,7 +214,7 @@ test.describe('theme', () => {
     await expect(root).toHaveAttribute('data-theme', 'dark');
 
     // And handed back: Device follows the device again.
-    await page.locator('#settings-btn').click();
+    await openMore(page);
     await option('Device').check();
     await expect(root).toHaveAttribute('data-theme', 'light');
     await page.emulateMedia({ colorScheme: 'dark' });
@@ -218,7 +231,7 @@ test.describe('theme', () => {
     );
 
     // Switch away from the default and back, so the style really is replaced twice.
-    await page.locator('#settings-btn').click();
+    await openMore(page);
     await page.getByRole('radio', { name: 'Light' }).check();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await page.getByRole('radio', { name: 'Dark' }).check();

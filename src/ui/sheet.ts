@@ -47,8 +47,12 @@ const FULL_FRACTION = 0.92;
  * coordinates need about a fifth of a phone screen, and taking half of it to show them is
  * the same mistake the old layout made, just in a nicer wrapper. The cap stops a long
  * list from opening as a near-fullscreen wall.
+ *
+ * The floor is only there so a near-empty view still opens far enough above the peek row
+ * to read as opened. It was 24%, which held a one-line view — "No saved places yet" — a
+ * hand's width above its content, as blank sheet.
  */
-const CONTENT_MIN_FRACTION = 0.24;
+const CONTENT_MIN_FRACTION = 0.15;
 const CONTENT_MAX_FRACTION = 0.62;
 
 /**
@@ -187,10 +191,22 @@ export class BottomSheet {
     // Both rows are content-driven. The peek row changes when the planner adds a chip;
     // the body changes on every render, and the middle detent is sized from it — so a
     // route that grows an elevation profile has to be able to grow the sheet with it.
-    const remeasure = new ResizeObserver(() => this.applyDetent(this.current, false));
-    remeasure.observe(this.peek);
-    remeasure.observe(this.body);
-    window.addEventListener('resize', () => this.applyDetent(this.current, false));
+    // Eased, not jumped: a view whose content arrives after it opens (the routes list,
+    // the regions catalogue) used to open at one height and snap to another a moment
+    // later.
+    const contentChanged = new ResizeObserver(() => this.remeasure(true));
+    contentChanged.observe(this.peek);
+    contentChanged.observe(this.body);
+
+    // And the sheet's own box, which is the screen's height. Every offset is measured
+    // against it, and the window's `resize` event does not cover every way it changes: an
+    // installed iOS web app starts with the page 62pt short (the top safe area) and grows
+    // to full height a moment later with no resize event at all, measured on an iPhone 17
+    // Pro simulator. The sheet kept the short height's offsets and sat 62pt too high —
+    // a band of empty sheet under the peek row until something else made it re-measure.
+    const boxChanged = new ResizeObserver(() => this.remeasure(false));
+    boxChanged.observe(this.element);
+    window.addEventListener('resize', () => this.remeasure(false));
 
     this.element.addEventListener('pointerdown', (event) => this.onPointerDown(event));
     this.element.addEventListener('pointermove', (event) => this.onPointerMove(event));
@@ -202,6 +218,16 @@ export class BottomSheet {
 
   detent(): Detent {
     return this.current;
+  }
+
+  /**
+   * Put the sheet back where its detent says, after something it is measured from changed.
+   * Not mid-drag: the finger has the sheet, and moving it from under the finger because a
+   * view finished loading is the sheet fighting back.
+   */
+  private remeasure(animate: boolean): void {
+    if (this.dragging) return;
+    this.applyDetent(this.current, animate);
   }
 
   /**

@@ -61,46 +61,50 @@ describe('the route kept across a reload', () => {
 });
 
 describe('DraftKeeper', () => {
-  it('writes a burst of changes once', async () => {
-    vi.useFakeTimers();
+  it('writes a change at once, so a save followed straight away by a reload keeps it', async () => {
     const read = vi.fn(() => DRAFT);
-    const keeper = new DraftKeeper(read, vi.fn(), 500);
+    const keeper = new DraftKeeper(read, vi.fn());
 
     keeper.changed();
-    keeper.changed();
-    keeper.changed();
-    expect(read).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(500);
     expect(read).toHaveBeenCalledTimes(1);
-    expect(await readDraft()).toEqual(DRAFT);
+    await vi.waitFor(async () => expect(await readDraft()).toEqual(DRAFT));
   });
 
-  it('writes at once when the page is hidden, before iOS can end it', async () => {
-    vi.useFakeTimers();
-    const read = vi.fn(() => DRAFT);
-    const keeper = new DraftKeeper(read, vi.fn(), 500);
+  it('folds changes made during a write into one more, of the latest state', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tx = db.current!.tx;
+    tx.mockImplementationOnce(async (...args: Parameters<typeof tx>) => {
+      await held;
+      return memoryDb().tx(...args);
+    });
+    let latest = { ...DRAFT, name: 'first' };
+    const read = vi.fn(() => latest);
+    const keeper = new DraftKeeper(read, vi.fn());
+
     keeper.changed();
-
-    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
-    document.dispatchEvent(new Event('visibilitychange'));
-    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
-
+    latest = { ...DRAFT, name: 'second' };
+    keeper.changed();
+    latest = { ...DRAFT, name: 'third' };
+    keeper.changed();
     expect(read).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(read).toHaveBeenCalledTimes(1);
+
+    release();
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    await vi.waitFor(async () => expect((await readDraft())?.name).toBe('third'));
   });
 
   it('says once, not on every edit, when it cannot write', async () => {
-    vi.useFakeTimers();
     db.current!.tx.mockRejectedValue(new Error('QuotaExceededError'));
     const onError = vi.fn();
-    const keeper = new DraftKeeper(() => DRAFT, onError, 10);
+    const keeper = new DraftKeeper(() => DRAFT, onError);
 
     keeper.changed();
-    await vi.advanceTimersByTimeAsync(10);
+    await vi.waitFor(() => expect(onError).toHaveBeenCalled());
     keeper.changed();
-    await vi.advanceTimersByTimeAsync(10);
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(onError).toHaveBeenCalledTimes(1);
   });

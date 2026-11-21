@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { layers as basemapLayers } from '@protomaps/basemaps';
-import { ratmapFlavor } from './flavor';
-import { ratmapBasemapLayers, TOWN_LABEL_LAYER_ID } from './landuse';
+import type { LayerSpecification } from 'maplibre-gl';
+import { ROAD_CLASS_FILL, ratmapFlavor } from './flavor';
+import {
+  isOverGroundLayer,
+  OVER_GROUND_FROM_LAYER_ID,
+  ratmapBasemapLayers,
+  TOWN_LABEL_LAYER_ID,
+} from './landuse';
+import { paintValue, styleColor } from '../test-support/paint-value';
 import { PROTOMAPS_HUTS_WATER_KINDS } from '../overlays/huts-water';
 
 describe('ratmapBasemapLayers', () => {
@@ -70,5 +77,78 @@ describe('ratmapBasemapLayers', () => {
   it('names a town label layer the basemap actually has', () => {
     // peaks.ts and region-layers.ts both anchor to it by id.
     expect(ids).toContain(TOWN_LABEL_LAYER_ID);
+  });
+
+  it('splits the ground from what is built on it at a layer the basemap actually has', () => {
+    // Relief and contours go beneath this; a rename upstream would put them under the earth.
+    expect(ids).toContain(OVER_GROUND_FROM_LAYER_ID);
+    for (const ground of ['earth', 'landcover', 'landuse_park', 'landuse_bare_rock']) {
+      expect(isOverGroundLayer(ground), ground).toBe(false);
+    }
+    for (const built of ['water', 'buildings', 'buildings_outline', 'roads_minor_casing', 'roads_major', 'roads_bridges_major']) {
+      expect(isOverGroundLayer(built), built).toBe(true);
+    }
+    // Labels have their own place, above everything.
+    expect(isOverGroundLayer(TOWN_LABEL_LAYER_ID)).toBe(false);
+    expect(isOverGroundLayer('roads_labels_minor')).toBe(false);
+  });
+});
+
+describe('roads', () => {
+  const layers = ratmapBasemapLayers('basemap', 'light', { lang: 'en' });
+  const paint = (id: string) => (layers.find((l) => l.id === id) as LayerSpecification & { paint: Record<string, unknown> }).paint;
+  const at = (id: string, property: string, zoom: number, properties: Record<string, unknown> = {}) =>
+    paintValue('line', property, paint(id)[property], zoom, properties);
+
+  it('draws a minor road wide enough to hold its own against the contours', () => {
+    // Upstream's 2 px at z15 was a hairline the 10 m contours outdrew.
+    expect(at('roads_minor', 'line-width', 15)).toBeCloseTo(3.2);
+    expect(at('roads_major', 'line-width', 15)).toBeCloseTo(4.6);
+  });
+
+  it('edges each road exactly where its fill ends, bridges and tunnels too', () => {
+    for (const [fill, casing] of [
+      ['roads_minor', 'roads_minor_casing'],
+      ['roads_major', 'roads_major_casing_late'],
+      ['roads_highway', 'roads_highway_casing_early'],
+      ['roads_bridges_minor', 'roads_bridges_minor_casing'],
+      ['roads_tunnels_major', 'roads_tunnels_major_casing'],
+      ['roads_minor_service', 'roads_minor_service_casing'],
+    ]) {
+      for (const zoom of [12, 14, 16]) {
+        expect(at(casing, 'line-gap-width', zoom), `${casing} z${zoom}`).toBeCloseTo(
+          at(fill, 'line-width', zoom) as number,
+        );
+      }
+    }
+  });
+
+  it('colours main roads by class', () => {
+    const fill = (kind_detail: string) => at('roads_major', 'line-color', 15, { kind_detail });
+    expect(fill('primary')).toEqual(styleColor(ROAD_CLASS_FILL.light.primary));
+    expect(fill('trunk')).toEqual(styleColor(ROAD_CLASS_FILL.light.primary));
+    expect(fill('secondary')).toEqual(styleColor(ROAD_CLASS_FILL.light.secondary));
+    expect(fill('tertiary')).toEqual(styleColor(ratmapFlavor('light').major));
+  });
+
+  it('gives roads an edge that holds against the ground, day and night', () => {
+    // Relative luminance contrast, as WCAG measures it.
+    const luminance = (css: string) => {
+      const { r, g, b } = styleColor(css);
+      const lin = (v: number) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    };
+    const contrast = (a: string, b: string) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const day = ratmapFlavor('light');
+    // Above the 10 m contours' 1.6:1 and the index contours' 2.9:1.
+    expect(contrast(day.minor_casing, day.earth)).toBeGreaterThan(4.5);
+    expect(contrast(day.major_casing_late, day.earth)).toBeGreaterThan(5.5);
+    // At night the fill carries the road: above the index contours' 3.2:1.
+    const night = ratmapFlavor('dark');
+    expect(contrast(night.minor_a, night.earth)).toBeGreaterThan(4);
+    expect(contrast(night.major, night.earth)).toBeGreaterThan(4);
   });
 });

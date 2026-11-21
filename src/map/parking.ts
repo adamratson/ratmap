@@ -129,7 +129,8 @@ export function parkingLayerId(sourceId: string): string {
 }
 
 /**
- * The car park symbol layer: the sign from z13, its name beside it from z15.
+ * The car park symbol layer: the sign from z13, its name beside it from z15, thinned
+ * where they crowd by the room kept round each (`icon-padding`).
  *
  * Placement order when signs collide, first to last: named car parks, as the ones a walk
  * description sends you to; then the rest; customers-only after public within each; and
@@ -149,6 +150,12 @@ export function parkingLayer(sourceId: string, theme: Theme, minzoom: number): S
     layout: {
       'icon-image': parkingIconId(theme),
       'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.8, 15, 1],
+      // Room round each sign, so where car parks crowd — a town centre — collision keeps
+      // the first of them (in the order below) and drops the rest, while a lone lot at
+      // the head of a valley, with nothing near it, is untouched. At the default 2 px the
+      // middle of Andorra la Vella showed about 40 signs at z15. Shrinks as you zoom in,
+      // where there is room for more of them.
+      'icon-padding': ['interpolate', ['linear'], ['zoom'], 13, 20, 15, 12, 16, 6, 17, 2],
       'symbol-sort-key': [
         '+',
         ['case', ['has', 'name'], 0, 2],

@@ -1,4 +1,4 @@
-import type { SourceSpecification, StyleSpecification } from 'maplibre-gl';
+import type { LayerSpecification, SourceSpecification, StyleSpecification } from 'maplibre-gl';
 import {
   BASEMAP_MAX_ZOOM,
   BASEMAP_PMTILES_URL,
@@ -13,7 +13,7 @@ import {
 } from '../app/config';
 import type { Theme } from '../ui/theme';
 import { mapInk } from './flavor';
-import { ratmapBasemapLayers } from './landuse';
+import { OVER_GROUND_FROM_LAYER_ID, ratmapBasemapLayers } from './landuse';
 import type { TileSourceRegistry } from './tile-source-registry';
 
 function terrainSource(registry: TileSourceRegistry): SourceSpecification {
@@ -60,20 +60,35 @@ export function buildBaseStyle(theme: Theme, registry: TileSourceRegistry): Styl
       },
       terrain: terrainSource(registry),
     },
-    layers: [
-      ...ratmapBasemapLayers('basemap', theme, { lang: 'en' }),
-      {
-        id: 'hillshade',
-        type: 'hillshade',
-        source: 'terrain',
-        // Style-spec default is 0.5; dialled down 40% to match the region hillshade's own
-        // reduction in region-layers.ts.
-        paint: {
-          'hillshade-exaggeration': 0.3,
-          'hillshade-highlight-color': mapInk(theme).hillshadeHighlight,
-          'hillshade-shadow-color': mapInk(theme).hillshadeShadow,
-        },
+    layers: withGroundBeneath(ratmapBasemapLayers('basemap', theme, { lang: 'en' }), {
+      id: 'hillshade',
+      type: 'hillshade',
+      source: 'terrain',
+      // Style-spec default is 0.5; dialled down 40% to match the region hillshade's own
+      // reduction in region-layers.ts.
+      paint: {
+        'hillshade-exaggeration': 0.3,
+        'hillshade-highlight-color': mapInk(theme).hillshadeHighlight,
+        'hillshade-shadow-color': mapInk(theme).hillshadeShadow,
       },
-    ],
+    }),
   };
+}
+
+/**
+ * The basemap with the relief spliced in under its water and everything built on it (see
+ * OVER_GROUND_FROM_LAYER_ID).
+ *
+ * The hillshade used to be the style's last layer, over every road and every label — and,
+ * since a downloaded region draws above the base style's fills but not above this, shading
+ * the region's roads and text too, from a terrain archive blurred across a whole valley.
+ */
+function withGroundBeneath(
+  basemap: LayerSpecification[],
+  relief: LayerSpecification,
+): LayerSpecification[] {
+  const at = basemap.findIndex((layer) => layer.id === OVER_GROUND_FROM_LAYER_ID);
+  // No anchor (an upstream rename): last, where it used to be, rather than nowhere.
+  if (at < 0) return [...basemap, relief];
+  return [...basemap.slice(0, at), relief, ...basemap.slice(at)];
 }

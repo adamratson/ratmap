@@ -1,7 +1,13 @@
-import type { FilterSpecification, Map as MLMap, RasterTileSource, VectorTileSource } from 'maplibre-gl';
+import type {
+  ExpressionSpecification,
+  FilterSpecification,
+  Map as MLMap,
+  RasterTileSource,
+  VectorTileSource,
+} from 'maplibre-gl';
 import { MAP_FONTS, mapInk, type MapInk } from '../map/flavor';
 import type { Theme } from '../ui/theme';
-import { ratmapBasemapLayers, TOWN_LABEL_LAYER_ID } from '../map/landuse';
+import { isOverGroundLayer, ratmapBasemapLayers, TOWN_LABEL_LAYER_ID } from '../map/landuse';
 import { isTileArchive, type Region } from './manifest';
 import { getArtifactFile } from './opfs-store';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
@@ -113,20 +119,48 @@ function beneathPaths(map: MLMap): string | undefined {
   return downloadedLayerIds(map).find(isAnchor) ?? beneathLabels(map);
 }
 
+/** Whether a downloaded basemap layer is one drawn over the ground — see isOverGroundLayer. */
+function isOverGroundBasemapLayer(map: MLMap, id: string): boolean {
+  const source = layerSource(map, id);
+  return (
+    source.endsWith('-basemap') &&
+    id.startsWith(`${source}-`) &&
+    isOverGroundLayer(id.slice(source.length + 1))
+  );
+}
+
+/**
+ * Where a region's ground belongs — relief, contours, slope, scree, walls: beneath the
+ * basemap's water and everything built on the ground (OVER_GROUND_FROM_LAYER_ID), as a
+ * paper map prints them, so a road is laid over the contours and a contour never crosses a
+ * loch. Without the basemap yet (C16), under the paths, where the basemap's own layers will
+ * then arrive above them.
+ *
+ * These used to go just under the paths, which is above every road, bridge and building:
+ * at z13 the 10 m contours outdrew the main road through a valley.
+ */
+function beneathRoads(map: MLMap): string | undefined {
+  return downloadedLayerIds(map).find((id) => isOverGroundBasemapLayer(map, id)) ?? beneathPaths(map);
+}
+
 /**
  * Where the walking routes' tint belongs: under everything drawn over the ground — relief,
- * contours, slope, scree, walls — so they all still read across it, and so under the paths
- * and the grade band too. Only the basemap is beneath it.
+ * contours, slope, scree, walls — so they all still read across it, and so under the
+ * roads, the paths and the grade band too. Only the basemap's ground is beneath it.
  */
 function beneathGround(map: MLMap): string | undefined {
-  // The kinds drawn over the ground, all of them under the paths (beneathPaths) — and the
-  // paths' own casing, for a region with none of them yet.
+  // The kinds drawn over the ground, all of them under the roads (beneathRoads) — and the
+  // roads and the paths' own casing, for a region with none of them yet.
   const ground = ['-terrain', '-avalanche', '-contours', '-terrain-features', '-detail', '-sac'];
   return (
     downloadedLayerIds(map).find((id) => {
       if (map.getLayer(id)?.type === 'symbol') return false;
       const source = layerSource(map, id);
-      return ground.some((kind) => source.endsWith(kind)) || id === `${source}-paths-casing`;
+      return (
+        ground.some((kind) => source.endsWith(kind)) ||
+        id === `${source}-paths-casing` ||
+        isOverGroundBasemapLayer(map, id)
+      );
     }) ?? beneathPaths(map)
   );
 }
@@ -156,8 +190,8 @@ function amongBasemapPois(map: MLMap): string | undefined {
  * map, where the paths are the single most important feature.
  *
  * A white casing under a dark dashed line keeps them readable over hillshade and contours
- * without competing with them. Tracks (vehicle-width) draw solid and slightly heavier than
- * footpaths, matching the usual convention.
+ * without competing with them. Tracks (vehicle-width) draw as a narrow lane between two
+ * thin edges in the path ink, as a paper map draws a track.
  *
  * Used for two different sources, which is why the layer and filter are parameters: the
  * region basemap's `roads` layer above z14, and our own low-zoom `paths` artifact below
@@ -188,9 +222,11 @@ function addPathLayers(
   },
 ): void {
   const zooms = { minzoom, ...(maxzoom === undefined ? {} : { maxzoom }) };
+  const isTrack: ExpressionSpecification = ['==', ['get', 'kind_detail'], 'track'];
 
   // Casing first, so the line above sits in its own channel and stays legible against
-  // relief — light by day, graphite at night (see mapInk()).
+  // relief — light by day, graphite at night (see mapInk()). Under a track it is the
+  // lane's two edges instead, in the path ink, with the track's own fill between them.
   map.addLayer(
     {
       id: `${sourceId}-paths-casing`,
@@ -201,8 +237,16 @@ function addPathLayers(
       ...zooms,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': ink.pathCasing,
-        'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 12, 2, 16, 6],
+        'line-color': ['case', isTrack, ink.pathLine, ink.pathCasing],
+        'line-width': [
+          'interpolate',
+          ['exponential', 1.5],
+          ['zoom'],
+          12,
+          ['case', isTrack, 2.4, 2],
+          16,
+          ['case', isTrack, 5.6, 5],
+        ],
       },
     },
     before,
@@ -218,28 +262,34 @@ function addPathLayers(
       ...zooms,
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
-        'line-color': ink.pathLine,
+        'line-color': ['case', isTrack, ink.trackFill, ink.pathLine],
         'line-width': [
           'interpolate',
           ['exponential', 1.5],
           ['zoom'],
           12,
-          ['case', ['==', ['get', 'kind_detail'], 'track'], 1.4, 1],
+          ['case', isTrack, 1, 1],
           16,
-          ['case', ['==', ['get', 'kind_detail'], 'track'], 3.5, 2.4],
+          ['case', isTrack, 3.6, 2.2],
         ],
-        // Tracks solid, footpaths dashed — the usual walking-map distinction.
-        'line-dasharray': [
-          'case',
-          ['==', ['get', 'kind_detail'], 'track'],
-          ['literal', [1, 0]],
-          ['literal', [2.5, 1.5]],
-        ],
+        // Tracks a lane, footpaths dashed — the usual walking-map distinction. A track
+        // used to be this same ink drawn solid and wider: the heaviest line on the map.
+        'line-dasharray': ['case', isTrack, ['literal', [1, 0]], ['literal', [2.5, 1.5]]],
       },
     },
     before,
   );
 }
+
+/**
+ * The ways a town is laced with that are not walking routes: pavements (`sidewalk`), road
+ * crossings, and pedestrianised streets. Protomaps keeps each as its own `kind_detail`
+ * (checked on Andorra's tiles), and upstream's pale `roads_other` still draws them, quietly.
+ *
+ * Drawn as footpaths, they put a red dashed line down both sides of every street: in the
+ * middle of Andorra la Vella, ~220 of the ~430 path features on screen at z15.
+ */
+const NOT_WALKING_ROUTES = ['sidewalk', 'crossing', 'pedestrian'];
 
 /**
  * Zoom at which the region basemap starts carrying paths.
@@ -445,9 +495,8 @@ function addKindLayers(
           'hillshade-shadow-color': ink.hillshadeShadow,
         },
       },
-      // Under every label, not just under the peaks — see beneathLabels() — and under
-      // the paths, see beneathPaths().
-      beneathPaths(map),
+      // Under the roads and everything else built, see beneathRoads().
+      beneathRoads(map),
     );
   } else if (kind === 'basemap') {
     map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
@@ -480,6 +529,11 @@ function addKindLayers(
     // A second basemap source (another zoom range) goes under the first's ground too, and
     // so under every overlay, rather than over them.
     const beneathRegion = downloadedLayerIds(map)[0] ?? beforePeaks;
+    // Water and everything built go over the region's ground instead — relief, contours,
+    // scree, walls — whichever arrived first (beneathRoads). Under another basemap source's
+    // own, like its ground; otherwise just under the paths.
+    const overGround =
+      downloadedLayerIds(map).find((id) => isOverGroundBasemapLayer(map, id)) ?? beneathPaths(map);
     for (const layer of generated) {
       if (!('source' in layer) || !layer.source) continue;
       const scoped = {
@@ -492,14 +546,20 @@ function addKindLayers(
           ? beforeTownLabels
           : layer.type === 'symbol'
             ? beforePeaks
-            : beneathRegion;
+            : isOverGroundLayer(layer.id)
+              ? overGround
+              : beneathRegion;
       map.addLayer(scoped, beforeId);
     }
 
     addPathLayers(map, sourceId, {
       ink,
       sourceLayer: 'roads',
-      filter: ['==', ['get', 'kind'], 'path'] as unknown as FilterSpecification,
+      filter: [
+        'all',
+        ['==', ['get', 'kind'], 'path'],
+        ['!', ['in', ['get', 'kind_detail'], ['literal', NOT_WALKING_ROUTES]]],
+      ] as unknown as FilterSpecification,
       // Starts where the low-zoom paths artifact stops, so the two never draw the same
       // way twice — a duplicated translucent casing reads brighter, not invisible. Every
       // region in the catalogue carries that artifact. One downloaded before it existed
@@ -513,10 +573,11 @@ function addKindLayers(
     // and crediting OpenStreetMap for them was both wrong and a licence gap.
     map.addSource(sourceId, { type: 'vector', url, attribution: DEM_ATTRIBUTION });
 
-    // z11-z13 preview: index contours only (every 5th — see the `idx` note below),
-    // giving a coarse sense of relief before full 10 m detail arrives. `maxzoom` is
-    // exclusive in the style spec, so this hands off to the full layer below at exactly
-    // z13 with no overlap between the two.
+    // z11-z14: index contours only (every 5th — see the `idx` note below), a coarse sense
+    // of relief before full 10 m detail arrives. Index-only to z14 rather than z13: at z13
+    // the 10 m lines sit a millimetre apart on steep ground and turn into a texture that
+    // buries the roads and paths. `maxzoom` is exclusive in the style spec, so this hands
+    // off to the full layer below at exactly z13, which then fades the 10 m lines in.
     map.addLayer(
       {
         id: `${sourceId}-lines-index`,
@@ -528,15 +589,13 @@ function addKindLayers(
         minzoom: Math.max(minzoom, 11),
         maxzoom: 13,
         paint: {
-          // Ramped up to the full index stroke at z13, where the all-contours layer takes
-          // over. At z11–12 these lines sit a millimetre apart on steep ground, and at
-          // full ink they turn into a texture that buries the trails.
+          // Faint at z11, where the index lines are still close together.
           'line-color': ink.contourIndex,
-          'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.3, 12, 0.5, 13, 1],
-          'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.8, 13, 1.4],
+          'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.4, 12, 0.6, 13, 1],
+          'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.7, 13, 1.1],
         },
       },
-      beneathPaths(map),
+      beneathRoads(map),
     );
 
     map.addLayer(
@@ -548,7 +607,7 @@ function addKindLayers(
         // Picks up exactly where the index-only layer above stops (its maxzoom: 13).
         minzoom: Math.max(minzoom, 13),
         paint: {
-          // Index contours (every 5th) are drawn darker and heavier, as on a paper map —
+          // Index contours (every 5th) are drawn firmer and heavier, as on a paper map —
           // their own ink, not only a wider stroke (see MapInk.contourIndex).
           'line-color': ['case', ['==', ['get', 'idx'], 1], ink.contourIndex, ink.contour],
           //
@@ -556,12 +615,22 @@ function addKindLayers(
           // via SQLite, which yields an integer 0/1 under the alias `idx`. The original
           // expression matched neither the name nor the type, so every contour silently
           // drew at the thin weight and the emphasis never appeared.
-          'line-width': ['case', ['==', ['get', 'idx'], 1], 1.4, 0.7],
+          'line-width': ['case', ['==', ['get', 'idx'], 1], 1.1, 0.6],
+          // The 10 m lines fade in across z13–14; the index lines hold.
+          'line-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            13,
+            ['case', ['==', ['get', 'idx'], 1], 1, 0],
+            14,
+            1,
+          ],
         },
       },
-      // Contour lines drawn over place names would be just as unreadable as relief
-      // over them, so these go under the labels too — and under the paths.
-      beneathPaths(map),
+      // Under the labels, the paths and the roads: a road is laid over the contours, which
+      // stop at its edge, as on a paper map.
+      beneathRoads(map),
     );
 
     addContourLabels(map, sourceId, ink);
@@ -591,9 +660,9 @@ function addKindLayers(
       // caps it at the DEM's own ~30 m), so hardcoding it here would drift from the
       // pipeline exactly the way the detail-limit constant once did.
       maxzoom,
-      // Beneath the labels like the relief and contours — this shades the ground, so
-      // painting it over the place names would be the same mistake the hillshade made.
-      before: beneathPaths(map),
+      // Beneath the roads and labels like the relief and contours — this shades the ground,
+      // so painting it over the place names would be the same mistake the hillshade made.
+      before: beneathRoads(map),
     });
   } else if (kind === 'sac') {
     map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
@@ -620,12 +689,12 @@ function addKindLayers(
     // Scree, shingle, rock and boulders — OSM ground-surface detail Protomaps does not
     // carry (see src/overlays/terrain-features.ts). Same attribution and z-order slot as the
     // rest of the ground-surface overlays (contours, avalanche terrain): beneath the
-    // downloaded paths and labels, so neither is lost under the scree stipple.
+    // downloaded roads, paths and labels, so none is lost under the scree stipple.
     map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
     addTerrainFeatureLayers(map, sourceId, {
       ink,
       minzoom,
-      before: beneathPaths(map),
+      before: beneathRoads(map),
     });
   } else if (kind === 'landmarks') {
     // Masts, towers, trig points, cairns, lighthouses and wind turbines — POIs Protomaps
@@ -660,13 +729,13 @@ function addKindLayers(
     });
   } else if (kind === 'detail') {
     // Walls, fences, power lines, gates, stiles and fords (see src/overlays/detail.ts).
-    // The lines are ground detail like the scree, so under the paths; the gates and fords
-    // sit on the paths, so with the landmarks, over them.
+    // The lines are ground detail like the scree, so under the roads and paths; the gates
+    // and fords sit on the paths, so with the landmarks, over them.
     map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
     addDetailLayers(map, sourceId, {
       ink,
       minzoom,
-      beforeLines: beneathPaths(map),
+      beforeLines: beneathRoads(map),
       beforeSymbols: amongBasemapPois(map),
     });
   }

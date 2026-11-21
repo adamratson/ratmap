@@ -1,7 +1,7 @@
-import type { LayerSpecification } from 'maplibre-gl';
+import type { ExpressionSpecification, LayerSpecification } from 'maplibre-gl';
 import { layers as basemapLayers, type Flavor } from '@protomaps/basemaps';
 import type { Theme } from '../ui/theme';
-import { BUILDING_OUTLINE, ratmapFlavor } from './flavor';
+import { BUILDING_OUTLINE, ROAD_CLASS_FILL, ratmapFlavor } from './flavor';
 import { PROTOMAPS_HUTS_WATER_KINDS } from '../overlays/huts-water';
 
 /**
@@ -12,6 +12,28 @@ import { PROTOMAPS_HUTS_WATER_KINDS } from '../overlays/huts-water';
  * label-collision priority over the peaks layer.
  */
 export const TOWN_LABEL_LAYER_ID = 'places_locality';
+
+/**
+ * The first basemap layer drawn *over* the ground: water, then everything built — tunnels,
+ * buildings, roads, rail, bridges. Relief, contours, scree, walls and the region's other
+ * ground detail go beneath it, the way a paper hill map prints them: a road is laid over
+ * the contours, which stop at its edge, and a contour never crosses a loch.
+ *
+ * They used to go above every road, bridge and building, so at z13 a contour every 10 m
+ * across the main road through a valley all but hid it.
+ */
+export const OVER_GROUND_FROM_LAYER_ID = 'water';
+
+/**
+ * Whether one of the basemap's own layers (its id as ratmapBasemapLayers gives it, before
+ * any region prefix) is drawn over the ground — see {@link OVER_GROUND_FROM_LAYER_ID}.
+ * Labels are not: they have a place of their own, above everything.
+ */
+export function isOverGroundLayer(id: string): boolean {
+  const order = basemapOrder();
+  const index = order.ids.indexOf(id);
+  return order.from >= 0 && index >= order.from && order.types[index] !== 'symbol';
+}
 
 // OSM `natural=bare_rock` rides in every basemap archive already — Protomaps' own
 // `Landuse.java` puts it in the `landuse` source-layer as `kind: "bare_rock"` at
@@ -66,6 +88,76 @@ function buildingOutlineLayer(
 }
 
 /**
+ * How wide each class of road is drawn, in CSS px at each zoom (exponential 1.6, as
+ * upstream's own). Fill widths: a casing's gap is the same expression, so the edge sits
+ * exactly on the fill.
+ *
+ * Wider than upstream from z12, and the minor roads most of all. Upstream's widths suit a
+ * city map, where roads are the whole picture; a hill map's ground is busy with relief,
+ * and a 0.5 px minor road on it was a hairline the 10 m contours outdrew. These are the
+ * proportions of a printed 1:25 000 sheet, where a single-track road is still a road you
+ * can see from arm's length.
+ */
+const ROAD_WIDTHS = {
+  highway: [3, 0, 6, 1.1, 12, 2.6, 15, 5.5, 18, 16],
+  major: [6, 0, 12, 2.2, 15, 4.6, 18, 14],
+  link: [13, 0, 13.5, 1.2, 18, 11],
+  minor: [11, 0, 12.5, 1.2, 15, 3.2, 18, 12],
+  service: [13, 0, 15, 1.6, 18, 8],
+} as const;
+
+type RoadClass = keyof typeof ROAD_WIDTHS;
+
+/** Which width class an upstream road layer draws — fill, casing, tunnel or bridge alike. */
+function roadClass(id: string): RoadClass | null {
+  const match = /^roads_(?:tunnels_|bridges_)?(highway|major|link|minor_service|minor)(?:_casing(?:_early|_late)?)?$/.exec(id);
+  if (!match) return null;
+  return match[1] === 'minor_service' ? 'service' : (match[1] as RoadClass);
+}
+
+function widthExpression(roadClassName: RoadClass): ExpressionSpecification {
+  return ['interpolate', ['exponential', 1.6], ['zoom'], ...ROAD_WIDTHS[roadClassName]] as ExpressionSpecification;
+}
+
+/**
+ * Main roads coloured by what they are — trunk and primary, secondary, the rest — the way
+ * a paper map grades them, rather than one cream for all of them. Upstream keeps the OSM
+ * class in `kind_detail` (checked on Andorra's tiles: trunk, primary, secondary, tertiary
+ * and their links), and a road with none takes the flavour's own `major` colour.
+ */
+function majorFill(theme: Theme, fallback: unknown): ExpressionSpecification {
+  const fill = ROAD_CLASS_FILL[theme];
+  return [
+    'match',
+    ['get', 'kind_detail'],
+    ['trunk', 'primary', 'trunk_link', 'primary_link'],
+    fill.primary,
+    ['secondary', 'secondary_link'],
+    fill.secondary,
+    typeof fallback === 'string' ? fallback : fill.secondary,
+  ] as ExpressionSpecification;
+}
+
+/** Upstream's road layer with ratmap's widths, and main roads coloured by class. */
+function retuneRoad(layer: LayerSpecification, theme: Theme): LayerSpecification {
+  if (layer.type !== 'line') return layer;
+  const roadClassName = roadClass(layer.id);
+  if (!roadClassName) return layer;
+  const paint = { ...layer.paint };
+  const width = widthExpression(roadClassName);
+  if (/_casing/.test(layer.id)) {
+    // The casing's own stroke stays upstream's; the road it edges is what got wider.
+    paint['line-gap-width'] = width;
+  } else {
+    paint['line-width'] = width;
+    if (roadClassName === 'major' && !layer.id.startsWith('roads_tunnels_')) {
+      paint['line-color'] = majorFill(theme, paint['line-color']);
+    }
+  }
+  return { ...layer, paint } as LayerSpecification;
+}
+
+/**
  * Protomaps' POI layer, minus what src/overlays/huts-water.ts draws from the huts
  * artifact. Upstream draws `drinking_water` with its own sprite icon, from z16 where its
  * `min_zoom` says, so left alone a tap would show twice, in two styles. Every huts-and-water
@@ -85,7 +177,8 @@ function withoutHutsWater(pois: LayerSpecification): LayerSpecification {
  * Protomaps' generated basemap layers, in ratmap's flavour, with what upstream leaves
  * unpainted spliced back in: the bare-rock fill right after `landuse_park` (same
  * source-layer, same z-order as the rest of the landuse fills, under roads and labels),
- * and an outline right after the `buildings` fill.
+ * and an outline right after the `buildings` fill. Roads are widened and main roads
+ * coloured by class (see {@link ROAD_WIDTHS}).
  * Drop-in replacement for `@protomaps/basemaps`' own `layers()`.
  *
  * Car parks are not drawn from here any more, though the basemap carries some: they come
@@ -114,5 +207,23 @@ export function ratmapBasemapLayers(
   }
   const poisIndex = generated.findIndex((layer) => layer.id === 'pois');
   if (poisIndex >= 0) generated[poisIndex] = withoutHutsWater(generated[poisIndex]);
-  return generated;
+  return generated.map((layer) => retuneRoad(layer, theme));
+}
+
+let order: { ids: string[]; types: string[]; from: number } | null = null;
+
+/**
+ * The basemap's layer order, read from the generator itself so it can never drift from
+ * what is actually drawn. Theme changes paint, not order.
+ *
+ * Should upstream ever rename the anchor, `from` is -1 and nothing counts as over the
+ * ground: the relief and contours fall back to their old place under the paths, over the
+ * roads — the old look, not a broken map. landuse.test.ts is what notices.
+ */
+function basemapOrder(): { ids: string[]; types: string[]; from: number } {
+  if (order) return order;
+  const layers = ratmapBasemapLayers('basemap', 'light');
+  const ids = layers.map((layer) => layer.id);
+  order = { ids, types: layers.map((layer) => layer.type), from: ids.indexOf(OVER_GROUND_FROM_LAYER_ID) };
+  return order;
 }

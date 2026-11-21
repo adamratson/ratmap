@@ -28,6 +28,16 @@ describe('buildBaseStyle', () => {
     );
   });
 
+  it('shades the relief under the water, the roads and the labels, not over them', () => {
+    // It used to be the last layer, so it shaded every road and every label — a downloaded
+    // region's included — from a terrain archive blurred across a whole valley.
+    const ids = style.layers.map((layer) => layer.id);
+    const hillshade = ids.indexOf('hillshade');
+    expect(hillshade).toBeGreaterThan(ids.indexOf('landcover'));
+    expect(hillshade).toBe(ids.indexOf('water') - 1);
+    expect(hillshade).toBeLessThan(ids.indexOf('roads_minor'));
+  });
+
   it('serves glyphs and sprites locally, so labels survive offline (C7)', () => {
     expect(style.glyphs).toBe(GLYPHS_URL);
     expect(style.sprite).toBe(SPRITE_URL);

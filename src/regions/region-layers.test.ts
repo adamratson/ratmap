@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Map as MLMap } from 'maplibre-gl';
+import type { FilterSpecification, Map as MLMap } from 'maplibre-gl';
 import type { Region } from './manifest';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 import { mapInk, ratmapFlavor } from '../map/flavor';
+import { isOverGroundLayer } from '../map/landuse';
+import { featureFilter } from '@maplibre/maplibre-gl-style-spec';
 import { paintValue, styleColor } from '../test-support/paint-value';
 
 const getArtifactFileMock = vi.hoisted(() => vi.fn());
@@ -404,19 +406,47 @@ describe('addRegionToMap', () => {
 
     const groundIds = (map: ReturnType<typeof fakeMap>) => {
       const ids = map.layers.map((l) => String(l.id));
-      const fills = map.layers.filter(
+      const basemap = map.layers.filter(
         (l) =>
           l.source === sid('basemap') &&
           l.type !== 'symbol' &&
           !String(l.id).includes('-paths'),
       );
+      const baseId = (id: unknown) => String(id).slice(sid('basemap').length + 1);
+      const ground = basemap.filter((l) => !isOverGroundLayer(baseId(l.id)));
+      const built = basemap.filter((l) => isOverGroundLayer(baseId(l.id)));
       return {
         ids,
-        lastBasemapGround: ids.indexOf(String(fills.at(-1)!.id)),
+        lastBasemapGround: ids.indexOf(String(ground.at(-1)!.id)),
+        firstBasemapBuilt: Math.min(...built.map((l) => ids.indexOf(String(l.id)))),
+        lastBasemapBuilt: Math.max(...built.map((l) => ids.indexOf(String(l.id)))),
         earth: ids.indexOf(`${sid('basemap')}-earth`),
         casing: ids.indexOf(`${sid('basemap')}-paths-casing`),
       };
     };
+
+    const OVERLAYS = () => [
+      `${sid('avalanche')}-shade`,
+      `${sid('terrain')}-hillshade`,
+      `${sid('contours')}-lines`,
+      `${sid('contours')}-lines-index`,
+    ];
+
+    it('lays the roads, water and buildings over the relief and contours, as a paper map does', async () => {
+      // The contours used to go just under the paths — over every road, so at z13 a line
+      // every 10 m across the main road through a valley all but hid it.
+      const map = fakeMap();
+
+      await addRegionToMap(map as unknown as MLMap, registry, manifestOrder, 'light');
+
+      const { ids, firstBasemapBuilt, lastBasemapBuilt, casing } = groundIds(map);
+      for (const id of OVERLAYS()) {
+        expect(ids.indexOf(id), id).toBeGreaterThan(-1);
+        expect(ids.indexOf(id), id).toBeLessThan(firstBasemapBuilt);
+      }
+      // And the paths still over the roads.
+      expect(casing).toBeGreaterThan(lastBasemapBuilt);
+    });
 
     it('draws avalanche terrain over the basemap fills, not under them', async () => {
       // Regression: avalanche was added first, at the peaks, and every basemap layer then
@@ -426,11 +456,11 @@ describe('addRegionToMap', () => {
 
       await addRegionToMap(map as unknown as MLMap, registry, manifestOrder, 'light');
 
-      const { ids, lastBasemapGround, casing } = groundIds(map);
+      const { ids, lastBasemapGround, firstBasemapBuilt } = groundIds(map);
       const shade = ids.indexOf(`${sid('avalanche')}-shade`);
       expect(shade).toBeGreaterThan(-1);
       expect(shade).toBeGreaterThan(lastBasemapGround);
-      expect(shade).toBeLessThan(casing);
+      expect(shade).toBeLessThan(firstBasemapBuilt);
     });
 
     it('keeps the overlays visible when the basemap arrives in a later call (C16)', async () => {
@@ -445,16 +475,48 @@ describe('addRegionToMap', () => {
       await addRegionToMap(map as unknown as MLMap, registry, partial, 'light');
       await addRegionToMap(map as unknown as MLMap, registry, manifestOrder, 'light');
 
-      const { ids, lastBasemapGround, earth } = groundIds(map);
+      const { ids, lastBasemapGround, firstBasemapBuilt, earth } = groundIds(map);
       expect(earth).toBeGreaterThan(-1);
-      for (const id of [
-        `${sid('avalanche')}-shade`,
-        `${sid('terrain')}-hillshade`,
-        `${sid('contours')}-lines`,
-      ]) {
+      for (const id of OVERLAYS()) {
         expect(ids.indexOf(id), id).toBeGreaterThan(lastBasemapGround);
+        // The roads that arrived after them still go on top.
+        expect(ids.indexOf(id), id).toBeLessThan(firstBasemapBuilt);
       }
     });
+  });
+
+  it('leaves pavements, crossings and pedestrian streets out of the walking paths', async () => {
+    // Protomaps keeps each as its own kind_detail (checked on Andorra's tiles). Drawn as
+    // footpaths they lined both sides of every street in a town with red dashes.
+    const map = fakeMap();
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
+
+    const paths = map.layers.find((l) => String(l.id) === `${sid('basemap')}-paths`)!;
+    const keeps = (kindDetail: string) =>
+      featureFilter(paths.filter as FilterSpecification).filter({ zoom: 15 }, {
+        type: 2,
+        properties: { kind: 'path', kind_detail: kindDetail },
+      } as never);
+    for (const kind of ['sidewalk', 'crossing', 'pedestrian']) expect(keeps(kind), kind).toBe(false);
+    for (const kind of ['path', 'footway', 'track', 'bridleway', 'steps', 'cycleway']) {
+      expect(keeps(kind), kind).toBe(true);
+    }
+  });
+
+  it('draws a track as a lane between two edges, not as the heaviest line on the map', async () => {
+    const map = fakeMap();
+    await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
+    const ink = mapInk('light');
+    const paint = (id: string) => map.layers.find((l) => String(l.id) === id)!.paint as Record<string, unknown>;
+    const casing = paint(`${sid('basemap')}-paths-casing`);
+    const line = paint(`${sid('basemap')}-paths`);
+    const track = { kind_detail: 'track' };
+
+    expect(paintValue('line', 'line-color', casing['line-color'], 15, track)).toEqual(styleColor(ink.pathLine));
+    expect(paintValue('line', 'line-color', line['line-color'], 15, track)).toEqual(styleColor(ink.trackFill));
+    // A footpath is still the path ink, on a light casing.
+    const footpath = { kind_detail: 'path' };
+    expect(paintValue('line', 'line-color', line['line-color'], 15, footpath)).toEqual(styleColor(ink.pathLine));
   });
 
   it('filters paths on the attribute the Protomaps schema actually uses', async () => {
@@ -978,17 +1040,19 @@ describe('SAC grades', () => {
 
     await addRegionToMap(map as unknown as MLMap, registry, graded, 'light');
 
-    const widthAt16 = (id: string): number => {
+    const widthAt16 = (id: string, kindDetail: string): number => {
       const layer = map.layers.find((l) => String(l.id) === id)!;
-      const stops = (layer.paint as Record<string, unknown>)['line-width'] as unknown[];
-      return Number(stops[stops.length - 1]);
+      const width = (layer.paint as Record<string, unknown>)['line-width'];
+      return Number(paintValue('line', 'line-width', width, 16, { kind_detail: kindDetail }));
     };
 
     // A band narrower than the casing would show as a coloured line beside the path
-    // rather than around it.
-    expect(widthAt16(`${sid('sac')}-band`)).toBeGreaterThan(
-      widthAt16(`${sid('basemap')}-paths-casing`),
-    );
+    // rather than around it — a track's lane edges included.
+    for (const kind of ['path', 'track']) {
+      expect(widthAt16(`${sid('sac')}-band`, kind), kind).toBeGreaterThan(
+        widthAt16(`${sid('basemap')}-paths-casing`, kind),
+      );
+    }
   });
 
   it('writes the grade along the line, so the colour is not the only signal', async () => {

@@ -101,6 +101,18 @@ describe('parkingLayer', () => {
     expect(parkingLayer('s', 'dark', 13).layout).toMatchObject({ 'icon-image': parkingIconId('dark') });
   });
 
+  it('keeps more room round each sign zoomed out, so a crowd of them thins', () => {
+    const padding = (zoom: number) =>
+      (layoutValue('symbol', 'icon-padding', parkingLayer('s', 'light', 13).layout!['icon-padding'], zoom) as {
+        values: number[];
+      }).values;
+    // MapLibre reads padding as [top, right, bottom, left].
+    expect(padding(13)).toEqual([20, 20, 20, 20]);
+    expect(padding(15)).toEqual([12, 12, 12, 12]);
+    expect(padding(16)).toEqual([6, 6, 6, 6]);
+    expect(padding(17)).toEqual([2, 2, 2, 2]);
+  });
+
   it('keeps the sign when its name has no room', () => {
     expect(parkingLayer('s', 'light', 13).layout).toMatchObject({ 'text-optional': true });
   });

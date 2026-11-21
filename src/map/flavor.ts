@@ -9,7 +9,9 @@
 //
 // Day: a quiet, desaturated topo, warm-neutral to sit under the bone chrome. The stock
 // cyan water and saturated park greens were the loudest things on screen, and they are
-// what made it read as a city map. Here the brown contours and footpaths carry the page.
+// what made it read as a city map. Here the roads, footpaths and water carry the page,
+// in the order a paper hill map prints them, and the orange-brown contours sit beneath as
+// the ground they cross (see landuse.ts's OVER_GROUND_FROM_LAYER_ID).
 //
 // Night: graphite land and deep slate water, matching the chrome's --surface-sunken.
 // Landcover is only just off the land colour, so hillshade, the magenta route and the
@@ -66,20 +68,24 @@ const DAY: Flavor = {
   boundaries: '#a8a39a',
   railway: '#a19c93',
 
-  // Roads. Upstream's near-white fills vanish on the #ebe9e3 ground, so the fills sit
-  // a step darker and every class gets a casing that holds against earth and woodland.
+  // Roads: pale fills inside dark edges, as on a paper map, where the edge is what makes a
+  // road read on busy ground. The edges used to be 2.2–2.6:1 against the earth, fainter
+  // than any 10 m contour (2.8:1), so the contours outdrew the roads. Now minor 4.6:1,
+  // main roads 6.0:1 and motorways 7.2:1 (4.8 and 5.9:1 over woodland). Fills grade by class: motorway terracotta,
+  // then trunk/primary and secondary (ROAD_CLASS_FILL), tertiary pale yellow, the rest
+  // white.
   other: '#f7f5f0',
   minor_service: '#f7f5f0',
   minor_a: '#fbfaf7',
-  minor_b: '#f7f5f0',
-  minor_casing: '#a39e94',
-  link: '#f6dfa4',
-  major: '#f6dfa4',
-  major_casing_early: '#9a8f78',
-  major_casing_late: '#9a8f78',
-  highway: '#f2c66b',
-  highway_casing_early: '#8f7f5f',
-  highway_casing_late: '#8f7f5f',
+  minor_b: '#fbfaf7',
+  minor_casing: '#6e685e',
+  link: '#f3c47e',
+  major: '#f6e2a8',
+  major_casing_early: '#5c564d',
+  major_casing_late: '#5c564d',
+  highway: '#dc8e6c',
+  highway_casing_early: '#4f4a43',
+  highway_casing_late: '#4f4a43',
 
   city_label: '#3a3f45',
   city_label_halo: '#ebe9e3',
@@ -129,16 +135,19 @@ const NIGHT: Flavor = {
   pedestrian: '#1b1f24',
   buildings: '#0e1114',
 
+  // Roads by night: the fill carries them, so it is lifted clear of graphite and of the
+  // index contours (3.5:1) — minor 4.1:1, main roads 4.3–4.6:1 — and the edge goes to the
+  // background colour, a dark channel that keeps the fill off whatever is under it.
   other: '#3a424c',
-  minor_service: '#3a424c',
-  minor_a: '#4a525c',
-  minor_b: '#3a424c',
+  minor_service: '#555d67',
+  minor_a: '#737b86',
+  minor_b: '#737b86',
   minor_casing: '#0e1114',
-  link: '#5a5f52',
-  major: '#6b6852',
+  link: '#958056',
+  major: '#857e5e',
   major_casing_early: '#0e1114',
   major_casing_late: '#0e1114',
-  highway: '#857650',
+  highway: '#b0705a',
   highway_casing_early: '#0e1114',
   highway_casing_late: '#0e1114',
   railway: '#0e1114',
@@ -167,6 +176,15 @@ const NIGHT: Flavor = {
     scrub: 'rgba(28, 33, 29, 1)',
     forest: 'rgba(24, 33, 29, 1)',
   },
+};
+
+/**
+ * Fills for main roads above tertiary, by class — see landuse.ts's majorFill. Tertiary and
+ * unclassified main roads take the flavour's `major`; motorways its `highway`.
+ */
+export const ROAD_CLASS_FILL: Record<Theme, { primary: string; secondary: string }> = {
+  light: { primary: '#eba46c', secondary: '#f3c47e' },
+  dark: { primary: '#a8794b', secondary: '#958056' },
 };
 
 /**
@@ -202,11 +220,19 @@ export interface MapInk {
   pathLine: string;
   pathCasing: string;
   /**
+   * The inside of a track. A track is drawn as a lane — this between two thin edges in the
+   * path ink — rather than as a solid line in it: solid and 3.5 px wide, a track was the
+   * boldest line on the map, heavier than the main road it left.
+   */
+  trackFill: string;
+  /**
    * Contours. Two inks, not one width: the 10 m lines are read by counting and must stay
-   * recessive; the 50 m index lines are what the relief is read from and must not be.
-   * Both used to be a single ~2:1 ink at two widths, measured 2026-09-25 — the index
-   * lines barely separated from the rest, and at night neither held against the ground.
+   * recessive; the 50 m index lines are what the relief is read from, a step firmer.
    * Contrast over earth / forest / bare rock is noted beside each value.
+   *
+   * Orange-brown, as a paper map prints them, and kept below the roads' edges. They were
+   * a dark red-brown at 6.6:1 for the index lines (2026-09-25 to 2026-11-21): as strong as
+   * a footpath and nearly its colour, and stronger than any road on the map.
    */
   contour: string;
   contourIndex: string;
@@ -278,9 +304,10 @@ const DAY_INK: MapInk = {
   labelHalo: 'rgba(255,255,255,0.9)',
   pathLine: '#8a3d2e',
   pathCasing: 'rgba(255,255,255,0.85)',
-  contour: 'rgba(110, 74, 44, 0.62)', // 2.8 / 2.6 / 2.7:1
-  contourIndex: 'rgba(92, 56, 28, 0.9)', // 6.8 / 5.7 / 6.2:1
-  contourLabel: '#6b4a33',
+  trackFill: '#fbfaf7',
+  contour: 'rgba(176, 104, 44, 0.42)', // 1.6 / 1.5 / 1.6:1
+  contourIndex: 'rgba(168, 96, 36, 0.8)', // 2.9 / 2.5 / 2.7:1
+  contourLabel: '#94561f',
   peakText: '#14171a',
   peakMunroText: '#8a5d00',
   peakDot: '#14171a',
@@ -309,15 +336,16 @@ const DAY_INK: MapInk = {
   walkRouteText: '#005c61',
 };
 
-// Contrast against night earth (#161a1f): path 6.3:1, contour label 6.5:1, route 5.8:1,
+// Contrast against night earth (#161a1f): path 6.3:1, contour label 6.9:1, route 5.8:1,
 // straight legs 8.1:1.
 const NIGHT_INK: MapInk = {
   labelHalo: 'rgba(14,17,20,0.9)',
   pathLine: '#d08a6e',
   pathCasing: 'rgba(14,17,20,0.8)',
-  contour: 'rgba(212, 176, 136, 0.45)', // 2.7 / 2.6 / 2.6:1
-  contourIndex: 'rgba(226, 192, 150, 0.85)', // 7.6 / 7.2 / 6.9:1
-  contourLabel: '#b8977a',
+  trackFill: '#22282f',
+  contour: 'rgba(214, 170, 126, 0.3)', // 1.9 / 1.9 / 1.9:1
+  contourIndex: 'rgba(222, 172, 122, 0.52)', // 3.2 / 3.2 / 3.1:1
+  contourLabel: '#c89a70',
   peakText: '#e6e9ed',
   peakMunroText: '#e0b34d',
   peakDot: '#e6e9ed',

@@ -860,6 +860,28 @@ describe('closing a route', () => {
   });
 });
 
+describe('reopening the route it has just saved', () => {
+  it('leaves the map where it is', async () => {
+    planner.activate();
+    planner.handleMapClick(click(ACHINTEE));
+    planner.handleMapClick(click(SUMMIT));
+    await settle();
+    const draft = planner.getDraft();
+    map.fitBounds.mockClear();
+
+    // What persist() does after writing the record.
+    planner.load({
+      id: 'route-1',
+      name: 'Ben Nevis',
+      coords: draft.coordinates(),
+      waypoints: draft.getWaypoints(),
+      legs: draft.getLegs(),
+    });
+
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+});
+
 describe('unsaved changes', () => {
   const saved = {
     id: 'route-1',

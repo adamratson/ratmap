@@ -117,11 +117,23 @@ function planSection(
 ): HTMLElement {
   const section = el('div', 'route-panel-body');
 
+  const ready = summary.waypointCount >= 2 && summary.pendingLegs === 0;
   const head = el('div', 'route-panel-head');
-  if (summary.waypointCount > 0) head.append(routeStatus(summary));
+  if (summary.waypointCount > 0) {
+    head.append(
+      routeStatus(summary, ready ? () => openSaveForm(section, planner, deps, onStatus) : null),
+    );
+  }
+  // Up here rather than in the action row: sending a route is occasional, and the row had
+  // grown to six buttons over two lines on a phone.
+  if (ready) {
+    const share = buttonEl('Share', () => openShareDialog(currentRoute(planner), onStatus));
+    share.className = 'route-link route-share';
+    head.append(share);
+  }
   if (deps.onShowRoutes) {
     const all = buttonEl('All routes', () => deps.onShowRoutes?.());
-    all.className = 'route-all';
+    all.className = 'route-link route-all';
     head.append(all);
   }
   if (head.childElementCount > 0) section.append(head);
@@ -178,26 +190,40 @@ function planSection(
 
   section.append(editTools(summary, planner));
 
-  // Five identically-styled grey pills, with Clear sitting immediately beside Done, made
-  // finishing and destroying look like the same kind of thing — fixed by pulling Clear
-  // out and colouring it as the destructive action it is. Giving it an entire row to
-  // itself for that, though, cost a full row of height for one short link every time the
-  // panel is open — one row back, but still visually set apart by colour and position
-  // (last, past a gap `margin-left: auto` opens up whenever the row has room for it).
+  // Four, on one line on a phone. There were six — Undo, Save, Share, Follow, Done, Clear —
+  // over two. Share is in the line above (it is occasional); Clear is gone, since Close
+  // takes the route away (Discard, with an Undo) and "New route" starts another.
   const actions = el('div', 'route-actions');
-  const ready = summary.waypointCount >= 2 && summary.pendingLegs === 0;
 
   const undo = buttonEl('Undo', () => planner.undo());
   undo.disabled = !summary.canUndo;
   actions.append(undo);
 
-  const save = buttonEl('Save', () => openSaveForm(section, planner, deps, onStatus));
-  save.disabled = !ready;
+  // One tap, under the name the route already has — its saved one, or the one it would be
+  // given: the last summit on it, say. Saving used to open a name field with a second Save
+  // button; renaming is a tap on the name instead, for the few who want to.
+  const isSaved = summary.saved && !summary.unsaved;
+  const save = buttonEl(isSaved ? 'Saved' : 'Save', () => {
+    void persist(planner, planner.getName(), deps).then(
+      (route) => {
+        if (deps.onUndoableStatus) {
+          deps.onUndoableStatus(`Saved “${route.name}”`, {
+            label: 'Rename',
+            onSelect: () => {
+              const panel = deps.container.querySelector<HTMLElement>('.route-panel-body');
+              if (panel) openSaveForm(panel, planner, deps, onStatus);
+            },
+          });
+        } else {
+          onStatus(`Saved “${route.name}”`, 'ok');
+        }
+      },
+      (err: Error) => onStatus(`Could not save: ${err.message}`, 'error'),
+    );
+  });
+  save.dataset.focusKey = 'save';
+  save.disabled = !ready || isSaved;
   actions.append(save);
-
-  const share = buttonEl('Share', () => openShareDialog(currentRoute(planner), onStatus));
-  share.disabled = !ready;
-  actions.append(share);
 
   // Following is what a planned route is *for*, so it is the one action that leads.
   const follow = buttonEl('Follow', () => planner.startFollowing());
@@ -210,25 +236,6 @@ function planSection(
   // the map with it — it used to be "Done", which only stopped editing and left the route
   // drawn, unreachable, and (unsaved) one "New route" away from being wiped unseen.
   actions.append(buttonEl('Close', () => closeRoute(summary, deps)));
-
-  const clear = buttonEl('Clear', () => {
-    // Immediate, not a confirmation dialog in front of every clear — the same "act now,
-    // offer a way back" pattern already used for deleting a saved place or route.
-    // RouteDraft.clear() snapshots before wiping, so the panel's own Undo button already
-    // recovers the exact route — the toast exists because that fact wasn't otherwise
-    // discoverable. Without it, clearing a carefully-placed 10-waypoint route left no
-    // sign anything had happened beyond a button elsewhere in the panel quietly
-    // switching from disabled to enabled.
-    const description = describeWaypoints(summary);
-    planner.clear();
-    deps.onUndoableStatus?.(`Cleared ${description}`, {
-      label: 'Undo',
-      onSelect: () => planner.undo(),
-    });
-  });
-  clear.disabled = summary.waypointCount === 0;
-  clear.classList.add('destructive');
-  actions.append(clear);
 
   section.append(actions);
 
@@ -244,9 +251,18 @@ function planSection(
  * Which route this is and whether it is saved — the one thing that says an edit has not
  * reached the routes list yet, before Close or a reload would lose it.
  */
-function routeStatus(summary: RouteSummary): HTMLElement {
+function routeStatus(summary: RouteSummary, onRename: (() => void) | null): HTMLElement {
   const line = el('p', 'route-status');
-  line.append(el('span', 'route-status-name', summary.name));
+  if (onRename) {
+    // The name is the way to rename: where you would look for it, with no button of its own.
+    const name = buttonEl(summary.name, onRename);
+    name.className = 'route-status-name route-rename';
+    name.dataset.focusKey = 'rename';
+    name.setAttribute('aria-label', `Rename “${summary.name}”`);
+    line.append(name);
+  } else {
+    line.append(el('span', 'route-status-name', summary.name));
+  }
   const state = !summary.saved ? 'Not saved' : summary.unsaved ? 'Unsaved changes' : 'Saved';
   line.append(el('span', summary.unsaved ? 'route-status-state unsaved' : 'route-status-state', state));
   return line;
@@ -452,7 +468,7 @@ function startPromptBlock(summary: RouteSummary, planner: RoutePlanner): HTMLEle
   // Only when there is a waypoint for the route to start at instead.
   if (summary.waypointCount > 0) {
     const skip = buttonEl('Start where it is', () => planner.dismissStartPrompt());
-    skip.className = 'route-all';
+    skip.className = 'route-link route-skip';
     block.append(skip);
   }
   return block;
@@ -524,13 +540,6 @@ function snapToggle(summary: RouteSummary, planner: RoutePlanner): HTMLElement {
 
   row.append(text, input);
   return row;
-}
-
-/** "8 waypoints · 4.2 km" — what the Clear-route undo toast names, so it's obvious what
- *  was just wiped without having to remember it from a glance at the panel a moment ago. */
-function describeWaypoints(summary: RouteSummary): string {
-  const points = summary.waypointCount === 1 ? '1 waypoint' : `${summary.waypointCount} waypoints`;
-  return summary.distanceM > 0 ? `${points} · ${formatDistance(summary.distanceM)}` : points;
 }
 
 function statsRow(summary: RouteSummary): HTMLElement {
@@ -796,7 +805,7 @@ function openSaveForm(
 
   const confirm = document.createElement('button');
   confirm.type = 'submit';
-  confirm.textContent = 'Save';
+  confirm.textContent = planner.getLoadedRouteId() ? 'Rename' : 'Save';
   form.append(confirm);
 
   form.addEventListener('submit', (event) => {
@@ -808,7 +817,10 @@ function openSaveForm(
     form.remove();
   });
 
-  section.append(form);
+  // Under the name it changes.
+  const head = section.querySelector('.route-panel-head');
+  if (head) head.after(form);
+  else section.prepend(form);
   if (carried) return;
   input.focus();
   input.select();

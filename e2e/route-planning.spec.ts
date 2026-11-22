@@ -241,12 +241,14 @@ test.describe('route planning', () => {
     await clickMapAt(page, ...RIDGE);
     await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
 
+    // One tap, under the name the route already has; then renamed from the name.
     await page.locator('.route-actions button', { hasText: 'Save' }).click();
-    const nameField = page.locator('.route-save-form input');
-    await nameField.fill('Andorra test route');
+    await expect(page.locator('.toast', { hasText: /^Saved “/ })).toBeVisible();
+    await page.locator('.toast button', { hasText: 'Rename' }).click();
+    await page.locator('.route-save-form input').fill('Andorra test route');
     await page.locator('.route-save-form button').click();
 
-    await expect(page.locator('.toast')).toContainText('Andorra test route');
+    await expect(page.locator('.toast', { hasText: 'Saved “Andorra test route”' })).toBeVisible();
     // Reopen from a fresh page: the record has to stand alone (C10), with no in-memory
     // state and no network.
     await page.reload();

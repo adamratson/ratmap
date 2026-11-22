@@ -31,7 +31,7 @@ async function linkFromPlanner(page: Page, { keep = false } = {}): Promise<strin
   await clickMapAt(page, ...RIDGE);
   await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
 
-  await page.locator('.route-actions button', { hasText: 'Share' }).click();
+  await page.locator('.route-panel-head .route-share').click();
   await expect(page.locator('.share-dialog')).toContainText('can’t be taken back');
 
   // Headless Chromium has no share sheet, so this lands on the clipboard stub.

@@ -325,6 +325,19 @@ export async function openPrint(page: Page): Promise<void> {
   await page.locator('.print-frame').waitFor();
 }
 
+/**
+ * Save the route on screen under `name`: Save (one tap, under the route's own name), then
+ * a tap on the name to rename it, the way someone choosing their own name would.
+ */
+export async function saveRouteAs(page: Page, name: string): Promise<void> {
+  await page.locator('.route-actions button', { hasText: /^Save$/ }).click();
+  await expect(page.locator('.route-status-state')).toHaveText('Saved');
+  await page.locator('.route-rename').click();
+  await page.locator('.route-save-form input').fill(name);
+  await page.locator('.route-save-form button').click();
+  await expect(page.locator('.route-rename')).toHaveText(name);
+}
+
 /** Open the routes sheet and start a fresh route. */
 export async function startNewRoute(page: Page): Promise<void> {
   await openChip(page, 'Routes');

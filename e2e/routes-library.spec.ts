@@ -6,6 +6,7 @@ import {
   gotoApp,
   openChip,
   plannerState,
+  saveRouteAs,
   preferFileDownloads,
   showArea,
   startNewRoute,
@@ -44,9 +45,7 @@ async function planAndSave(page: Page, name: string): Promise<void> {
   await clickMapAt(page, ...RIDGE);
   await expect.poll(async () => (await plannerState(page)).pending).toBe(0);
 
-  await page.locator('.route-actions button', { hasText: 'Save' }).click();
-  await page.locator('.route-save-form input').fill(name);
-  await page.locator('.route-save-form button').click();
+  await saveRouteAs(page, name);
   // Filtered rather than a bare locator: toasts stack, and by the second save there is
   // more than one success on screen — both of them correct.
   await expect(page.locator('.toast.ok', { hasText: `Saved “${name}”` })).toBeVisible();
@@ -123,9 +122,7 @@ test.describe('saved routes', () => {
     // No region here, so both legs are straight lines.
     expect((await plannerState(page)).legKinds).toEqual(['straight', 'straight']);
 
-    await page.locator('.route-actions button', { hasText: 'Save' }).click();
-    await page.locator('.route-save-form input').fill('Round trip');
-    await page.locator('.route-save-form button').click();
+    await saveRouteAs(page, 'Round trip');
     await expect(page.locator('.toast.ok', { hasText: 'Saved “Round trip”' })).toBeVisible();
 
     await openChip(page, 'Routes');
@@ -163,10 +160,10 @@ test.describe('saved routes', () => {
     await planAndSave(page, 'First name');
 
     // Saving reopens the stored record, so the planner is now editing it rather than a
-    // copy — otherwise every Save writes another route with almost the same name.
-    await page.locator('.route-actions button', { hasText: 'Save' }).click();
+    // copy — otherwise every rename writes another route with almost the same name.
+    await page.locator('.route-rename').click();
     await page.locator('.route-save-form input').fill('Second name');
-    await page.locator('.route-save-form button').click();
+    await page.locator('.route-save-form button', { hasText: 'Rename' }).click();
     await expect(page.locator('.toast.ok', { hasText: 'Saved “Second name”' })).toBeVisible();
 
     await openChip(page, 'Routes');

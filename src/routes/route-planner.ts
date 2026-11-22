@@ -837,7 +837,8 @@ export class RoutePlanner {
    * draft arrived without, which nothing else would.
    */
   private showDraft(previousLine: readonly LngLat[], { fit = true }: { fit?: boolean } = {}): void {
-    if (!sameLine(previousLine, this.draft.coordinates())) {
+    const sameRoute = sameLine(previousLine, this.draft.coordinates());
+    if (!sameRoute) {
       this.profile = null;
       this.profileNote = null;
       this.sac = null;
@@ -850,7 +851,9 @@ export class RoutePlanner {
     // After emit, which is what brings the route panel up: the route is fitted into the
     // map that panel leaves showing, not the one before it opened.
     this.emit();
-    if (fit) this.fitToRoute();
+    // Not for the same line: saving reopens the record it has just written, and moving the
+    // map off what someone was looking at, on every Save, was a surprise for nothing.
+    if (fit && !sameRoute) this.fitToRoute();
     this.draftChanged();
     void this.recompute();
   }

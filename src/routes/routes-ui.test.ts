@@ -68,26 +68,6 @@ function render(summary: Partial<RouteSummary>): HTMLElement {
   return container;
 }
 
-/** For the Clear-route tests, which need to inspect what the button actually triggers —
- *  `render()`'s deps are write-only from the test's point of view. */
-function renderClearable(summary: Partial<RouteSummary>) {
-  const container = document.createElement('div');
-  const planner = { clear: vi.fn(), undo: vi.fn() } as unknown as RoutePlanner;
-  const onUndoableStatus = vi.fn();
-  renderRoutePanel(
-    { ...BASE, ...summary },
-    {
-      planner,
-      container,
-      onPlanStarted: vi.fn(),
-      onStatus: vi.fn(),
-      onUndoableStatus,
-    },
-  );
-  const button = container.querySelector<HTMLButtonElement>('.route-actions button.destructive')!;
-  return { button, planner, onUndoableStatus };
-}
-
 describe('the planning panel', () => {
   it('leads with one action rather than five identical pills', () => {
     const panel = render({});
@@ -97,18 +77,18 @@ describe('the planning panel', () => {
     expect(primary[0].textContent).toBe('Follow');
   });
 
-  it('marks Clear as destructive rather than styling it like Close', () => {
-    // They used to be identical grey pills sitting side by side — one finishes, one
-    // wipes the route, and nothing distinguished them. Sharing a row again (finding a
-    // dedicated row cost real vertical space for one short link), but the styling still
-    // has to keep them apart.
+  it('has four actions, on one line, with Share above them', () => {
+    // There were six — Undo, Save, Share, Follow, Done, Clear — over two lines on a phone.
     const panel = render({});
     const inRow = [...panel.querySelectorAll('.route-actions button')].map((b) => b.textContent);
 
-    expect(inRow).toEqual(['Undo', 'Save', 'Share', 'Follow', 'Close', 'Clear']);
-    const clear = panel.querySelector('.route-actions button.destructive')!;
-    expect(clear.textContent).toBe('Clear');
-    expect(clear.classList.contains('primary')).toBe(false);
+    expect(inRow).toEqual(['Undo', 'Save', 'Follow', 'Close']);
+    expect(panel.querySelector('.route-panel-head .route-share')!.textContent).toBe('Share');
+  });
+
+  it('offers Share only for a route there is to send', () => {
+    expect(render({ pendingLegs: 1 }).querySelector('.route-share')).toBeNull();
+    expect(render({ waypointCount: 1 }).querySelector('.route-share')).toBeNull();
   });
 
   it('keeps the way out available even on an empty route', () => {
@@ -214,62 +194,6 @@ describe('the planning panel', () => {
     });
   });
 
-  it('does not offer to clear a route that has nothing in it', () => {
-    const panel = render({ waypointCount: 0 });
-    expect(panel.querySelector<HTMLButtonElement>('.route-actions button.destructive')!.disabled).toBe(
-      true,
-    );
-  });
-
-  describe('clearing a route', () => {
-    it('clears immediately, not behind a confirmation dialog', () => {
-      const { button, planner } = renderClearable({ waypointCount: 8, distanceM: 4200 });
-      button.click();
-
-      expect(planner.clear).toHaveBeenCalledOnce();
-    });
-
-    it('names what was cleared, so the toast alone answers "did I lose the good one"', () => {
-      const { button, onUndoableStatus } = renderClearable({ waypointCount: 8, distanceM: 4200 });
-      button.click();
-
-      const [message] = onUndoableStatus.mock.calls[0];
-      expect(message).toBe('Cleared 8 waypoints · 4.20 km');
-    });
-
-    it('says "1 waypoint", not "1 waypoints"', () => {
-      const { button, onUndoableStatus } = renderClearable({ waypointCount: 1, distanceM: 0 });
-      button.click();
-
-      const [message] = onUndoableStatus.mock.calls[0];
-      expect(message).toBe('Cleared 1 waypoint');
-    });
-
-    it('omits the distance when there is none yet — a lone waypoint has no legs', () => {
-      const { button, onUndoableStatus } = renderClearable({ waypointCount: 1, distanceM: 0 });
-      button.click();
-
-      const [message] = onUndoableStatus.mock.calls[0];
-      expect(message).not.toContain('·');
-    });
-
-    it('wires the toast\'s Undo to the same recovery the panel\'s own Undo button uses', () => {
-      // RouteDraft.clear() snapshots before wiping, so planner.undo() is a full recovery,
-      // not a reconstruction — the toast exists to make that already-correct mechanism
-      // discoverable, not to build a new one.
-      const { button, planner, onUndoableStatus } = renderClearable({
-        waypointCount: 3,
-        distanceM: 1000,
-      });
-      button.click();
-
-      const [, action] = onUndoableStatus.mock.calls[0];
-      expect(action.label).toBe('Undo');
-      action.onSelect();
-
-      expect(planner.undo).toHaveBeenCalledOnce();
-    });
-  });
 });
 
 describe('round trip in the panel', () => {
@@ -338,6 +262,78 @@ describe('snap to paths in the panel', () => {
   });
 });
 
+const store = vi.mocked(await import('./route-store'));
+
+describe('saving', () => {
+  function mount(summary: Partial<RouteSummary> = {}) {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const planner = {
+      getName: () => 'Ben Nevis',
+      getLoadedRouteId: () => null,
+      getProfile: () => null,
+      getDraft: () => ({
+        coordinates: () => [
+          [-5.09, 56.81],
+          [-5.0, 56.797],
+        ],
+        totalDistanceM: 8200,
+        hasStraightLegs: () => false,
+        getWaypoints: () => [],
+        getLegs: () => [],
+      }),
+      load: vi.fn(),
+    } as unknown as RoutePlanner;
+    const onUndoableStatus = vi.fn();
+    renderRoutePanel(
+      { ...BASE, ...summary },
+      { ...deps(container), planner, onUndoableStatus },
+    );
+    return { container, planner, onUndoableStatus };
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    store.saveRoute.mockReset();
+  });
+
+  it('saves in one tap, under the name the route already has', async () => {
+    store.saveRoute.mockImplementation(async (route) => ({ ...route, id: 'r1', createdAt: 1, updatedAt: 1 }) as never);
+    const { container, onUndoableStatus } = mount();
+    [...container.querySelectorAll<HTMLButtonElement>('.route-actions button')]
+      .find((b) => b.textContent === 'Save')!
+      .click();
+
+    await vi.waitFor(() => expect(store.saveRoute).toHaveBeenCalled());
+    expect(store.saveRoute.mock.calls[0][0]).toMatchObject({ name: 'Ben Nevis' });
+    // No name form first.
+    expect(container.querySelector('.route-save-form')).toBeNull();
+    // Renaming is offered after, not demanded before.
+    await vi.waitFor(() => expect(onUndoableStatus).toHaveBeenCalled());
+    const [message, action] = onUndoableStatus.mock.calls[0];
+    expect(message).toBe('Saved “Ben Nevis”');
+    expect(action.label).toBe('Rename');
+  });
+
+  it('has nothing to save for a saved route as it was saved', () => {
+    const { container } = mount({ saved: true, unsaved: false });
+    const save = container.querySelector<HTMLButtonElement>('[data-focus-key="save"]')!;
+    expect(save.textContent).toBe('Saved');
+    expect(save.disabled).toBe(true);
+  });
+
+  it('renames from the name itself', () => {
+    const { container } = mount();
+    container.querySelector<HTMLButtonElement>('.route-rename')!.click();
+    const input = container.querySelector<HTMLInputElement>('.route-save-form input')!;
+    expect(input.value).toBe('Ben Nevis');
+    // Right under the name it changes.
+    expect(container.querySelector('.route-panel-head')!.nextElementSibling).toBe(
+      container.querySelector('.route-save-form'),
+    );
+  });
+});
+
 describe('redrawing the panel under someone using it', () => {
   // The panel is redrawn on every GPS fix while a route is open, not only on edits. With
   // the location dot on, the save form — and whatever had been typed into it — was gone
@@ -347,7 +343,7 @@ describe('redrawing the panel under someone using it', () => {
     document.body.append(container);
     const panelDeps = {
       ...deps(container),
-      planner: { getName: () => '8.20 km route' } as unknown as RoutePlanner,
+      planner: { getName: () => '8.20 km route', getLoadedRouteId: () => null } as unknown as RoutePlanner,
     };
     const draw = (summary: Partial<RouteSummary> = {}) =>
       renderRoutePanel({ ...BASE, ...summary }, panelDeps);
@@ -364,7 +360,7 @@ describe('redrawing the panel under someone using it', () => {
 
   it('keeps a half-typed name, where the cursor was, through a redraw', () => {
     const { container, draw } = mount();
-    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Save')!.click();
+    container.querySelector<HTMLButtonElement>('.route-rename')!.click();
     nameInput(container)!.value = 'Ben Nevis by the arête';
     nameInput(container)!.setSelectionRange(4, 4);
 
@@ -379,7 +375,7 @@ describe('redrawing the panel under someone using it', () => {
   it('closes the form once the route no longer stands to be saved', () => {
     // An edit leaves a leg pending; saving then would store a route with a hole in it.
     const { container, draw } = mount();
-    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Save')!.click();
+    container.querySelector<HTMLButtonElement>('.route-rename')!.click();
 
     draw({ pendingLegs: 1 });
 
@@ -702,8 +698,8 @@ describe('sharing from the panel', () => {
   });
 
   it('waits until the route is complete', () => {
-    expect(shareButton({ pendingLegs: 1 }).disabled).toBe(true);
-    expect(shareButton().disabled).toBe(false);
+    expect(shareButton({ pendingLegs: 1 })).toBeUndefined();
+    expect(shareButton()).toBeDefined();
   });
 
   it('says a link can’t be taken back before anything is sent', () => {

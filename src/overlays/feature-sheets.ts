@@ -68,7 +68,12 @@ export function renderPeakSheet(
   body: HTMLElement,
   peak: PeakProperties,
   lngLat: LngLat,
-  { status, avalanche, route }: { status: Toasts; avalanche?: AvalancheReading; route?: CardRoute },
+  {
+    status,
+    avalanche,
+    route,
+    hint,
+  }: { status: Toasts; avalanche?: AvalancheReading; route?: CardRoute; hint?: string | null },
 ): void {
   const name = peak.name?.trim() || 'Unnamed summit';
   const ele = formatElevation(peak.ele);
@@ -87,7 +92,9 @@ export function renderPeakSheet(
     </div>
     <div class="sheet-actions sheet-open-in"></div>
     ${avalanche ? '<div class="sheet-avalanche"></div>' : ''}
+    ${hint ? '<p class="sheet-note sheet-hint"></p>' : ''}
   `;
+  if (hint) body.querySelector('.sheet-hint')!.textContent = hint;
   // textContent, not interpolation: names come from OSM, which is user-editable data.
   body.querySelector('h2')!.textContent = name;
   fillReadout(body.querySelector<HTMLElement>('.sheet-ele')!, ele ?? 'Elevation unknown');

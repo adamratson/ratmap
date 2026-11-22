@@ -278,7 +278,9 @@ describe('limits on what can be sent', () => {
     expect(() => encodeRouteLink({ name: 'x', waypoints, legs, stats: null })).toThrow(LinkTooLong);
   });
 
-  it('will not write more vertices than a reader will accept', () => {
+  // Its own time limit: 60,000 vertices to simplify is 2 s alone and past the default 5 s
+  // with the machine busy — the end-to-end suite running beside it timed it out three times.
+  it('will not write more vertices than a reader will accept', { timeout: 20_000 }, () => {
     const coords = wiggle(ACHINTEE, SUMMIT, 60_000).map(
       ([lng, lat], i) => [lng + (i % 2) * 0.001, lat] as LngLat,
     );

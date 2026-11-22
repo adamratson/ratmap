@@ -42,6 +42,21 @@ test.describe('summits and saved places', () => {
     );
   });
 
+  test('tells you about right-click for coordinates, until you have used it', async ({ page }) => {
+    await clickPeak(page);
+    // A mouse here, so the mouse's gesture.
+    await expect(page.locator('.sheet-hint')).toContainText('right-click anywhere on the map');
+
+    // Used once: a point's coordinates, from a right-click on bare map.
+    const box = (await page.locator('#map').boundingBox())!;
+    await page.mouse.click(box.x + box.width * 0.75, box.y + 80, { button: 'right' });
+    await expect(page.locator('#sheet-body')).toHaveAttribute('aria-label', 'Coordinates');
+
+    await clickPeak(page);
+    await expect(page.locator('#sheet-body h2')).toBeVisible();
+    await expect(page.locator('.sheet-hint')).toHaveCount(0);
+  });
+
   test('closes the summit sheet when the next tap misses', async ({ page }) => {
     await clickPeak(page);
     await expect(page.locator('#sheet-body h2')).toBeVisible();

@@ -384,3 +384,15 @@ describe('routing from a card', () => {
     expect(body.querySelector('.sheet-route')).toBeNull();
   });
 });
+
+describe('the tip on a summit card', () => {
+  it('is there when asked for', () => {
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, { status, hint: 'Tip: press and hold.' });
+    expect(body.querySelector('.sheet-hint')!.textContent).toBe('Tip: press and hold.');
+  });
+
+  it('is not, once retired', () => {
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, { status, hint: null });
+    expect(body.querySelector('.sheet-hint')).toBeNull();
+  });
+});

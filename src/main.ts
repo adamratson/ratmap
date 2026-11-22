@@ -65,6 +65,7 @@ import { BottomSheet } from './ui/sheet';
 import { SheetViews, type View } from './ui/sheet-views';
 import { StatusCentre } from './ui/status';
 import { ThemeController } from './ui/theme';
+import { coordsGestureUsed, coordsHint, markCoordsGestureUsed } from './ui/hints';
 
 // The app's bootstrap: builds the page, the map and the sheet, and wires the feature
 // modules to each other. Anything with logic of its own lives in one of those modules.
@@ -600,8 +601,14 @@ function openPeakCard(properties: PeakProperties, lngLat: maplibregl.LngLat): vo
     ...(properties.name ? { name: properties.name } : {}),
     ...(typeof properties.ele === 'number' ? { ele: properties.ele } : {}),
   });
+  const hint = coordsGestureUsed() ? null : coordsHint(isCoarsePointer());
   views.open('peak', (body) =>
-    renderPeakSheet(body, properties, lngLat, { status, route, ...(avalanche ? { avalanche } : {}) }),
+    renderPeakSheet(body, properties, lngLat, {
+      status,
+      route,
+      hint,
+      ...(avalanche ? { avalanche } : {}),
+    }),
   );
 }
 
@@ -723,12 +730,15 @@ function avalancheReading(lngLat: maplibregl.LngLat) {
 map.on('contextmenu', (e) => {
   e.preventDefault();
   if (planner.isEditing()) return;
+  markCoordsGestureUsed();
   showCoordsSheet(e.lngLat);
 });
 
 onPressHold(map.getCanvasContainer(), {
   onHold: (point) => {
     if (planner.isEditing()) return;
+    // Found it: the summit card's tip about it can go.
+    markCoordsGestureUsed();
     const rect = map.getCanvasContainer().getBoundingClientRect();
     showCoordsSheet(map.unproject([point.x - rect.left, point.y - rect.top]));
   },

@@ -82,7 +82,12 @@ services:
       # REGION_BASEMAP_MAXZOOM: "15"
       # REGION_TERRAIN_MAXZOOM: "11"
 
-      # Progress bars are noise in `docker logs`; set to 1 when watching interactively.
+      # What the console shows: info (default) is one progress line per stage plus
+      # results, warnings and failures, with every stage's full output in its log under
+      # /work/logs; debug puts all of it on the console too. `--debug` does the same.
+      RATMAP_LOG_LEVEL: "${RATMAP_LOG_LEVEL:-}"
+      # curl's progress bar for the prefetch downloads at debug, where it reaches the
+      # console raw (at info it always runs, and drives the stage's progress line).
       RATMAP_CURL_PROGRESS: "${RATMAP_CURL_PROGRESS:-}"
 
       # Both read directly by build-global.sh inside the container (region_ids() and

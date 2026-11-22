@@ -81,8 +81,15 @@ PREFLIGHT_ONLY=""
 REPIN=""
 stages=()
 
+# What the console shows. info: one live progress line per stage and the lines that
+# matter — results, warnings, failures — with everything else in the stage's log (see
+# scripts/tools/cmd/stage-console). debug: everything on the console as well, as it used
+# to be.
+LOG_LEVEL="${RATMAP_LOG_LEVEL:-info}"
+
 for arg in "$@"; do
   case "$arg" in
+    --debug)           LOG_LEVEL=debug ;;
     --force)           FORCE=1 ;;
     --dry-run)         DRY_RUN="--dry-run" ;;
     --skip-preflight)  SKIP_PREFLIGHT=1 ;;
@@ -95,10 +102,27 @@ for arg in "$@"; do
   esac
 done
 
+case "$LOG_LEVEL" in
+  info|debug) ;;
+  *) echo "RATMAP_LOG_LEVEL=$LOG_LEVEL: want info or debug" >&2; exit 2 ;;
+esac
+
 mkdir -p "$OSM_CACHE" "$LOG_DIR" "$DIST_DIR" "${TMPDIR:-$WORK_DIR/tmp}"
 
 hr()  { printf '%s\n' "----------------------------------------------------------------"; }
 log() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+# Inside a stage, which stage-console reads: `note` is a line for the stage's log only
+# (the console shows it at debug), and `progress` moves the stage's progress bar.
+note()     { printf '  %s\n' "$*"; }
+progress() { printf '@@progress %s %s %s\n' "$1" "$2" "$3"; }
+# 75 -> 1:15, 11045 -> 3:04:05
+duration() {
+  if [ "$1" -ge 3600 ]; then
+    printf '%d:%02d:%02d' $(($1 / 3600)) $((($1 % 3600) / 60)) $(($1 % 60))
+  else
+    printf '%d:%02d' $(($1 / 60)) $(($1 % 60))
+  fi
+}
 
 gb_free() { df -PB1 "$1" 2>/dev/null | awk 'NR==2 {printf "%.0f", $4/1073741824}'; }
 
@@ -549,9 +573,13 @@ fetch_continent() {
   for attempt in 1 2; do
     log "  $name: downloading (attempt $attempt) $url"
     # curl's default meter emits a progress table line per second, which turns a 35 GB
-    # download into thousands of lines of `docker logs`. Silent unless asked.
-    local progress=--no-progress-meter
-    [ -n "${RATMAP_CURL_PROGRESS:-}" ] && progress=--progress-bar
+    # download into thousands of lines of `docker logs`. Its --progress-bar redraws one
+    # line in place instead, which stage-console turns into this stage's progress bar at
+    # info; at debug that would reach the console raw, so it is silent there unless asked.
+    local meter=--no-progress-meter
+    if [ "$LOG_LEVEL" = info ] || [ -n "${RATMAP_CURL_PROGRESS:-}" ]; then
+      meter=--progress-bar
+    fi
 
     # -C - resumes a partial from an interrupted run, which is worth having on a 35 GB
     # continent — and now that the target is a dated file rather than "-latest", the
@@ -560,12 +588,12 @@ fetch_continent() {
     # through to a clean download rather than eating a whole attempt.
     if [ -f "$dest" ]; then
       curl -fL --retry 2 --retry-delay 5 --retry-all-errors \
-        "$progress" -C - -o "$dest" "$url" \
+        "$meter" -C - -o "$dest" "$url" \
         || { log "  $name: cannot resume the cached partial — restarting from scratch"; rm -f "$dest"; }
     fi
     if [ ! -f "$dest" ]; then
       curl -fL --retry 5 --retry-delay 10 --retry-all-errors \
-        "$progress" -o "$dest" "$url"
+        "$meter" -o "$dest" "$url"
     fi
 
     if file_md5_is "$dest" "$want"; then
@@ -605,12 +633,16 @@ stage_prefetch() {
     rm -f "$PIN_FILE"
   fi
 
-  local c
+  local c n=0
+  progress 0 "${#CONTINENTS[@]}" extracts
   for c in "${CONTINENTS[@]}"; do
+    echo "==> $c"
     # Explicit || return: these stage functions run as the condition of an `if` in the
     # driver loop below, which switches errexit off inside them — without this a failed
     # continent would be logged and the run would carry on to build a partial planet.
     fetch_continent "$c" || return 1
+    n=$((n + 1))
+    progress "$n" "${#CONTINENTS[@]}" extracts
   done
 
   # Worth printing in full: every later stage reads these pins, and when someone comes
@@ -923,15 +955,43 @@ stage_regions() {
   # cap is what actually decides. Each worker's output goes to its own log with one
   # OK/FAILED line per region crossing back, the contours stage's idiom.
   local parallel="${RATMAP_REGIONS_PARALLEL:-$(overlapping_io_parallel 1.5 4)}"
+
+  # Progress by the catalogue's estimate of each region's download rather than by count:
+  # this stage is almost all fetching, and andorra is 16 MB where some regions are tens of
+  # GB, so a count would race through the small ones and then sit. The count goes beside
+  # it. Regions with no estimate weigh nothing; none at all, and it is the count alone.
+  local -A est=()
+  local rid b n=0 total_bytes=0 done_bytes=0
+  while read -r rid b; do
+    est[$rid]=$b
+    total_bytes=$((total_bytes + b))
+  done < <(catalog bytes "$INFRA_DIR/regions.json" "${jobs[@]%% *}")
+  region_done() {  # region_done <id>
+    n=$((n + 1))
+    done_bytes=$((done_bytes + ${est[$1]:-0}))
+    if [ "$total_bytes" -gt 0 ]; then
+      progress "$done_bytes" "$total_bytes" bytes
+      echo "==> $n/${#jobs[@]} regions built"
+    else
+      progress "$n" "${#jobs[@]}" regions
+    fi
+  }
+  if [ "$total_bytes" -gt 0 ]; then
+    progress 0 "$total_bytes" bytes
+    echo "==> 0/${#jobs[@]} regions built"
+  else
+    progress 0 "${#jobs[@]}" regions
+  fi
   if [ "$parallel" -le 1 ]; then
     local job
     for job in "${jobs[@]}"; do
       read -r id only <<<"$job"
-      log "regions/$id${only:+ ($only)}"
+      echo "==> $id${only:+ ($only)}"
       if ! "$SCRIPTS_DIR/build-region.sh" "$id" $DRY_RUN $only; then
         log "regions/$id FAILED — continuing with the rest"
         failed+=("$id")
       fi
+      region_done "$id"
     done
   else
     log "regions: building ${#jobs[@]} region(s), $parallel at a time"
@@ -950,11 +1010,12 @@ stage_regions() {
     local status rid
     while IFS=$'\t' read -r status rid; do
       if [ "$status" = OK ]; then
-        log "regions/$rid: done"
+        note "regions/$rid: done"
       else
         log "regions/$rid FAILED — see $LOG_DIR/${RUN_ID}-regions-$rid.log — continuing with the rest"
         failed+=("$rid")
       fi
+      region_done "$rid"
     done < <(printf '%s\n' "${jobs[@]}" | xargs -P "$parallel" -L 1 bash -c 'build_one_region "$@"' _)
   fi
 
@@ -1026,9 +1087,13 @@ stage_contours() {
           "$(date -u +%H:%M:%S)" "$id"
       fi
       printf '%s\n' "$id" >> "$DEM_READY"
+      # Beside the stage's progress bar (stage-console): how far ahead the DEMs are.
+      printf '@@fetch %s %s DEMs\n' "$(grep -cvxF __done__ "$DEM_READY")" "$DEM_TOTAL"
     }
     export -f fetch_one_dem
     export SCRIPTS_DIR LOG_DIR RUN_ID DEM_READY
+    export DEM_TOTAL="${#ids[@]}"
+    printf '@@fetch 0 %s DEMs\n' "$DEM_TOTAL"
     (
       region_bboxes "${ids[@]}" | xargs -P "$ahead" -L 1 bash -c 'fetch_one_dem "$@"' _
       echo "__done__" >> "$DEM_READY"
@@ -1065,14 +1130,17 @@ stage_contours() {
   export SCRIPTS_DIR LOG_DIR RUN_ID
 
   local -a failed=()
-  local status rid
+  local status rid n=0
+  progress 0 "${#ids[@]}" regions
   while IFS=$'\t' read -r status rid; do
     if [ "$status" = OK ]; then
-      log "contours/$rid: done"
+      note "contours/$rid: done"
     else
       log "contours/$rid FAILED — see $LOG_DIR/${RUN_ID}-contours-$rid.log — continuing with the rest"
       failed+=("$rid")
     fi
+    n=$((n + 1))
+    progress "$n" "${#ids[@]}" regions
   done < <(printf '%s\n' "${ids[@]}" | xargs -P "$parallel" -I{} bash -c 'build_one_contour "$@"' _ {})
 
   # Every build waited for its own DEM, so the fetcher has nothing left; this only reaps it.
@@ -1142,14 +1210,17 @@ stage_avalanche() {
   export SCRIPTS_DIR LOG_DIR RUN_ID
 
   local -a failed=()
-  local status rid
+  local status rid n=0
+  progress 0 "${#ids[@]}" regions
   while IFS=$'\t' read -r status rid; do
     if [ "$status" = OK ]; then
-      log "avalanche/$rid: done"
+      note "avalanche/$rid: done"
     else
       log "avalanche/$rid FAILED — see $LOG_DIR/${RUN_ID}-avalanche-$rid.log — continuing with the rest"
       failed+=("$rid")
     fi
+    n=$((n + 1))
+    progress "$n" "${#ids[@]}" regions
   done < <(printf '%s\n' "${ids[@]}" | xargs -P "$parallel" -I{} bash -c 'build_one_avalanche "$@"' _ {})
 
   if [ "${#failed[@]}" -gt 0 ]; then
@@ -1246,12 +1317,18 @@ fi
 # The catalogue queries above (catalogue_dist_gb, peaks_mem_gb, region_ids, region_bboxes)
 # are Go, scripts/tools/cmd/catalog, built here once from the working copy like every Go
 # tool in the pipeline. This driver does not source lib.sh (see the note on the sizing
-# helpers), so it does the build itself.
+# helpers), so it does the build itself. stage-console, which every stage's output goes
+# through, with it.
 CATALOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$CATALOG_DIR"' EXIT
-(cd "$INFRA_DIR/scripts/tools" \
-  && GOTOOLCHAIN=local go build -trimpath -buildvcs=false -o "$CATALOG_DIR/catalog" ./cmd/catalog) \
-  || { echo "could not build scripts/tools/cmd/catalog" >&2; exit 1; }
+# Its output ("go: downloading ...") only if it fails.
+if ! go_out="$(cd "$INFRA_DIR/scripts/tools" \
+       && GOTOOLCHAIN=local go build -trimpath -buildvcs=false -o "$CATALOG_DIR/" \
+            ./cmd/catalog ./cmd/stage-console 2>&1)"; then
+  printf '%s\n' "$go_out" >&2
+  echo "could not build scripts/tools/cmd/catalog and stage-console" >&2
+  exit 1
+fi
 catalog() { "$CATALOG_DIR/catalog" "$@"; }
 
 if [ -n "$PREFLIGHT_ONLY" ]; then
@@ -1272,19 +1349,38 @@ RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 declare -a summary=()
 overall_start=$SECONDS
 
+hr
+log "run $RUN_ID: ${stages[*]}"
+log "full output per stage: $LOG_DIR/${RUN_ID}-<stage>.log (console: $LOG_LEVEL)"
 for stage in "${stages[@]}"; do
   logfile="$LOG_DIR/${RUN_ID}-${stage}.log"
+  # The OSM stages read every continent in turn, announcing each with a Source: line;
+  # stage-console counts them against this.
+  case "$stage" in
+    peaks|sac|paths|terrain-features|landmarks|detail|parking|huts|routes|access|places)
+      sources=${#CONTINENTS[@]} ;;
+    *) sources=0 ;;
+  esac
   hr
-  log "==> stage: $stage   (log: $logfile)"
-  hr
+  log "▶ $stage"
   start=$SECONDS
-  if "stage_$stage" 2>&1 | tee -a "$logfile"; then
+  if "stage_$stage" 2>&1 \
+       | "$CATALOG_DIR/stage-console" --stage "$stage" --log "$logfile" \
+           --level "$LOG_LEVEL" --sources "$sources"; then
     elapsed=$((SECONDS - start))
-    summary+=("$(printf '  %-10s ok      %02d:%02d:%02d' "$stage" $((elapsed/3600)) $(((elapsed%3600)/60)) $((elapsed%60)))")
-    log "<== $stage done in $((elapsed / 60)) min"
+    summary+=("$(printf '  %-18s ok      %s' "$stage" "$(duration "$elapsed")")")
+    log "✓ $stage  $(duration "$elapsed")"
   else
     elapsed=$((SECONDS - start))
-    summary+=("$(printf '  %-10s FAILED  %02d:%02d:%02d' "$stage" $((elapsed/3600)) $(((elapsed%3600)/60)) $((elapsed%60)))")
+    summary+=("$(printf '  %-18s FAILED  %s' "$stage" "$(duration "$elapsed")")")
+    log "✗ $stage FAILED after $(duration "$elapsed")"
+    # At info the console held back most of what led up to it: the end of the log is
+    # what anyone would look at first.
+    if [ "$LOG_LEVEL" = info ]; then
+      echo "  the end of $logfile:"
+      tail -c 200000 "$logfile" | tr '\r' '\n' | grep -v '^\s*$' | tail -n 25 | sed 's/^/  | /'
+    fi
+    hr
     printf '%s\n' "${summary[@]}"
     echo "stage '$stage' failed — see $logfile" >&2
     exit 1
@@ -1293,7 +1389,7 @@ done
 
 total=$((SECONDS - overall_start))
 hr
-echo "run $RUN_ID complete in $((total / 3600))h $(((total % 3600) / 60))m"
+echo "run $RUN_ID complete in $(duration "$total")"
 printf '%s\n' "${summary[@]}"
 hr
 echo "dist/:"

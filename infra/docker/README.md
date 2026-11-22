@@ -183,7 +183,27 @@ docker compose run -d --name ratmap-global infra global all
 docker logs -f ratmap-global
 ```
 
-Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume.
+Per-stage logs also land in `/work/logs/<run-id>-<stage>.log` inside the volume, and
+they hold everything each stage wrote. The console is the info-level view of it: a line
+as each stage starts and ends, one live progress line while it runs, and between them
+only results (`built dist/peaks-global.pmtiles (412 MB)`), warnings and failures:
+
+```
+[17:17:13] ▶ peaks
+  ⠹ peaks  [████████████░░░░░░░░] 111/184  prominence: scotland  41:07
+```
+
+The bar counts what the stage counts: continents read by the OSM stages, regions
+scored by prominence, regions built by `contours` and `avalanche`; and tippecanoe's,
+pmtiles' and curl's own percentages while those run. `regions`, which is nearly all
+fetching, measures its bar in the catalogue's `estimatedBytes` rather than in regions
+(`4.1/310 GB  37/184 regions built`), so a 16 MB region and a 20 GB one do not count
+the same; `contours` adds how far its DEM fetch-ahead has got (`· fetched 9/62 DEMs`). Under
+`docker logs` there is no live line: the same status is printed as a line when the
+step changes, and at most once a minute between. When a stage fails, the last 25 lines
+of its log follow the failure. `RATMAP_LOG_LEVEL=debug` (or `global --debug ...`) puts
+everything on the console as well, as it used to be. The renderer is
+`scripts/tools/cmd/stage-console`.
 
 ### Stages
 

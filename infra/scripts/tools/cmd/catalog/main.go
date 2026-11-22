@@ -5,6 +5,7 @@
 //	catalog region-vars avalanche REGIONS_JSON ID ZMIN      # build-avalanche.sh
 //	catalog ids       REGIONS_JSON [FLAG [REGEX]]           # build-global.sh region_ids
 //	catalog bboxes    REGIONS_JSON ID...                    # build-global.sh region_bboxes
+//	catalog bytes     REGIONS_JSON ID...                    # build-global.sh stage_regions
 //	catalog dist-gb   REGIONS_JSON DIST_DIR                 # build-global.sh catalogue_dist_gb
 //	catalog peaks-mem REGIONS_JSON RES WORKERS PER_FETCH_GB BYTES_PER_PX  # peaks_mem_gb
 //
@@ -34,6 +35,7 @@ import (
 const usage = `usage: catalog region-vars region|contours|avalanche REGIONS_JSON ID [ZMIN]
        catalog ids REGIONS_JSON [FLAG [REGEX]]
        catalog bboxes REGIONS_JSON ID...
+       catalog bytes REGIONS_JSON ID...
        catalog dist-gb REGIONS_JSON DIST_DIR
        catalog peaks-mem REGIONS_JSON RES WORKERS PER_FETCH_GB BYTES_PER_PX`
 
@@ -105,6 +107,12 @@ func run(args []string, out io.Writer) error {
 			return err
 		}
 		return bboxes(out, regions, args[2:])
+	case "bytes":
+		regions, err := load(args[1])
+		if err != nil {
+			return err
+		}
+		return estimatedBytes(out, regions, args[2:])
 	case "dist-gb":
 		if len(args) != 3 {
 			return errUsage
@@ -393,6 +401,31 @@ func bboxes(out io.Writer, regions []*region, idList []string) error {
 			return err
 		}
 		fmt.Fprintln(out, id+" "+strings.Join(text, " "))
+	}
+	return nil
+}
+
+// estimatedBytes: "ID BYTES" for each region, from the catalogue's estimate (0 where it
+// has none) — what the regions stage weights its progress bar by, since one region can be
+// a thousand times another's download.
+func estimatedBytes(out io.Writer, regions []*region, idList []string) error {
+	by := map[string]*region{}
+	for _, r := range regions {
+		by[r.ID] = r
+	}
+	for _, id := range idList {
+		r, ok := by[id]
+		if !ok {
+			return fmt.Errorf("no region %q in regions.json", id)
+		}
+		var n float64
+		if r.EstimatedBytes != "" {
+			var err error
+			if n, err = r.EstimatedBytes.Float64(); err != nil {
+				return fmt.Errorf("region %s: estimatedBytes %q", r.ID, r.EstimatedBytes)
+			}
+		}
+		fmt.Fprintf(out, "%s %d\n", id, int64(n))
 	}
 	return nil
 }

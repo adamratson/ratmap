@@ -298,7 +298,8 @@ func runRegions(o opts, regionsPath string, lons, lats []float64) (map[int]float
 			submit(k + workers)
 		}
 
-		fmt.Printf("==> prominence: %s\n", r.ID)
+		// "(i/n)": build-global.sh's progress bar reads it (tools/cmd/stage-console).
+		fmt.Printf("==> prominence: %s (%d/%d)\n", r.ID, k+1, len(order))
 		os.Stderr.Write(res.log)
 		if res.code != 0 {
 			fmt.Fprintf(os.Stderr, "  ! no DEM for %s — its peaks keep no prominence\n", r.ID)

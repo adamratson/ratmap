@@ -1,0 +1,27 @@
+# Copy from .env.example and fill in after SETUP.md.
+S3_BUCKET=ratmap-tiles
+S3_ENDPOINT=https://uk-lon-1.katapultobjects.com
+S3_REGION=uk-lon-1
+PUBLIC_BASE_URL=https://ratmap-tiles.uk-lon-1.katapultobjects.com
+
+# From the Katapult console: Object Storage -> your bucket -> Access Keys -> Create.
+AWS_ACCESS_KEY_ID=7ea73b1b373141ee9d8df9ec5058a027
+AWS_SECRET_ACCESS_KEY=ead57386c4694e3fb6bb1c02fa02b2c1
+
+# Retained for the ~2-week R2 rollback window (see plans/krystal-migration.md §5) — not
+# read by upload.sh anymore, kept here only so the credentials aren't lost.
+R2_BUCKET=ratmap-tiles
+R2_ACCOUNT_ID=35ab5d048a540defac43f9253bf1d8c7
+R2_PUBLIC_URL=https://pub-1a40001ed7db4ec58589d03151a30bad.r2.dev
+R2_JURISDICTION=eu
+R2_ACCESS_KEY_ID=9cbf0be547d3c8025544ff97be0f7f92
+R2_SECRET_ACCESS_KEY=e6de2071c7e6e8971512f24a6e2b8d28f9813ee1f63800bb7aaa7d10bfceca0e
+
+CIVO_ACCESS_KEY_ID=CM602QZPEWIXP3IIYQFQ
+CIVO_SECRET_ACCESS_KEY=sB2RL68tqxZ7qmGX2LiSiq3sEBchhan0Fz2A8n2s
+CIVO_BUCKET=ratmap-tiles
+
+SCALEWAY_ACCESS_KEY_ID=SCW9ZQWHW8ES6SE1T4KN
+SCALEWAY_SECRET_ACCESS_KEY=f687f974-bff2-4837-bf64-7983673bf1f0
+SCALEWAY_BUCKET=ratmap-tiles
+SCALEWAY_REGION=fr-par

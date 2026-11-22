@@ -62,7 +62,7 @@ import { renderLegend } from './ui/legend-view';
 import { isCoarsePointer, prefersDockedSheet } from './ui/pointer';
 import { renderSettingsView, syncDebugOverlay } from './ui/settings-view';
 import { BottomSheet } from './ui/sheet';
-import { SheetViews } from './ui/sheet-views';
+import { SheetViews, type View } from './ui/sheet-views';
 import { StatusCentre } from './ui/status';
 import { ThemeController } from './ui/theme';
 
@@ -156,8 +156,24 @@ const views = new SheetViews({
   onViewChange: (view) => {
     if (view === 'print') printer?.show();
     else printer?.hide();
+    syncMainSearch(view);
   },
 });
+
+/**
+ * Views with a search of their own, which the main search box makes way for while they are
+ * open. Maps searched regions in a box of its own, directly under "Search places and
+ * summits": two search fields, stacked, each looking like the other.
+ */
+const VIEWS_WITH_OWN_SEARCH: ReadonlySet<View> = new Set(['regions']);
+
+function syncMainSearch(view: View | null): void {
+  const box = document.querySelector<HTMLElement>('#search');
+  if (!box) return;
+  const hide = view !== null && VIEWS_WITH_OWN_SEARCH.has(view);
+  if (hide && !box.hidden) searchBox.hideResults();
+  box.hidden = hide;
+}
 
 // Five, all of which fit a phone's row. There were seven controls — five chips and two
 // icon buttons — and on an iPhone the row scrolled: Layers cut off at the edge, Print out

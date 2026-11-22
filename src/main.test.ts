@@ -598,6 +598,23 @@ const stubPrefersDark = (dark: boolean): void => {
     expect(body.querySelector('.layers-key .legend-section')).not.toBeNull();
   });
 
+  it('shows one search box at a time: Maps has its own, and the main one makes way', async () => {
+    bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
+    await loadMainQuietly();
+    const search = document.querySelector<HTMLElement>('#search')!;
+    const chip = (view: string) => document.querySelector<HTMLButtonElement>(`#chips [data-chip="${view}"]`)!;
+
+    chip('regions').click();
+    expect(search.hidden).toBe(true);
+
+    // Back as soon as the view goes, whichever way it goes.
+    chip('layers').click();
+    expect(search.hidden).toBe(false);
+    chip('regions').click();
+    chip('regions').click();
+    expect(search.hidden).toBe(false);
+  });
+
   it('keeps avalanche terrain in Layers, not Settings', async () => {
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
     await loadMainQuietly();

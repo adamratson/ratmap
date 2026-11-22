@@ -94,6 +94,9 @@ test.describe('search across downloaded regions', () => {
 
     await openRegionsSheet(page);
     await downloadTestRegion(page);
+    // Maps has its own search; the main one is back once Maps is closed.
+    await expect(page.locator('#search')).toBeHidden();
+    await page.keyboard.press('Escape');
 
     await searchFor(page, VILLAGE);
     // Among the results, not necessarily first: they are ordered by distance from the map
@@ -102,9 +105,6 @@ test.describe('search across downloaded regions', () => {
       has: page.locator('.result-name', { hasText: new RegExp(`^${VILLAGE}$`) }),
     });
     await expect(village.locator('.result-meta')).toHaveText(/^village · /);
-    // The first Escape dismisses the results, the second the regions sheet still open
-    // behind them — reopening it from its chip would otherwise toggle it shut.
-    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
 
     // Delete is two taps: the second confirms.
@@ -114,6 +114,7 @@ test.describe('search across downloaded regions', () => {
     await action.click();
     await action.click();
     await expect(action).toHaveText(/Download/);
+    await page.keyboard.press('Escape');
 
     await searchFor(page, VILLAGE);
     await expect(page.locator('#search-results')).toHaveText(NO_REGION_HINT);

@@ -94,8 +94,8 @@ test.describe('search across downloaded regions', () => {
 
     await openRegionsSheet(page);
     await downloadTestRegion(page);
-    // Maps has its own search; the main one is back once Maps is closed.
-    await expect(page.locator('#search')).toBeHidden();
+    // While Maps is open the one search box searches regions; closed, it searches places.
+    await expect(page.locator('#search-input')).toHaveAttribute('placeholder', 'Search regions');
     await page.keyboard.press('Escape');
 
     await searchFor(page, VILLAGE);

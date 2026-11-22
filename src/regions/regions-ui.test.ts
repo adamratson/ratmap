@@ -238,6 +238,35 @@ describe('a catalogue that covers the globe', () => {
     expect(container.querySelector('.regions-hint')!.textContent).toBe('');
   });
 
+  it('filters with the app’s own search box when given it, and draws none of its own', async () => {
+    const external = document.createElement('input');
+    external.value = 'polyn';
+    const container = document.createElement('div');
+    document.body.append(container);
+    await renderRegionsSheet({
+      map: centredOn(-4.5, 56.8) as MLMap,
+      registry: {} as never,
+      theme: () => 'light',
+      container,
+      onStatus: vi.fn(),
+      searchInput: external,
+    });
+
+    expect(container.querySelector('.regions-search')).toBeNull();
+    // Opened on what the box held.
+    expect(names(container)).toEqual(['Polynésie française']);
+
+    external.value = 'scot';
+    external.dispatchEvent(new Event('input'));
+    expect(names(container)[0]).toBe('Scotland');
+
+    // Once the view has gone, the box is the app's again: typing in it changes nothing here.
+    container.remove();
+    external.value = 'polyn';
+    external.dispatchEvent(new Event('input'));
+    expect(names(container)[0]).toBe('Scotland');
+  });
+
   it('offers the regions covering where the map is pointed', async () => {
     const container = await openSheet(centredOn(-4.5, 56.8));
 

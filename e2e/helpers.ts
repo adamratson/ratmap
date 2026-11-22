@@ -179,11 +179,19 @@ const DOWNLOAD_TIMEOUT_MS = 240_000;
  * losing tickets are several hundred megabytes over the wire.
  */
 export async function focusTestRegionRow(page: Page): Promise<void> {
-  const search = page.locator('.regions-search');
+  const search = regionSearch(page);
   if (await search.isVisible()) {
     await search.fill(TEST_REGION);
     await page.locator('.regions-list .region-row').first().waitFor({ state: 'visible' });
   }
+}
+
+/**
+ * The box that searches regions while Maps is open: the app's main search box, lent to the
+ * view rather than a second one of its own.
+ */
+export function regionSearch(page: Page) {
+  return page.locator('#search-input[placeholder="Search regions"]');
 }
 
 /**

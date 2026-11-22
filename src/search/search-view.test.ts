@@ -29,6 +29,7 @@ const { SearchBox } = await import('./search-view');
 describe('SearchBox focus after choosing a result', () => {
   let input: HTMLInputElement;
   let results: HTMLUListElement;
+  let box: InstanceType<typeof SearchBox>;
   let toast: ReturnType<typeof vi.fn<StatusCentre['toast']>>;
   let onCoordinates: ReturnType<typeof vi.fn<(coords: { lat: number; lng: number }) => void>>;
 
@@ -56,7 +57,7 @@ describe('SearchBox focus after choosing a result', () => {
     searchImpl.empty = false;
     searchImpl.regions = 0;
     searchImpl.synced = [];
-    new SearchBox({
+    box = new SearchBox({
       container,
       input,
       results,
@@ -138,5 +139,27 @@ describe('SearchBox focus after choosing a result', () => {
     searchImpl.regions = 1;
     await typeAndWaitForResults('zzz');
     expect(results.textContent).toBe('No matches');
+  });
+
+  describe('lent to another view', () => {
+    it('searches nothing of its own, and says what it now searches', async () => {
+      const lent = box.lend('Search regions');
+      expect(lent).toBe(input);
+      expect(input.placeholder).toBe('Search regions');
+      expect(input.getAttribute('aria-label')).toBe('Search regions');
+
+      input.value = 'Ben Nev';
+      input.dispatchEvent(new Event('input'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(results.hidden).toBe(true);
+    });
+
+    it('comes back as the place search, cleared', () => {
+      const original = input.placeholder;
+      box.lend('Search regions').value = 'scot';
+      box.takeBack();
+      expect(input.placeholder).toBe(original);
+      expect(input.value).toBe('');
+    });
   });
 });

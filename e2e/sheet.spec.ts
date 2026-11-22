@@ -58,6 +58,23 @@ test.describe('the sheet', () => {
     expect(view.zoom).toBeCloseTo(13.5, 1);
   });
 
+  test('keeps the search box and chips in place when Maps opens', async ({ page }) => {
+    // Maps used to hide the main search box for its own, which moved the chip row up
+    // and back down under the thumb every time it opened and closed.
+    const chipsOffset = () =>
+      page.evaluate(() => {
+        const sheet = document.querySelector('#sheet')!.getBoundingClientRect();
+        return document.querySelector('#chips')!.getBoundingClientRect().top - sheet.top;
+      });
+    const before = await chipsOffset();
+
+    await openChip(page, 'Maps');
+    await expect(page.locator('#search-input')).toBeVisible();
+    await expect(page.locator('#search-input')).toHaveAttribute('placeholder', 'Search regions');
+    expect(await chipsOffset()).toBeCloseTo(before, 0);
+    await expect(page.locator('input[type="search"]')).toHaveCount(1);
+  });
+
   test('opens a destination from its chip, and closes it from the same chip', async ({ page }) => {
     const routes = page.locator('#chips .chip', { hasText: 'Routes' });
     await expect(routes).toHaveAttribute('aria-expanded', 'false');

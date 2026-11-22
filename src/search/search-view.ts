@@ -53,6 +53,12 @@ export class SearchBox {
    */
   private highlighted = -1;
 
+  /**
+   * Set while another view has the box — see {@link lend}. What was here before, so it
+   * can be put back; null while it is the app's own.
+   */
+  private lent: { placeholder: string; label: string } | null = null;
+
   constructor(options: SearchBoxOptions) {
     this.input = options.input;
     this.results = options.results;
@@ -64,6 +70,7 @@ export class SearchBox {
     this.viewInset = options.viewInset ?? (() => NO_INSET);
 
     this.input.addEventListener('input', () => {
+      if (this.lent) return;
       void this.run(this.input.value);
     });
 
@@ -72,6 +79,7 @@ export class SearchBox {
     // Load the index on first focus rather than at startup: it pulls the SQLite runtime plus
     // the index, and the map should render first.
     this.input.addEventListener('focus', () => {
+      if (this.lent) return;
       void this.search.load().catch((err: Error) => {
         this.status.toast(`Search is unavailable: ${err.message}`, { kind: 'warn' });
       });
@@ -81,6 +89,35 @@ export class SearchBox {
       if (!(event.target instanceof Node)) return;
       if (!options.container.contains(event.target)) this.hideResults();
     });
+  }
+
+  /**
+   * Hand the box to a view with a search of its own (Maps, searching regions): it says what
+   * it now searches, starts empty, and stops answering with places. The box stays where it
+   * is — showing a second one, or hiding this one, moved the peek row under the thumb.
+   * Returns the input for the view to listen to.
+   */
+  lend(placeholder: string): HTMLInputElement {
+    if (!this.lent) {
+      this.lent = {
+        placeholder: this.input.placeholder,
+        label: this.input.getAttribute('aria-label') ?? '',
+      };
+    }
+    this.hideResults();
+    this.input.value = '';
+    this.input.placeholder = placeholder;
+    this.input.setAttribute('aria-label', placeholder);
+    return this.input;
+  }
+
+  /** The box is the app's place search again, cleared of the other view's query. */
+  takeBack(): void {
+    if (!this.lent) return;
+    this.input.value = '';
+    this.input.placeholder = this.lent.placeholder;
+    this.input.setAttribute('aria-label', this.lent.label);
+    this.lent = null;
   }
 
   resultsOpen(): boolean {

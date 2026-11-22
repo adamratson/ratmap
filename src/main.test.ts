@@ -598,21 +598,25 @@ const stubPrefersDark = (dark: boolean): void => {
     expect(body.querySelector('.layers-key .legend-section')).not.toBeNull();
   });
 
-  it('shows one search box at a time: Maps has its own, and the main one makes way', async () => {
+  it('keeps one search box where it is, searching regions while Maps is open', async () => {
+    // Hiding it moved the whole peek row, chips and all, every time Maps opened and shut.
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
     await loadMainQuietly();
-    const search = document.querySelector<HTMLElement>('#search')!;
+    const box = document.querySelector<HTMLElement>('#search')!;
+    const input = document.querySelector<HTMLInputElement>('#search-input')!;
     const chip = (view: string) => document.querySelector<HTMLButtonElement>(`#chips [data-chip="${view}"]`)!;
 
     chip('regions').click();
-    expect(search.hidden).toBe(true);
+    expect(box.hidden).toBe(false);
+    expect(input.placeholder).toBe('Search regions');
+    expect(document.querySelectorAll('input[type="search"]')).toHaveLength(1);
 
-    // Back as soon as the view goes, whichever way it goes.
+    // The app's place search again as soon as Maps goes, whichever way it goes.
     chip('layers').click();
-    expect(search.hidden).toBe(false);
+    expect(input.placeholder).toBe('Search places and summits');
     chip('regions').click();
     chip('regions').click();
-    expect(search.hidden).toBe(false);
+    expect(input.placeholder).toBe('Search places and summits');
   });
 
   it('keeps avalanche terrain in Layers, not Settings', async () => {

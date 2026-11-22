@@ -62,7 +62,7 @@ import { renderLegend } from './ui/legend-view';
 import { isCoarsePointer, prefersDockedSheet } from './ui/pointer';
 import { renderSettingsView, syncDebugOverlay } from './ui/settings-view';
 import { BottomSheet } from './ui/sheet';
-import { SheetViews, type View } from './ui/sheet-views';
+import { SheetViews } from './ui/sheet-views';
 import { StatusCentre } from './ui/status';
 import { ThemeController } from './ui/theme';
 import { coordsGestureUsed, coordsHint, markCoordsGestureUsed } from './ui/hints';
@@ -157,24 +157,11 @@ const views = new SheetViews({
   onViewChange: (view) => {
     if (view === 'print') printer?.show();
     else printer?.hide();
-    syncMainSearch(view);
+    // Maps borrows the main search box for regions (see openRegionsView); any other view
+    // gives it back.
+    if (view !== 'regions') searchBox.takeBack();
   },
 });
-
-/**
- * Views with a search of their own, which the main search box makes way for while they are
- * open. Maps searched regions in a box of its own, directly under "Search places and
- * summits": two search fields, stacked, each looking like the other.
- */
-const VIEWS_WITH_OWN_SEARCH: ReadonlySet<View> = new Set(['regions']);
-
-function syncMainSearch(view: View | null): void {
-  const box = document.querySelector<HTMLElement>('#search');
-  if (!box) return;
-  const hide = view !== null && VIEWS_WITH_OWN_SEARCH.has(view);
-  if (hide && !box.hidden) searchBox.hideResults();
-  box.hidden = hide;
-}
 
 // Five, all of which fit a phone's row. There were seven controls — five chips and two
 // icon buttons — and on an iPhone the row scrolled: Layers cut off at the edge, Print out
@@ -788,13 +775,17 @@ function openLayersView(): void {
 }
 
 function openRegionsView(initialQuery?: string): void {
+  // One search box, which searches regions while Maps is open: a second box stacked under
+  // it read as the same thing twice, and hiding the main one moved the peek row every time.
+  const searchInput = searchBox.lend('Search regions');
+  if (initialQuery !== undefined) searchInput.value = initialQuery;
   views.open('regions', (body) => {
     void renderRegionsSheet({
       map,
       registry,
       theme: () => theme.get(),
       container: body,
-      ...(initialQuery === undefined ? {} : { initialQuery }),
+      searchInput,
       onStatus: (message, kind) => status.toast(message, { kind }),
       offlineState: () => appUpdates?.offlineState() ?? 'unsupported',
       onRegionsChanged: () => {

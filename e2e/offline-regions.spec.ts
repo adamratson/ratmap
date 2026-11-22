@@ -13,6 +13,7 @@ import {
   styleLayers,
   TEST_REGION,
   waitForServiceWorkerControl,
+  regionSearch,
 } from './helpers';
 
 test.describe('offline regions', () => {
@@ -274,14 +275,14 @@ test.describe('the region catalogue', () => {
   test('searches the rest of the catalogue by name', async ({ page }) => {
     await openRegionsSheet(page);
 
-    await page.locator('.regions-search').fill(TEST_REGION);
+    await regionSearch(page).fill(TEST_REGION);
     await expect(page.locator('.regions-hint')).toHaveText('1 match.');
     await expect(page.locator('.region-name')).toHaveText(new RegExp(TEST_REGION));
     // Size up front: this is a decision about megabytes on a phone. Only the size — not a
     // list of what the region is made of.
     await expect(page.locator('.region-meta')).toHaveText(/ [kMG]B$/);
 
-    await page.locator('.regions-search').fill('zzzznowhere');
+    await regionSearch(page).fill('zzzznowhere');
     await expect(page.locator('.regions-hint')).toHaveText('No region matches that name.');
     await expect(page.locator('.region-row')).toHaveCount(0);
   });
@@ -303,7 +304,7 @@ test.describe('without persistent storage (C1)', () => {
     ).toBeVisible();
 
     await openRegionsSheet(page);
-    await page.locator('.regions-search').fill(TEST_REGION);
+    await regionSearch(page).fill(TEST_REGION);
     await page.locator('.region-action').first().click();
 
     // Refused with a reason, never a silent no-op and never a download that the browser

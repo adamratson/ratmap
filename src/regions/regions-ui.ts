@@ -103,6 +103,9 @@ function refreshSheet(): void {
   void renderRegionsSheet(currentSheet.deps);
 }
 
+/** Stops the current drawing listening to its search box — see renderRegionsSheet. */
+let detachSearch: (() => void) | null = null;
+
 export interface RegionsUiDeps {
   map: MLMap;
   registry: TileSourceRegistry;
@@ -112,6 +115,14 @@ export interface RegionsUiDeps {
   onStatus(message: string, kind: 'ok' | 'warn' | 'error'): void;
   /** Open on this search, when something has already said which region is wanted. */
   initialQuery?: string;
+  /**
+   * A search box outside the sheet to filter with — the app's main one — instead of a box
+   * of the view's own. Two boxes stacked looked like the same thing twice; hiding the main
+   * one moved the whole peek row up and down every time Maps opened and closed. One box
+   * that stays put and changes what it searches does neither. Its value is the query, so
+   * an `initialQuery` goes in it before the view is drawn.
+   */
+  searchInput?: HTMLInputElement;
   /**
    * What is on disk may have changed: after every download attempt, since a paused or
    * failed one can still have completed some artifacts, and after a delete. Not after a
@@ -228,12 +239,18 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   // A download or a delete re-renders this whole sheet. Losing what someone had typed at
   // that moment would throw them back to the nearby list with their region no longer in
   // it — the one search they had already done, undone by finishing.
-  const previousQuery =
-    container.querySelector<HTMLInputElement>('.regions-search')?.value ?? deps.initialQuery ?? '';
+  const external = deps.searchInput;
+  const previousQuery = external
+    ? external.value
+    : (container.querySelector<HTMLInputElement>('.regions-search')?.value ?? deps.initialQuery ?? '');
 
   container.innerHTML = `
-    <input class="regions-search" type="search" enterkeyhint="search" autocomplete="off"
-           placeholder="Search regions" aria-label="Search regions" />
+    ${
+      external
+        ? ''
+        : `<input class="regions-search" type="search" enterkeyhint="search" autocomplete="off"
+           placeholder="Search regions" aria-label="Search regions" />`
+    }
     <p class="regions-notice" role="status" hidden></p>
     <p class="regions-hint" aria-live="polite"></p>
     <ul class="regions-list"></ul>
@@ -246,7 +263,10 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
 
   const hint = container.querySelector<HTMLParagraphElement>('.regions-hint')!;
   const notice = container.querySelector<HTMLParagraphElement>('.regions-notice')!;
-  const search = container.querySelector<HTMLInputElement>('.regions-search')!;
+  const search = external ?? container.querySelector<HTMLInputElement>('.regions-search')!;
+  // Only one drawing listens to an outside box at a time: a download redraws the view.
+  detachSearch?.();
+  detachSearch = null;
   const list = container.querySelector<HTMLUListElement>('.regions-list')!;
   currentSheet = { container, list, deps };
 
@@ -265,7 +285,8 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
   }
   const manifest = catalogue.manifest;
   if (!manifest) {
-    search.hidden = true;
+    // Not the app's own search box, which is never the view's to hide.
+    if (!external) search.hidden = true;
     return;
   }
 
@@ -274,7 +295,7 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
     empty.className = 'places-empty';
     empty.textContent = 'No regions published yet.';
     list.append(empty);
-    search.hidden = true;
+    if (!external) search.hidden = true;
     return;
   }
 
@@ -304,7 +325,16 @@ export async function renderRegionsSheet(deps: RegionsUiDeps): Promise<void> {
 
   // No debounce: filtering a few hundred strings is not work, and a delay on a search
   // that already has an answer is felt as lag.
-  search.addEventListener('input', () => draw(search.value));
+  const onInput = (): void => {
+    // The view has gone (closed, or redrawn): the box is the app's again.
+    if (!list.isConnected) {
+      search.removeEventListener('input', onInput);
+      return;
+    }
+    draw(search.value);
+  };
+  search.addEventListener('input', onInput);
+  detachSearch = () => search.removeEventListener('input', onInput);
   search.value = previousQuery;
   draw(previousQuery);
 

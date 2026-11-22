@@ -50,6 +50,12 @@ export interface RegionCoverageOptions {
    * "Elevation profile needs a downloaded region" over one that had been there all along.
    */
   onDownloadedChange?: () => void;
+  /**
+   * The catalogue of regions on offer has arrived, or changed. What depends on it — the
+   * planner's "no map downloaded here, get Scotland" — was worked out against none, if it
+   * was drawn before.
+   */
+  onCatalogueChange?: () => void;
 }
 
 export class RegionCoverage {
@@ -59,6 +65,7 @@ export class RegionCoverage {
   private readonly notice: HTMLButtonElement;
   private readonly onRestoreProblem?: (message: string | null) => void;
   private readonly onDownloadedChange?: () => void;
+  private readonly onCatalogueChange?: () => void;
 
   /**
    * Regions whose archives are actually present in OPFS.
@@ -105,6 +112,7 @@ export class RegionCoverage {
     this.notice = options.notice;
     this.onRestoreProblem = options.onRestoreProblem;
     this.onDownloadedChange = options.onDownloadedChange;
+    this.onCatalogueChange = options.onCatalogueChange;
 
     // `move`, not `zoom`: the notice names whichever region covers the map's *centre*
     // (`covering` below), so it has to be re-evaluated on a pure pan too, not only when the
@@ -194,6 +202,7 @@ export class RegionCoverage {
     // Compared rather than announced on every draw: a theme change redraws everything, and
     // the cached catalogue and the fresh one usually describe the same regions.
     const changed = downloadedKey(restored) !== downloadedKey(this.downloaded);
+    const catalogueChanged = downloadedKey(regions) !== downloadedKey(this.catalogue);
     this.downloaded = restored;
     this.catalogue = regions;
     // Deleting a region has to bring the notice back, as much as downloading one hides it.
@@ -205,6 +214,7 @@ export class RegionCoverage {
         : null,
     );
     if (changed) this.onDownloadedChange?.();
+    if (catalogueChanged) this.onCatalogueChange?.();
   }
 
   /**

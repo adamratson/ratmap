@@ -59,6 +59,7 @@ const BASE: RouteSummary = {
   name: 'Ben Nevis',
   saved: false,
   unsaved: true,
+  startPrompt: null,
 };
 
 function render(summary: Partial<RouteSummary>): HTMLElement {
@@ -845,5 +846,82 @@ describe('pasting a route', () => {
     submit(container, '   ');
     expect(planner.load).not.toHaveBeenCalled();
     expect(opened.onStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('before a route is drawn', () => {
+  function renderWith(summary: Partial<RouteSummary>, extra: Record<string, unknown> = {}) {
+    const container = document.createElement('div');
+    const planner = {
+      getDraft: () => ({ getWaypoints: () => extra.waypoints ?? [] }),
+      dismissStartPrompt: vi.fn(),
+      startFromMyLocation: vi.fn(),
+    } as unknown as RoutePlanner;
+    const onGetRegion = vi.fn();
+    renderRoutePanel(
+      { ...BASE, ...summary },
+      {
+        planner,
+        container,
+        onPlanStarted: vi.fn(),
+        onStatus: vi.fn(),
+        onGetRegion,
+        viewCentre: () => [-5, 56.8],
+        ...(extra.regionOffer ? { regionOffer: extra.regionOffer as never } : {}),
+      },
+    );
+    return { container, planner, onGetRegion };
+  }
+
+  it('says there is no map here before any point is placed, and offers the region', () => {
+    const regionOffer = vi.fn(() => ({
+      kind: 'region',
+      region: { name: 'Scotland', totalBytes: 1_400_000_000 },
+    }));
+    const { container, onGetRegion } = renderWith(
+      { waypointCount: 0, profileNote: 'Elevation profile needs a downloaded region.' },
+      { regionOffer },
+    );
+
+    // Asked about where the map is looking: there is no route yet.
+    expect(regionOffer).toHaveBeenCalledWith([[-5, 56.8]]);
+    expect(container.querySelector('.route-missing-map')!.textContent).toMatch(/straight lines/);
+    const get = container.querySelector<HTMLButtonElement>('.route-get-region')!;
+    expect(get.textContent).toMatch(/^Get Scotland \(/);
+    get.click();
+    expect(onGetRegion).toHaveBeenCalledWith('Scotland');
+    // Said once, not twice.
+    expect(container.textContent).not.toContain('Elevation profile needs a downloaded region.');
+  });
+
+  it('says nothing about maps where one is downloaded', () => {
+    const { container } = renderWith({ waypointCount: 0 }, { regionOffer: () => null });
+    expect(container.querySelector('.route-missing-map')).toBeNull();
+  });
+
+  it('asks where the route starts, while it is still to come', () => {
+    const { container, planner } = renderWith({
+      waypointCount: 1,
+      startPrompt: { kind: 'tap', awayM: 120_000 },
+    });
+    expect(container.querySelector('.route-start-prompt')!.textContent).toMatch(
+      /You’re 120 km away\. Tap the map where you’ll start\./,
+    );
+    [...container.querySelectorAll<HTMLButtonElement>('.route-start-prompt button')][0].click();
+    expect(planner.dismissStartPrompt).toHaveBeenCalled();
+  });
+
+  it('offers to start from where you are, unless it is already asking', () => {
+    const button = (container: HTMLElement) =>
+      [...container.querySelectorAll<HTMLButtonElement>('.route-tools button')].find(
+        (b) => b.textContent === 'From my location',
+      )!;
+    const idle = renderWith({ waypointCount: 0 });
+    expect(button(idle.container).hidden).toBe(false);
+    button(idle.container).click();
+    expect(idle.planner.startFromMyLocation).toHaveBeenCalled();
+
+    const asking = renderWith({ waypointCount: 1, startPrompt: { kind: 'locating' } });
+    expect(button(asking.container).hidden).toBe(true);
   });
 });

@@ -16,6 +16,8 @@ export interface LocationUiOptions {
   /** The location dot was tapped. */
   onDotClick: (lngLat: [number, number]) => void;
   viewInset?: () => ViewInset;
+  /** No fix is coming: location refused, or failing. */
+  onPositionUnavailable?: () => void;
 }
 
 export interface LocationUi {
@@ -25,6 +27,8 @@ export interface LocationUi {
    * tap: iOS only asks for the compass from one.
    */
   start(): void;
+  /** Show the dot and fix the position, leaving the map where it is (LocationController.watch). */
+  watch(): void;
 }
 
 export function setUpLocation({
@@ -34,6 +38,7 @@ export function setUpLocation({
   onPosition,
   onDotClick,
   viewInset,
+  onPositionUnavailable,
 }: LocationUiOptions): LocationUi {
   const location: LocationController = new LocationController({
     map,
@@ -101,12 +106,14 @@ export function setUpLocation({
         status.setCondition('location', null);
         break;
       case 'denied':
+        onPositionUnavailable?.();
         status.setCondition('location', {
           message: 'Location access is blocked in browser settings.',
           kind: 'warn',
         });
         break;
       case 'unavailable':
+        onPositionUnavailable?.();
         status.setCondition('location', {
           message: `No position fix yet: ${state.message}`,
           kind: 'warn',
@@ -117,5 +124,5 @@ export function setUpLocation({
     }
   }
 
-  return { location, start };
+  return { location, start, watch: () => location.watch() };
 }

@@ -55,6 +55,8 @@ export interface RoutesUiDeps {
   regionOffer?(points: readonly [number, number][]): RouteRegionOffer | null;
   /** Open the offline regions sheet, searched for one region. */
   onGetRegion?(name: string): void;
+  /** The middle of the map showing, [lng, lat] — where an empty route is about to go. */
+  viewCentre?(): [number, number];
 }
 
 // --- Planning panel -------------------------------------------------------------------
@@ -124,7 +126,7 @@ function planSection(
   }
   if (head.childElementCount > 0) section.append(head);
 
-  if (summary.waypointCount === 0) {
+  if (summary.waypointCount === 0 && !summary.startPrompt) {
     section.append(
       el(
         'p',
@@ -133,6 +135,14 @@ function planSection(
       ),
     );
   }
+
+  const prompt = startPromptBlock(summary, planner);
+  if (prompt) section.append(prompt);
+
+  // Before anything is placed, not after: with no map under it, a route is straight lines
+  // and no profile, which used to be found out only once the points were down.
+  const missingMap = summary.received ? null : missingMapBlock(summary, planner, deps);
+  if (missingMap) section.append(missingMap);
 
   section.append(statsRow(summary));
 
@@ -150,7 +160,8 @@ function planSection(
     if (chart) section.append(chart);
   }
 
-  if (summary.profileNote) {
+  // Said already, with the way to fix it, when there is no map here at all.
+  if (summary.profileNote && !missingMap) {
     section.append(el('p', 'route-note warn', summary.profileNote));
   }
 
@@ -160,7 +171,9 @@ function planSection(
   const avalanche = avalancheSection(summary);
   if (avalanche) section.append(avalanche);
 
-  const straight = straightLegsNote(summary);
+  // The missing-map warning has already said why the legs are straight — unless some were
+  // drawn freehand on purpose, which it does not cover.
+  const straight = missingMap && !summary.hasFreehandLegs ? null : straightLegsNote(summary);
   if (straight) section.append(el('p', 'route-note warn', straight));
 
   section.append(editTools(summary, planner));
@@ -408,8 +421,90 @@ function editTools(summary: RouteSummary, planner: RoutePlanner): HTMLElement {
   const roundTrip = buttonEl('Round trip', () => planner.closeLoop());
   roundTrip.disabled = !summary.canCloseLoop;
   roundTrip.title = 'Add a last leg back to the start';
-  row.append(roundTrip, snapToggle(summary, planner));
+  // Begins an empty route where you are, or puts your position in front of one already
+  // drawn. Hidden while it is already being asked for.
+  const fromHere = buttonEl('From my location', () => planner.startFromMyLocation());
+  fromHere.title = 'Start the route where you are';
+  fromHere.hidden = summary.startPrompt !== null;
+  row.append(roundTrip, fromHere, snapToggle(summary, planner));
   return row;
+}
+
+/**
+ * Where the start is to come from, while it is still to come: the GPS, or a tap. With a way
+ * to let the route start where it already does.
+ */
+function startPromptBlock(summary: RouteSummary, planner: RoutePlanner): HTMLElement | null {
+  const prompt = summary.startPrompt;
+  if (!prompt) return null;
+  const block = el('div', 'route-start-prompt');
+  let text: string;
+  if (prompt.kind === 'locating') {
+    text = 'Finding your location to start from — or tap the map where you’ll start.';
+  } else if (prompt.awayM !== undefined) {
+    // Whole kilometres at this range: "120.0 km away" is false precision.
+    const away = prompt.awayM >= 10_000 ? `${Math.round(prompt.awayM / 1000)} km` : formatDistance(prompt.awayM);
+    text = `You’re ${away} away. Tap the map where you’ll start.`;
+  } else {
+    text = 'Tap the map where you’ll start.';
+  }
+  block.append(el('p', '', text));
+  // Only when there is a waypoint for the route to start at instead.
+  if (summary.waypointCount > 0) {
+    const skip = buttonEl('Start where it is', () => planner.dismissStartPrompt());
+    skip.className = 'route-all';
+    block.append(skip);
+  }
+  return block;
+}
+
+/**
+ * No downloaded map under the route, or under the map where an empty one is about to go:
+ * say what that costs, and offer the region that fixes it.
+ */
+function missingMapBlock(
+  summary: RouteSummary,
+  planner: RoutePlanner,
+  deps: RoutesUiDeps,
+): HTMLElement | null {
+  if (!deps.regionOffer) return null;
+  const waypoints = planner.getDraft().getWaypoints();
+  const points: [number, number][] =
+    waypoints.length > 0
+      ? waypoints.map(({ lng, lat }) => [lng, lat])
+      : deps.viewCentre
+        ? [deps.viewCentre()]
+        : [];
+  if (points.length === 0) return null;
+  const offer = deps.regionOffer(points);
+  if (!offer) return null;
+
+  const block = el('div', 'route-missing-map');
+  if (offer.kind === 'region') {
+    block.append(
+      el(
+        'p',
+        'route-note warn',
+        `No map downloaded here, so routes are straight lines with no elevation profile. Get ${offer.region.name} to route along paths.`,
+      ),
+    );
+    const get = buttonEl(`Get ${offer.region.name} (${formatBytes(offer.region.totalBytes)})`, () =>
+      deps.onGetRegion?.(offer.region.name),
+    );
+    get.className = 'route-get-region';
+    block.append(get);
+  } else {
+    block.append(
+      el(
+        'p',
+        'route-note warn',
+        summary.waypointCount > 1
+          ? 'No one downloaded map covers this route, so it’s straight lines with no elevation profile where the map is missing.'
+          : 'No map downloaded here, so routes are straight lines with no elevation profile.',
+      ),
+    );
+  }
+  return block;
 }
 
 /**

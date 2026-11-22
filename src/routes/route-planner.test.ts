@@ -996,3 +996,103 @@ describe('keeping the route across a reload', () => {
     expect(planner.getLoadedRouteId()).toBe('route-1');
   });
 });
+
+describe('starting a route from a place, or from where you are', () => {
+  const BEN_NEVIS = { lng: SUMMIT[0], lat: SUMMIT[1], name: 'Ben Nevis', ele: 1345 };
+  let requestPosition: Mock<() => void>;
+
+  beforeEach(() => {
+    requestPosition = vi.fn();
+    Object.assign(map, { easeTo: vi.fn() });
+    planner = new RoutePlanner({
+      map: map as unknown as MLMap,
+      registry: registry as unknown as TileSourceRegistry,
+      downloadedRegions: () => regions,
+      onChange: (summary) => summaries.push(summary),
+      theme: () => 'dark',
+      requestPosition,
+    });
+    planner.activate();
+  });
+
+  const waypoints = () => planner.getDraft().getWaypoints();
+
+  it('puts a named place on the end of the route', () => {
+    planner.appendWaypoint(BEN_NEVIS);
+    expect(waypoints()).toEqual([expect.objectContaining({ name: 'Ben Nevis', ele: 1345, lng: SUMMIT[0] })]);
+  });
+
+  it('starts from a fresh fix nearby, in front of the place', () => {
+    planner.updatePosition(ACHINTEE);
+    planner.appendWaypoint(BEN_NEVIS);
+    planner.startFromMyLocation();
+
+    expect(waypoints().map((w) => [w.lng, w.lat])).toEqual([ACHINTEE, SUMMIT]);
+    expect(last().startPrompt).toBeNull();
+    expect(requestPosition).not.toHaveBeenCalled();
+  });
+
+  it('asks the GPS when it has no fix, and starts from the first one', () => {
+    planner.appendWaypoint(BEN_NEVIS);
+    planner.startFromMyLocation();
+
+    expect(requestPosition).toHaveBeenCalled();
+    expect(last().startPrompt).toEqual({ kind: 'locating' });
+
+    planner.updatePosition(ACHINTEE);
+    expect(waypoints().map((w) => [w.lng, w.lat])).toEqual([ACHINTEE, SUMMIT]);
+    expect(last().startPrompt).toBeNull();
+  });
+
+  it('asks for a tap instead of routing from somewhere far away', () => {
+    const EDINBURGH: LngLat = [-3.19, 55.95];
+    planner.updatePosition(EDINBURGH);
+    planner.appendWaypoint(BEN_NEVIS);
+    planner.startFromMyLocation();
+
+    expect(waypoints()).toHaveLength(1);
+    const prompt = last().startPrompt;
+    expect(prompt).toMatchObject({ kind: 'tap' });
+    expect(prompt && 'awayM' in prompt ? prompt.awayM : 0).toBeGreaterThan(100_000);
+
+    // The tap becomes the start — in front, not after the summit.
+    planner.handleMapClick(click(ACHINTEE));
+    expect(waypoints().map((w) => [w.lng, w.lat])).toEqual([ACHINTEE, SUMMIT]);
+    expect(last().startPrompt).toBeNull();
+  });
+
+  it('takes a tap as the start while still waiting on the GPS', () => {
+    planner.appendWaypoint(BEN_NEVIS);
+    planner.startFromMyLocation();
+    planner.handleMapClick(click(CIC_HUT));
+
+    expect(waypoints().map((w) => [w.lng, w.lat])).toEqual([CIC_HUT, SUMMIT]);
+    // A fix arriving afterwards changes nothing.
+    planner.updatePosition(ACHINTEE);
+    expect(waypoints()).toHaveLength(2);
+  });
+
+  it('begins an empty route where you are, however far away that is', () => {
+    planner.updatePosition([-3.19, 55.95]);
+    planner.startFromMyLocation();
+    expect(waypoints().map((w) => [w.lng, w.lat])).toEqual([[-3.19, 55.95]]);
+  });
+
+  it('asks for a tap once the GPS is refused, rather than go on saying it is looking', () => {
+    planner.appendWaypoint(BEN_NEVIS);
+    planner.startFromMyLocation();
+    planner.positionUnavailable();
+    expect(last().startPrompt).toEqual({ kind: 'tap' });
+  });
+
+  it('lets the route start where it already does', () => {
+    planner.appendWaypoint(BEN_NEVIS);
+    planner.startFromMyLocation();
+    planner.dismissStartPrompt();
+
+    expect(last().startPrompt).toBeNull();
+    planner.handleMapClick(click(ACHINTEE));
+    // Back to ordinary taps: on the end.
+    expect(waypoints().map((w) => [w.lng, w.lat])).toEqual([SUMMIT, ACHINTEE]);
+  });
+});

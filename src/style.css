@@ -1946,9 +1946,49 @@ textarea {
    its label and note wrap beside the button rather than pushing the checkbox off-row. */
 .route-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.9rem;
+  gap: 0.6rem 0.9rem;
   margin-top: 0.7rem;
+}
+
+.route-tools button[hidden] {
+  display: none;
+}
+
+/* Asking where the route starts: the next thing to do, so it reads as an instruction. */
+.route-start-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--accent);
+  background: var(--surface-raised);
+}
+
+.route-start-prompt p {
+  flex: 1 1 14rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+.route-missing-map {
+  margin-top: 0.5rem;
+}
+
+.route-get-region {
+  margin-top: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* The settings switch, reused: the same control does the same job in both places. Tighter
@@ -2432,6 +2472,12 @@ textarea {
   font-size: 0.8rem;
   line-height: 1.4;
   color: var(--warn-text);
+}
+
+.sheet-actions button.secondary {
+  background: transparent;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .sheet-actions button:disabled {

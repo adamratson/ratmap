@@ -30,7 +30,7 @@ import type { PMTiles } from 'pmtiles';
 import type { Region, RegionArtifact } from '../regions/manifest';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 import type { Theme } from '../ui/theme';
-import { insetPadding, NO_INSET, type ViewInset } from '../map/view-inset';
+import { insetOffset, insetPadding, NO_INSET, type ViewInset } from '../map/view-inset';
 
 // Ties the pieces together: the draft (route-model), the offline router (router), the
 // elevation profile (terrain-sampler + profile), the map layers and the draggable markers.
@@ -81,6 +81,12 @@ export interface RouteSummary {
   avalancheNote: string | null;
   /** Set while the route on screen is one that arrived as a link, untouched. */
   received: ReceivedLink | null;
+  /**
+   * Where the route's start is still to come from, when it was begun from its far end —
+   * "Route here" on a summit — or from "Start from my location": waiting for a GPS fix, or
+   * for a tap on the map. Null when the start is settled.
+   */
+  startPrompt: StartPrompt | null;
   /** What the route is called: its saved name, or the one Save would suggest. */
   name: string;
   /** Whether the route on screen is a saved one (edited or not). */
@@ -99,6 +105,33 @@ export interface RouteSummary {
    */
   currentDistanceM: number | null;
 }
+
+/**
+ * See {@link RouteSummary.startPrompt}. `locating`: asked the GPS, and a tap will do
+ * instead. `tap`: only a tap will — the fix is too far from the route to start it from
+ * (`awayM`), or there is no GPS to ask.
+ */
+export type StartPrompt = { kind: 'locating' } | { kind: 'tap'; awayM?: number };
+
+/** A place to put a waypoint on, from outside the map: a summit card, a search result. */
+export interface RoutePoint {
+  lng: number;
+  lat: number;
+  name?: string;
+  ele?: number;
+}
+
+/**
+ * How far from the route your position can be and still start it.
+ *
+ * Further than that, "from my location" is almost always someone planning from home: a
+ * leg from there is across a valley system or a country, routed (if at all) over roads the
+ * walk never uses, and slow to work out on a phone. They are asked to tap the start.
+ */
+const START_FROM_LOCATION_MAX_M = 15_000;
+
+/** A fix older than this is not "where you are" any more. */
+const FRESH_FIX_MS = 2 * 60_000;
 
 /** What a route that arrived as a link brought with it, beyond the route itself. */
 export interface ReceivedLink {
@@ -134,6 +167,11 @@ export interface RoutePlannerOptions {
   onStatus?: (message: string, kind: 'ok' | 'warn' | 'error') => void;
   /** Read at the moment the route layers are (re)created, since the theme can change. */
   theme: () => Theme;
+  /**
+   * Ask for a GPS fix, without the map following it. Fixes then arrive through
+   * {@link RoutePlanner.updatePosition}, as they always do.
+   */
+  requestPosition?: () => void;
   /**
    * The route changed in a way worth keeping a copy of — see {@link RoutePlanner.snapshot}.
    * Not on every GPS fix, which `onChange` is: the copy is the route, not where you are on it.
@@ -247,6 +285,11 @@ export class RoutePlanner {
   private readonly theme: () => Theme;
   private readonly onDraftChange?: () => void;
   private readonly viewInset: () => ViewInset;
+  private readonly requestPosition?: () => void;
+  /** See {@link RouteSummary.startPrompt}. */
+  private startPrompt: StartPrompt | null = null;
+  /** When {@link currentPosition} was last set. */
+  private positionAt = 0;
 
   private readonly router: OfflineRouter;
   private draft = new RouteDraft();
@@ -309,6 +352,7 @@ export class RoutePlanner {
     this.theme = options.theme;
     this.onDraftChange = options.onDraftChange;
     this.viewInset = options.viewInset ?? (() => NO_INSET);
+    this.requestPosition = options.requestPosition;
     this.router = new OfflineRouter({
       registry: options.registry,
       downloadedRegions: options.downloadedRegions,
@@ -444,7 +488,11 @@ export class RoutePlanner {
       })
       .length > 0;
 
-    if (onRoute && this.draft.waypointCount >= 2) {
+    if (this.startPrompt && this.draft.waypointCount > 0) {
+      // Asked for: "tap the map where you'll start".
+      this.startPrompt = null;
+      this.draft.insertAt(0, point, meta);
+    } else if (onRoute && this.draft.waypointCount >= 2) {
       this.draft.insertOnLine(point, meta);
     } else {
       this.draft.add(point, meta);
@@ -452,6 +500,84 @@ export class RoutePlanner {
 
     this.afterEdit();
     return true;
+  }
+
+  /**
+   * Put a waypoint at the end of the route — a summit card's "Add to route", or the first
+   * point of a route begun from one.
+   */
+  appendWaypoint(point: RoutePoint): void {
+    if (!this.isEditing()) return;
+    this.draft.add([point.lng, point.lat], this.waypointMeta(point));
+    this.afterEdit();
+  }
+
+  /**
+   * Start the route from where you are: now, if there is a fresh fix near enough; once
+   * one arrives, if not (asking the GPS for it); or, too far away to be the start, by
+   * asking for a tap instead. An empty route simply begins there, wherever that is.
+   */
+  startFromMyLocation(): void {
+    if (!this.isEditing()) return;
+    if (this.currentPosition && Date.now() - this.positionAt < FRESH_FIX_MS) {
+      this.useFixAsStart(this.currentPosition);
+      return;
+    }
+    if (!this.requestPosition) {
+      this.startPrompt = { kind: 'tap' };
+      this.emit();
+      return;
+    }
+    this.startPrompt = { kind: 'locating' };
+    this.requestPosition();
+    this.emit();
+  }
+
+  /** Settle a start prompt with a fix: the start, or too far away to be one. */
+  private useFixAsStart(fix: LngLat): void {
+    if (this.draft.waypointCount === 0) {
+      this.startPrompt = null;
+      this.draft.add(fix, this.snapToPath ? {} : { freehand: true });
+      this.afterEdit();
+      this.map.easeTo({ center: fix, offset: insetOffset(this.viewInset()), duration: 500 });
+      return;
+    }
+    const first = this.draft.getWaypoints()[0];
+    const awayM = distanceMetres(fix, [first.lng, first.lat]);
+    if (awayM > START_FROM_LOCATION_MAX_M) {
+      this.startPrompt = { kind: 'tap', awayM };
+      this.emit();
+      return;
+    }
+    this.startPrompt = null;
+    this.draft.insertAt(0, fix, this.snapToPath ? {} : { freehand: true });
+    this.afterEdit();
+    this.fitToRoute();
+  }
+
+  /**
+   * The GPS will not be giving a fix: refused, or failing. A prompt still waiting on one
+   * asks for a tap instead, rather than go on saying it is finding your location.
+   */
+  positionUnavailable(): void {
+    if (this.startPrompt?.kind !== 'locating') return;
+    this.startPrompt = { kind: 'tap' };
+    this.emit();
+  }
+
+  /** Never mind the start prompt: the route starts where it starts. */
+  dismissStartPrompt(): void {
+    if (!this.startPrompt) return;
+    this.startPrompt = null;
+    this.emit();
+  }
+
+  private waypointMeta(point: RoutePoint): Partial<Waypoint> {
+    return {
+      ...(point.name ? { name: point.name } : {}),
+      ...(typeof point.ele === 'number' ? { ele: point.ele } : {}),
+      ...(this.snapToPath ? {} : { freehand: true }),
+    };
   }
 
   /** Route back to the start — see {@link RouteDraft.closeLoop}. */
@@ -472,6 +598,7 @@ export class RoutePlanner {
   }
 
   clear(): void {
+    this.startPrompt = null;
     this.draft.clear();
     this.loadedRouteId = null;
     this.loadedName = null;
@@ -503,6 +630,7 @@ export class RoutePlanner {
     this.stopFollowing();
     this.inflight?.abort();
     this.inflight = null;
+    this.startPrompt = null;
     this.draft = new RouteDraft();
     this.loadedRouteId = null;
     this.loadedName = null;
@@ -574,6 +702,7 @@ export class RoutePlanner {
    * someone off the stretch they were looking at.
    */
   restore(saved: DraftSnapshot): void {
+    this.startPrompt = null;
     this.stopFollowing();
     this.inflight?.abort();
     this.inflight = null;
@@ -609,6 +738,7 @@ export class RoutePlanner {
     this.stopFollowing();
     this.inflight?.abort();
     this.inflight = null;
+    this.startPrompt = null;
     this.loadedRouteId = route.id ?? null;
     this.loadedName = route.name;
 
@@ -748,6 +878,7 @@ export class RoutePlanner {
     }
     this.follower = new RouteFollower(coords);
     this.followState = null;
+    this.startPrompt = null;
     void this.wakeLock.acquire();
     this.syncEditing();
     this.emit();
@@ -771,6 +902,10 @@ export class RoutePlanner {
    */
   updatePosition(position: LngLat): void {
     this.currentPosition = position;
+    this.positionAt = Date.now();
+    if (this.startPrompt?.kind === 'locating' && this.isEditing()) {
+      this.useFixAsStart(position);
+    }
     if (this.follower) {
       const state = this.follower.update(position);
       this.followState = state;
@@ -1205,6 +1340,7 @@ export class RoutePlanner {
       avalanche: this.avalanche,
       avalancheNote: this.avalancheNote,
       received: this.receivedLink(),
+      startPrompt: this.startPrompt,
       name: this.getName(),
       saved: this.loadedRouteId !== null,
       unsaved: this.hasUnsavedChanges(),

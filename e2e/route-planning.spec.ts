@@ -64,11 +64,11 @@ test.describe('route planning', () => {
     // The straight leg is drawn, and flagged in the panel rather than passed off as a path.
     const layers = await styleLayers(page);
     expect(layers.some((l) => l.id === 'route-line')).toBe(true);
-    // Filtered rather than a bare locator: with no region the panel also warns that the
-    // profile needs one, so two notes are on screen and both are correct.
+    // With no region at all, the one warning says why, and offers the map that fixes it.
     await expect(
       page.locator('.route-note.warn').filter({ hasText: /straight lines/i }),
     ).toBeVisible();
+    await expect(page.locator('.route-get-region')).toBeVisible();
   });
 
   test('routes along real paths from the downloaded region', async ({ page }) => {
@@ -295,6 +295,47 @@ test.describe('route planning', () => {
     const state = await plannerState(page);
     expect(state.legKinds).toEqual(['snapped']);
     expect(state.distanceM).toBeGreaterThan(4000);
+  });
+
+  test('says there is no map here before the first point goes down', async ({ page }) => {
+    await showArea(page, TEST_AREA);
+    await startNewRoute(page);
+    await expect(page.locator('.route-missing-map')).toContainText('straight lines');
+    await expect(page.locator('.route-get-region')).toContainText('Get Andorra');
+  });
+
+  test('routes from where you are to a place picked on the map', async ({ context, page }) => {
+    await context.grantPermissions(['geolocation']);
+    await context.setGeolocation({ longitude: RIDGE[0], latitude: RIDGE[1] });
+    await showArea(page, TEST_AREA);
+
+    // Right-click: the coordinates card, with its way into the planner.
+    await clickMapAt(page, ...TRAILHEAD, { button: 'right' });
+    await page.locator('.sheet-route button', { hasText: 'Route here' }).click();
+
+    await expect.poll(async () => (await plannerState(page)).waypoints).toBe(2);
+    const ends = await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const waypoints = (window as any).__ratmapPlanner.getDraft().getWaypoints();
+      return [waypoints[0], waypoints[waypoints.length - 1]].map((w: { lng: number; lat: number }) => [w.lng, w.lat]);
+    });
+    // From you, to the place.
+    expect(ends[0][0]).toBeCloseTo(RIDGE[0], 3);
+    expect(ends[0][1]).toBeCloseTo(RIDGE[1], 3);
+    expect(ends[1][0]).toBeCloseTo(TRAILHEAD[0], 2);
+    expect(ends[1][1]).toBeCloseTo(TRAILHEAD[1], 2);
+    await expect(page.locator('#chips .chip-mode')).toHaveText('Planning');
+  });
+
+  test('starts a route at a place picked on the map', async ({ page }) => {
+    await showArea(page, TEST_AREA);
+    await clickMapAt(page, ...TRAILHEAD, { button: 'right' });
+    await page.locator('.sheet-route button', { hasText: 'Route from here' }).click();
+
+    await expect.poll(async () => (await plannerState(page)).waypoints).toBe(1);
+    // Planning, so the next tap carries on from it.
+    await clickMapAt(page, ...RIDGE);
+    await expect.poll(async () => (await plannerState(page)).waypoints).toBe(2);
   });
 
   test('keeps an unsaved route across a reload', async ({ page }) => {

@@ -89,6 +89,25 @@ export class LocationController {
     );
   }
 
+  /**
+   * Start watching without the camera following: the dot appears and fixes flow, and the
+   * map stays where the person put it. For the planner's "from my location", which wants
+   * a position, not to be flown across the map to it. Already watching, it does nothing.
+   */
+  watch(): void {
+    if (this.watchId !== null) return;
+    if (!navigator.geolocation) {
+      this.setState({ status: 'unavailable', message: 'Geolocation unsupported on this device' });
+      return;
+    }
+    this.setState({ status: 'locating' });
+    this.watchId = navigator.geolocation.watchPosition(
+      (position) => this.handlePosition(position),
+      (error) => this.handleError(error),
+      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
+    );
+  }
+
   stop(): void {
     if (this.watchId !== null) {
       navigator.geolocation.clearWatch(this.watchId);

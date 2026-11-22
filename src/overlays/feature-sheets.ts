@@ -23,6 +23,41 @@ import { savePlace } from '../search/saved-places';
 type Toasts = Pick<StatusCentre, 'toast'>;
 
 /**
+ * A card's way into the planner. Planning to a summit used to be five steps — Routes, New
+ * route, find it on the map, tap a start, tap the summit — from a card that had the summit
+ * right there.
+ */
+export interface CardRoute {
+  /** A route is open: this point goes on its end, and that is the only offer. */
+  adding: boolean;
+  /** Route here — from your location, or a start tapped on the map. Or: add to the route. */
+  to(): void;
+  /** A new route starting here. */
+  from?(): void;
+}
+
+/** The card's route buttons, first among its actions: the one most likely to be next. */
+function renderRouteActions(container: HTMLElement, route: CardRoute): void {
+  const button = (label: string, className: string, onClick: () => void): HTMLButtonElement => {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = className;
+    element.textContent = label;
+    element.addEventListener('click', onClick);
+    return element;
+  };
+  if (route.adding) {
+    container.append(button('Add to route', 'sheet-route-to', () => route.to()));
+    return;
+  }
+  container.append(button('Route here', 'sheet-route-to', () => route.to()));
+  if (route.from) {
+    const from = route.from;
+    container.append(button('Route from here', 'sheet-route-from secondary', () => from()));
+  }
+}
+
+/**
  * What the avalanche terrain artifact says about a tapped point, as the planner reads it:
  * null where no downloaded region carries the artifact, `cell: null` inside one where the
  * archive has no tile.
@@ -33,7 +68,7 @@ export function renderPeakSheet(
   body: HTMLElement,
   peak: PeakProperties,
   lngLat: LngLat,
-  { status, avalanche }: { status: Toasts; avalanche?: AvalancheReading },
+  { status, avalanche, route }: { status: Toasts; avalanche?: AvalancheReading; route?: CardRoute },
 ): void {
   const name = peak.name?.trim() || 'Unnamed summit';
   const ele = formatElevation(peak.ele);
@@ -45,8 +80,9 @@ export function renderPeakSheet(
     ${munro ? `<p class="sheet-munro-badge">▲ Munro</p>` : ''}
     <p class="sheet-ele"></p>
     <p class="sheet-coords"></p>
+    ${route ? '<div class="sheet-actions sheet-route"></div>' : ''}
     <div class="sheet-actions">
-      <button class="sheet-save" type="button">Save place</button>
+      <button class="sheet-save${route ? ' secondary' : ''}" type="button">Save place</button>
       ${wikidata ? `<a class="sheet-link" target="_blank" rel="noreferrer">Wikidata</a>` : ''}
     </div>
     <div class="sheet-actions sheet-open-in"></div>
@@ -63,6 +99,7 @@ export function renderPeakSheet(
   }
   renderOpenIn(body.querySelector<HTMLElement>('.sheet-open-in')!, lngLat, name);
   if (avalanche) renderAvalancheReadout(body.querySelector<HTMLElement>('.sheet-avalanche')!, avalanche);
+  if (route) renderRouteActions(body.querySelector<HTMLElement>('.sheet-route')!, route);
 
   body.querySelector('.sheet-save')!.addEventListener('click', () => {
     void savePlace({
@@ -125,16 +162,23 @@ export function renderCoordsSheet(
     status,
     elevation,
     avalanche,
-  }: { status: Toasts; elevation: Promise<number | null>; avalanche?: AvalancheReading },
+    route,
+  }: {
+    status: Toasts;
+    elevation: Promise<number | null>;
+    avalanche?: AvalancheReading;
+    route?: CardRoute;
+  },
 ): void {
   const coordsText = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
 
   body.innerHTML = `
     <h2></h2>
     <p class="sheet-ele">Reading elevation…</p>
+    ${route ? '<div class="sheet-actions sheet-route"></div>' : ''}
     <div class="sheet-actions">
-      <button class="sheet-copy" type="button">Copy</button>
-      <button class="sheet-save" type="button">Save place</button>
+      <button class="sheet-copy${route ? ' secondary' : ''}" type="button">Copy</button>
+      <button class="sheet-save${route ? ' secondary' : ''}" type="button">Save place</button>
     </div>
     <div class="sheet-actions sheet-open-in"></div>
     ${avalanche ? '<div class="sheet-avalanche"></div>' : ''}
@@ -142,6 +186,7 @@ export function renderCoordsSheet(
   body.querySelector('h2')!.textContent = coordsText;
   renderOpenIn(body.querySelector<HTMLElement>('.sheet-open-in')!, lngLat, coordsText);
   if (avalanche) renderAvalancheReadout(body.querySelector<HTMLElement>('.sheet-avalanche')!, avalanche);
+  if (route) renderRouteActions(body.querySelector<HTMLElement>('.sheet-route')!, route);
 
   // Saved with the place once known, as a summit's height is. A save tapped before the
   // read lands goes without it rather than waiting on it.

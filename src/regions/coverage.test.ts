@@ -198,6 +198,31 @@ describe('restoring downloaded regions', () => {
   });
 });
 
+describe('saying when the catalogue arrives', () => {
+  // The planner's "no map downloaded here" offer reads the catalogue; a route restored at
+  // startup drew its panel before the catalogue came, and was never told.
+  it('says so once, when the catalogue first lands, and not for a redraw of the same one', async () => {
+    const onCatalogueChange = vi.fn();
+    coverage = new RegionCoverage({
+      map: map as unknown as MLMap,
+      registry: {} as TileSourceRegistry,
+      theme: () => 'dark',
+      notice,
+      onOpenRegions,
+      onRestoreProblem,
+      onCatalogueChange,
+    });
+    coverage.setStyleReady(true);
+    deps.loadCachedManifest.mockResolvedValue(MANIFEST);
+
+    await coverage.restore();
+    await vi.waitFor(() => expect(onCatalogueChange).toHaveBeenCalled());
+    const calls = onCatalogueChange.mock.calls.length;
+    await coverage.restore();
+    expect(onCatalogueChange).toHaveBeenCalledTimes(calls);
+  });
+});
+
 describe('saying when the regions on the device change', () => {
   // The planner measures routes against what is downloaded. A route opened before the
   // startup restore finished was measured against nothing, and nothing told it otherwise.

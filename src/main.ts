@@ -24,6 +24,7 @@ import { watchMapHealth } from './map/network-status';
 import { supplyParkingIcons } from './map/parking';
 import { TileSourceRegistry } from './map/tile-source-registry';
 import {
+  type CardRoute,
   PeakTooltip,
   renderCoordsSheet,
   renderPathSheet,
@@ -41,7 +42,7 @@ import { renderRegionsSheet } from './regions/regions-ui';
 import { DraftKeeper, readDraft } from './routes/draft-store';
 import { onPressHold } from './routes/press-hold';
 import { addRouteLayers } from './routes/route-layers';
-import { RoutePlanner, type RouteSummary } from './routes/route-planner';
+import { RoutePlanner, type RoutePoint, type RouteSummary } from './routes/route-planner';
 import {
   openRouteLink,
   renderRoutePanel,
@@ -329,6 +330,11 @@ const coverage = new RegionCoverage({
   // Startup included: a route can be open before the regions on disk have been read back,
   // and it was measured against none of them.
   onDownloadedChange: () => planner.invalidateRegions(),
+  // The planner's missing-map warning is read from the catalogue, which can arrive after a
+  // route restored at startup has drawn its panel.
+  onCatalogueChange: () => {
+    if (views.view() === 'plan') openPlanView();
+  },
 });
 
 // --- Printing ------------------------------------------------------------------------
@@ -397,6 +403,7 @@ const planner = new RoutePlanner({
   downloadedRegions: () => coverage.downloadedRegions(),
   onDraftChange: () => draftKeeper.changed(),
   viewInset,
+  requestPosition: () => locationUi.watch(),
   // A tap that lands on a summit makes it a named waypoint, so a route reads
   // "Achintee → Ben Nevis" rather than as a list of coordinates.
   describePoint: (event) => {
@@ -467,6 +474,10 @@ function routesUi(container: HTMLElement = sheet.body): RoutesUiDeps {
     onUndoableStatus: (message, action) => status.toast(message, { action }),
     regionOffer: (points) => coverage.regionOfferFor(points),
     onGetRegion: (name) => openRegionsView(name),
+    viewCentre: () => {
+      const { lng, lat } = map.getCenter();
+      return [lng, lat];
+    },
   };
 }
 
@@ -565,9 +576,65 @@ map.on('click', (e) => {
 
 function openPeakCard(properties: PeakProperties, lngLat: maplibregl.LngLat): void {
   const avalanche = avalancheReading(lngLat);
+  const route = cardRoute({
+    lng: lngLat.lng,
+    lat: lngLat.lat,
+    ...(properties.name ? { name: properties.name } : {}),
+    ...(typeof properties.ele === 'number' ? { ele: properties.ele } : {}),
+  });
   views.open('peak', (body) =>
-    renderPeakSheet(body, properties, lngLat, { status, ...(avalanche ? { avalanche } : {}) }),
+    renderPeakSheet(body, properties, lngLat, { status, route, ...(avalanche ? { avalanche } : {}) }),
   );
+}
+
+/**
+ * A card's route buttons, for the planner as it is now: with a route open, "Add to route";
+ * otherwise "Route here" (from your location, or a start you tap) and "Route from here".
+ */
+function cardRoute(point: RoutePoint): CardRoute {
+  if (planner.isEditing() && planner.getDraft().waypointCount > 0) {
+    return {
+      adding: true,
+      to: () => {
+        planner.appendWaypoint(point);
+        openPlanView();
+      },
+    };
+  }
+  return {
+    adding: false,
+    to: () => {
+      beginRoute();
+      planner.appendWaypoint(point);
+      planner.startFromMyLocation();
+    },
+    from: () => {
+      beginRoute();
+      planner.appendWaypoint(point);
+    },
+  };
+}
+
+/**
+ * A fresh route, from a card — as "New route" begins one: whatever was open closes first,
+ * and an unsaved one goes with an Undo rather than without a word.
+ */
+function beginRoute(): void {
+  const unsaved = planner.hasUnsavedChanges();
+  const name = planner.getName();
+  const putBack = planner.close();
+  planner.activate();
+  openPlanView();
+  if (unsaved && putBack) {
+    status.toast(`Closed “${name}”`, {
+      action: {
+        label: 'Undo',
+        onSelect: () => {
+          if (!putBack()) status.toast('Can’t undo: another route is open now.', { kind: 'warn' });
+        },
+      },
+    });
+  }
 }
 
 /** Bumped per search pick, so a card filled in late is only filled for the pick it was for. */
@@ -608,10 +675,16 @@ function showCoordsSheet(tapped: maplibregl.LngLat, { focus = false } = {}): voi
   const lngLat = tapped.wrap();
   const elevation = planner.elevationAt([lngLat.lng, lngLat.lat]);
   const avalanche = avalancheReading(lngLat);
+  const route = cardRoute({ lng: lngLat.lng, lat: lngLat.lat });
   views.open(
     'coords',
     (body) =>
-      renderCoordsSheet(body, lngLat, { status, elevation, ...(avalanche ? { avalanche } : {}) }),
+      renderCoordsSheet(body, lngLat, {
+        status,
+        elevation,
+        route,
+        ...(avalanche ? { avalanche } : {}),
+      }),
     { focus },
   );
 }
@@ -749,6 +822,7 @@ const locationUi = setUpLocation({
   button: document.querySelector<HTMLButtonElement>('#locate-btn')!,
   status,
   onPosition: (lngLat) => planner.updatePosition(lngLat),
+  onPositionUnavailable: () => planner.positionUnavailable(),
   onDotClick: ([lng, lat]) => showCoordsSheet(new maplibregl.LngLat(lng, lat)),
 });
 

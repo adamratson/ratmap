@@ -350,3 +350,37 @@ describe('the avalanche terrain readout', () => {
     );
   });
 });
+
+describe('routing from a card', () => {
+  const buttons = () => [...body.querySelectorAll<HTMLButtonElement>('.sheet-route button')];
+
+  it('offers a route to the summit, or from it, first among its actions', () => {
+    const route = { adding: false, to: vi.fn(), from: vi.fn() };
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, { status, route });
+
+    expect(buttons().map((b) => b.textContent)).toEqual(['Route here', 'Route from here']);
+    expect(body.querySelector('.sheet-actions')!.classList.contains('sheet-route')).toBe(true);
+    buttons()[0].click();
+    expect(route.to).toHaveBeenCalled();
+    buttons()[1].click();
+    expect(route.from).toHaveBeenCalled();
+  });
+
+  it('offers only to add to a route already open', () => {
+    const route = { adding: true, to: vi.fn() };
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, { status, route });
+    expect(buttons().map((b) => b.textContent)).toEqual(['Add to route']);
+  });
+
+  it('routes to a bare point too', () => {
+    const route = { adding: false, to: vi.fn(), from: vi.fn() };
+    renderCoordsSheet(body, BEN_NEVIS, { status, elevation: Promise.resolve(null), route });
+    buttons()[0].click();
+    expect(route.to).toHaveBeenCalled();
+  });
+
+  it('has no route buttons where nothing was offered', () => {
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, { status });
+    expect(body.querySelector('.sheet-route')).toBeNull();
+  });
+});

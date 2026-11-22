@@ -229,7 +229,12 @@ export async function styleLayers(page: Page): Promise<Array<{ id: string; type:
  * Projected through the live map rather than taking pixel coordinates, so a test says
  * where on the ground it is tapping and stays correct if the default view changes.
  */
-export async function clickMapAt(page: Page, lng: number, lat: number): Promise<void> {
+export async function clickMapAt(
+  page: Page,
+  lng: number,
+  lat: number,
+  { button = 'left' }: { button?: 'left' | 'right' } = {},
+): Promise<void> {
   const point = await page.evaluate(
     ([lngValue, latValue]) => {
       const map = (window as unknown as { __ratmapMap: MLMap }).__ratmapMap;
@@ -239,7 +244,7 @@ export async function clickMapAt(page: Page, lng: number, lat: number): Promise<
     [lng, lat] as const,
   );
 
-  await page.mouse.click(point.x, point.y);
+  await page.mouse.click(point.x, point.y, { button });
 }
 
 /** Point the map at a bounding box, so subsequent clicks land where intended. */

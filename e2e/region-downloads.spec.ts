@@ -327,7 +327,7 @@ test.describe('a poor connection', () => {
     // detent, which a click that closes an already-open view can never satisfy — that
     // combination hung this test for its full timeout the first time round.
     await context.setOffline(false);
-    await page.locator('#chips .chip', { hasText: 'Offline' }).click();
+    await page.locator('#chips .chip', { hasText: 'Maps' }).click();
     await page.locator('#sheet.at-peek').waitFor();
     await openRegionsSheet(page);
     await focusTestRegionRow(page);

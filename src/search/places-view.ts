@@ -4,7 +4,7 @@ import type { StatusCentre } from '../ui/status';
 import { insetOffset, NO_INSET, type ViewInset } from '../map/view-inset';
 import { deletePlace, listPlaces, savePlace, type SavedPlace } from './saved-places';
 
-// The Saved view: every saved place, to fly to or delete.
+// The Places view: every saved place, to fly to or delete.
 
 export interface PlacesViewDeps {
   map: MLMap;

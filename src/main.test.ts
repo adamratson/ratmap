@@ -358,7 +358,7 @@ describe('app bootstrap', () => {
 
     const chips = [...document.querySelectorAll('#chips .chip')].map((c) => c.textContent);
     // Five, so they fit a phone's row: Print and Settings are under More, the legend in Layers.
-    expect(chips).toEqual(['Routes', 'Offline', 'Saved', 'Layers', 'More']);
+    expect(chips).toEqual(['Routes', 'Maps', 'Places', 'Layers', 'More']);
 
     const sheet = document.querySelector<HTMLElement>('#sheet')!;
     expect(sheet.classList.contains('at-peek')).toBe(true);

@@ -723,7 +723,8 @@ function followSection(summary: RouteSummary, planner: RoutePlanner): HTMLElemen
     const figures = el('dl', 'follow-figures');
     figures.append(
       followFigure('Remaining', formatDistance(follow.remainingM)),
-      followFigure('Done', `${Math.round(follow.fraction * 100)}%`),
+      // Not "Done": beside a planner that had a Done button, it read as one.
+      followFigure('Completed', `${Math.round(follow.fraction * 100)}%`),
     );
     section.append(figures);
 

@@ -23,7 +23,7 @@ const VIEW_LABEL: Record<View, string> = {
   path: 'Path grade',
   coords: 'Coordinates',
   places: 'Saved places',
-  regions: 'Offline regions',
+  regions: 'Offline maps',
   routes: 'Routes',
   plan: 'Route planner',
   install: 'Add to Home Screen',

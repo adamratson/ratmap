@@ -27,7 +27,7 @@ test.describe('the sheet', () => {
   test('rests at peek with the controls that must always be in reach', async ({ page }) => {
     await expect(page.locator('#sheet')).toHaveClass(/at-peek/);
     await expect(page.locator('#search-input')).toBeVisible();
-    await expect(page.locator('#chips .chip')).toHaveText(['Routes', 'Offline', 'Saved', 'Layers', 'More']);
+    await expect(page.locator('#chips .chip')).toHaveText(['Routes', 'Maps', 'Places', 'Layers', 'More']);
   });
 
   test('fits every destination on a phone, without scrolling, planning included', async ({ page }) => {
@@ -39,7 +39,7 @@ test.describe('the sheet', () => {
     expect(await overflow()).toBeLessThanOrEqual(0);
 
     await startNewRoute(page);
-    await expect(page.locator('#chips .chip')).toHaveText(['Planning', 'Offline', 'Saved', 'Layers', 'More']);
+    await expect(page.locator('#chips .chip')).toHaveText(['Planning', 'Maps', 'Places', 'Layers', 'More']);
     expect(await overflow()).toBeLessThanOrEqual(0);
   });
 
@@ -77,8 +77,8 @@ test.describe('the sheet', () => {
   });
 
   test('puts the map back on Escape', async ({ page }) => {
-    await openChip(page, 'Offline');
-    await expect(page.locator('#sheet-body')).toHaveAttribute('aria-label', 'Offline regions');
+    await openChip(page, 'Maps');
+    await expect(page.locator('#sheet-body')).toHaveAttribute('aria-label', 'Offline maps');
 
     // The one thing every dismissible surface owes a keyboard user, and with no close
     // buttons anywhere it is the only key that closes anything.
@@ -89,10 +89,10 @@ test.describe('the sheet', () => {
 
   test('swaps one destination for another without stacking them', async ({ page }) => {
     await openChip(page, 'Routes');
-    await openChip(page, 'Saved');
+    await openChip(page, 'Places');
 
     await expect(page.locator('#sheet-body')).toHaveAttribute('aria-label', 'Saved places');
-    await expect(page.locator('#chips .chip', { hasText: 'Saved' })).toHaveAttribute(
+    await expect(page.locator('#chips .chip', { hasText: 'Places' })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
@@ -291,7 +291,7 @@ test.describe('detail limit', () => {
       .toEqual(expect.arrayContaining(['region-footprints-fill', 'region-footprints-line']));
 
     await notice.click();
-    await expect(page.locator('#sheet-body')).toHaveAttribute('aria-label', 'Offline regions');
+    await expect(page.locator('#sheet-body')).toHaveAttribute('aria-label', 'Offline maps');
   });
 
   test('goes quiet again on zooming back out', async ({ page }) => {

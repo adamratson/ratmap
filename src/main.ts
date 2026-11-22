@@ -166,8 +166,10 @@ const views = new SheetViews({
 // are under More.
 views.setDestinations([
   { view: 'routes', label: 'Routes', open: () => void openRoutesView() },
-  { view: 'regions', label: 'Offline', open: () => openRegionsView() },
-  { view: 'places', label: 'Saved', open: () => void openPlacesView() },
+  // Named for what is in them. "Offline" named a state, not the regions you download;
+  // "Saved" held places only, while saved routes live under Routes.
+  { view: 'regions', label: 'Maps', open: () => openRegionsView() },
+  { view: 'places', label: 'Places', open: () => void openPlacesView() },
   { view: 'layers', label: 'Layers', open: () => openLayersView(), includes: ['legend'] },
   { view: 'settings', label: 'More', open: () => openSettingsView(), includes: ['print'] },
 ]);

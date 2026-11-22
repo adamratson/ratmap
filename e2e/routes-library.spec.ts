@@ -258,7 +258,7 @@ test.describe('following', () => {
 
     await fix(page, TRAILHEAD);
     await expect(page.locator('.follow-figures')).toContainText('Remaining');
-    await expect(page.locator('.follow-figures')).toContainText('Done');
+    await expect(page.locator('.follow-figures')).toContainText('Completed');
 
     const nearStart = await page.locator('.follow-progress-fill').evaluate((el) => el.style.width);
 

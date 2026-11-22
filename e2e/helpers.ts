@@ -142,7 +142,7 @@ export async function clearConditions(page: Page): Promise<void> {
 
 /** Open the offline-regions sheet and wait for the catalogue to load. */
 export async function openRegionsSheet(page: Page): Promise<void> {
-  await openChip(page, 'Offline');
+  await openChip(page, 'Maps');
   await page.locator('.regions-list .region-row').first().waitFor({ state: 'visible' });
 }
 

@@ -59,7 +59,7 @@ test.describe('summits and saved places', () => {
     await page.locator('.sheet-save').click();
     await expect(page.locator('.toast.ok', { hasText: `Saved “${peak.name}”` })).toBeVisible();
 
-    await openChip(page, 'Saved');
+    await openChip(page, 'Places');
     await expect(page.locator('.place-goto')).toContainText(peak.name);
     if (peak.ele !== null) {
       await expect(page.locator('.place-goto')).toContainText(`${Math.round(peak.ele)} m`);
@@ -71,7 +71,7 @@ test.describe('summits and saved places', () => {
     await page.locator('#map').waitFor();
     await clearConditions(page);
 
-    await openChip(page, 'Saved');
+    await openChip(page, 'Places');
     await expect(page.locator('.place-goto')).toContainText(peak.name);
   });
 
@@ -83,7 +83,7 @@ test.describe('summits and saved places', () => {
     // Somewhere else entirely, so arriving is unambiguous.
     await showArea(page, [-3.2, 55.9, -3.1, 56.0]);
 
-    await openChip(page, 'Saved');
+    await openChip(page, 'Places');
     await page.locator('.place-goto').first().click();
 
     // In the middle of the map the sheet leaves showing, not under the sheet.
@@ -99,7 +99,7 @@ test.describe('summits and saved places', () => {
     await page.locator('.sheet-save').click();
     await expect(page.locator('.toast.ok', { hasText: `Saved “${peak.name}”` })).toBeVisible();
 
-    await openChip(page, 'Saved');
+    await openChip(page, 'Places');
     await page.locator('.place-delete').first().click();
 
     // Deleted straight away rather than behind a confirmation dialog — the way back is the
@@ -114,7 +114,7 @@ test.describe('summits and saved places', () => {
   });
 
   test('says the list is empty rather than showing nothing at all', async ({ page }) => {
-    await openChip(page, 'Saved');
+    await openChip(page, 'Places');
     await expect(page.locator('.places-empty')).toContainText(/Save place/);
   });
 });

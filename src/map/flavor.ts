@@ -51,7 +51,9 @@ const DAY: Flavor = {
   background: '#d9d6cf',
   earth: '#ebe9e3',
   water: '#a9c3cc',
-  ocean_label: '#5f7f8c',
+  // Water names: 4.7:1 on the water-coloured halo they sit in. #5f7f8c was 2.3:1 — a
+  // loch's name greyed out on the loch.
+  ocean_label: '#2a5060',
 
   park_a: '#dde3da',
   park_b: '#c4d3c3',
@@ -66,7 +68,8 @@ const DAY: Flavor = {
   buildings: '#d2cec6',
 
   boundaries: '#a8a39a',
-  railway: '#a19c93',
+  // Drawn at 0.85 (landuse.ts), not upstream's 0.5: 3.4:1, where the pale dashes were 1.5.
+  railway: '#6e685f',
 
   // Roads: pale fills inside dark edges, as on a paper map, where the edge is what makes a
   // road read on busy ground. The edges used to be 2.2–2.6:1 against the earth, fainter
@@ -89,14 +92,27 @@ const DAY: Flavor = {
 
   city_label: '#3a3f45',
   city_label_halo: '#ebe9e3',
-  subplace_label: '#6b7076',
+  // Villages and hamlets: 6.6:1 on their halo, 4.7:1 over woodland. #6b7076 was 4.1 and
+  // 2.9 — and in the hills, a hamlet is often the name that says where the walk starts.
+  subplace_label: '#4c5157',
   subplace_label_halo: '#ebe9e3',
   state_label: '#9a968e',
   state_label_halo: '#ebe9e3',
   country_label: '#8a867e',
-  roads_label_minor: '#7d7870',
+  roads_label_minor: '#6a655c', // 5.8:1 on its white halo; 4.4 before
   roads_label_major: '#6b665e',
-  address_label: '#7d7870',
+  address_label: '#6a655c',
+  // Point-of-interest labels, upstream's hues a step darker: each 4.5:1 or more on the
+  // ground-coloured halo. Shops, cafés, attractions and parks were 2.6–3.9.
+  pois: {
+    ...(LIGHT.pois as NonNullable<Flavor['pois']>),
+    blue: '#0f6a91',
+    green: '#1d7444',
+    pink: '#b52a85',
+    red: '#bd2a4c',
+    tangerine: '#a35303',
+    turquoise: '#007480',
+  },
 
   landcover: {
     grassland: 'rgba(221, 229, 214, 1)',
@@ -119,7 +135,7 @@ const NIGHT: Flavor = {
   // Lifted and blue, not sunk: #0f1a22 was the first try, and at night the lochs
   // disappeared into the land. Water is a landmark, so it must read.
   water: '#1d3040',
-  ocean_label: '#5d7684',
+  ocean_label: '#8fb8cd', // 6.4:1 on the water halo; 2.8 before
 
   park_a: '#18201c',
   park_b: '#1a241f',
@@ -150,22 +166,27 @@ const NIGHT: Flavor = {
   highway: '#b0705a',
   highway_casing_early: '#0e1114',
   highway_casing_late: '#0e1114',
-  railway: '#0e1114',
+  // The background colour, before: railways were not drawn at night at all (1.1:1).
+  // 3.8:1 at the 0.85 landuse.ts draws them at.
+  railway: '#7d858f',
   boundaries: '#4a525c',
 
   city_label: '#9aa3ad',
   city_label_halo: '#0e1114',
-  subplace_label: '#6f7883',
+  subplace_label: '#868f99', // 5.8:1; 4.2 before
   subplace_label_halo: '#0e1114',
   state_label: '#4a525c',
   state_label_halo: '#0e1114',
   country_label: '#5c646e',
-  roads_label_minor: '#5c646e',
+  // 5.2 and 6.4:1, under the towns' 6.8; they were 2.9 and 3.9.
+  roads_label_minor: '#848d97',
   roads_label_minor_halo: '#161a1f',
-  roads_label_major: '#6f7883',
+  roads_label_major: '#959ea8',
   roads_label_major_halo: '#161a1f',
-  address_label: '#5c646e',
+  address_label: '#848d97',
   address_label_halo: '#161a1f',
+  // Transport labels were 3.2:1 in upstream's dark blue; the rest hold.
+  pois: { ...(DARK.pois as NonNullable<Flavor['pois']>), lapis: '#6f8ff2' },
 
   landcover: {
     grassland: 'rgba(25, 32, 28, 1)',
@@ -176,6 +197,17 @@ const NIGHT: Flavor = {
     scrub: 'rgba(28, 33, 29, 1)',
     forest: 'rgba(24, 33, 29, 1)',
   },
+};
+
+/**
+ * Streams and rivers. Upstream draws them 0.5 px wide in the lakes' fill colour: 1.5:1 on
+ * open ground by day, 1.1 over woodland, 1.3 at night — a river's name floating over no
+ * river. A blue of their own instead, darker by day and lighter at night: 3.6:1 by day
+ * (2.9 over woodland), 4.8 at night. See landuse.ts for the width.
+ */
+export const STREAM_INK: Record<Theme, string> = {
+  light: '#3f7fa3',
+  dark: '#4f8db3',
 };
 
 /**
@@ -311,7 +343,8 @@ const DAY_INK: MapInk = {
   peakText: '#14171a',
   peakMunroText: '#8a5d00',
   peakDot: '#14171a',
-  peakMunroDot: '#c9910a',
+  // A step darker than night's: 3.2:1 on open ground, where #c9910a was 2.3.
+  peakMunroDot: '#a97a08',
   peakDotStroke: 'rgba(255,255,255,0.95)',
   routeLine: '#d6127e',
   routeStraight: '#b45309',

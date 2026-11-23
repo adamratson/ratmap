@@ -40,6 +40,13 @@ export interface SacGradeInfo {
   /** What it demands of the walker, in one line. */
   note: string;
   color: string;
+  /**
+   * The grade's own hue, dark enough to read as text on the white badge its map label sits
+   * on: 4.5:1 or more, measured on the night map, where the badge's slight translucency
+   * is darkest. The ramp colours themselves are for the band, and as text T3 amber was
+   * 2.3:1, T2 3.3, T4 3.5 — the grade, the safety-critical fact, the hardest thing to read.
+   */
+  labelColor: string;
 }
 
 /**
@@ -62,6 +69,7 @@ export const SAC_GRADES: readonly SacGradeInfo[] = [
     label: 'Hiking',
     note: 'Well-made path, gentle ground, no exposure.',
     color: '#2c7fb8',
+    labelColor: '#1f6a99',
   },
   {
     grade: 2,
@@ -69,6 +77,7 @@ export const SAC_GRADES: readonly SacGradeInfo[] = [
     label: 'Mountain hiking',
     note: 'Continuous path, steeper ground in places.',
     color: '#3f9e4d',
+    labelColor: '#2a7636',
   },
   {
     grade: 3,
@@ -76,6 +85,7 @@ export const SAC_GRADES: readonly SacGradeInfo[] = [
     label: 'Demanding mountain hiking',
     note: 'Exposed sections, short scrambles, sometimes cabled.',
     color: '#d9a125',
+    labelColor: '#866200',
   },
   {
     grade: 4,
@@ -83,6 +93,7 @@ export const SAC_GRADES: readonly SacGradeInfo[] = [
     label: 'Alpine hiking',
     note: 'Intermittent path, hands needed, sustained exposure.',
     color: '#e8590c',
+    labelColor: '#b0450a',
   },
   {
     grade: 5,
@@ -90,6 +101,7 @@ export const SAC_GRADES: readonly SacGradeInfo[] = [
     label: 'Demanding alpine hiking',
     note: 'Often trackless, scrambling, possible glacier or snow.',
     color: '#c92a2a',
+    labelColor: '#c02828',
   },
   {
     grade: 6,
@@ -97,6 +109,7 @@ export const SAC_GRADES: readonly SacGradeInfo[] = [
     label: 'Difficult alpine hiking',
     note: 'Mostly trackless, climbing to grade II, very exposed, rarely marked.',
     color: '#7b2d8b',
+    labelColor: '#7b2d8b',
   },
 ];
 
@@ -118,11 +131,11 @@ export function sacCssColor(grade: number): string {
 }
 
 /** `['match', ['get','t'], 1, colour, …, fallback]` — the ramp as a style expression. */
-function colorExpression(): unknown {
+function colorExpression(which: 'color' | 'labelColor' = 'color'): unknown {
   return [
     'match',
     ['get', 't'],
-    ...SAC_GRADES.flatMap((entry) => [entry.grade, entry.color]),
+    ...SAC_GRADES.flatMap((entry) => [entry.grade, entry[which]]),
     // A grade outside 1–6 cannot reach the tiles (build-sac.sh drops it), so this only
     // fires if the artifact and this build ever disagree. Grey says "unknown", which is
     // the truth, rather than borrowing a grade's colour and asserting something false.
@@ -197,10 +210,11 @@ export function addSacLayers(
         'text-allow-overlap': false,
       },
       paint: {
-        'text-color': colorExpression() as never,
+        'text-color': colorExpression('labelColor') as never,
         // White in both themes, deliberately — not mapInk().labelHalo. The text takes the
-        // grade ramp, whose darker grades (T5, T6) need a light ground; on the night map
-        // the white halo reads as a badge, which is what this label is.
+        // grade's hue, whose darker grades (T5, T6) need a light ground; on the night map
+        // the white halo reads as a badge, which is what this label is. The text is each
+        // grade's labelColor, not the band's ramp colour, so every grade reads on it.
         'text-halo-color': 'rgba(255,255,255,0.9)',
         'text-halo-width': 1.6,
       },

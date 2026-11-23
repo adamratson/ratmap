@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
 import { SAC_GRADES, addSacLayers, sacGradeInfo, sacPathAt } from './sac';
-import { paintValue } from '../test-support/paint-value';
+import { contrast, paintValue, styleColor } from '../test-support/paint-value';
 
 function fakeMap(layerIds: string[], features: Array<Record<string, unknown>> = []) {
   return {
@@ -95,5 +95,31 @@ describe('addSacLayers', () => {
     expect(at(12)).toBeLessThan(at(14.5) / 2);
     expect(at(13)).toBeLessThan(at(14.5));
     expect(at(16)).toBe(at(14.5));
+  });
+});
+
+describe('grade labels', () => {
+  it('reads every grade against the white badge it is drawn on', () => {
+    // The band colours are tuned to read as lines on the ground; as text on white, T3's
+    // ochre was 2.3:1. Each grade has a darker label ink of its own hue.
+    for (const grade of SAC_GRADES) {
+      expect([grade.grade, contrast(grade.labelColor, '#ffffff') >= 4.5]).toEqual([grade.grade, true]);
+    }
+  });
+
+  it('draws the label layer in the label ink, not the band colour', () => {
+    const map = fakeMap([]);
+
+    addSacLayers(map, 'region-lochaber-sac', { minzoom: 12 });
+
+    const labels = vi
+      .mocked(map.addLayer)
+      .mock.calls.map(([layer]) => layer as unknown as { type: string; paint: Record<string, unknown> })
+      .find((layer) => layer.type === 'symbol')!;
+    for (const grade of SAC_GRADES) {
+      expect(paintValue('symbol', 'text-color', labels.paint['text-color'], 15, { t: grade.grade })).toEqual(
+        styleColor(grade.labelColor),
+      );
+    }
   });
 });

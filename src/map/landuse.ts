@@ -1,7 +1,7 @@
 import type { ExpressionSpecification, LayerSpecification } from 'maplibre-gl';
 import { layers as basemapLayers, type Flavor } from '@protomaps/basemaps';
 import type { Theme } from '../ui/theme';
-import { BUILDING_OUTLINE, ROAD_CLASS_FILL, ratmapFlavor } from './flavor';
+import { BUILDING_OUTLINE, ROAD_CLASS_FILL, STREAM_INK, ratmapFlavor } from './flavor';
 import { PROTOMAPS_HUTS_WATER_KINDS } from '../overlays/huts-water';
 
 /**
@@ -207,7 +207,41 @@ export function ratmapBasemapLayers(
   }
   const poisIndex = generated.findIndex((layer) => layer.id === 'pois');
   if (poisIndex >= 0) generated[poisIndex] = withoutHutsWater(generated[poisIndex]);
-  return generated.map((layer) => retuneRoad(layer, theme));
+  return generated.map((layer) => retuneWater(retuneRoad(layer, theme), theme, flavor.water));
+}
+
+/**
+ * Streams and rivers in a blue of their own (STREAM_INK), wide enough to see. A river is
+ * also a water polygon from about z14, where a dark line down its middle would read as a
+ * channel, so its line fades back to the water colour by z15; a stream has no polygon to
+ * fill it and keeps its line.
+ */
+function retuneWater(layer: LayerSpecification, theme: Theme, water: string): LayerSpecification {
+  if (layer.type !== 'line') return layer;
+  if (layer.id === 'water_stream') {
+    return {
+      ...layer,
+      paint: {
+        ...layer.paint,
+        'line-color': STREAM_INK[theme],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.6, 14, 1, 16, 1.6, 18, 2.4],
+      },
+    } as LayerSpecification;
+  }
+  if (layer.id === 'water_river') {
+    return {
+      ...layer,
+      paint: {
+        ...layer.paint,
+        'line-color': ['interpolate', ['linear'], ['zoom'], 13, STREAM_INK[theme], 15, water],
+      },
+    } as LayerSpecification;
+  }
+  if (layer.id === 'roads_rail') {
+    // Upstream's 0.5 left the dashes all but invisible on either theme.
+    return { ...layer, paint: { ...layer.paint, 'line-opacity': 0.85 } } as LayerSpecification;
+  }
+  return layer;
 }
 
 let order: { ids: string[]; types: string[]; from: number } | null = null;

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { layers as basemapLayers } from '@protomaps/basemaps';
 import type { LayerSpecification } from 'maplibre-gl';
-import { ROAD_CLASS_FILL, ratmapFlavor } from './flavor';
+import { ROAD_CLASS_FILL, STREAM_INK, ratmapFlavor } from './flavor';
 import {
   isOverGroundLayer,
   OVER_GROUND_FROM_LAYER_ID,
   ratmapBasemapLayers,
   TOWN_LABEL_LAYER_ID,
 } from './landuse';
-import { paintValue, styleColor } from '../test-support/paint-value';
+import { contrast, paintValue, styleColor } from '../test-support/paint-value';
 import { PROTOMAPS_HUTS_WATER_KINDS } from '../overlays/huts-water';
 
 describe('ratmapBasemapLayers', () => {
@@ -132,16 +132,6 @@ describe('roads', () => {
   });
 
   it('gives roads an edge that holds against the ground, day and night', () => {
-    // Relative luminance contrast, as WCAG measures it.
-    const luminance = (css: string) => {
-      const { r, g, b } = styleColor(css);
-      const lin = (v: number) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-    };
-    const contrast = (a: string, b: string) => {
-      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-      return (hi + 0.05) / (lo + 0.05);
-    };
     const day = ratmapFlavor('light');
     // Above the 10 m contours' 1.6:1 and the index contours' 2.9:1.
     expect(contrast(day.minor_casing, day.earth)).toBeGreaterThan(4.5);
@@ -150,5 +140,28 @@ describe('roads', () => {
     const night = ratmapFlavor('dark');
     expect(contrast(night.minor_a, night.earth)).toBeGreaterThan(4);
     expect(contrast(night.major, night.earth)).toBeGreaterThan(4);
+  });
+
+  it('draws streams in an ink that holds against the ground, and rivers in it until they fill', () => {
+    // The water fill is near the ground's own tone: a stream drawn in it was 1.1–1.5:1,
+    // gone on the open hill, which is where a stream is a navigation feature.
+    for (const theme of ['light', 'dark'] as const) {
+      const layers = ratmapBasemapLayers('basemap', theme, { lang: 'en' });
+      const stream = layers.find((l) => l.id === 'water_stream')!;
+      expect(paintValue('line', 'line-color', stream.paint!['line-color' as never], 14)).toEqual(
+        styleColor(STREAM_INK[theme]),
+      );
+      expect(paintValue('line', 'line-width', stream.paint!['line-width' as never], 14)).toBe(1);
+
+      const river = layers.find((l) => l.id === 'water_river')!;
+      expect(paintValue('line', 'line-color', river.paint!['line-color' as never], 12)).toEqual(
+        styleColor(STREAM_INK[theme]),
+      );
+
+      const flavor = ratmapFlavor(theme);
+      for (const ground of [flavor.earth, flavor.wood_a, flavor.park_a]) {
+        expect(contrast(STREAM_INK[theme], ground!)).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 });

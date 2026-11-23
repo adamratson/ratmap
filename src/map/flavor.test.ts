@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { layers } from '@protomaps/basemaps';
-import { MAP_FONTS, ratmapFlavor } from './flavor';
+import { MAP_FONTS, mapInk, ratmapFlavor } from './flavor';
+import { contrast } from '../test-support/paint-value';
 
 // Listed, not loaded: a glob of the glyph files actually in public/fonts, grouped by
 // fontstack directory. import.meta.glob rather than node:fs so the app tsconfig does not
@@ -56,4 +57,35 @@ describe('map fontstacks', () => {
     }
     expect([...requested].sort()).toEqual([...new Set(Object.values(MAP_FONTS))].sort());
   });
+});
+
+// What the contrast review measured, held: text at 4.5:1 against the halo it is drawn on
+// (WCAG AA for body text), lines and symbols at 3:1 against the ground they cross.
+describe('contrast of the map’s own ink', () => {
+  for (const theme of ['light', 'dark'] as const) {
+    const flavor = ratmapFlavor(theme);
+
+    it(`reads labels against their halos (${theme})`, () => {
+      // Water labels sit on the water itself, not on a halo of the ground.
+      expect(contrast(flavor.ocean_label, flavor.water)).toBeGreaterThanOrEqual(4.5);
+      // Villages and hamlets: on their halo, and over plain ground where the halo is thin.
+      expect(contrast(flavor.subplace_label, flavor.subplace_label_halo)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(flavor.subplace_label, flavor.earth)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(flavor.roads_label_minor, flavor.roads_label_minor_halo)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(flavor.roads_label_major, flavor.roads_label_major_halo)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(flavor.address_label, flavor.address_label_halo)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`reads every POI colour against the ground (${theme})`, () => {
+      for (const [name, colour] of Object.entries(flavor.pois ?? {})) {
+        expect([name, contrast(colour, flavor.earth) >= 4.5]).toEqual([name, true]);
+      }
+    });
+
+    it(`keeps railways and the Munro dot off the ground (${theme})`, () => {
+      // 3.5 rather than 3: the rail layer is drawn at 0.85 opacity.
+      expect(contrast(flavor.railway, flavor.earth)).toBeGreaterThanOrEqual(3.5);
+      expect(contrast(mapInk(theme).peakMunroDot, flavor.earth)).toBeGreaterThanOrEqual(3);
+    });
+  }
 });

@@ -101,14 +101,20 @@ go_run() {
 # Downloads to a `.part` file and only moves it into place once curl reports success, so
 # an interrupted transfer can never be mistaken for a complete extract. Same reasoning as
 # the app's region downloader.
+#
+# Failure is returned, never left to `set -e`: every caller runs this inside `$(...)`
+# (cached_osm_extract's path is captured), where bash does not apply errexit, so a failed
+# curl used to fall through to the next line. On 2026-11-23 Geofabrik refused the infra
+# image smoke test's connections, and build-peaks.sh and build-places.sh went on to build
+# from an extract that was never downloaded: 0 peaks, 0 places, no error.
 fetch_to() {
   local url="$1" dest="$2"
   local part="$dest.part"
 
   echo "  fetching $(basename "$dest")"
   curl -L --fail --retry 5 --retry-delay 5 --retry-connrefused \
-    --continue-at - --progress-bar "$url" -o "$part"
-  mv "$part" "$dest"
+    --continue-at - --progress-bar "$url" -o "$part" || return 1
+  mv "$part" "$dest" || return 1
 }
 
 # Path to a URL's cached copy, downloading it first if absent.
@@ -133,8 +139,14 @@ cached_osm_extract() {
   local dest="$OSM_CACHE_DIR/$name"
 
   mkdir -p "$OSM_CACHE_DIR"
+  # A failed download returns failure rather than a path to nothing (see fetch_to). The
+  # callers assign the path with a plain `src="$(cached_osm_extract ...)"`, so under
+  # their `set -e` that stops the script.
   if [ ! -s "$dest" ]; then
-    fetch_to "$url" "$dest" >&2
+    if ! fetch_to "$url" "$dest" >&2; then
+      echo "FAILED: could not download $url" >&2
+      return 1
+    fi
   else
     echo "  cached $name ($(du -h "$dest" | cut -f1))" >&2
   fi

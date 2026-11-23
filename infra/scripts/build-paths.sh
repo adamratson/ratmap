@@ -88,7 +88,9 @@ PATHS_FILTER="w/highway=path,footway,bridleway,steps,track"
 # against 12.74 s with none, on the same input), so this is about the log, not the clock.
 tile_one_source() {
   local url="$1" src key out building work
-  src="$(cached_osm_extract "$url")"
+  # Explicit: this runs as `tile_one_source ... || true` and in the background, where
+  # set -e does not reach, and a failed download must not go on to tile nothing.
+  src="$(cached_osm_extract "$url")" || return 1
   key="$(basename "${src%.osm.pbf}")"
   out="$PATHS_TILE_CACHE/$key-paths.pmtiles"
   # Still ends in .pmtiles, deliberately: tippecanoe and tile-join both choose their

@@ -118,6 +118,9 @@ services:
       # docker/README.md tells a contours-everywhere run to raise it; same passthrough
       # reason as the rest.
       RATMAP_MIN_WORK_GB: "${RATMAP_MIN_WORK_GB:-}"
+      # Days a run's logs under /work/logs are kept before a later run removes them
+      # (default 30; 0 keeps them all). Same passthrough reason as the rest.
+      RATMAP_KEEP_LOGS_DAYS: "${RATMAP_KEEP_LOGS_DAYS:-}"
       # Threads build-manifest hashes with (default 2). Set 1 on a spinning disk.
       # Same passthrough reason as the rest: undeclared, an inline host value is dropped.
       MANIFEST_HASH_WORKERS: "${MANIFEST_HASH_WORKERS:-}"

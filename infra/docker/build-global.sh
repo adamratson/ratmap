@@ -633,8 +633,28 @@ stage_prefetch() {
     rm -f "$PIN_FILE"
   fi
 
+  # Every continent pinned before anything downloads, so that what the pins replace can
+  # go first: a re-pin otherwise holds two snapshots of the planet at once, ~170 GB, on
+  # the disk that is this run's binding constraint (see preflight). No stage reads a
+  # snapshot it has not pinned, and the pins are written as they resolve, so a run killed
+  # part-way through the downloads still resumes the same snapshot. prune-caches.sh --osm
+  # removes the replaced extracts, and the subsets and paths tilesets built from them.
   local c n=0
   progress 0 "${#CONTINENTS[@]}" extracts
+  echo "==> pinning snapshots"
+  for c in "${CONTINENTS[@]}"; do
+    pin_for "$c" > /dev/null || return 1
+  done
+  local line
+  { "$SCRIPTS_DIR/prune-caches.sh" --osm $DRY_RUN \
+      || echo "  ! prune-caches.sh --osm failed; carrying on without it"; } \
+    | while IFS= read -r line; do
+        case "$line" in
+          "  nothing to prune") ;;
+          *) log "${line#  }" ;;
+        esac
+      done
+
   for c in "${CONTINENTS[@]}"; do
     echo "==> $c"
     # Explicit || return: these stage functions run as the condition of an `if` in the
@@ -652,16 +672,18 @@ stage_prefetch() {
   awk -F'\t' '{ printf "    %-20s %s\n", $1, $2 }' "$PIN_FILE"
   log "cache total: $(du -sh "$OSM_CACHE" | cut -f1)"
 
-  # Repinning does not delete the previous snapshot's extracts, and at ~85 GB a set that
-  # is disk is the binding constraint on this whole run (see preflight). Flag orphans
-  # rather than letting a later stage die of ENOSPC with no explanation.
-  local orphans
+  # What the pruning above leaves, because nothing says it is stale: an extract of a
+  # continent this run does not pin (dropped from CONTINENTS, say), or a -latest one from
+  # a lazy RATMAP_NO_CACHE run that no pin adopted. Flagged rather than deleted, but
+  # flagged, so a later stage does not die of ENOSPC with no explanation.
+  local orphans f
   orphans="$(cd "$OSM_CACHE" && ls -1 ./*.osm.pbf 2>/dev/null | sed 's|^\./||' \
     | grep -vxF -f <(cut -f2 "$PIN_FILE") || true)"
   if [ -n "$orphans" ]; then
     log "extracts in the cache that no current pin refers to — safe to delete:"
-    printf '%s\n' "$orphans" | sed 's/^/    /'
-    log "  $(printf '%s\n' "$orphans" | sed "s|^|$OSM_CACHE/|" | xargs du -ch 2>/dev/null | tail -1 | cut -f1) reclaimable"
+    while IFS= read -r f; do
+      log "    $f ($(du -h "$OSM_CACHE/$f" | cut -f1))"
+    done <<< "$orphans"
   fi
 }
 
@@ -1302,6 +1324,19 @@ if [ -z "$PREFLIGHT_ONLY" ] && [ "${#stages[@]}" -gt 0 ]; then
       echo "  ~ $WORK_DIR/tmp also holds $((others_kb / 1024)) MB outside $RUN_TMP," \
         "from single-script runs (or runs from before 2026-11-19)."
       echo "    Left alone, since one may still be running; remove it by hand when none is."
+    fi
+    # Logs: a planet run's are a few hundred MB, and every run adds its own. Kept for
+    # RATMAP_KEEP_LOGS_DAYS (default 30), long enough to look back at the runs that
+    # matter; 0 keeps them all.
+    keep_logs="${RATMAP_KEEP_LOGS_DAYS:-30}"
+    if [ "$keep_logs" -gt 0 ] && [ -d "$LOG_DIR" ]; then
+      old_logs="$(find "$LOG_DIR" -maxdepth 1 -type f -mtime +"$keep_logs")"
+      if [ -n "$old_logs" ]; then
+        printf '  %-11s %8s  %s logs over %s days old in %s\n' "old logs" \
+          "$(printf '%s\n' "$old_logs" | xargs du -ch | tail -1 | cut -f1)" \
+          "$(printf '%s\n' "$old_logs" | wc -l | tr -d ' ')" "$keep_logs" "$LOG_DIR"
+        [ -n "$DRY_RUN" ] || printf '%s\n' "$old_logs" | xargs rm -f
+      fi
     fi
     "$SCRIPTS_DIR/prune-caches.sh" ${DRY_RUN:+--dry-run} \
       || echo "  ! prune-caches.sh failed; carrying on without it" >&2

@@ -82,6 +82,15 @@ again, before the preflight measures free space (from 2026-11-19, after a run fi
 disk on what the runs before it had left behind). `scripts/prune-caches.sh` has the full
 list and why each item is safe to remove:
 
+- **OSM extracts:** a continent's extract once `pinned-sources.tsv` pins that continent to
+  a newer snapshot, with its `.md5` and any `.unverified` download. `prefetch` also prunes
+  after it pins and before it downloads, so a `--repin` frees the old snapshot before
+  fetching the new one rather than holding both (~170 GB). An extract with no pin for its
+  continent, and a `-latest` one that `prefetch` may adopt, are kept and listed.
+- **Paths tilesets:** a continent's cached paths tileset built from a snapshot it is no
+  longer pinned to.
+- **Logs:** run logs in `/work/logs` older than `RATMAP_KEEP_LOGS_DAYS` (default 30; 0
+  keeps them).
 - **DEM cache:** clips under a key `fetch-dem.sh` no longer builds, after a key-version bump
   or a Mapterhorn re-pin. That includes every GLO-30 v1 clip since the move to Mapterhorn.
 - **OSM subsets:** a continent's subset whose extract or filter has changed since it was
@@ -424,7 +433,8 @@ Two details worth knowing:
 * **Pins expire.** Geofabrik keeps roughly a week of daily snapshots (first-of-month
   ones stick around as archives). Resume a run after longer than that and the pinned
   file is a 404 — `prefetch` says so and tells you to re-run with `--repin`, which
-  resolves fresh dates and refetches whatever is not already cached.
+  resolves fresh dates, removes the snapshots they replace, and refetches whatever is
+  not already cached.
 
 A `<continent>-latest.osm.pbf` left in the cache by an older run is not wasted: if its
 bytes hash to the pinned snapshot's digest then it *is* that snapshot, and `prefetch`

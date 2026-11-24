@@ -92,7 +92,8 @@ list and why each item is safe to remove:
 - **Logs:** run logs in `/work/logs` older than `RATMAP_KEEP_LOGS_DAYS` (default 30; 0
   keeps them).
 - **DEM cache:** clips under a key `fetch-dem.sh` no longer builds, after a key-version bump
-  or a Mapterhorn re-pin. That includes every GLO-30 v1 clip since the move to Mapterhorn.
+  or a Mapterhorn re-pin, and every GLO-30 clip, the source before 2026-11-18, unless the
+  run sets `DEM_SOURCE=glo30`.
 - **OSM subsets:** a continent's subset whose extract or filter has changed since it was
   built.
 - **dist/:** region files an older build named, such as `-contours` once contours are

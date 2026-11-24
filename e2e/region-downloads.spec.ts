@@ -273,6 +273,13 @@ test.describe('a poor connection', () => {
     // So: let the first couple of chunks through, hold every chunk after them at the gate
     // below, and open it only once the context is offline — at which point `continue()`
     // fails, exactly as a connection dropping mid-transfer does.
+    //
+    // The app's own offline setup finishes first. Pulled mid-precache, the plug fails the
+    // service worker's install too, and the app then rightly refuses Resume ("isn't set up
+    // to open without signal yet") — a different failure from the one under test, and one
+    // this test hit about one run in three, depending on how fast the shell precached.
+    await page.evaluate(() => navigator.serviceWorker.ready);
+
     let openGate!: () => void;
     const gate = new Promise<void>((resolve) => {
       openGate = resolve;

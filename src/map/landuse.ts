@@ -14,15 +14,15 @@ import { PROTOMAPS_HUTS_WATER_KINDS } from '../overlays/huts-water';
 export const TOWN_LABEL_LAYER_ID = 'places_locality';
 
 /**
- * The first basemap layer drawn *over* the ground: water, then everything built — tunnels,
- * buildings, roads, rail, bridges. Relief, contours, scree, walls and the region's other
+ * The first basemap layer drawn *over* the ground: streams and rivers, water, then
+ * everything built — tunnels, buildings, roads, rail, bridges. Relief, contours, scree, walls and the region's other
  * ground detail go beneath it, the way a paper hill map prints them: a road is laid over
  * the contours, which stop at its edge, and a contour never crosses a loch.
  *
  * They used to go above every road, bridge and building, so at z13 a contour every 10 m
  * across the main road through a valley all but hid it.
  */
-export const OVER_GROUND_FROM_LAYER_ID = 'water';
+export const OVER_GROUND_FROM_LAYER_ID = 'water_stream';
 
 /**
  * Whether one of the basemap's own layers (its id as ratmapBasemapLayers gives it, before
@@ -207,7 +207,28 @@ export function ratmapBasemapLayers(
   }
   const poisIndex = generated.findIndex((layer) => layer.id === 'pois');
   if (poisIndex >= 0) generated[poisIndex] = withoutHutsWater(generated[poisIndex]);
-  return generated.map((layer) => retuneWater(retuneRoad(layer, theme), theme, flavor.water));
+  return waterLinesUnderWater(generated).map((layer) =>
+    retuneWater(retuneRoad(layer, theme), theme, flavor.water),
+  );
+}
+
+/** The stream and river centreline layers, which run on through every lake they feed. */
+const WATER_LINE_LAYER_IDS = ['water_stream', 'water_river'];
+
+/**
+ * Streams and rivers moved from just above the water fill to just beneath it. OSM carries a
+ * river's centreline straight through every loch and reservoir it passes through (the Tees
+ * across Cow Green), and upstream draws the lines over the fill: harmless while they were
+ * the water's own colour, a line across the lake once they have an ink of their own. Under
+ * the fill, a lake hides its river the way a paper map does.
+ */
+function waterLinesUnderWater(layers: LayerSpecification[]): LayerSpecification[] {
+  const lines = layers.filter((layer) => WATER_LINE_LAYER_IDS.includes(layer.id));
+  const rest = layers.filter((layer) => !WATER_LINE_LAYER_IDS.includes(layer.id));
+  const water = rest.findIndex((layer) => layer.id === 'water');
+  // No water layer (labelsOnly): nothing to go beneath, and no lines either.
+  if (water < 0) return layers;
+  return [...rest.slice(0, water), ...lines, ...rest.slice(water)];
 }
 
 /**

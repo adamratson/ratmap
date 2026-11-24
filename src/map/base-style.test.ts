@@ -34,7 +34,8 @@ describe('buildBaseStyle', () => {
     const ids = style.layers.map((layer) => layer.id);
     const hillshade = ids.indexOf('hillshade');
     expect(hillshade).toBeGreaterThan(ids.indexOf('landcover'));
-    expect(hillshade).toBe(ids.indexOf('water') - 1);
+    expect(hillshade).toBe(ids.indexOf('water_stream') - 1);
+    expect(hillshade).toBeLessThan(ids.indexOf('water'));
     expect(hillshade).toBeLessThan(ids.indexOf('roads_minor'));
   });
 

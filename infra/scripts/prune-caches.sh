@@ -19,8 +19,9 @@
 #                pinned. An extract whose continent has no pin at all is kept, as is a
 #                <continent>-latest.osm.pbf: prefetch may yet pin, or adopt, that one.
 #   DEM cache    entries under a key fetch-dem.sh no longer builds: an older key version,
-#                a source re-pin, or GLO-30's v1 since the move to Mapterhorn. A full set
-#                of current entries is a planet's worth of DEMs, and kept: the next run
+#                a Mapterhorn re-pin, or any GLO-30 clip unless DEM_SOURCE=glo30 (the
+#                source before 2026-11-18, now only a diagnostic switch). A full set of
+#                current entries is a planet's worth of DEMs, and kept: the next run
 #                reads them.
 #   OSM subsets  a continent's subset whose extract has been re-downloaded, or has gone,
 #                or whose filter union has changed. osm_subset already replaces a stale

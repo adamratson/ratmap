@@ -46,11 +46,16 @@ describe('ratmapBasemapLayers', () => {
       'landuse_bare_rock',
       ...plain.slice(plain.indexOf('landuse_park') + 1),
     ];
-    expect(ids).toEqual([
+    const added = [
       ...withRock.slice(0, withRock.indexOf('buildings') + 1),
       'buildings_outline',
       ...withRock.slice(withRock.indexOf('buildings') + 1),
-    ]);
+    ];
+    // The same layers, in upstream's order apart from the water lines, which move beneath
+    // the water fill (tested on their own below).
+    const lines = ['water_stream', 'water_river'];
+    expect([...ids].sort()).toEqual([...added].sort());
+    expect(ids.filter((id) => !lines.includes(id))).toEqual(added.filter((id) => !lines.includes(id)));
   });
 
   it('draws from the source it is given, so region copies read their own archive', () => {
@@ -85,7 +90,7 @@ describe('ratmapBasemapLayers', () => {
     for (const ground of ['earth', 'landcover', 'landuse_park', 'landuse_bare_rock']) {
       expect(isOverGroundLayer(ground), ground).toBe(false);
     }
-    for (const built of ['water', 'buildings', 'buildings_outline', 'roads_minor_casing', 'roads_major', 'roads_bridges_major']) {
+    for (const built of ['water_stream', 'water_river', 'water', 'buildings', 'buildings_outline', 'roads_minor_casing', 'roads_major', 'roads_bridges_major']) {
       expect(isOverGroundLayer(built), built).toBe(true);
     }
     // Labels have their own place, above everything.
@@ -162,6 +167,18 @@ describe('roads', () => {
       for (const ground of [flavor.earth, flavor.wood_a, flavor.park_a]) {
         expect(contrast(STREAM_INK[theme], ground!)).toBeGreaterThanOrEqual(3);
       }
+    }
+  });
+
+  it('draws streams and rivers beneath the water fill, so a lake hides the river through it', () => {
+    // OSM runs the Tees's centreline straight across Cow Green reservoir; drawn over the
+    // fill in an ink of its own, it was a blue line across the lake.
+    for (const theme of ['light', 'dark'] as const) {
+      const order = ratmapBasemapLayers('basemap', theme, { lang: 'en' }).map((l) => l.id);
+      expect(order.indexOf('water_stream')).toBeGreaterThan(order.indexOf('landuse_runway'));
+      expect(order.indexOf('water_stream')).toBeLessThan(order.indexOf('water'));
+      expect(order.indexOf('water_river')).toBeLessThan(order.indexOf('water'));
+      expect(order.indexOf('water_river')).toBe(order.indexOf('water_stream') + 1);
     }
   });
 });

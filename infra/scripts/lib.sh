@@ -293,14 +293,20 @@ DEM_CACHE_GLO30_VERSION=v2
 DEM_CACHE_MAPTERHORN_VERSION=v1
 mapterhorn_pin() { printf '%s' "$MAPTERHORN_PLANET_ETAG" | tr -cd 'A-Za-z0-9' | cut -c1-12; }
 
-# dem_cache_key_is_current <key> — whether fetch-dem.sh, as it stands, can still produce
-# and read this key (a cache file's name without .tif or .txt).
+# dem_cache_key_is_current <key> — whether fetch-dem.sh, as it stands and with this
+# DEM_SOURCE, will read this key again (a cache file's name without .tif or .txt).
+#
+# GLO-30 entries count only when DEM_SOURCE=glo30. Mapterhorn has been the source since
+# 2026-11-18, and GLO-30 survives only as the switch for telling a Mapterhorn problem
+# from ours, so a planet of GLO-30 clips from before then is cache no run reads. A
+# diagnostic DEM_SOURCE=glo30 run fetches what it needs again; Mapterhorn entries are kept
+# whatever DEM_SOURCE says, since that is what every default run reads.
 dem_cache_key_is_current() {
   case "$1" in
     "mapterhorn-z"*"-$(mapterhorn_pin)-${DEM_CACHE_MAPTERHORN_VERSION}_"*) return 0 ;;
-    "glo30-${DEM_CACHE_GLO30_VERSION}_"*) return 0 ;;
+    "glo30-${DEM_CACHE_GLO30_VERSION}_"*) [ "${DEM_SOURCE:-mapterhorn}" = glo30 ] ;;
+    *) return 1 ;;
   esac
-  return 1
 }
 
 # Memory this process may actually use, in whole GB.

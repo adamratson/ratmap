@@ -215,6 +215,43 @@ of its log follow the failure. `RATMAP_LOG_LEVEL=debug` (or `global --debug ...`
 everything on the console as well, as it used to be. The renderer is
 `scripts/tools/cmd/stage-console`.
 
+### Did it work?
+
+Every run ends with a summary, whether it succeeded, failed, or was stopped (ctrl-C,
+`docker stop`):
+
+```
+================================================================
+run 20261123T091405Z FAILED at contours, after 14:02:11
+
+  prefetch           ok          41:05
+  world              ok           0:00  already built
+  regions            ok        5:01:00  12 built, 379 already built
+  contours           FAILED    3:10:00  49 built, 13 FAILED
+                                        failed: england-south-west scotland greece ...
+  avalanche          not run
+  manifest           not run
+
+  see /work/logs/20261123T091405Z-contours.log
+  and /work/logs/20261123T091405Z-contours-<region>.log for each failed region
+  logs:  /work/logs/20261123T091405Z-*.log
+  dist/: 312G, 391 region(s)
+================================================================
+```
+
+The first line is the verdict. The run stops at the first stage that fails, and a
+per-region stage (`regions`, `contours`, `avalanche`) fails if any one of its regions
+does, after building all the rest. The exit status says the same: 0 when every stage
+succeeded, 1 when one failed. For a detached run, `docker wait ratmap-global` waits for
+it and prints that status.
+
+The summary is also saved as `/work/logs/<run-id>-summary.txt`, and the last run's as
+`latest-summary.txt`, for when the console is gone:
+
+```sh
+docker compose run --rm --entrypoint cat infra /work/logs/latest-summary.txt
+```
+
 ### Stages
 
 `global` takes any subset, in any order, or `all`:

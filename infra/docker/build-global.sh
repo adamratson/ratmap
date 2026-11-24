@@ -115,6 +115,24 @@ log() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 # (the console shows it at debug), and `progress` moves the stage's progress bar.
 note()     { printf '  %s\n' "$*"; }
 progress() { printf '@@progress %s %s %s\n' "$1" "$2" "$3"; }
+# `result` is a line for the stage's row in the summary that ends the run (run_summary):
+# what it built, or why it built nothing. A stage runs on the left of a pipe, in a
+# subshell, so its lines reach the summary through a file of its own.
+result() {
+  [ -n "${RESULTS:-}" ] && printf '%s\n' "$*" >> "$RESULTS/$stage"
+  return 0
+}
+# region_result <built> <already built> [failed id...] — a per-region stage's result.
+region_result() {
+  local built="$1" already="$2" line
+  shift 2
+  line="$built built"
+  [ "$#" -gt 0 ] && line="$line, $# FAILED"
+  [ "$already" -gt 0 ] && line="$line, $already already built"
+  result "$line"
+  [ "$#" -gt 0 ] && result "failed: $*"
+  return 0
+}
 # 75 -> 1:15, 11045 -> 3:04:05
 duration() {
   if [ "$1" -ge 3600 ]; then
@@ -626,6 +644,7 @@ stage_prefetch() {
   if [ -n "${RATMAP_NO_CACHE:-}" ]; then
     log "RATMAP_NO_CACHE set — skipping the verified prefetch;"
     log "  the build scripts will still cache lazily into $OSM_CACHE, just unverified"
+    result "skipped: RATMAP_NO_CACHE is set"
     return 0
   fi
   if [ -n "$REPIN" ] && [ -f "$PIN_FILE" ]; then
@@ -723,6 +742,7 @@ have_output() {  # have_output <glob...>
 stage_world() {
   if [ -z "$FORCE" ] && have_output "$DIST_DIR/world-catalog-*.pmtiles"; then
     log "world: already built ($(ls -1 "$DIST_DIR"/world-catalog-*.pmtiles | tail -1)) — --force to redo"
+    result "already built"
     return 0
   fi
   "$SCRIPTS_DIR/build-world-catalog.sh"
@@ -731,6 +751,7 @@ stage_world() {
 stage_terrain() {
   if [ -z "$FORCE" ] && have_output "$DIST_DIR/terrain-global-*.pmtiles"; then
     log "terrain: already built — --force to redo"
+    result "already built"
     return 0
   fi
   "$SCRIPTS_DIR/build-terrain.sh"
@@ -739,6 +760,7 @@ stage_terrain() {
 stage_peaks() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/peaks-global.pmtiles" ]; then
     log "peaks: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # A genuinely global peaks build: the whole point of this image. With every continent
@@ -750,6 +772,7 @@ stage_peaks() {
 stage_sac() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/sac-global.pmtiles" ]; then
     log "sac: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # **Before `regions`, not after.** build-region.sh cuts each region's `<id>-sac.pmtiles`
@@ -764,6 +787,7 @@ stage_sac() {
 stage_paths() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/paths-global.pmtiles" ]; then
     log "paths: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # The walkable network at z12-13, which the basemap does not carry: Protomaps tags paths
@@ -786,6 +810,7 @@ stage_paths() {
 stage_terrain-features() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/terrain-features-global.pmtiles" ]; then
     log "terrain-features: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # Scree, shingle, rock and boulders — natural= values Protomaps' OSM ingestion drops
@@ -797,6 +822,7 @@ stage_terrain-features() {
 stage_landmarks() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/landmarks-global.pmtiles" ]; then
     log "landmarks: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # Masts, towers, trig pillars and cairns — man_made= POIs Protomaps does not keep (see
@@ -807,6 +833,7 @@ stage_landmarks() {
 stage_detail() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/detail-global.pmtiles" ]; then
     log "detail: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # Walls, fences, power lines, gates, stiles and fords — none of it in the basemap (see
@@ -817,6 +844,7 @@ stage_detail() {
 stage_parking() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/parking-global.pmtiles" ]; then
     log "parking: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # Car parks, the small unnamed ones included — the basemap drops most of those (see
@@ -827,6 +855,7 @@ stage_parking() {
 stage_huts() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/huts-global.pmtiles" ]; then
     log "huts: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # Huts, shelters, campsites and water, told apart where the basemap cannot (see
@@ -837,6 +866,7 @@ stage_huts() {
 stage_routes() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/routes-global.pmtiles" ]; then
     log "routes: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # Named walking routes, joined from their relations — the basemap carries none (see
@@ -847,6 +877,7 @@ stage_routes() {
 stage_access() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/access-global.pmtiles" ]; then
     log "access: already built — --force to redo"
+    result "already built"
     return 0
   fi
   # Ways tagged private that are open on foot, which the router needs because the basemap
@@ -861,6 +892,7 @@ stage_places() {
   if [ -z "$FORCE" ] && [ -f "$DIST_DIR/places.sqlite" ] \
      && compgen -G "$DIST_DIR/regions/*/*-places-1.sqlite" >/dev/null; then
     log "places: already built — --force to redo"
+    result "already built"
     return 0
   fi
   PLACES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-places.sh"
@@ -927,7 +959,7 @@ stage_regions() {
     fi
   done
 
-  local id wants_terrain only
+  local id wants_terrain only already=0
   local -a jobs=() failed=()
   while read -r id wants_terrain; do
     only=""
@@ -953,6 +985,7 @@ stage_regions() {
         only="--only=$(IFS=,; echo "${missing[*]}")"
       else
         log "regions/$id: already built — --force to redo"
+        already=$((already + 1))
         continue
       fi
     fi
@@ -965,6 +998,7 @@ stage_regions() {
 
   if [ "${#jobs[@]}" -eq 0 ]; then
     log "regions: nothing to build"
+    region_result 0 "$already"
     return 0
   fi
 
@@ -1041,6 +1075,7 @@ stage_regions() {
     done < <(printf '%s\n' "${jobs[@]}" | xargs -P "$parallel" -L 1 bash -c 'build_one_region "$@"' _)
   fi
 
+  region_result $((${#jobs[@]} - ${#failed[@]})) "$already" ${failed[@]+"${failed[@]}"}
   if [ "${#failed[@]}" -gt 0 ]; then
     log "regions: ${#failed[@]} of the catalogue failed: ${failed[*]}"
     return 1
@@ -1052,18 +1087,19 @@ stage_contours() {
   # roughly 300 MB of intermediate GeoJSON per square degree; the planet's land surface
   # is ~15,000 square degrees. That is the C14 scratch-space problem, and it is why
   # contours ship per downloaded region rather than as a global artifact.
-  [ -n "$DRY_RUN" ] && { log "contours: no dry-run mode, skipping"; return 0; }
+  [ -n "$DRY_RUN" ] && { log "contours: no dry-run mode, skipping"; result "skipped: no dry-run mode"; return 0; }
 
   # Only regions that opt in with "contours": true. Contours are the most expensive
   # artifact by a wide margin — roughly 300 MB of intermediate GeoJSON per square degree
   # — and the catalogue now covers the globe. Running this over every region is the
   # planet-contour build the spec says never to attempt (C14, §4 Phase 2), reached by
   # accident rather than by decision.
-  local id
+  local id already=0
   local -a ids=()
   while read -r id _; do
     if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-contours-1.pmtiles" ]; then
       log "contours/$id: already built — --force to redo"
+      already=$((already + 1))
       continue
     fi
     ids+=("$id")
@@ -1071,6 +1107,7 @@ stage_contours() {
 
   if [ "${#ids[@]}" -eq 0 ]; then
     log "contours: nothing to build"
+    region_result 0 "$already"
     return 0
   fi
 
@@ -1170,6 +1207,7 @@ stage_contours() {
     wait "$DEM_FETCHER" 2>/dev/null || true
   fi
 
+  region_result $((${#ids[@]} - ${#failed[@]})) "$already" ${failed[@]+"${failed[@]}"}
   if [ "${#failed[@]}" -gt 0 ]; then
     log "contours: ${#failed[@]} failed: ${failed[*]}"
     return 1
@@ -1184,13 +1222,14 @@ stage_avalanche() {
   # Far cheaper than contours, though — no line tracing, no large GeoJSON intermediate.
   # The whole working set is a few byte rasters the size of the region, so this is
   # parallel by default where contours is not.
-  [ -n "$DRY_RUN" ] && { log "avalanche: no dry-run mode, skipping"; return 0; }
+  [ -n "$DRY_RUN" ] && { log "avalanche: no dry-run mode, skipping"; result "skipped: no dry-run mode"; return 0; }
 
-  local id
+  local id already=0
   local -a ids=()
   while read -r id _; do
     if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-avalanche-2.pmtiles" ]; then
       log "avalanche/$id: already built — --force to redo"
+      already=$((already + 1))
       continue
     fi
     ids+=("$id")
@@ -1198,6 +1237,7 @@ stage_avalanche() {
 
   if [ "${#ids[@]}" -eq 0 ]; then
     log "avalanche: nothing to build"
+    region_result 0 "$already"
     return 0
   fi
 
@@ -1245,6 +1285,7 @@ stage_avalanche() {
     progress "$n" "${#ids[@]}" regions
   done < <(printf '%s\n' "${ids[@]}" | xargs -P "$parallel" -I{} bash -c 'build_one_avalanche "$@"' _ {})
 
+  region_result $((${#ids[@]} - ${#failed[@]})) "$already" ${failed[@]+"${failed[@]}"}
   if [ "${#failed[@]}" -gt 0 ]; then
     log "avalanche: ${#failed[@]} failed: ${failed[*]}"
     return 1
@@ -1381,8 +1422,82 @@ if [ -z "$SKIP_PREFLIGHT" ]; then
 fi
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
-declare -a summary=()
+RESULTS="$CATALOG_DIR/results"
+mkdir -p "$RESULTS"
+declare -A stage_status=() stage_time=()
+running=""
 overall_start=$SECONDS
+
+# The summary that ends every run, however it ends: every stage asked for, with what it
+# came to (a stage's `result` lines) or that it never ran, and the verdict on the first
+# line. A run takes days and nobody reads its whole console, so this is the part to look
+# at, and it is kept beside the logs as <run>-summary.txt — latest-summary.txt too, for a
+# run that holds the lock — for a run whose console is gone.
+run_summary() {
+  local rc="$1" s st t line verdict pad
+  local total=$((SECONDS - overall_start))
+  pad="$(printf '%40s' '')"
+  if [ -n "$running" ] && [ -z "${stage_status[$running]:-}" ]; then
+    stage_status[$running]=stopped
+    stage_time[$running]=$((SECONDS - start))
+  fi
+  if [ "$rc" -eq 0 ] && [ -z "$running" ]; then
+    verdict="succeeded"
+  else
+    verdict="FAILED (exit $rc)"
+    for s in "${stages[@]}"; do
+      case "${stage_status[$s]:-}" in
+        FAILED)  verdict="FAILED at $s" ;;
+        # Killed by a signal: bash's own status is no guide to that in the trap.
+        stopped) verdict="STOPPED during $s" ;;
+        *) continue ;;
+      esac
+      break
+    done
+  fi
+  {
+    echo "================================================================"
+    echo "run $RUN_ID $verdict, after $(duration "$total")"
+    echo
+    for s in "${stages[@]}"; do
+      st="${stage_status[$s]:-not run}"
+      t=""
+      [ -n "${stage_time[$s]:-}" ] && t="$(duration "${stage_time[$s]}")"
+      line="$(printf '  %-18s %-8s %8s' "$s" "$st" "$t")"
+      [ -s "$RESULTS/$s" ] && line="$line  $(head -n 1 "$RESULTS/$s")"
+      printf '%s\n' "$line" | sed 's/ *$//'
+      # Further lines (a region stage's failures) beneath the first, wrapped.
+      tail -n +2 "$RESULTS/$s" 2>/dev/null | fold -s -w 50 | sed "s/^/$pad/"
+    done
+    echo
+    if [ "$verdict" != succeeded ]; then
+      for s in "${stages[@]}"; do
+        case "${stage_status[$s]:-}" in
+          FAILED|stopped)
+            echo "  see $LOG_DIR/${RUN_ID}-$s.log"
+            # Per-region logs only when regions were built side by side; one at a time,
+            # their output is in the stage's log.
+            if grep -q '^failed: ' "$RESULTS/$s" 2>/dev/null \
+               && compgen -G "$LOG_DIR/${RUN_ID}-$s-*.log" > /dev/null; then
+              echo "  and $LOG_DIR/${RUN_ID}-$s-<region>.log for each failed region"
+            fi
+            ;;
+        esac
+      done
+    fi
+    echo "  logs:  $LOG_DIR/${RUN_ID}-*.log"
+    [ -d "$DIST_DIR" ] && echo "  dist/: $(du -sh "$DIST_DIR" 2>/dev/null | cut -f1)," \
+      "$(find "$DIST_DIR/regions" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ') region(s)"
+    echo "================================================================"
+  } | tee "$LOG_DIR/${RUN_ID}-summary.txt"
+  if [ -n "${RUN_TMP:-}" ]; then
+    cp "$LOG_DIR/${RUN_ID}-summary.txt" "$LOG_DIR/latest-summary.txt"
+  fi
+}
+# Not INT or TERM traps: bash defers a trap until the stage's pipeline has finished, so
+# ctrl-C or `docker stop` would wait out the stage. Untrapped, the signal kills bash at
+# once, and bash runs the EXIT trap on the way out all the same.
+trap 'rc=$?; run_summary "$rc" || true; rm -rf "$CATALOG_DIR"' EXIT
 
 hr
 log "run $RUN_ID: ${stages[*]}"
@@ -1398,34 +1513,27 @@ for stage in "${stages[@]}"; do
   esac
   hr
   log "▶ $stage"
+  running="$stage"
   start=$SECONDS
   if "stage_$stage" 2>&1 \
        | "$CATALOG_DIR/stage-console" --stage "$stage" --log "$logfile" \
            --level "$LOG_LEVEL" --sources "$sources"; then
-    elapsed=$((SECONDS - start))
-    summary+=("$(printf '  %-18s ok      %s' "$stage" "$(duration "$elapsed")")")
-    log "✓ $stage  $(duration "$elapsed")"
+    stage_time[$stage]=$((SECONDS - start))
+    stage_status[$stage]=ok
+    log "✓ $stage  $(duration "${stage_time[$stage]}")"
   else
-    elapsed=$((SECONDS - start))
-    summary+=("$(printf '  %-18s FAILED  %s' "$stage" "$(duration "$elapsed")")")
-    log "✗ $stage FAILED after $(duration "$elapsed")"
+    stage_time[$stage]=$((SECONDS - start))
+    stage_status[$stage]=FAILED
+    log "✗ $stage FAILED after $(duration "${stage_time[$stage]}")"
     # At info the console held back most of what led up to it: the end of the log is
     # what anyone would look at first.
     if [ "$LOG_LEVEL" = info ]; then
       echo "  the end of $logfile:"
       tail -c 200000 "$logfile" | tr '\r' '\n' | grep -v '^\s*$' | tail -n 25 | sed 's/^/  | /'
     fi
-    hr
-    printf '%s\n' "${summary[@]}"
-    echo "stage '$stage' failed — see $logfile" >&2
+    # The summary comes on the way out (the EXIT trap); the stages after this one do
+    # not run.
     exit 1
   fi
+  running=""
 done
-
-total=$((SECONDS - overall_start))
-hr
-echo "run $RUN_ID complete in $(duration "$total")"
-printf '%s\n' "${summary[@]}"
-hr
-echo "dist/:"
-du -h -d 2 "$DIST_DIR" | sort -k2 | sed 's/^/  /'

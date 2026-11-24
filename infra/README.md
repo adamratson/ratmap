@@ -265,6 +265,13 @@ hung. If the listing cannot be used it says why and falls back to that per-file 
 with progress every 25. `FORCE_UPLOAD=1` skips the check and re-sends everything, for the
 rare archive rebuilt at exactly the same size.
 
+A dropped connection doesn't end the upload. Each request gets `AWS_MAX_ATTEMPTS`
+attempts (default 10, against aws-cli's own 3), and a file that still fails is sent
+again whole, `UPLOAD_TRIES` times in all (default 3, a minute's wait more each time).
+One that fails every try is listed at the end, after the rest have gone up, and the
+script exits 1 *without* uploading the manifest, which would otherwise offer downloads
+that 404. Run it again to send what is missing.
+
 ## Verify (C4 acceptance check)
 
 After uploading, confirm CORS and range requests actually work from a browser origin, not

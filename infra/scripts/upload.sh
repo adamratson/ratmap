@@ -21,6 +21,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # aws-cli v2's default CRC32 request-checksum trailer is a separate, known incompatibility
 # with non-AWS S3 gateways (hit against R2 too, see infra/docker/README.md) — force it off.
 export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
+# Retries. aws-cli's default is 3 attempts per request, and a multipart upload fails whole
+# when one part runs out of them: on 2026-11-24 austria-contours-1 died at part 26 when the
+# gateway closed the connection ("Connection was closed before we received a valid
+# response"). Measured against a server that drops every part (2026-11-24): the default
+# gave up after 3 attempts and ~5 s; AWS_MAX_ATTEMPTS raises it, with backoff (standard
+# mode, capped at 20 s a wait), and a failed upload is still aborted, leaving no parts
+# behind. Never exported empty: aws-cli then refuses every call (exit 255).
+export AWS_RETRY_MODE="${AWS_RETRY_MODE:-standard}"
+export AWS_MAX_ATTEMPTS="${AWS_MAX_ATTEMPTS:-10}"
 AWS_DEFAULT_REGION="$S3_REGION"
 export AWS_DEFAULT_REGION
 BUCKET_URL="s3://${S3_BUCKET}"
@@ -98,16 +107,48 @@ fi
 skipped=$(( ${#files[@]} - ${#to_upload[@]} ))
 echo "  $skipped already present, ${#to_upload[@]} to upload"
 
+# A file whose parts run out of retries is sent again whole, UPLOAD_TRIES times in all
+# (aws s3 cp cannot resume a multipart upload), after a wait that grows: an outage of the
+# gateway lasts longer than one request's backoff. One that fails every try is left for
+# the next run, and the rest still go: a catalogue upload is hours, and one bad archive
+# should not stop it. The next run sends what is missing, as it would anyway.
+UPLOAD_TRIES="${UPLOAD_TRIES:-3}"
+UPLOAD_RETRY_WAIT="${UPLOAD_RETRY_WAIT:-60}"   # seconds, times the try
 uploaded=0
+n=0
+failed=()
 # ${arr[@]+...} rather than a bare "${arr[@]}": an empty array under `set -u` is an
 # "unbound variable" error before bash 4.4, and nothing to upload is the common case.
 for key in ${to_upload[@]+"${to_upload[@]}"}; do
+  n=$((n + 1))
+  echo "Uploading $key ($n of ${#to_upload[@]}, $(du -h "$DIST_DIR/$key" | cut -f1))"
+  try=1
+  until s3_cp "$DIST_DIR/$key" "$key" --no-progress; do
+    if [ "$try" -ge "$UPLOAD_TRIES" ]; then
+      echo "  ! gave up on $key after $try tries" >&2
+      failed+=("$key")
+      continue 2
+    fi
+    echo "  ! $key failed (try $try of $UPLOAD_TRIES); sending it again in $((UPLOAD_RETRY_WAIT * try)) s" >&2
+    sleep $((UPLOAD_RETRY_WAIT * try))
+    try=$((try + 1))
+  done
   uploaded=$((uploaded + 1))
-  echo "Uploading $key ($uploaded of ${#to_upload[@]}, $(du -h "$DIST_DIR/$key" | cut -f1))"
-  s3_cp "$DIST_DIR/$key" "$key" --no-progress
 done
 
 echo "$uploaded uploaded, $skipped already present"
+
+# The manifest would list what failed, and offer downloads that 404: stop before it. The
+# published manifest stays as it was, and a failed upload leaves the bucket's copy of that
+# key, if it had one, untouched.
+if [ "${#failed[@]}" -gt 0 ]; then
+  echo >&2
+  echo "FAILED: ${#failed[@]} archive(s) could not be uploaded:" >&2
+  printf '  %s\n' "${failed[@]}" >&2
+  echo "The manifest was not uploaded. Run upload.sh again to send them (the rest are" >&2
+  echo "already there and are skipped)." >&2
+  exit 1
+fi
 
 # The manifest must go up *after* the archives it describes: a client that reads a
 # manifest listing artifacts which aren't uploaded yet would offer a download that 404s.

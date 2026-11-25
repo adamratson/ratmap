@@ -14,6 +14,8 @@ import type { AvalancheCell } from '../routes/avalanche-sampler';
 import type { Region } from '../regions/manifest';
 import { fillReadout } from '../ui/readout';
 import { gridReference } from '../location/grid-ref';
+import { formatBearing, type BearingToPoint } from '../location/bearing';
+import { formatDistance } from '../routes/geo';
 import type { StatusCentre } from '../ui/status';
 import { savePlace } from '../search/saved-places';
 
@@ -59,6 +61,34 @@ function renderRouteActions(container: HTMLElement, route: CardRoute): void {
 }
 
 /**
+ * The way from you to a card's point: bearing and distance where there is a fix, and the
+ * button that takes the compass there.
+ */
+export interface CardBearing {
+  /** Null without a position fix. */
+  reading: BearingToPoint | null;
+  /** Open the compass, steering to this point. Called from the tap, for iOS (heading.ts). */
+  follow: () => void;
+}
+
+function renderBearing(container: HTMLElement, { reading, follow }: CardBearing): void {
+  const figure = document.createElement('span');
+  figure.className = 'sheet-bearing-figure readout';
+  if (reading) {
+    figure.textContent = reading.tooClose
+      ? `Within ${formatDistance(Math.max(reading.distanceM, 10))} of you`
+      : `${formatBearing(reading.magnetic ?? reading.true)} ${reading.magnetic === null ? 'true' : 'magnetic'} · ${formatDistance(reading.distanceM)}`;
+  }
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'sheet-follow-bearing secondary';
+  button.textContent = 'Follow bearing';
+  button.addEventListener('click', follow);
+  container.append(button);
+  if (reading) container.append(figure);
+}
+
+/**
  * What the avalanche terrain artifact says about a tapped point, as the planner reads it:
  * null where no downloaded region carries the artifact, `cell: null` inside one where the
  * archive has no tile.
@@ -74,7 +104,14 @@ export function renderPeakSheet(
     avalanche,
     route,
     hint,
-  }: { status: Toasts; avalanche?: AvalancheReading; route?: CardRoute; hint?: string | null },
+    bearing,
+  }: {
+    status: Toasts;
+    avalanche?: AvalancheReading;
+    route?: CardRoute;
+    hint?: string | null;
+    bearing?: CardBearing;
+  },
 ): void {
   const name = peak.name?.trim() || 'Unnamed summit';
   const ele = formatElevation(peak.ele);
@@ -88,6 +125,7 @@ export function renderPeakSheet(
     <p class="sheet-coords"></p>
     <p class="sheet-gridref"></p>
     ${route ? '<div class="sheet-actions sheet-route"></div>' : ''}
+    ${bearing ? '<div class="sheet-actions sheet-bearing"></div>' : ''}
     <div class="sheet-actions">
       <button class="sheet-save${route ? ' secondary' : ''}" type="button">Save place</button>
       ${wikidata ? `<a class="sheet-link" target="_blank" rel="noreferrer">Wikidata</a>` : ''}
@@ -110,6 +148,7 @@ export function renderPeakSheet(
   renderOpenIn(body.querySelector<HTMLElement>('.sheet-open-in')!, lngLat, name);
   if (avalanche) renderAvalancheReadout(body.querySelector<HTMLElement>('.sheet-avalanche')!, avalanche);
   if (route) renderRouteActions(body.querySelector<HTMLElement>('.sheet-route')!, route);
+  if (bearing) renderBearing(body.querySelector<HTMLElement>('.sheet-bearing')!, bearing);
 
   body.querySelector('.sheet-save')!.addEventListener('click', () => {
     void savePlace({
@@ -173,11 +212,13 @@ export function renderCoordsSheet(
     elevation,
     avalanche,
     route,
+    bearing,
   }: {
     status: Toasts;
     elevation: Promise<number | null>;
     avalanche?: AvalancheReading;
     route?: CardRoute;
+    bearing?: CardBearing;
   },
 ): void {
   const coordsText = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
@@ -187,6 +228,7 @@ export function renderCoordsSheet(
     <p class="sheet-gridref"></p>
     <p class="sheet-ele">Reading elevation…</p>
     ${route ? '<div class="sheet-actions sheet-route"></div>' : ''}
+    ${bearing ? '<div class="sheet-actions sheet-bearing"></div>' : ''}
     <div class="sheet-actions">
       <button class="sheet-copy${route ? ' secondary' : ''}" type="button">Copy</button>
       <button class="sheet-save${route ? ' secondary' : ''}" type="button">Save place</button>
@@ -199,6 +241,7 @@ export function renderCoordsSheet(
   renderOpenIn(body.querySelector<HTMLElement>('.sheet-open-in')!, lngLat, coordsText);
   if (avalanche) renderAvalancheReadout(body.querySelector<HTMLElement>('.sheet-avalanche')!, avalanche);
   if (route) renderRouteActions(body.querySelector<HTMLElement>('.sheet-route')!, route);
+  if (bearing) renderBearing(body.querySelector<HTMLElement>('.sheet-bearing')!, bearing);
 
   // Saved with the place once known, as a summit's height is. A save tapped before the
   // read lands goes without it rather than waiting on it.

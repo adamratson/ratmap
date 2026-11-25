@@ -24,6 +24,7 @@ import { watchMapHealth } from './map/network-status';
 import { supplyParkingIcons } from './map/parking';
 import { TileSourceRegistry } from './map/tile-source-registry';
 import {
+  type CardBearing,
   type CardRoute,
   PeakTooltip,
   renderCoordsSheet,
@@ -58,6 +59,9 @@ import { PrintController } from './print/print-view';
 import { ROUTE_SOURCE_ID } from './routes/route-layers';
 import { setUpCompass } from './ui/compass';
 import { CompassView } from './ui/compass-view';
+import { bearingTo, type Fix } from './location/bearing';
+import { fieldNear } from './location/declination';
+import { gridReference } from './location/grid-ref';
 import { PositionReadout } from './location/position-readout';
 import { renderLayersView } from './ui/layers-view';
 import { renderLegend } from './ui/legend-view';
@@ -164,15 +168,37 @@ sheet.peek.innerHTML = `
  * grid convergence where you are, or where the map is looking without a fix.
  */
 const compassView = new CompassView({
-  place: () => {
-    const state = locationUi.location.getState();
-    if (state.status === 'tracking') {
-      return { lng: state.position.coords.longitude, lat: state.position.coords.latitude };
-    }
+  fix: () => currentFix(),
+  centre: () => {
     const { lng, lat } = map.getCenter().wrap();
     return { lng, lat };
   },
 });
+
+/** Where you are, while the location dot has a fix. */
+function currentFix(): Fix | null {
+  const state = locationUi.location.getState();
+  if (state.status !== 'tracking') return null;
+  const { longitude: lng, latitude: lat, accuracy } = state.position.coords;
+  return { lng, lat, accuracyM: Number.isFinite(accuracy) ? accuracy : null };
+}
+
+/**
+ * A card's way from you to its point, and its "Follow bearing": the compass, steering
+ * there. A position is asked for if there is none — it is what the bearing is from — but
+ * the map is left where it is: the point is what is being looked at.
+ */
+function cardBearing(lngLat: maplibregl.LngLat, name: string): CardBearing {
+  const fix = currentFix();
+  return {
+    reading: fix ? bearingTo(fix, [lngLat.lng, lngLat.lat], fieldNear(fix.lat, fix.lng)) : null,
+    follow: () => {
+      if (!fix) locationUi.watch();
+      compassView.setTarget({ lng: lngLat.lng, lat: lngLat.lat, name });
+      views.open('compass', (body) => compassView.open(body));
+    },
+  };
+}
 
 const compassViewButton = document.querySelector<HTMLButtonElement>('#compass-view-btn')!;
 
@@ -636,6 +662,7 @@ function openPeakCard(properties: PeakProperties, lngLat: maplibregl.LngLat): vo
       status,
       route,
       hint,
+      bearing: cardBearing(lngLat, properties.name?.trim() || 'Unnamed summit'),
       ...(avalanche ? { avalanche } : {}),
     }),
   );
@@ -737,6 +764,7 @@ function showCoordsSheet(tapped: maplibregl.LngLat, { focus = false } = {}): voi
         status,
         elevation,
         route,
+        bearing: cardBearing(lngLat, gridReference(lngLat.lng, lngLat.lat)?.text ?? `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`),
         ...(avalanche ? { avalanche } : {}),
       }),
     { focus },
@@ -885,7 +913,10 @@ const locationUi = setUpLocation({
   onPosition: (lngLat) => planner.updatePosition(lngLat),
   onPositionUnavailable: () => planner.positionUnavailable(),
   onDotClick: ([lng, lat]) => showCoordsSheet(new maplibregl.LngLat(lng, lat)),
-  onStateChange: (state) => positionReadout.update(state),
+  onStateChange: (state) => {
+    positionReadout.update(state);
+    compassView.positionChanged();
+  },
 });
 
 // --- Storage + install onboarding (C1, C2) ------------------------------------------

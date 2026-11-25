@@ -43,6 +43,31 @@ describe('the summit card', () => {
     expect(body.querySelector('.sheet-gridref')!.textContent).toBe('OS NN 1667 7128');
   });
 
+  it('gives the bearing and distance from you, and follows it on request', () => {
+    const follow = vi.fn();
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, {
+      status,
+      bearing: { reading: { true: 40, magnetic: 41.2, distanceM: 3288, tooClose: false }, follow },
+    });
+    expect(body.querySelector('.sheet-bearing-figure')!.textContent).toBe('041° magnetic · 3.29 km');
+    body.querySelector<HTMLButtonElement>('.sheet-follow-bearing')!.click();
+    expect(follow).toHaveBeenCalled();
+  });
+
+  it('still offers to follow a bearing before there is a fix to give one from', () => {
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, { status, bearing: { reading: null, follow: vi.fn() } });
+    expect(body.querySelector('.sheet-bearing-figure')).toBeNull();
+    expect(body.querySelector('.sheet-follow-bearing')).not.toBeNull();
+  });
+
+  it('labels a bearing true where there is no magnetic one', () => {
+    renderPeakSheet(body, { name: 'Ben Nevis' }, BEN_NEVIS, {
+      status,
+      bearing: { reading: { true: 40, magnetic: null, distanceM: 3288, tooClose: false }, follow: vi.fn() },
+    });
+    expect(body.querySelector('.sheet-bearing-figure')!.textContent).toBe('040° true · 3.29 km');
+  });
+
   it('gives a UTM reference outside Britain', () => {
     renderPeakSheet(body, { name: 'Mont Blanc' }, new maplibregl.LngLat(6.86517, 45.83265), { status });
     expect(body.querySelector('.sheet-gridref')!.textContent).toBe('UTM 32T 334198E 5077670N');

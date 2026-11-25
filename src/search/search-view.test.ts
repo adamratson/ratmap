@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
 import type { StatusCentre } from '../ui/status';
+import { gridReference } from '../location/grid-ref';
 
 // The FTS index needs the SQLite wasm runtime, which jsdom cannot load; the search itself
 // is covered by search.test.ts. Here only what the box does with a result matters.
@@ -106,6 +107,18 @@ describe('SearchBox focus after choosing a result', () => {
     press('Enter');
 
     expect(onCoordinates).toHaveBeenCalledWith({ lat: 56.79685, lng: -5.0036 });
+  });
+
+  it('finds a grid reference, named as typed, and hands on the middle of its square', async () => {
+    await typeAndWaitForResults('nn166712');
+    expect(results.querySelector('.result-name')!.textContent).toBe('NN 166 712');
+    expect(results.querySelector('.result-meta')!.textContent).toBe('OS National Grid');
+    press('ArrowDown');
+    press('Enter');
+
+    // The centre of the 100 m square: E 216650 N 771250.
+    const { lat, lng } = onCoordinates.mock.calls[0]![0];
+    expect(gridReference(lng, lat)!.text).toBe('NN 1665 7125');
   });
 
   it('says so when a search throws, and clears the stale results', async () => {

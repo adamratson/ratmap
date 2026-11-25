@@ -1,5 +1,7 @@
 import { COMPASS_UNRELIABLE_NT, fieldNear, type MagneticField } from '../location/declination';
 import { HeadingWatcher, trueHeading, type Heading, type HeadingPermission } from '../location/heading';
+import { bearingTo, formatBearing, turnTo, type BearingToPoint, type Fix } from '../location/bearing';
+import { formatDistance } from '../routes/geo';
 import { gridConvergence, gridFor } from '../print/grid';
 
 // The compass panel: which way the phone is pointing, as a number to walk on.
@@ -12,6 +14,11 @@ import { gridConvergence, gridFor } from '../print/grid';
 // The phone's own reading is magnetic on every platform (heading.ts), so magnetic is the
 // figure that is measured; true and grid are worked out from it with the local declination
 // and grid convergence, and left blank rather than guessed where either is unknown.
+//
+// Given a target (a summit or point's "Follow bearing"), it also steers: the target's
+// magnetic bearing from your fix, marked on the card, and which way to turn to face it.
+
+export { formatBearing };
 
 /** Where the declination and grid convergence are worked out. */
 export interface CompassPlace {
@@ -40,12 +47,6 @@ export function compassReadings(magnetic: number, place: CompassPlace, field: Ma
   };
 }
 
-/** "047°": three figures, as a bearing is said and set on a compass. */
-export function formatBearing(degrees: number): string {
-  const whole = Math.round(normalise(degrees)) % 360;
-  return `${whole.toString().padStart(3, '0')}°`;
-}
-
 const POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
 /** Sixteen points: this one is for walking on, unlike a search result's eight (geo.ts). */
@@ -60,14 +61,28 @@ function normalise(degrees: number): number {
 /** How long to wait for a first reading before saying there may be no compass at all. */
 const NO_READING_MS = 3000;
 
+/** Somewhere to walk to on a bearing. */
+export interface CompassTarget {
+  lng: number;
+  lat: number;
+  name: string;
+}
+
+/** Within this of the target's bearing counts as on it: a phone compass is no better. */
+const ON_BEARING_DEG = 5;
+
 export interface CompassViewOptions {
-  place: () => CompassPlace;
+  /** Your position, where there is a fix. */
+  fix: () => Fix | null;
+  /** Where the map is looking: the declination's place without a fix. */
+  centre: () => CompassPlace;
   now?: () => Date;
   noReadingMs?: number;
 }
 
 export class CompassView {
-  private readonly place: () => CompassPlace;
+  private readonly fix: () => Fix | null;
+  private readonly centre: () => CompassPlace;
   private readonly now: () => Date;
   private readonly noReadingMs: number;
   private readonly watcher: HeadingWatcher;
@@ -79,9 +94,13 @@ export class CompassView {
    * after rotate(-359deg) the transition spins the card the whole way round.
    */
   private dialAngle: number | null = null;
+  private target: CompassTarget | null = null;
+  /** The last magnetic heading, to re-steer when the fix moves and the phone does not. */
+  private heading: Heading = null;
 
-  constructor({ place, now = () => new Date(), noReadingMs = NO_READING_MS }: CompassViewOptions) {
-    this.place = place;
+  constructor({ fix, centre, now = () => new Date(), noReadingMs = NO_READING_MS }: CompassViewOptions) {
+    this.fix = fix;
+    this.centre = centre;
     this.now = now;
     this.noReadingMs = noReadingMs;
     this.watcher = new HeadingWatcher((heading, accuracy) => this.update(heading, accuracy));
@@ -96,8 +115,11 @@ export class CompassView {
     this.body = body;
     this.seen = false;
     this.dialAngle = null;
+    this.heading = null;
     body.innerHTML = DIAL_HTML;
+    body.querySelector('.compass-target-clear')!.addEventListener('click', () => this.setTarget(null));
     this.setStatus('Waiting for the compass…');
+    this.renderTarget();
 
     void this.watcher.start().then((permission) => this.started(permission));
   }
@@ -108,6 +130,26 @@ export class CompassView {
     // now the sheet body holds whatever view replaced this one, or nothing.
     this.body = null;
     this.watcher.stop();
+  }
+
+  /** Steer to `target`, or stop steering. Kept across closing and reopening the panel. */
+  setTarget(target: CompassTarget | null): void {
+    this.target = target;
+    this.renderTarget();
+  }
+
+  getTarget(): CompassTarget | null {
+    return this.target;
+  }
+
+  /** The fix has moved: the target's bearing and distance with it. */
+  positionChanged(): void {
+    this.renderTarget();
+  }
+
+  private place(): CompassPlace {
+    const fix = this.fix();
+    return fix ? { lng: fix.lng, lat: fix.lat } : this.centre();
   }
 
   private started(permission: HeadingPermission): void {
@@ -133,6 +175,7 @@ export class CompassView {
     const body = this.body;
     const view = body?.querySelector<HTMLElement>('.compass-view');
     if (!body || !view) return;
+    this.heading = heading;
 
     if (heading === null) {
       // Readings that have stopped making sense: an uncalibrated magnetometer on iOS.
@@ -140,6 +183,7 @@ export class CompassView {
       view.classList.add('compass-no-reading');
       setText(body, '.compass-heading-value', '—');
       setText(body, '.compass-heading-point', '');
+      this.renderTarget();
       return;
     }
 
@@ -161,6 +205,7 @@ export class CompassView {
     if (accuracy !== null) setText(body, '.compass-accuracy', `±${Math.round(accuracy)}°`);
 
     this.turnDial(readings.magnetic, field);
+    this.renderTarget();
     this.setStatus(
       field && field.horizontal < COMPASS_UNRELIABLE_NT
         ? 'This close to the magnetic pole a compass is unreliable.'
@@ -181,6 +226,58 @@ export class CompassView {
     const usable = field !== null && field.horizontal >= COMPASS_UNRELIABLE_NT;
     marker.style.display = usable ? '' : 'none';
     if (usable) marker.style.transform = `rotate(${-field.declination}deg)`;
+  }
+
+  /** The target's line, its mark on the card, and which way to turn. */
+  private renderTarget(): void {
+    const body = this.body;
+    const info = body?.querySelector<HTMLElement>('.compass-target-info');
+    if (!body || !info) return;
+    const marker = body.querySelector<SVGGElement>('.compass-target')!;
+    const steer = body.querySelector<HTMLElement>('.compass-steer')!;
+
+    const target = this.target;
+    info.hidden = target === null;
+    marker.style.display = 'none';
+    steer.hidden = true;
+    if (!target) return;
+
+    setText(body, '.compass-target-name', target.name);
+    const fix = this.fix();
+    if (!fix) {
+      setText(body, '.compass-target-figures', 'Waiting for your position…');
+      return;
+    }
+
+    const reading: BearingToPoint = bearingTo(fix, [target.lng, target.lat], fieldNear(fix.lat, fix.lng, this.now()));
+    if (reading.tooClose) {
+      setText(body, '.compass-target-figures', `Within ${formatDistance(Math.max(reading.distanceM, 10))}`);
+      return;
+    }
+    setText(
+      body,
+      '.compass-target-figures',
+      reading.magnetic === null
+        ? `${formatBearing(reading.true)} true · ${formatDistance(reading.distanceM)}`
+        : `${formatBearing(reading.magnetic)} · ${formatDistance(reading.distanceM)}`,
+    );
+
+    // Steering compares the phone's magnetic heading with the target's magnetic bearing;
+    // without either there is nothing honest to say.
+    if (reading.magnetic === null) return;
+    marker.style.display = '';
+    marker.style.transform = `rotate(${reading.magnetic}deg)`;
+    if (this.heading === null) return;
+    const turn = turnTo(this.heading, reading.magnetic);
+    steer.hidden = false;
+    steer.classList.toggle('on-bearing', Math.abs(turn) <= ON_BEARING_DEG);
+    setText(
+      body,
+      '.compass-steer',
+      Math.abs(turn) <= ON_BEARING_DEG
+        ? 'On bearing'
+        : `Turn ${Math.round(Math.abs(turn))}° ${turn > 0 ? 'right' : 'left'}`,
+    );
   }
 
   private setStatus(message: string | null): void {
@@ -233,6 +330,9 @@ const DIAL_HTML = `
         <g class="compass-true-north" style="display: none">
           <path d="M0 -92 L5 -100 L-5 -100 Z"/>
         </g>
+        <g class="compass-target" style="display: none">
+          <circle cx="0" cy="-92" r="6"/>
+        </g>
         <path class="compass-needle-north" d="M0 -44 L7 0 L-7 0 Z"/>
         <path class="compass-needle-south" d="M0 44 L7 0 L-7 0 Z"/>
       </g>
@@ -242,6 +342,14 @@ const DIAL_HTML = `
       <span class="compass-heading-value readout">—</span>
       <span class="compass-heading-point"></span>
     </p>
+    <div class="compass-target-info" hidden>
+      <p class="compass-target-line">
+        <span class="compass-target-name"></span>
+        <span class="compass-target-figures readout"></span>
+        <button class="compass-target-clear secondary" type="button" aria-label="Stop following this bearing">✕</button>
+      </p>
+      <p class="compass-steer" hidden></p>
+    </div>
     <dl class="compass-figures">
       <div><dt>True</dt><dd class="compass-true readout">—</dd></div>
       <div><dt class="compass-grid-name">Grid</dt><dd class="compass-grid readout">—</dd></div>

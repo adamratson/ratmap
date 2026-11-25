@@ -13,6 +13,21 @@ const EARTH_RADIUS_M = 6_371_008.8;
 const DEG = Math.PI / 180;
 
 /**
+ * Initial great-circle bearing from `a` to `b`, degrees clockwise from true north, 0-360.
+ *
+ * Exact rather than equirectangular (compassBearing below): this one is walked on, and
+ * over a few kilometres in Scotland the approximation is already a degree out.
+ */
+export function trueBearing(a: LngLat, b: LngLat): number {
+  const lat1 = a[1] * DEG;
+  const lat2 = b[1] * DEG;
+  const dLng = (b[0] - a[0]) * DEG;
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return ((Math.atan2(y, x) / DEG) % 360 + 360) % 360;
+}
+
+/**
  * Great-circle distance in metres.
  *
  * Haversine rather than the cheaper equirectangular approximation: leg lengths accumulate

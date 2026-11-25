@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gridReference } from './grid-ref';
+import { gridReference, parseGridReference } from './grid-ref';
 
 describe('gridReference', () => {
   it('writes an eight-figure OS reference in Great Britain', () => {
@@ -49,5 +49,65 @@ describe('gridReference', () => {
 
   it('runs band X to 84° N', () => {
     expect(gridReference(15.6, 78.2)!.text).toMatch(/^33X /);
+  });
+});
+
+describe('parseGridReference', () => {
+  it('reads a six-figure OS reference to the middle of its 100 m square', () => {
+    const ref = parseGridReference('NN 166 712')!;
+    expect(ref.text).toBe('NN 166 712');
+    expect(ref.precisionM).toBe(100);
+    // The centre, E 216650 N 771250, written back as eight figures.
+    expect(gridReference(ref.lng, ref.lat)!.text).toBe('NN 1665 7125');
+  });
+
+  it('takes it however it is typed', () => {
+    const want = parseGridReference('NN 166 712');
+    expect(parseGridReference('nn166712')).toEqual(want);
+    expect(parseGridReference('  NN166 712 ')).toEqual(want);
+  });
+
+  it('reads every precision from 1 km to 1 m', () => {
+    expect(parseGridReference('NN 16 71')!.precisionM).toBe(1000);
+    expect(parseGridReference('NN 1667 7129')!.precisionM).toBe(10);
+    const metre = parseGridReference('NN 16671 71291')!;
+    expect(metre.precisionM).toBe(1);
+    // Ben Nevis, against PROJ through grid.ts (grid.test.ts): back within a metre.
+    expect(metre.lng).toBeCloseTo(-5.00361, 4);
+    expect(metre.lat).toBeCloseTo(56.79694, 4);
+  });
+
+  it('round-trips what the position readout shows', () => {
+    const shown = gridReference(-1.5, 51.0)!.text; // "SU 3518 2240"
+    const back = parseGridReference(shown)!;
+    expect(gridReference(back.lng, back.lat)!.text).toBe(shown);
+  });
+
+  it('refuses what is not a reference, so place names still search', () => {
+    expect(parseGridReference('NN 166 71')).toBeNull(); // uneven halves
+    expect(parseGridReference('NN 16671')).toBeNull(); // odd figures
+    expect(parseGridReference('NN')).toBeNull();
+    expect(parseGridReference('IN 166 712')).toBeNull(); // no I in the grid
+    expect(parseGridReference('Ben Nevis')).toBeNull();
+    expect(parseGridReference('NN 123456 123456')).toBeNull(); // six-figure halves
+  });
+
+  it('reads the UTM form ratmap writes, with or without E and N', () => {
+    const ref = parseGridReference('32T 334198E 5077670N')!;
+    expect(ref.system).toBe('UTM 32N');
+    expect(ref.lng).toBeCloseTo(6.86517, 4);
+    expect(ref.lat).toBeCloseTo(45.83265, 4);
+    expect(parseGridReference('32t 334198 5077670')!.lat).toBeCloseTo(45.83265, 4);
+  });
+
+  it('round-trips a southern UTM reference', () => {
+    const back = parseGridReference(gridReference(-70, -33)!.text)!;
+    expect(back.lng).toBeCloseTo(-70, 4);
+    expect(back.lat).toBeCloseTo(-33, 4);
+  });
+
+  it('refuses a UTM band that does not match the northing', () => {
+    // 5077670 m north is band T (45.8° N); band C is 80° S.
+    expect(parseGridReference('32C 334198E 5077670N')).toBeNull();
   });
 });

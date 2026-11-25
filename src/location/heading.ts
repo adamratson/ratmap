@@ -68,6 +68,12 @@ export function headingFrom(reading: OrientationReading, screenAngle: number): H
   return null;
 }
 
+/** Whether an event carries a reading against north: iOS's compass, or an absolute alpha. */
+function isCompassReading(reading: OrientationReading): boolean {
+  if (typeof reading.webkitCompassHeading === 'number') return true;
+  return reading.absolute === true && typeof reading.alpha === 'number';
+}
+
 /**
  * How far either way the iOS heading may be out, in degrees: CLHeading's own
  * `headingAccuracy`, passed through untouched by WebKit. Null where the platform gives
@@ -113,6 +119,12 @@ export class HeadingWatcher {
 
   private readonly onOrientation = (event: Event): void => {
     const reading = event as unknown as OrientationReading;
+    // An event that is not a compass reading at all says nothing about the compass. Chromium
+    // fires a relative `deviceorientation` beside every `deviceorientationabsolute`, so
+    // treating it as "no heading" made the heading flicker off and on with each tick; a
+    // desktop browser fires one with nothing in it on start. Only iOS's uncalibrated
+    // reading takes a heading away (headingFrom).
+    if (!isCompassReading(reading)) return;
     const heading = headingFrom(reading, screenAngle());
     if (heading === null && this.last === null) return;
     // Whole degrees. The sensor jitters continuously and every change re-renders the

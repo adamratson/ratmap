@@ -1756,6 +1756,14 @@ textarea {
   fill: var(--accent);
 }
 
+/* The target: where "Follow bearing" is steering to. Lined up with the lubber line, the
+   phone is facing it. */
+.compass-target circle {
+  fill: var(--accent);
+  stroke: var(--surface-raised);
+  stroke-width: 2;
+}
+
 /* Fixed: the line the bearing is read against, as on a compass housing. */
 .compass-lubber {
   stroke: var(--accent);
@@ -1781,6 +1789,53 @@ textarea {
   font-family: var(--font-display);
   font-size: var(--text-lg);
   color: var(--text-muted);
+}
+
+.compass-target-info {
+  margin: 0 0 0.75rem;
+}
+
+.compass-target-info[hidden],
+.compass-steer[hidden] {
+  display: none;
+}
+
+.sheet-body .compass-target-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--text);
+}
+
+.compass-target-name {
+  font-weight: 600;
+}
+
+.compass-target-clear {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+}
+
+/* The instruction itself: large, and green once on the bearing — with the words changing
+   too, so it does not rest on colour alone. */
+.sheet-body .compass-steer {
+  margin: 0.1rem 0 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+.sheet-body .compass-steer.on-bearing {
+  color: var(--success);
+}
+
+.sheet-bearing-figure {
+  font-size: var(--text-sm);
+  color: var(--text);
 }
 
 .compass-figures {

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { magneticField } from '../location/declination';
 import { gridConvergence, nationalGrid } from '../print/grid';
+import { bearingTo } from '../location/bearing';
+import { formatDistance } from '../routes/geo';
 import { cardinal, compassReadings, CompassView, formatBearing, type CompassPlace } from './compass-view';
 
 const BEN_NEVIS: CompassPlace = { lng: -5.00361, lat: 56.79694 };
@@ -75,7 +77,7 @@ describe('the compass panel', () => {
   });
 
   async function opened(place: CompassPlace = BEN_NEVIS) {
-    const view = new CompassView({ place: () => place, now: () => NOW, noReadingMs: 1000 });
+    const view = new CompassView({ fix: () => ({ ...place, accuracyM: 8 }), centre: () => place, now: () => NOW, noReadingMs: 1000 });
     view.open(body);
     await vi.waitFor(() => expect(text('.compass-status')).toBe('Waiting for the compass…'));
     await Promise.resolve();
@@ -141,9 +143,67 @@ describe('the compass panel', () => {
     expect(text('.compass-heading-value')).toBe('—');
   });
 
+  describe('steering to a target', () => {
+    const TARGET = { lng: -4.97, lat: 56.82, name: 'Carn Mòr Dearg' };
+    const expected = () => bearingTo({ ...BEN_NEVIS, accuracyM: 8 }, [TARGET.lng, TARGET.lat], magneticField(BEN_NEVIS.lat, BEN_NEVIS.lng, NOW));
+
+    it('gives the target’s magnetic bearing and distance from the fix, and marks it on the card', async () => {
+      const view = await opened();
+      view.setTarget(TARGET);
+      const { magnetic, distanceM } = expected();
+      expect(text('.compass-target-name')).toBe('Carn Mòr Dearg');
+      expect(text('.compass-target-figures')).toBe(`${formatBearing(magnetic!)} · ${formatDistance(distanceM)}`);
+      expect(body.querySelector<SVGGElement>('.compass-target')!.style.transform).toBe(`rotate(${magnetic}deg)`);
+      view.close();
+    });
+
+    it('says which way to turn, the short way round, and when you are on it', async () => {
+      const view = await opened();
+      view.setTarget(TARGET);
+      const target = expected().magnetic!;
+      orient({ webkitCompassHeading: target - 30 });
+      expect(text('.compass-steer')).toBe('Turn 30° right');
+      orient({ webkitCompassHeading: target + 40 });
+      expect(text('.compass-steer')).toBe('Turn 40° left');
+      orient({ webkitCompassHeading: target + 3 });
+      expect(text('.compass-steer')).toBe('On bearing');
+      view.close();
+    });
+
+    it('waits for a fix rather than steering from the map centre', async () => {
+      const view = new CompassView({ fix: () => null, centre: () => BEN_NEVIS, now: () => NOW });
+      view.open(body);
+      view.setTarget(TARGET);
+      expect(text('.compass-target-figures')).toBe('Waiting for your position…');
+      expect(body.querySelector<SVGGElement>('.compass-target')!.style.display).toBe('none');
+      view.close();
+    });
+
+    it('stops steering when cleared, and keeps the target across reopening until then', async () => {
+      const view = await opened();
+      view.setTarget(TARGET);
+      view.close();
+      view.open(body);
+      expect(body.querySelector<HTMLElement>('.compass-target-info')!.hidden).toBe(false);
+      body.querySelector<HTMLButtonElement>('.compass-target-clear')!.click();
+      expect(body.querySelector<HTMLElement>('.compass-target-info')!.hidden).toBe(true);
+      expect(view.getTarget()).toBeNull();
+      view.close();
+    });
+
+    it('offers no bearing to a target inside the fix’s own error', async () => {
+      const view = await opened();
+      view.setTarget({ ...BEN_NEVIS, name: 'Here' });
+      orient({ webkitCompassHeading: 90 });
+      expect(text('.compass-target-figures')).toBe('Within 10 m');
+      expect(body.querySelector<HTMLElement>('.compass-steer')!.hidden).toBe(true);
+      view.close();
+    });
+  });
+
   it('says when the browser has no compass at all', async () => {
     vi.stubGlobal('DeviceOrientationEvent', undefined);
-    const view = new CompassView({ place: () => BEN_NEVIS, now: () => NOW });
+    const view = new CompassView({ fix: () => null, centre: () => BEN_NEVIS, now: () => NOW });
     view.open(body);
     await vi.waitFor(() => expect(text('.compass-status')).toMatch(/doesn’t give ratmap a compass/));
     view.close();

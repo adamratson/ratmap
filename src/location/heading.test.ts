@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { accuracyFrom, headingFrom, trueHeading } from './heading';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { accuracyFrom, headingFrom, HeadingWatcher, trueHeading } from './heading';
 
 describe('headingFrom', () => {
   it('takes iOS at its word — webkitCompassHeading is already a (magnetic) compass heading', () => {
@@ -66,5 +66,43 @@ describe('trueHeading', () => {
     expect(trueHeading(90, null)).toBeNull();
     expect(trueHeading(90, field(3, 1500))).toBeNull();
     expect(trueHeading(null, field(3))).toBeNull();
+  });
+});
+
+describe('HeadingWatcher', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function fire(type: string, reading: Record<string, unknown>): void {
+    const event = new Event(type);
+    Object.assign(event, { alpha: null, absolute: false, ...reading });
+    window.dispatchEvent(event);
+  }
+
+  it('ignores Chromium’s relative events between its absolute ones, rather than flickering', async () => {
+    vi.stubGlobal('DeviceOrientationEvent', class {});
+    const seen: (number | null)[] = [];
+    const watcher = new HeadingWatcher((heading) => seen.push(heading));
+    await watcher.start();
+
+    fire('deviceorientationabsolute', { alpha: 90, absolute: true });
+    fire('deviceorientation', { alpha: 12, absolute: false });
+    fire('deviceorientationabsolute', { alpha: 80, absolute: true });
+    fire('deviceorientation', { alpha: null, absolute: false });
+
+    expect(seen).toEqual([270, 280]);
+    watcher.stop();
+  });
+
+  it('still takes the heading away when iOS says it is uncalibrated', async () => {
+    vi.stubGlobal('DeviceOrientationEvent', class {});
+    const seen: (number | null)[] = [];
+    const watcher = new HeadingWatcher((heading) => seen.push(heading));
+    await watcher.start();
+
+    fire('deviceorientation', { webkitCompassHeading: 90 });
+    fire('deviceorientation', { webkitCompassHeading: 90, webkitCompassAccuracy: -1 });
+
+    expect(seen).toEqual([90, null]);
+    watcher.stop();
   });
 });

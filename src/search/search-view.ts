@@ -4,6 +4,7 @@ import { compassBearing, distanceMetres, formatDistance } from '../routes/geo';
 import type { StatusCentre } from '../ui/status';
 import { insetOffset, NO_INSET, type ViewInset } from '../map/view-inset';
 import { parseLatLng } from './coords';
+import { parseGridReference } from '../location/grid-ref';
 import { PlacesSearch, type RegionIndex, type SearchResult } from './search';
 
 // The search box in the sheet's peek row (C9: local FTS5, no geocoding API).
@@ -213,6 +214,13 @@ export class SearchBox {
       return;
     }
 
+    // A grid reference, the same way: "NN 166 712" off a guidebook or a rescue call.
+    const ref = parseGridReference(query);
+    if (ref) {
+      this.renderCoordsResult(ref, { name: ref.text, meta: ref.system });
+      return;
+    }
+
     try {
       await this.search.load();
     } catch (err) {
@@ -261,7 +269,13 @@ export class SearchBox {
   }
 
   /** A typed-in coordinate pair, offered as the one search result it is. */
-  private renderCoordsResult(coords: { lat: number; lng: number }): void {
+  private renderCoordsResult(
+    coords: { lat: number; lng: number },
+    label: { name: string; meta: string } = {
+      name: `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`,
+      meta: 'Coordinates',
+    },
+  ): void {
     this.beginRender();
 
     const item = document.createElement('li');
@@ -272,17 +286,17 @@ export class SearchBox {
 
     const name = document.createElement('span');
     name.className = 'result-name';
-    name.textContent = `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
+    name.textContent = label.name;
 
     const meta = document.createElement('span');
     meta.className = 'result-meta';
-    meta.textContent = 'Coordinates';
+    meta.textContent = label.meta;
 
     button.append(name, meta);
     button.addEventListener('click', (event) => {
       this.hideResults();
       this.releaseInput(event);
-      this.onCoordinates(coords);
+      this.onCoordinates({ lat: coords.lat, lng: coords.lng });
       this.moveTo(coords.lng, coords.lat);
     });
 

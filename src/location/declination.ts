@@ -114,6 +114,20 @@ export function magneticField(lat: number, lng: number, when: Date, heightKm = 0
   return fieldAt(lat, lng, decimalYear(when), heightKm);
 }
 
+/**
+ * {@link magneticField} for something asked many times a second — a compass turning —
+ * remembered for the last tenth of a degree and day asked about. Declination changes by
+ * hundredths of a degree across that distance, far under what a phone's magnetometer can
+ * tell apart.
+ */
+export function fieldNear(lat: number, lng: number, when: Date = new Date()): MagneticField | null {
+  const key = `${Math.round(lat * 10)}:${Math.round(lng * 10)}:${Math.floor(when.getTime() / 86_400_000)}`;
+  if (key !== lastNear.key) lastNear = { key, field: magneticField(lat, lng, when) };
+  return lastNear.field;
+}
+
+let lastNear: { key: string; field: MagneticField | null } = { key: '', field: null };
+
 /** As {@link magneticField}, at a decimal year — the form the published test values use. */
 export function fieldAt(lat: number, lng: number, year: number, heightKm = 0): MagneticField | null {
   const m = model();

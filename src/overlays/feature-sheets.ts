@@ -13,6 +13,7 @@ import {
 import type { AvalancheCell } from '../routes/avalanche-sampler';
 import type { Region } from '../regions/manifest';
 import { fillReadout } from '../ui/readout';
+import { gridReference } from '../location/grid-ref';
 import type { StatusCentre } from '../ui/status';
 import { savePlace } from '../search/saved-places';
 
@@ -85,6 +86,7 @@ export function renderPeakSheet(
     ${munro ? `<p class="sheet-munro-badge">▲ Munro</p>` : ''}
     <p class="sheet-ele"></p>
     <p class="sheet-coords"></p>
+    <p class="sheet-gridref"></p>
     ${route ? '<div class="sheet-actions sheet-route"></div>' : ''}
     <div class="sheet-actions">
       <button class="sheet-save${route ? ' secondary' : ''}" type="button">Save place</button>
@@ -100,6 +102,7 @@ export function renderPeakSheet(
   fillReadout(body.querySelector<HTMLElement>('.sheet-ele')!, ele ?? 'Elevation unknown');
   body.querySelector('.sheet-coords')!.textContent =
     `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
+  fillGridRef(body.querySelector<HTMLElement>('.sheet-gridref')!, lngLat);
   if (wikidata) {
     const link = body.querySelector<HTMLAnchorElement>('.sheet-link')!;
     link.href = `https://www.wikidata.org/wiki/${encodeURIComponent(wikidata)}`;
@@ -181,6 +184,7 @@ export function renderCoordsSheet(
 
   body.innerHTML = `
     <h2></h2>
+    <p class="sheet-gridref"></p>
     <p class="sheet-ele">Reading elevation…</p>
     ${route ? '<div class="sheet-actions sheet-route"></div>' : ''}
     <div class="sheet-actions">
@@ -191,6 +195,7 @@ export function renderCoordsSheet(
     ${avalanche ? '<div class="sheet-avalanche"></div>' : ''}
   `;
   body.querySelector('h2')!.textContent = coordsText;
+  fillGridRef(body.querySelector<HTMLElement>('.sheet-gridref')!, lngLat);
   renderOpenIn(body.querySelector<HTMLElement>('.sheet-open-in')!, lngLat, coordsText);
   if (avalanche) renderAvalancheReadout(body.querySelector<HTMLElement>('.sheet-avalanche')!, avalanche);
   if (route) renderRouteActions(body.querySelector<HTMLElement>('.sheet-route')!, route);
@@ -226,6 +231,21 @@ export function renderCoordsSheet(
         status.toast(`Could not save “${coordsText}”: ${err.message}`, { kind: 'error' }),
       );
   });
+}
+
+/**
+ * The point's grid reference, named by its grid — "OS NN 1667 7129", "UTM 32T 334198E
+ * 5077670N" — or the line removed where there is no grid (beyond UTM's 84° N).
+ */
+function fillGridRef(line: HTMLElement, lngLat: LngLat): void {
+  const { lng, lat } = lngLat.wrap();
+  const ref = gridReference(lng, lat);
+  if (!ref) {
+    line.remove();
+    return;
+  }
+  line.textContent = ref.system === 'OS National Grid' ? `OS ${ref.text}` : `UTM ${ref.text}`;
+  line.title = ref.system;
 }
 
 /**

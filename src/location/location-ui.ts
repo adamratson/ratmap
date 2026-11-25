@@ -1,6 +1,7 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import type { StatusCentre } from '../ui/status';
-import { HeadingWatcher } from './heading';
+import { fieldNear } from './declination';
+import { HeadingWatcher, trueHeading } from './heading';
 import type { ViewInset } from '../map/view-inset';
 import { LocationController, type LocationState } from './location';
 
@@ -18,6 +19,8 @@ export interface LocationUiOptions {
   viewInset?: () => ViewInset;
   /** No fix is coming: location refused, or failing. */
   onPositionUnavailable?: () => void;
+  /** Every change of state, for whatever shows the fix itself (the position readout). */
+  onStateChange?: (state: LocationState) => void;
 }
 
 export interface LocationUi {
@@ -39,6 +42,7 @@ export function setUpLocation({
   onDotClick,
   viewInset,
   onPositionUnavailable,
+  onStateChange,
 }: LocationUiOptions): LocationUi {
   const location: LocationController = new LocationController({
     map,
@@ -55,7 +59,18 @@ export function setUpLocation({
    * load it is refused outright, and asked for before the user has shown any interest in
    * their own position it is a prompt with no context.
    */
-  const heading = new HeadingWatcher((degrees) => location.setHeading(degrees));
+  //
+  // The sensor reads magnetic north and the map is drawn to true (heading.ts), so the cone
+  // is turned by the declination where the dot is — or where the map is looking, for a
+  // heading that arrives before the first fix.
+  const heading = new HeadingWatcher((magnetic) => {
+    const state = location.getState();
+    const { lng, lat } =
+      state.status === 'tracking'
+        ? { lng: state.position.coords.longitude, lat: state.position.coords.latitude }
+        : map.getCenter();
+    location.setHeading(trueHeading(magnetic, fieldNear(lat, lng)));
+  });
 
   const start = (): void => {
     location.start();
@@ -77,6 +92,7 @@ export function setUpLocation({
   map.on('dragstart', () => location.cancelFollow());
 
   function renderLocationState(state: LocationState): void {
+    onStateChange?.(state);
     button.classList.toggle('active', location.isFollowing());
 
     // Route following runs off the same watch as the location dot rather than starting a

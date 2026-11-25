@@ -57,6 +57,8 @@ import type { SearchResult } from './search/search';
 import { PrintController } from './print/print-view';
 import { ROUTE_SOURCE_ID } from './routes/route-layers';
 import { setUpCompass } from './ui/compass';
+import { CompassView } from './ui/compass-view';
+import { PositionReadout } from './location/position-readout';
 import { renderLayersView } from './ui/layers-view';
 import { renderLegend } from './ui/legend-view';
 import { isCoarsePointer, prefersDockedSheet } from './ui/pointer';
@@ -89,6 +91,13 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div id="rail">
     <button id="locate-btn" type="button" aria-label="Show my location">
       <span class="rail-icon" aria-hidden="true">◎</span>
+    </button>
+    <button id="compass-view-btn" type="button" aria-label="Compass">
+      <svg class="rail-icon rail-svg" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M12 4.5 L14.6 12 L9.4 12 Z" class="rail-compass-north"/>
+        <path d="M12 19.5 L14.6 12 L9.4 12 Z" fill="currentColor"/>
+      </svg>
     </button>
     <button id="compass-btn" type="button" aria-label="Point the map north" hidden>
       <span class="rail-icon compass-needle" aria-hidden="true">▲</span>
@@ -150,11 +159,31 @@ sheet.peek.innerHTML = `
 `;
 
 
+/**
+ * The compass panel (src/ui/compass-view.ts). Bearings are corrected for declination and
+ * grid convergence where you are, or where the map is looking without a fix.
+ */
+const compassView = new CompassView({
+  place: () => {
+    const state = locationUi.location.getState();
+    if (state.status === 'tracking') {
+      return { lng: state.position.coords.longitude, lat: state.position.coords.latitude };
+    }
+    const { lng, lat } = map.getCenter().wrap();
+    return { lng, lat };
+  },
+});
+
+const compassViewButton = document.querySelector<HTMLButtonElement>('#compass-view-btn')!;
+
 const views = new SheetViews({
   sheet,
   chipsHost: sheet.peek.querySelector<HTMLDivElement>('#chips')!,
-  iconButtons: {},
+  // Lit while its panel is open, as a chip is.
+  iconButtons: { compass: compassViewButton },
   onViewChange: (view) => {
+    // The sensor runs only while there is a dial to turn.
+    if (view !== 'compass') compassView.close();
     if (view === 'print') printer?.show();
     else printer?.hide();
     // Maps borrows the main search box for regions (see openRegionsView); any other view
@@ -273,6 +302,19 @@ if (!isCoarsePointer()) {
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }));
 
 setUpCompass(map, document.querySelector<HTMLButtonElement>('#compass-btn')!);
+
+// Opened straight from the tap, with nothing awaited first: iOS only offers the compass
+// from inside a user gesture (heading.ts).
+compassViewButton.addEventListener('click', () =>
+  views.toggle('compass', () => views.open('compass', (body) => compassView.open(body))),
+);
+
+// The fix as a grid reference and lat/long, while there is one. Added after the scale bar:
+// MapLibre stacks bottom controls upwards, so it sits just above it.
+const positionReadout = new PositionReadout({
+  onSelect: ([lng, lat]) => showCoordsSheet(new maplibregl.LngLat(lng, lat)),
+});
+map.addControl(positionReadout, 'bottom-left');
 
 // Debug handle. Lets the e2e suite assert on real style state (which layers and sources
 // actually exist) rather than inferring it from screenshots, and is genuinely useful from
@@ -843,6 +885,7 @@ const locationUi = setUpLocation({
   onPosition: (lngLat) => planner.updatePosition(lngLat),
   onPositionUnavailable: () => planner.positionUnavailable(),
   onDotClick: ([lng, lat]) => showCoordsSheet(new maplibregl.LngLat(lng, lat)),
+  onStateChange: (state) => positionReadout.update(state),
 });
 
 // --- Storage + install onboarding (C1, C2) ------------------------------------------

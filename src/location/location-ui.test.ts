@@ -11,6 +11,7 @@ const fakes = vi.hoisted(() => ({
     stop: ReturnType<typeof vi.fn>;
     cancelFollow: ReturnType<typeof vi.fn>;
     setHeading: ReturnType<typeof vi.fn>;
+    state: LocationState;
   },
   heading: null as null | { onHeading: (degrees: number) => void; start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> },
 }));
@@ -23,6 +24,8 @@ vi.mock('./location', () => ({
     stop = vi.fn(() => void (this.following = false));
     cancelFollow = vi.fn();
     setHeading = vi.fn();
+    state: LocationState = { status: 'idle' };
+    getState = () => this.state;
     isFollowing = () => this.following;
     constructor(options: LocationControllerOptions) {
       this.options = options;
@@ -31,7 +34,8 @@ vi.mock('./location', () => ({
   },
 }));
 
-vi.mock('./heading', () => ({
+vi.mock('./heading', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./heading')>()),
   HeadingWatcher: class {
     onHeading: (degrees: number) => void;
     start = vi.fn(async () => {});
@@ -44,6 +48,7 @@ vi.mock('./heading', () => ({
 }));
 
 const { setUpLocation } = await import('./location-ui');
+const { magneticField } = await import('./declination');
 
 let button: HTMLButtonElement;
 let status: { setCondition: Mock<StatusCentre['setCondition']> };
@@ -61,7 +66,11 @@ beforeEach(() => {
   onPosition = vi.fn();
   onDotClick = vi.fn();
   mapHandlers = {};
-  const map = { on: (event: string, handler: () => void) => void (mapHandlers[event] = handler) };
+  const map = {
+    on: (event: string, handler: () => void) => void (mapHandlers[event] = handler),
+    // Svalbard, where the declination is big enough to see.
+    getCenter: () => ({ lng: 15.6, lat: 78.2 }),
+  };
   setUpLocation({ map: map as unknown as MLMap, button, status, onPosition, onDotClick });
 });
 
@@ -76,9 +85,20 @@ describe('the locate button', () => {
     expect(fakes.heading!.stop).toHaveBeenCalled();
   });
 
-  it('feeds the compass heading to the dot', () => {
+  it('turns the magnetic heading to true north for the dot, where the dot is', () => {
+    // Nowhere near the map centre: the fix is what counts once there is one.
+    fakes.controller!.state = { status: 'tracking', position: position(-5, 56.8) };
     fakes.heading!.onHeading(270);
-    expect(fakes.controller!.setHeading).toHaveBeenCalledWith(270);
+    const field = magneticField(56.8, -5, new Date())!;
+    expect(fakes.controller!.setHeading.mock.calls[0]![0]).toBeCloseTo(270 + field.declination, 6);
+  });
+
+  it('uses the map centre for a heading that comes before the first fix', () => {
+    fakes.heading!.onHeading(0);
+    const field = magneticField(78.2, 15.6, new Date())!;
+    // Svalbard's declination is well over a degree, so this cannot pass by accident.
+    expect(Math.abs(field.declination)).toBeGreaterThan(5);
+    expect(fakes.controller!.setHeading.mock.calls[0]![0]).toBeCloseTo((field.declination + 360) % 360, 6);
   });
 
   it('stops following when the map is dragged, so it does not fight the user', () => {

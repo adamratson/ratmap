@@ -15,7 +15,8 @@ export type View =
   | 'settings'
   | 'legend'
   | 'layers'
-  | 'print';
+  | 'print'
+  | 'compass';
 
 /** What a screen reader should call the sheet's contents, per view. */
 const VIEW_LABEL: Record<View, string> = {
@@ -31,6 +32,7 @@ const VIEW_LABEL: Record<View, string> = {
   legend: 'Map legend',
   layers: 'Map layers',
   print: 'Print',
+  compass: 'Compass',
 };
 
 /**

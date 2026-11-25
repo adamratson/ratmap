@@ -40,6 +40,12 @@ describe('the summit card', () => {
     expect(body.querySelector('h2')!.textContent).toBe('Ben Nevis');
     expect(body.querySelector('.sheet-ele')!.textContent).toBe('1345 m');
     expect(body.querySelector('.sheet-coords')!.textContent).toBe('56.79685, -5.00360');
+    expect(body.querySelector('.sheet-gridref')!.textContent).toBe('OS NN 1667 7128');
+  });
+
+  it('gives a UTM reference outside Britain', () => {
+    renderPeakSheet(body, { name: 'Mont Blanc' }, new maplibregl.LngLat(6.86517, 45.83265), { status });
+    expect(body.querySelector('.sheet-gridref')!.textContent).toBe('UTM 32T 334198E 5077670N');
   });
 
   it('treats the name as text — OSM names are anyone’s to edit', () => {
@@ -132,6 +138,7 @@ describe('the coordinates card', () => {
   it('says where the height would come from when there is none to read', async () => {
     renderCoordsSheet(body, BEN_NEVIS, { status, elevation: Promise.resolve(null) });
     await flush();
+    expect(body.querySelector('.sheet-gridref')!.textContent).toBe('OS NN 1667 7128');
 
     expect(body.querySelector('.sheet-ele')!.textContent).toBe('Elevation needs a downloaded region');
   });

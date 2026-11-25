@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { headingFrom } from './heading';
+import { accuracyFrom, headingFrom, trueHeading } from './heading';
 
 describe('headingFrom', () => {
-  it('takes iOS at its word — webkitCompassHeading is already true north', () => {
+  it('takes iOS at its word — webkitCompassHeading is already a (magnetic) compass heading', () => {
     expect(headingFrom({ alpha: 123, absolute: false, webkitCompassHeading: 90 }, 0)).toBe(90);
   });
 
@@ -42,5 +42,29 @@ describe('headingFrom', () => {
 
   it('gives up when there is nothing usable', () => {
     expect(headingFrom({ alpha: null, absolute: true }, 0)).toBeNull();
+  });
+});
+
+describe('accuracyFrom', () => {
+  it('passes the iOS accuracy through, and nothing for an uncalibrated or absent one', () => {
+    expect(accuracyFrom({ alpha: 0, absolute: false, webkitCompassHeading: 1, webkitCompassAccuracy: 15 })).toBe(15);
+    expect(accuracyFrom({ alpha: 0, absolute: false, webkitCompassHeading: 1, webkitCompassAccuracy: -1 })).toBeNull();
+    expect(accuracyFrom({ alpha: 0, absolute: true })).toBeNull();
+  });
+});
+
+describe('trueHeading', () => {
+  const field = (declination: number, horizontal = 17_000) => ({ declination, declinationPerYear: 0, horizontal });
+
+  it('adds an easterly declination and takes off a westerly one', () => {
+    // Magnetic north 10° east of true: a needle reading 0° is pointing 10° true.
+    expect(trueHeading(0, field(10))).toBe(10);
+    expect(trueHeading(5, field(-10))).toBe(355);
+  });
+
+  it('gives nothing without a field, or where a compass is unreliable', () => {
+    expect(trueHeading(90, null)).toBeNull();
+    expect(trueHeading(90, field(3, 1500))).toBeNull();
+    expect(trueHeading(null, field(3))).toBeNull();
   });
 });

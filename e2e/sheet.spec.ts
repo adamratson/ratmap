@@ -271,7 +271,7 @@ test.describe('theme', () => {
 
     await expect
       .poll(async () => (await styleLayers(page)).map((l) => l.id), { timeout: 30_000 })
-      .toEqual(expect.arrayContaining(['peaks-symbol', 'peaks-symbol-marker', 'route-line']));
+      .toEqual(expect.arrayContaining(['peaks-symbol', 'route-line']));
   });
 });
 

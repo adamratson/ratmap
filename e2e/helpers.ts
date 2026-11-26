@@ -498,21 +498,20 @@ export interface PeakOnScreen {
  * render at a given zoom, and pinning a test to one of them makes a rebuild look like a
  * regression.
  *
- * Queried on the circle layer, not the labels: a symbol is only returned once its label
- * has actually been placed, and `text-allow-overlap: false` means a summit in a crowded
- * corrie has a marker you can tap and no label at all.
+ * Only placed summits come back: the dot is the label layer's own icon, so a summit whose
+ * name could not be placed is not drawn, and is not there to tap.
  */
 export async function waitForPeak(page: Page): Promise<PeakOnScreen> {
   const handle = await page.waitForFunction(
     () => {
       const map = (window as unknown as { __ratmapMap?: MLMap }).__ratmapMap;
-      if (!map?.getLayer('peaks-symbol-marker')) return null;
+      if (!map?.getLayer('peaks-symbol')) return null;
 
       const canvas = map.getCanvas();
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
 
-      for (const feature of map.queryRenderedFeatures({ layers: ['peaks-symbol-marker'] })) {
+      for (const feature of map.queryRenderedFeatures({ layers: ['peaks-symbol'] })) {
         const name = feature.properties?.name;
         if (typeof name !== 'string' || name.length === 0) continue;
         if (feature.geometry?.type !== 'Point') continue;

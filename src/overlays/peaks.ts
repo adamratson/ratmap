@@ -7,9 +7,10 @@ import type {
 import { OSM_ATTRIBUTION, PEAKS_PMTILES_URL } from '../app/config';
 import { isCoarsePointer } from '../ui/pointer';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
-import { MAP_FONTS, mapInk } from '../map/flavor';
+import { MAP_FONTS, mapInk, type MapInk } from '../map/flavor';
 import { TOWN_LABEL_LAYER_ID } from '../map/landuse';
 import type { Theme } from '../ui/theme';
+import { ensureShapeImage, type Shape } from './icon-shapes';
 
 // Summits overlay, backed by our own peaks-global.pmtiles — Protomaps v4 dropped `ele`
 // from its POI layer (C6), so upstream peaks are unusable for a mountain map.
@@ -73,6 +74,9 @@ export function formatElevation(ele: unknown): string | null {
   return typeof ele === 'number' && Number.isFinite(ele) ? `${Math.round(ele)} m` : null;
 }
 
+/** Metres of prominence a peak needs for its Wikidata id to bring it in early: z13's floor. */
+const WIKIDATA_MIN_PROMINENCE = 30;
+
 /**
  * Zoom-dependent notability filter. Without it every tagged bump renders at once and the
  * map is a solid mass of overlapping labels.
@@ -103,7 +107,17 @@ export const PEAKS_NOTABILITY_FILTER = [
   // `wikidata` is a tiebreaker from z9, not an override at every zoom. Applying it
   // globally floods country-level views in well-catalogued walking regions — verified
   // over the Highlands, where enough hills carry a Wikidata id to swamp z6 on their own.
-  ['all', ['>=', ['zoom'], 9], ['has', 'wikidata']],
+  //
+  // And only for a real top: at least the z13 floor, or no computed prominence to judge
+  // by. Without it, a Wikidata id carried bumps and cols from z9: over Andorra at z10,
+  // Roques Feres (prominence 0.2 m) and the col Coll Blanc (5.9 m) were named while Pica
+  // d'Estats (1267 m) and Comapedrosa, the country's highest, were not (2026-11-26).
+  [
+    'all',
+    ['>=', ['zoom'], 9],
+    ['has', 'wikidata'],
+    ['any', ['!', ['has', 'prom']], ['>=', ['get', 'prom'], WIKIDATA_MIN_PROMINENCE]],
+  ],
 ] as const;
 
 /**
@@ -114,6 +128,27 @@ export const PEAKS_NOTABILITY_FILTER = [
  * clear the prominence floor on their own merits.
  */
 export const PEAKS_RENDER_FILTER = ['any', PEAKS_NOTABILITY_FILTER, MUNRO_EXPR] as const;
+
+/** The summit dot, on the icon grid. Drawn 20 px square: 12.5 px across at icon-size 1. */
+const PEAK_DOT: Shape = { discs: [[16, 16, 10]] };
+/** A Munro's dot, 1.3x the width, as the circle layer drew it. */
+const MUNRO_DOT: Shape = { discs: [[16, 16, 13]] };
+const PEAK_DOT_SIZE = 20;
+
+function peakDotColors(ink: MapInk, munro: boolean) {
+  return { glyph: munro ? ink.peakMunroDot : ink.peakDot, rim: ink.peakDotStroke };
+}
+
+/**
+ * Placement order, lowest first: Munros, then by prominence, then — for summits outside
+ * every built region, which have none — by elevation. Elevation is mapped into -1..-0.1
+ * (under 9000 m), below a prominence of 0 m, so it never outranks a computed prominence.
+ */
+export const PEAKS_SORT_KEY = [
+  '-',
+  ['case', MUNRO_EXPR, -100000, 0],
+  ['coalesce', ['get', 'prom'], ['-', ['/', ['coalesce', ['get', 'ele'], 0], 10000], 1]],
+] as const;
 
 export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: Theme): void {
   const ink = mapInk(theme);
@@ -164,6 +199,12 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: T
   // both the catalog's and every downloaded region's town labels, not just the catalog's.
   const beforeId = map.getLayer(TOWN_LABEL_LAYER_ID) ? TOWN_LABEL_LAYER_ID : undefined;
 
+  // The summit's dot is this layer's icon, not a layer of its own. It used to be a separate
+  // circle layer, and that went wrong in two ways (measured over Andorra, 2026-11-26):
+  // a downloaded region's ground went in above it, so inside every region the dot was
+  // painted over and the names hung off nothing; and a circle takes no part in label
+  // collision, so at z9 there were 803 dots for 107 names. Here a dot and its name place
+  // together or not at all.
   map.addLayer(
     {
       id: PEAKS_LAYER_ID,
@@ -172,6 +213,15 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: T
       'source-layer': PEAKS_SOURCE_LAYER,
       filter: PEAKS_RENDER_FILTER as unknown as FilterSpecification,
       layout: {
+        'icon-image': [
+          'case',
+          MUNRO_EXPR,
+          ensureShapeImage(map, 'ratmap-peak-munro', MUNRO_DOT, peakDotColors(ink, true), PEAK_DOT_SIZE),
+          ensureShapeImage(map, 'ratmap-peak', PEAK_DOT, peakDotColors(ink, false), PEAK_DOT_SIZE),
+        ],
+        // A summit's dot is 8, 10 and 13 px across from z<9, z9 and z12, a Munro's 10, 13
+        // and 17: big enough to read as a summit over hillshade, not as a POI or hamlet.
+        'icon-size': ['step', ['zoom'], 0.64, 9, 0.8, 12, 1.04],
         // Name on the first line, elevation on the second — dropped cleanly when either is
         // missing rather than leaving a stray separator or a blank line. A Munro gets a ▲
         // prefix: colour alone isn't a safe way to mark list membership (washes out on a
@@ -183,8 +233,18 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: T
         'text-size': 12,
         'text-offset': [0, 0.7],
         'text-anchor': 'top',
-        'text-optional': true,
+        // Neither optional: a dot without its name is a dot nobody can read, and a name
+        // without its dot does not say where the summit is.
+        'text-optional': false,
+        'icon-optional': false,
         'text-allow-overlap': false,
+        'icon-allow-overlap': false,
+        // The most prominent summits claim their place first, Munros before all. Without
+        // this, which of two colliding summits kept its name was down to tile order.
+        // MapLibre sorts a data-driven key across tiles, not only within one (LayerPlacement,
+        // maplibre-gl 5.24). Elevation ranks the summits with no computed prominence, below
+        // any that have one.
+        'symbol-sort-key': PEAKS_SORT_KEY as unknown as number,
       },
       paint: {
         // Ink, not the brown used previously — that brown sat one shade off the contour
@@ -197,48 +257,6 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: T
       },
     },
     beforeId,
-  );
-
-  // Separate circle layer for the marker itself — symbol layers can't draw both an icon
-  // and text without a sprite image, and we don't have a peak sprite yet.
-  map.addLayer(
-    {
-      id: `${PEAKS_LAYER_ID}-marker`,
-      type: 'circle',
-      source: PEAKS_SOURCE_ID,
-      'source-layer': PEAKS_SOURCE_LAYER,
-      // Same filter as the label layer — otherwise dots appear for peaks whose labels are
-      // filtered out, which reads as a rendering bug.
-      filter: PEAKS_RENDER_FILTER as unknown as FilterSpecification,
-      paint: {
-        // A single top-level `step` on zoom, with `case` nested inside each stop rather
-        // than the reverse — MapLibre allows only one zoom subexpression per property, so
-        // two independent `step`s (one per case arm) throws "Only one zoom-based step or
-        // interpolate subexpression may be used in an expression" at style-load time.
-        //
-        // Sized up from the original 2.5-6 px: at that size the dot read as generic
-        // vector-tile clutter (a POI, a hamlet) rather than a summit, especially over
-        // hillshade. A bigger dot plus a heavier white halo is what actually separates it
-        // from the terrain underneath, not the fill colour alone.
-        'circle-radius': [
-          'step',
-          ['zoom'],
-          ['case', MUNRO_EXPR, 5, 4],
-          9,
-          ['case', MUNRO_EXPR, 6.5, 5],
-          12,
-          ['case', MUNRO_EXPR, 8.5, 6.5],
-        ],
-        // The same ink as the label, per theme: near-black by day, near-white at night,
-        // each ringed in the opposite. This used to be a fixed violet, because one colour
-        // had to hold up on both basemaps; now the layer is rebuilt per theme, the dot
-        // can simply be the strongest neutral on each. Munro gold stays the one colour.
-        'circle-color': ['case', MUNRO_EXPR, ink.peakMunroDot, ink.peakDot],
-        'circle-stroke-color': ink.peakDotStroke,
-        'circle-stroke-width': ['case', MUNRO_EXPR, 2.25, 1.75],
-      },
-    },
-    PEAKS_LAYER_ID,
   );
 }
 
@@ -259,7 +277,7 @@ export interface PeakHit {
 /**
  * Half-width, in pixels, of the box a tap searches for a summit.
  *
- * A finger is not a pixel. The rendered marker is a 2.5-4 px circle, and querying the
+ * A finger is not a pixel. The rendered dot was then a 2.5-4 px circle, and querying the
  * single tapped pixel gave an effective target of about 18 px including the label —
  * measured in the running app, where a probe 18 px from a peak's centre already returned
  * nothing. Apple's minimum is 44 pt, so half of that is the floor.
@@ -322,8 +340,8 @@ function nearest(map: MLMap, hits: MapGeoJSONFeature[], x: number, y: number): M
 /**
  * The summit at a screen point, or null if none is there.
  *
- * Queries only layers that currently exist: `queryRenderedFeatures` *throws* on an unknown
- * layer id rather than returning nothing. The peaks layers are added on the map's `load`
+ * Queries only once the layer exists: `queryRenderedFeatures` *throws* on an unknown
+ * layer id rather than returning nothing. The peaks layer is added on the map's `load`
  * event, but pointer handlers are live from construction — so any mouse movement before
  * load (or after a style reload drops them) would otherwise raise "The layer
  * 'peaks-symbol' does not exist in the map's style and cannot be queried for features".
@@ -332,10 +350,8 @@ function nearest(map: MLMap, hits: MapGeoJSONFeature[], x: number, y: number): M
  *   explicit value to override the pointer-type heuristic.
  */
 export function peakAt(map: MLMap, point: PointLike, paddingPx = tapPadding()): PeakHit | null {
-  const layers = [PEAKS_LAYER_ID, `${PEAKS_LAYER_ID}-marker`].filter((id) =>
-    Boolean(map.getLayer(id)),
-  );
-  if (layers.length === 0) return null;
+  if (!map.getLayer(PEAKS_LAYER_ID)) return null;
+  const layers = [PEAKS_LAYER_ID];
 
   // A mouse queries the bare point, exactly as before — no box, and so no projection work
   // and no chance of selecting something the cursor is not on.

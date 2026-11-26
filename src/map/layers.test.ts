@@ -28,7 +28,7 @@ afterEach(() => vi.unstubAllGlobals());
  * downloaded region's prefixed copies (both path flavours included).
  */
 const IDS_BY_GROUP: Record<LayerGroup, string[]> = {
-  peaks: ['peaks-symbol', 'peaks-symbol-marker'],
+  peaks: ['peaks-symbol'],
   hillshade: ['hillshade', 'region-lochaber-terrain-hillshade'],
   contours: [
     'region-lochaber-contours-lines-index',

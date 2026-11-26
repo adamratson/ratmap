@@ -359,7 +359,7 @@ const DAY_INK: MapInk = {
   peakDot: '#14171a',
   // A step darker than night's: 3.2:1 on open ground, where #c9910a was 2.3.
   peakMunroDot: '#a97a08',
-  peakDotStroke: 'rgba(255,255,255,0.95)',
+  peakDotStroke: '#ffffff',
   routeLine: '#d6127e',
   routeStraight: '#b45309',
   routeCasing: 'rgba(255,255,255,0.9)',
@@ -398,7 +398,7 @@ const NIGHT_INK: MapInk = {
   peakMunroText: '#e0b34d',
   peakDot: '#e6e9ed',
   peakMunroDot: '#c9910a',
-  peakDotStroke: 'rgba(14,17,20,0.95)',
+  peakDotStroke: '#0e1114',
   routeLine: '#ff4fa8',
   routeStraight: '#f59e0b',
   routeCasing: 'rgba(14,17,20,0.9)',

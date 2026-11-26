@@ -534,9 +534,9 @@ const stubPrefersDark = (dark: boolean): void => {
     bootstrapStorageMock.mockResolvedValue({ supported: true, persisted: true });
     await loadMainQuietly();
 
-    // The mock map knows no layers; give it the peaks pair so the toggle has something to hit.
+    // The mock map knows no layers; give it the peaks layer so the toggle has something to hit.
     const map = mapInstances[0] as unknown as Record<string, unknown>;
-    const ids = ['peaks-symbol', 'peaks-symbol-marker', 'hillshade'];
+    const ids = ['peaks-symbol', 'hillshade'];
     const setLayoutProperty = vi.fn();
     map.getStyle = () => ({ layers: ids.map((id) => ({ id })) });
     map.getLayersOrder = () => [...ids];
@@ -576,7 +576,6 @@ const stubPrefersDark = (dark: boolean): void => {
     peaks.dispatchEvent(new Event('change'));
 
     expect(setLayoutProperty).toHaveBeenCalledWith('peaks-symbol', 'visibility', 'none');
-    expect(setLayoutProperty).toHaveBeenCalledWith('peaks-symbol-marker', 'visibility', 'none');
     expect(setLayoutProperty).not.toHaveBeenCalledWith('hillshade', 'visibility', expect.anything());
     expect(JSON.parse(store.get('ratmap:visible-layers')!)).toEqual({ peaks: false });
   });

@@ -75,7 +75,7 @@ const DEFAULT_VISIBLE: Record<LayerGroup, boolean> = {
  * a suffix that happens to be the whole string.
  */
 const LAYER_ID_SUFFIXES: Record<LayerGroup, readonly string[]> = {
-  peaks: [PEAKS_LAYER_ID, `${PEAKS_LAYER_ID}-marker`],
+  peaks: [PEAKS_LAYER_ID],
   // The global catalog's `hillshade` and every region's `…-terrain-hillshade`.
   hillshade: ['hillshade'],
   contours: ['-contours-lines-index', '-contours-lines', '-contours-labels'],

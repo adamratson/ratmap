@@ -1,15 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap, PointLike } from 'maplibre-gl';
 import {
+  createExpression,
+  featureFilter,
+  type ExpressionSpecification,
+  type FilterSpecification,
+} from '@maplibre/maplibre-gl-style-spec';
+import {
   addPeaksLayer,
   formatElevation,
   hasList,
   isMunro,
   peakAt,
   PEAKS_LAYER_ID,
+  PEAKS_NOTABILITY_FILTER,
   PEAKS_RENDER_FILTER,
+  PEAKS_SORT_KEY,
   PEAKS_SOURCE_ID,
 } from './peaks';
+import { mapInk } from '../map/flavor';
 import type { TileSourceRegistry } from '../map/tile-source-registry';
 
 function fakeRegistry() {
@@ -17,6 +26,33 @@ function fakeRegistry() {
     addRemote: vi.fn(),
     sourceUrl: (key: string) => `pmtiles://${key}`,
   } as unknown as TileSourceRegistry;
+}
+
+type Image = { width: number; height: number; data: Uint8ClampedArray };
+
+/** A map with just what addPeaksLayer touches, the dot images included. */
+function fakeMap({ addLayer = vi.fn(), getLayer = vi.fn(), addSource = vi.fn() } = {}) {
+  const images = new Map<string, Image>();
+  const map = {
+    addSource,
+    addLayer,
+    getLayer,
+    hasImage: (id: string) => images.has(id),
+    addImage: (id: string, image: Image) => void images.set(id, image),
+  } as unknown as MLMap;
+  return { map, addLayer, addSource, images };
+}
+
+/** The one layer addPeaksLayer adds, for a theme. */
+function peaksLayer(theme: 'light' | 'dark' = 'light') {
+  const { map, addLayer, images } = fakeMap();
+  addPeaksLayer(map, fakeRegistry(), theme);
+  return { layer: addLayer.mock.calls[0][0], images };
+}
+
+/** Whether a filter keeps a summit at a zoom, evaluated as MapLibre would. */
+function keeps(filter: unknown, props: Record<string, unknown>, zoom: number): boolean {
+  return featureFilter(filter as FilterSpecification).filter({ zoom }, { type: 1, properties: props } as never);
 }
 
 describe('formatElevation', () => {
@@ -38,9 +74,7 @@ describe('formatElevation', () => {
 describe('addPeaksLayer', () => {
   it('registers the archive for regional copies, and takes its zoom range from the archive', () => {
     const registry = fakeRegistry();
-    const addSource = vi.fn();
-    const addLayer = vi.fn();
-    const map = { addSource, addLayer, getLayer: vi.fn() } as unknown as MLMap;
+    const { map, addSource } = fakeMap();
 
     addPeaksLayer(map, registry, 'light');
 
@@ -55,16 +89,44 @@ describe('addPeaksLayer', () => {
     expect(spec.attribution).toContain('openstreetmap.org/copyright');
   });
 
-  it('adds both a marker and a label layer', () => {
-    const registry = fakeRegistry();
-    const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
+  it('draws the dot and the name as one symbol, placed together or not at all', () => {
+    // A separate circle layer went under every downloaded region's ground, and took no part
+    // in collision: 803 dots for 107 names over Andorra at z9.
+    const { map, addLayer } = fakeMap();
 
-    addPeaksLayer(map, registry, 'light');
+    addPeaksLayer(map, fakeRegistry(), 'light');
 
-    const ids = addLayer.mock.calls.map((call) => call[0].id);
-    expect(ids).toContain(PEAKS_LAYER_ID);
-    expect(ids).toContain(`${PEAKS_LAYER_ID}-marker`);
+    expect(addLayer.mock.calls.map((call) => call[0].id)).toEqual([PEAKS_LAYER_ID]);
+    const { layout } = addLayer.mock.calls[0][0];
+    expect(layout['icon-image']).toBeDefined();
+    expect(layout['text-optional']).toBe(false);
+    expect(layout['icon-optional']).toBe(false);
+    expect(layout['icon-allow-overlap']).toBe(false);
+    expect(layout['text-allow-overlap']).toBe(false);
+  });
+
+  it('draws the dot in the peak ink, ringed in the ground, at the size the circle had', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      const ink = mapInk(theme);
+      const { layer, images } = peaksLayer(theme);
+      const [, , munroId, peakId] = layer.layout['icon-image'];
+      const pixel = (image: Image, x: number, y: number) => {
+        const at = (y * image.width + x) * 4;
+        return `#${[...image.data.slice(at, at + 3)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+      };
+      const peak = images.get(peakId)!;
+      const munro = images.get(munroId)!;
+      const mid = peak.width / 2;
+      expect(pixel(peak, mid, mid)).toBe(ink.peakDot);
+      expect(pixel(munro, mid, mid)).toBe(ink.peakMunroDot);
+      // Rim just outside the disc (radius 10 of 32, at 2x of 20 px: 12.5 px), clear corners.
+      expect(pixel(peak, mid + 13, mid)).toBe(ink.peakDotStroke);
+      expect(peak.data[3]).toBe(0);
+      // 13 px across from z12, as the circle layer drew it (radius 6.5).
+      const size = layer.layout['icon-size'];
+      expect(size).toEqual(['step', ['zoom'], 0.64, 9, 0.8, 12, 1.04]);
+      expect(Math.round(((2 * 10) / 32) * 20 * 1.04)).toBe(13);
+    }
   });
 
   it('inserts the label layer before the basemap town/city labels, not on top of everything', () => {
@@ -72,41 +134,25 @@ describe('addPeaksLayer', () => {
     // space first. Appending peaks on top (the default for addLayer with no beforeId) let
     // the Lake District's fell density blank out every nearby town label. Placing peaks
     // before `places_locality` instead lets towns place first.
-    const registry = fakeRegistry();
-    const addLayer = vi.fn();
-    const getLayer = vi.fn().mockReturnValue({ id: 'places_locality' });
-    const map = { addSource: vi.fn(), addLayer, getLayer } as unknown as MLMap;
+    const { map, addLayer } = fakeMap({ getLayer: vi.fn().mockReturnValue({ id: 'places_locality' }) });
 
-    addPeaksLayer(map, registry, 'light');
+    addPeaksLayer(map, fakeRegistry(), 'light');
 
     const labelCall = addLayer.mock.calls.find((call) => call[0].id === PEAKS_LAYER_ID)!;
-    const markerCall = addLayer.mock.calls.find(
-      (call) => call[0].id === `${PEAKS_LAYER_ID}-marker`,
-    )!;
     expect(labelCall[1]).toBe('places_locality');
-    expect(markerCall[1]).toBe(PEAKS_LAYER_ID);
   });
 
   it('falls back to appending when the basemap has no places_locality layer', () => {
-    const registry = fakeRegistry();
-    const addLayer = vi.fn();
-    const getLayer = vi.fn().mockReturnValue(undefined);
-    const map = { addSource: vi.fn(), addLayer, getLayer } as unknown as MLMap;
+    const { map, addLayer } = fakeMap({ getLayer: vi.fn().mockReturnValue(undefined) });
 
-    addPeaksLayer(map, registry, 'light');
+    addPeaksLayer(map, fakeRegistry(), 'light');
 
     const labelCall = addLayer.mock.calls.find((call) => call[0].id === PEAKS_LAYER_ID)!;
     expect(labelCall[1]).toBeUndefined();
   });
 
   it('builds a label expression that degrades when name or ele is missing', () => {
-    const registry = fakeRegistry();
-    const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
-
-    addPeaksLayer(map, registry, 'light');
-
-    const symbolLayer = addLayer.mock.calls.find((call) => call[0].id === PEAKS_LAYER_ID)![0];
+    const symbolLayer = peaksLayer().layer;
     const textField = JSON.stringify(symbolLayer.layout['text-field']);
     // A 'case' expression with explicit has-checks, so a peak missing either field never
     // renders a stray separator or the literal string "undefined".
@@ -118,15 +164,8 @@ describe('addPeaksLayer', () => {
 });
 
 describe('PEAKS_NOTABILITY_FILTER', () => {
-  // Evaluates the filter expression the way MapLibre would, so the thresholds are
-  // actually asserted rather than just the expression's shape.
-  function passes(props: { prom?: number; wikidata?: string }, zoom: number): boolean {
-    const floor =
-      zoom >= 15 ? -1 : zoom >= 13 ? 30 : zoom >= 11 ? 120 : zoom >= 9 ? 300 : 600;
-    const byProminence = (props.prom ?? -1) >= floor;
-    const byNotability = zoom >= 9 && props.wikidata !== undefined;
-    return byProminence || byNotability;
-  }
+  // The real expression, evaluated by MapLibre's own filter code.
+  const passes = (props: Record<string, unknown>, zoom: number) => keeps(PEAKS_NOTABILITY_FILTER, props, zoom);
 
   it('shows only dominant summits at country zoom', () => {
     expect(passes({ prom: 1483 }, 6)).toBe(true);   // Bobotov Kuk
@@ -136,8 +175,8 @@ describe('PEAKS_NOTABILITY_FILTER', () => {
   it('ranks a massif by prominence, which elevation cannot do', () => {
     // Bobotov Kuk 2523 m / prom 1483; Savin kuk 2313 m / prom 93. Nearly the same height,
     // completely different significance — this is the whole reason for the measure.
-    expect(passes({ prom: 1483 }, 8)).toBe(true);
-    expect(passes({ prom: 93 }, 8)).toBe(false);
+    expect(passes({ prom: 1483, ele: 2523 }, 8)).toBe(true);
+    expect(passes({ prom: 93, ele: 2313 }, 8)).toBe(false);
   });
 
   it('travels between regions with different terrain', () => {
@@ -158,6 +197,21 @@ describe('PEAKS_NOTABILITY_FILTER', () => {
     expect(passes({ prom: 30, wikidata: 'Q1' }, 9)).toBe(true);
   });
 
+  it('does not let wikidata bring in a bump or a col', () => {
+    // Over Andorra at z10: Roques Feres (0.2 m) and Coll Blanc (5.9 m) were named, while
+    // Pica d'Estats and Comapedrosa were not.
+    expect(passes({ prom: 0.2, wikidata: 'Q1' }, 10)).toBe(false);
+    expect(passes({ prom: 5.9, wikidata: 'Q1' }, 12)).toBe(false);
+    // They still come in on prominence alone, at the highest zooms.
+    expect(passes({ prom: 0.2, wikidata: 'Q1' }, 15)).toBe(true);
+  });
+
+  it('still lets wikidata vouch for a summit with no computed prominence', () => {
+    // Outside every built region there is nothing else to judge by.
+    expect(passes({ wikidata: 'Q1' }, 9)).toBe(true);
+    expect(passes({}, 9)).toBe(false);
+  });
+
   it('lowers the bar progressively as you zoom in', () => {
     expect(passes({ prom: 400 }, 8)).toBe(false);
     expect(passes({ prom: 400 }, 9)).toBe(true);
@@ -172,17 +226,52 @@ describe('PEAKS_NOTABILITY_FILTER', () => {
     expect(passes({}, 13)).toBe(false);
     expect(passes({}, 15)).toBe(true);
   });
+});
 
-  it('is applied to the marker layer as well as the labels, so they stay in sync', () => {
-    const registry = fakeRegistry();
-    const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
+describe('PEAKS_SORT_KEY', () => {
+  const expression = createExpression(PEAKS_SORT_KEY as unknown as ExpressionSpecification);
+  if (expression.result !== 'success') throw new Error(JSON.stringify(expression.value));
+  const key = (props: Record<string, unknown>) =>
+    expression.value.evaluate({ zoom: 10 }, { type: 1, properties: props } as never) as number;
+  const order = (peaks: Record<string, Record<string, unknown>>) =>
+    Object.entries(peaks)
+      .sort(([, a], [, b]) => key(a) - key(b))
+      .map(([name]) => name);
 
-    addPeaksLayer(map, registry, 'light');
+  it('places the most prominent summit first, whatever the tile order', () => {
+    // The z10 view over Andorra that lost both of these to minor tops.
+    expect(
+      order({
+        'Roques Feres': { prom: 0.2, ele: 1967, wikidata: 'Q1' },
+        'Pic de Comapedrosa': { prom: 429.5, ele: 2943 },
+        'Coll Blanc': { prom: 5.9, ele: 2528, wikidata: 'Q2' },
+        "Pica d'Estats": { prom: 1267.2, ele: 3143 },
+      }),
+    ).toEqual(["Pica d'Estats", 'Pic de Comapedrosa', 'Coll Blanc', 'Roques Feres']);
+  });
 
-    const filters = addLayer.mock.calls.map((call) => JSON.stringify(call[0].filter));
-    expect(filters).toHaveLength(2);
-    expect(filters[0]).toBe(filters[1]);
+  it('places a Munro before any other summit', () => {
+    expect(
+      order({
+        'Ben Nevis-sized top': { prom: 1344 },
+        'a marginal Munro': { prom: 10, lists: 'munro' },
+      }),
+    ).toEqual(['a marginal Munro', 'Ben Nevis-sized top']);
+  });
+
+  it('ranks summits with no computed prominence by height, below every measured one', () => {
+    expect(
+      order({
+        'unmeasured, 3000 m': { ele: 3000 },
+        'unmeasured, 1000 m': { ele: 1000 },
+        'measured, 0 m': { prom: 0, ele: 500 },
+        'nothing known': {},
+      }),
+    ).toEqual(['measured, 0 m', 'unmeasured, 3000 m', 'unmeasured, 1000 m', 'nothing known']);
+  });
+
+  it('is what the layer places by', () => {
+    expect(peaksLayer().layer.layout['symbol-sort-key']).toEqual(PEAKS_SORT_KEY);
   });
 });
 
@@ -202,16 +291,7 @@ describe('hasList / isMunro', () => {
 });
 
 describe('PEAKS_RENDER_FILTER', () => {
-  // Same evaluation approach as PEAKS_NOTABILITY_FILTER above, extended with the list-
-  // membership override this filter adds on top.
-  function passes(props: { prom?: number; wikidata?: string; lists?: string }, zoom: number): boolean {
-    const floor =
-      zoom >= 15 ? -1 : zoom >= 13 ? 30 : zoom >= 11 ? 120 : zoom >= 9 ? 300 : 600;
-    const byProminence = (props.prom ?? -1) >= floor;
-    const byNotability = zoom >= 9 && props.wikidata !== undefined;
-    const byList = (props.lists ?? '').split(';').includes('munro');
-    return byProminence || byNotability || byList;
-  }
+  const passes = (props: Record<string, unknown>, zoom: number) => keeps(PEAKS_RENDER_FILTER, props, zoom);
 
   it('renders a munro at every zoom regardless of prominence', () => {
     // Same low prominence, only one is a munro — this is the case that regresses: a
@@ -225,35 +305,22 @@ describe('PEAKS_RENDER_FILTER', () => {
     expect(passes({ prom: 93 }, 6)).toBe(false);
   });
 
-  it('is what addPeaksLayer actually filters both layers on', () => {
-    const registry = fakeRegistry();
-    const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
-
-    addPeaksLayer(map, registry, 'light');
-
-    const filter = JSON.stringify(addLayer.mock.calls[0][0].filter);
-    expect(filter).toBe(JSON.stringify(PEAKS_RENDER_FILTER));
+  it('is what addPeaksLayer actually filters on', () => {
+    expect(JSON.stringify(peaksLayer().layer.filter)).toBe(JSON.stringify(PEAKS_RENDER_FILTER));
   });
 });
 
 describe('munro styling', () => {
-  it('prefixes the label and swaps marker colour for a munro, not just a symbol change', () => {
-    const registry = fakeRegistry();
-    const addLayer = vi.fn();
-    const map = { addSource: vi.fn(), addLayer, getLayer: vi.fn() } as unknown as MLMap;
-
-    addPeaksLayer(map, registry, 'light');
-
-    const symbolLayer = addLayer.mock.calls.find((call) => call[0].id === PEAKS_LAYER_ID)![0];
-    const markerLayer = addLayer.mock.calls.find(
-      (call) => call[0].id === `${PEAKS_LAYER_ID}-marker`,
-    )![0];
+  it('prefixes the label and swaps the dot for a munro, not just a symbol change', () => {
+    const { layer } = peaksLayer();
 
     // Shape (▲ prefix), not colour alone — a munro must read as one on a greyscale screen.
-    expect(JSON.stringify(symbolLayer.layout['text-field'])).toContain('▲');
-    // And colour still differs, as a second, redundant cue.
-    expect(JSON.stringify(markerLayer.paint['circle-color'])).toContain('munro');
+    expect(JSON.stringify(layer.layout['text-field'])).toContain('▲');
+    // And the dot still differs, in colour and size, as a second, redundant cue.
+    const [op, test, munroImage, peakImage] = layer.layout['icon-image'];
+    expect(op).toBe('case');
+    expect(JSON.stringify(test)).toContain('munro');
+    expect(munroImage).not.toBe(peakImage);
   });
 });
 
@@ -284,8 +351,8 @@ describe('peakAt', () => {
     expect(peakAt(map, [10, 10])).toBeNull();
   });
 
-  it('returns null instead of throwing when the peaks layers are not added yet', () => {
-    // Pointer handlers are live before the map's `load` event adds these layers.
+  it('returns null instead of throwing when the peaks layer is not added yet', () => {
+    // Pointer handlers are live before the map's `load` event adds the layer.
     // queryRenderedFeatures throws on an unknown layer id, so it must not be called.
     const queryRenderedFeatures = vi.fn(() => {
       throw new Error("The layer 'peaks-symbol' does not exist in the map's style");
@@ -299,7 +366,7 @@ describe('peakAt', () => {
     expect(queryRenderedFeatures).not.toHaveBeenCalled();
   });
 
-  it('queries only the layers that exist, when some are missing', () => {
+  it('queries the summits layer, which carries both the dot and the name', () => {
     const queryRenderedFeatures = vi.fn().mockReturnValue([]);
     const map = {
       getLayer: vi.fn((id: string) => (id === PEAKS_LAYER_ID ? {} : undefined)),
@@ -337,7 +404,7 @@ describe('peakAt on a touch screen', () => {
         [78, 178],
         [122, 222],
       ],
-      { layers: [PEAKS_LAYER_ID, `${PEAKS_LAYER_ID}-marker`] },
+      { layers: [PEAKS_LAYER_ID] },
     );
   });
 

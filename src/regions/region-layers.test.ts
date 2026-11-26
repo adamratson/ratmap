@@ -908,7 +908,7 @@ describe('walking routes', () => {
     expect(map.layers.some((l) => String(l.id).includes('routes'))).toBe(false);
   });
 
-  it('shares one source and one pair of layers between overlapping regions', async () => {
+  it('shares one source and one set of layers between overlapping regions', async () => {
     const map = fakeMap();
     const other: Region = {
       ...withRoutes,
@@ -919,7 +919,8 @@ describe('walking routes', () => {
     await addRegionToMap(map as unknown as MLMap, registry, withRoutes, 'light');
     await addRegionToMap(map as unknown as MLMap, registry, other, 'light');
 
-    expect(map.layers.filter((l) => l.source === sid('routes'))).toHaveLength(2);
+    // The corridor, the national diamonds and the names.
+    expect(map.layers.filter((l) => l.source === sid('routes'))).toHaveLength(3);
   });
 });
 

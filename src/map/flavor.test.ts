@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { layers } from '@protomaps/basemaps';
-import { MAP_FONTS, mapInk, ratmapFlavor } from './flavor';
-import { contrast } from '../test-support/paint-value';
+import { MAP_FONTS, mapInk, ratmapFlavor, STREAM_INK } from './flavor';
+import { contrast, styleColor } from '../test-support/paint-value';
 
 // Listed, not loaded: a glob of the glyph files actually in public/fonts, grouped by
 // fontstack directory. import.meta.glob rather than node:fs so the app tsconfig does not
@@ -86,6 +86,42 @@ describe('contrast of the map’s own ink', () => {
       // 3.5 rather than 3: the rail layer is drawn at 0.85 opacity.
       expect(contrast(flavor.railway, flavor.earth)).toBeGreaterThanOrEqual(3.5);
       expect(contrast(mapInk(theme).peakMunroDot, flavor.earth)).toBeGreaterThanOrEqual(3);
+    });
+  }
+});
+
+/** A colour's hue, in degrees. */
+function hue(css: string): number {
+  const { r, g, b } = styleColor(css);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (d === 0) return 0;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+const hueApart = (a: string, b: string) => {
+  const d = Math.abs(hue(a) - hue(b));
+  return Math.min(d, 360 - d);
+};
+
+describe('walking routes', () => {
+  for (const theme of ['light', 'dark'] as const) {
+    it(`are a hue well away from water's (${theme})`, () => {
+      // A pale corridor winding down a valley in a near-water hue read as a river: the teal
+      // tints were 20° and 30° from the water fill. 45° is clear of it.
+      const ink = mapInk(theme);
+      const { water } = ratmapFlavor(theme);
+      for (const tint of ink.walkRouteTint) expect(hueApart(tint, water)).toBeGreaterThanOrEqual(45);
+      // Below z12 it is a thin line, beside the streams' own.
+      expect(hueApart(ink.walkRoute, STREAM_INK[theme])).toBeGreaterThanOrEqual(45);
+    });
+
+    it(`holds as a line and as text (${theme})`, () => {
+      const ink = mapInk(theme);
+      const flavor = ratmapFlavor(theme);
+      expect(contrast(ink.walkRoute, flavor.earth)).toBeGreaterThanOrEqual(3);
+      expect(contrast(ink.walkRouteText, theme === 'light' ? '#ffffff' : '#0e1114')).toBeGreaterThanOrEqual(4.5);
     });
   }
 });

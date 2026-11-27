@@ -147,13 +147,17 @@ export function sacBandLayerId(sourceId: string): string {
   return `${sourceId}${BAND_SUFFIX}`;
 }
 
+/** The band's width at z12 and z16, on an exponential curve (base 1.5) between them. */
+export const SAC_BAND_WIDTH = [2.5, 7] as const;
+
 /**
- * Draw the graded paths as a wide, soft colour band *under* the path line itself.
+ * Draw the graded paths as a soft colour band *under* the path line itself.
  *
  * A band rather than recolouring the path: this geometry is our own OSM cut, tiled by
  * tippecanoe, while the line drawn on top of it is Protomaps' generalisation of the same
- * ways. They agree closely at z15 and less well below it, and a 6 px translucent band
- * absorbs that disagreement where a 2 px replacement line would show as a doubled path.
+ * ways. They agree closely at z15 and less well below it, and a translucent band wider
+ * than the path absorbs that disagreement where a replacement line would show as a
+ * doubled path.
  * It also keeps one path style on the map: the grade is an annotation on the path, not a
  * different kind of path.
  */
@@ -176,9 +180,12 @@ export function addSacLayers(
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': colorExpression() as never,
-        // Wider than the path drawn over it, so the grade reads as a halo around the
-        // path rather than as a second path beside it.
-        'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 12, 4, 16, 12],
+        // Wider than the path and its casing, so the grade reads as a halo around the
+        // path rather than as a second path beside it — and no wider. At 4-12 px it was
+        // the widest thing on a graded path from z14, and the path became a broad orange
+        // or green ribbon (Andorra, 2026-11-27). The grade is the colour, and the T-label
+        // from z14, not the band's weight.
+        'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 12, SAC_BAND_WIDTH[0], 16, SAC_BAND_WIDTH[1]],
         // Translucent so contours and hillshade still read through it — the band marks a
         // path, it does not replace the ground under it.
         //
@@ -228,9 +235,15 @@ export interface SacHit {
   grade: SacGradeInfo | null;
 }
 
-/** Tap targets are finger-sized on touch, exact on a mouse — same rule as the summits. */
+const MOUSE_PADDING_PX = 2;
+
+/**
+ * Tap targets are finger-sized on touch. On a mouse, 2 px either side of the band: it is
+ * narrow (SAC_BAND_WIDTH, 3.9 px at z14), and a pointer on the path's edge should still
+ * find it — the hover target the 6 px band used to give, kept when it narrowed.
+ */
 function tapPadding(): number {
-  return isCoarsePointer() ? 12 : 0;
+  return isCoarsePointer() ? 12 : MOUSE_PADDING_PX;
 }
 
 /**

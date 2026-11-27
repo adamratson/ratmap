@@ -55,6 +55,20 @@ describe('sacPathAt', () => {
     expect(sacPathAt(map, [10, 10], 12)?.grade?.short).toBe('T5');
   });
 
+  it('finds a narrow band under a mouse on the path’s edge, not only dead on it', () => {
+    const map = fakeMap(['region-lochaber-sac-band'], [{ t: 2 }]);
+
+    sacPathAt(map, [10, 10]);
+
+    expect(map.queryRenderedFeatures).toHaveBeenCalledWith(
+      [
+        [8, 8],
+        [12, 12],
+      ],
+      { layers: ['region-lochaber-sac-band'] },
+    );
+  });
+
   it('queries every downloaded region rather than one', () => {
     const map = fakeMap(
       ['region-lochaber-sac-band', 'region-cairngorms-sac-band', 'region-lochaber-sac-labels'],
@@ -95,6 +109,18 @@ describe('addSacLayers', () => {
     expect(at(12)).toBeLessThan(at(14.5) / 2);
     expect(at(13)).toBeLessThan(at(14.5));
     expect(at(16)).toBe(at(14.5));
+  });
+
+  it('draws the grade as a narrow band round the path, not a ribbon', () => {
+    // At 4-12 px it was the widest thing on a graded path from z14 (Andorra, 2026-11-27).
+    const map = fakeMap([]);
+    addSacLayers(map, 'region-lochaber-sac', { minzoom: 12 });
+    const band = vi.mocked(map.addLayer).mock.calls[0][0] as unknown as Record<string, unknown>;
+    const width = (zoom: number) =>
+      paintValue('line', 'line-width', (band.paint as Record<string, unknown>)['line-width'], zoom) as number;
+    expect(width(12)).toBe(2.5);
+    expect(width(14)).toBeLessThan(4);
+    expect(width(16)).toBe(7);
   });
 });
 

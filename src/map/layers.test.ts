@@ -53,7 +53,6 @@ const IDS_BY_GROUP: Record<LayerGroup, string[]> = {
   hutsWater: ['region-lochaber-huts-symbols'],
   routes: [
     'region-lochaber-routes-line',
-    'region-lochaber-routes-path-casing',
     'region-lochaber-routes-path',
     'region-lochaber-routes-labels',
   ],

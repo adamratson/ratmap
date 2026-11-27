@@ -92,7 +92,7 @@ const LAYER_ID_SUFFIXES: Record<LayerGroup, readonly string[]> = {
   ],
   landmarks: ['-landmarks-symbols', '-landmarks-symbols-overlap'],
   hutsWater: ['-huts-symbols'],
-  routes: ['-routes-line', '-routes-path-casing', '-routes-path', '-routes-labels'],
+  routes: ['-routes-line', '-routes-path', '-routes-labels'],
   boundaries: ['-detail-walls', '-detail-fences', '-detail-gates'],
   powerLines: ['-detail-power-lines', '-detail-pylons'],
   avalanche: ['-avalanche-shade'],

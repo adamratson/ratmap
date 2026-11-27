@@ -201,6 +201,9 @@ function amongBasemapPois(map: MLMap): string | undefined {
   );
 }
 
+/** Where a path's casing comes in: z14, the zoom a single path is followed at. */
+export const PATH_CASING_FROM = 14;
+
 /**
  * Draw paths and tracks the way a hill map does, on top of Protomaps' own road layers.
  *
@@ -209,9 +212,19 @@ function amongBasemapPois(map: MLMap): string | undefined {
  * reasonable default for a general-purpose basemap and completely wrong for a walking
  * map, where the paths are the single most important feature.
  *
- * A white casing under a dark dashed line keeps them readable over hillshade and contours
- * without competing with them. Tracks (vehicle-width) draw as a narrow lane between two
- * thin edges in the path ink, as a paper map draws a track.
+ * A footpath is a dark dashed line, a track (vehicle-width) a thinner solid one in the same
+ * ink: dashed or solid says which, and nothing more is needed to say it. From z14, where a
+ * single path is followed, a light casing keeps the line readable over hillshade and
+ * contours.
+ *
+ * Quieter than it was, measured over Andorra (2026-11-27):
+ *
+ *   - A track was a lane between two edges in the path ink. Over the Soldeu ski area 326 of
+ *     the 952 lines drawn at z12 are tracks, and each pair of edges read as two contours by
+ *     day and as a road at night: the heaviest line on the map, for the least important way.
+ *   - At z12-13, where a walk is chosen from the whole network, the casing under every
+ *     dashed path turned the network into a white flicker over the relief. Below z14 the
+ *     path sits on the ground, and a graded path shows its grade through the dashes.
  *
  * Used for two different sources, which is why the layer and filter are parameters: the
  * region basemap's `roads` layer above z14, and our own low-zoom `paths` artifact below
@@ -244,9 +257,7 @@ function addPathLayers(
   const zooms = { minzoom, ...(maxzoom === undefined ? {} : { maxzoom }) };
   const isTrack: ExpressionSpecification = ['==', ['get', 'kind_detail'], 'track'];
 
-  // Casing first, so the line above sits in its own channel and stays legible against
-  // relief — light by day, graphite at night (see mapInk()). Under a track it is the
-  // lane's two edges instead, in the path ink, with the track's own fill between them.
+  // The casing, the same under a track as under a footpath, fading in from z13.5 to z14.5.
   map.addLayer(
     {
       id: `${sourceId}-paths-casing`,
@@ -257,16 +268,9 @@ function addPathLayers(
       ...zooms,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': ['case', isTrack, ink.pathLine, ink.pathCasing],
-        'line-width': [
-          'interpolate',
-          ['exponential', 1.5],
-          ['zoom'],
-          12,
-          ['case', isTrack, 2.4, 2],
-          16,
-          ['case', isTrack, 5.6, 5],
-        ],
+        'line-color': ink.pathCasing,
+        'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 12, 2, 16, 5],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], PATH_CASING_FROM - 0.5, 0, PATH_CASING_FROM + 0.5, 1],
       },
     },
     before,
@@ -282,18 +286,17 @@ function addPathLayers(
       ...zooms,
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
-        'line-color': ['case', isTrack, ink.trackFill, ink.pathLine],
+        'line-color': ink.pathLine,
         'line-width': [
           'interpolate',
           ['exponential', 1.5],
           ['zoom'],
           12,
-          ['case', isTrack, 1, 1],
+          ['case', isTrack, 0.75, 1],
           16,
-          ['case', isTrack, 3.6, 2.2],
+          ['case', isTrack, 1.8, 2.2],
         ],
-        // Tracks a lane, footpaths dashed — the usual walking-map distinction. A track
-        // used to be this same ink drawn solid and wider: the heaviest line on the map.
+        // Tracks solid, footpaths dashed — the usual walking-map distinction.
         'line-dasharray': ['case', isTrack, ['literal', [1, 0]], ['literal', [2.5, 1.5]]],
       },
     },

@@ -85,10 +85,6 @@ export function routesPathLayerId(sourceId: string): string {
   return `${sourceId}-path`;
 }
 
-export function routesPathCasingLayerId(sourceId: string): string {
-  return `${sourceId}-path-casing`;
-}
-
 export function routesLabelLayerId(sourceId: string): string {
   return `${sourceId}-labels`;
 }
@@ -138,9 +134,9 @@ export function addRoutesLayers(
       },
       paint: {
         'line-color': ['case', isLocal, ink.walkRouteTint[1], ink.walkRouteTint[0]],
-        // Wider than the SAC band (4-12 px, on the same exponential curve), so a ring of the
-        // tint shows outside the grade: 3 px a side for a local route at z14.5, where at 1.2x
-        // the band's width it was under 2 px and lost against the band.
+        // Wider than the SAC band (SAC_BAND_WIDTH, on the same exponential curve), so a ring
+        // of the tint shows outside the grade: at 1.2x the band's old width it was under
+        // 2 px a side at z14.5 and lost against the band.
         'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], TINT_ZOOM, 9, 16, 23],
       },
     },
@@ -148,33 +144,17 @@ export function addRoutesLayers(
   );
 
   // National and regional routes as paths at z10-11, in the paths' own ink and dash
-  // (addPathLayers in src/regions/region-layers.ts), thinning to their z12 widths so the
-  // hand-over to the paths archive does not show. Local routes are left out: they come in
-  // at z12 with the rest of the network.
-  const pathZooms = { minzoom: Math.max(ROUTES_MIN_ZOOM, minzoom), maxzoom: TINT_ZOOM };
-  const notLocal = ['!', isLocal] as ExpressionSpecification;
+  // (addPathLayers in src/regions/region-layers.ts), thinning to their z12 width so the
+  // hand-over to the paths archive does not show. No casing: the paths have none below
+  // z14. Local routes are left out: they come in at z12 with the rest of the network.
   map.addLayer(
     {
       ...base,
-      ...pathZooms,
-      id: routesPathCasingLayerId(sourceId),
-      type: 'line',
-      filter: notLocal,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': ink.pathCasing,
-        'line-width': ['interpolate', ['linear'], ['zoom'], ROUTES_MIN_ZOOM, 1.6, TINT_ZOOM, 2],
-      },
-    },
-    beforePath,
-  );
-  map.addLayer(
-    {
-      ...base,
-      ...pathZooms,
       id: routesPathLayerId(sourceId),
       type: 'line',
-      filter: notLocal,
+      minzoom: Math.max(ROUTES_MIN_ZOOM, minzoom),
+      maxzoom: TINT_ZOOM,
+      filter: ['!', isLocal] as ExpressionSpecification,
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': ink.pathLine,

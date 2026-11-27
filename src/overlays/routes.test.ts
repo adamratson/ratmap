@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap } from 'maplibre-gl';
 import { mapInk } from '../map/flavor';
+import { SAC_BAND_WIDTH } from './sac';
 import { layoutValue, paintValue, styleColor } from '../test-support/paint-value';
 import { featureFilter, type FilterSpecification } from '@maplibre/maplibre-gl-style-spec';
 import {
@@ -9,7 +10,6 @@ import {
   routeSwatch,
   routesLabelLayerId,
   routesLineLayerId,
-  routesPathCasingLayerId,
   routesPathLayerId,
 } from './routes';
 
@@ -45,7 +45,6 @@ describe('the route layers', () => {
   it('are the tint, the paths and the names, each before its own anchor, and nothing else', () => {
     expect(layersFor().map((a) => [a.layer.id, a.before])).toEqual([
       [routesLineLayerId(SOURCE), 'ground'],
-      [routesPathCasingLayerId(SOURCE), 'roads'],
       [routesPathLayerId(SOURCE), 'roads'],
       [routesLabelLayerId(SOURCE), 'first-label'],
     ]);
@@ -87,9 +86,8 @@ describe('the route tint', () => {
   });
 
   it('is wider than the grade band, so both show round a graded path', () => {
-    // The SAC band is 4 px at z12 and 12 px at z16 (src/overlays/sac.ts).
-    expect(width(12, LOCAL)).toBeGreaterThan(4);
-    expect(width(16, LOCAL)).toBeGreaterThan(12);
+    expect(width(12, LOCAL)).toBeGreaterThan(SAC_BAND_WIDTH[0]);
+    expect(width(16, LOCAL)).toBeGreaterThan(SAC_BAND_WIDTH[1]);
   });
 
   it('is opaque, so crowded joins do not build up into dark marks', () => {
@@ -98,28 +96,23 @@ describe('the route tint', () => {
 });
 
 describe('the routes drawn as paths', () => {
-  const { layer: casing } = layer(routesPathCasingLayerId(SOURCE));
   const { layer: path } = layer(routesPathLayerId(SOURCE));
 
   it('draw national and regional routes at z10-11, before the paths archive starts', () => {
-    for (const l of [casing, path]) {
-      expect(l).toMatchObject({ type: 'line', 'source-layer': 'routes', minzoom: 10, maxzoom: 12 });
-      for (const props of [INTERNATIONAL, NATIONAL, REGIONAL]) expect(keeps(l, props)).toBe(true);
-      // Local routes come in at z12 with the rest of the network.
-      expect(keeps(l, LOCAL)).toBe(false);
-    }
+    expect(path).toMatchObject({ type: 'line', 'source-layer': 'routes', minzoom: 10, maxzoom: 12 });
+    for (const props of [INTERNATIONAL, NATIONAL, REGIONAL]) expect(keeps(path, props)).toBe(true);
+    // Local routes come in at z12 with the rest of the network.
+    expect(keeps(path, LOCAL)).toBe(false);
   });
 
-  it('look like the paths they hand over to: the path ink, dashed, on its casing', () => {
+  it('look like the paths they hand over to: the path ink, dashed, with no casing below z14', () => {
     for (const theme of ['light', 'dark'] as const) {
-      const ink = mapInk(theme);
-      expect(layer(routesPathCasingLayerId(SOURCE), 0, theme).layer.paint['line-color']).toBe(ink.pathCasing);
-      expect(layer(routesPathLayerId(SOURCE), 0, theme).layer.paint['line-color']).toBe(ink.pathLine);
+      expect(layer(routesPathLayerId(SOURCE), 0, theme).layer.paint['line-color']).toBe(mapInk(theme).pathLine);
     }
+    expect(layersFor().some((a) => /casing/.test(a.layer.id))).toBe(false);
     expect(path.paint['line-dasharray']).toEqual([2.5, 1.5]);
-    // A footpath is 1 px on a 2 px casing at z12 (addPathLayers, src/regions/region-layers.ts).
+    // A footpath is 1 px at z12 (addPathLayers, src/regions/region-layers.ts).
     expect(paintValue('line', 'line-width', path.paint['line-width'], 11.99, {})).toBeCloseTo(1, 1);
-    expect(paintValue('line', 'line-width', casing.paint['line-width'], 11.99, {})).toBeCloseTo(2, 1);
     expect(paintValue('line', 'line-width', path.paint['line-width'], 10, {})).toBeLessThan(1);
   });
 });
@@ -173,7 +166,6 @@ describe('routeSwatch', () => {
 
   it('names its layers after the source, so the Layers toggle finds them', () => {
     expect(routesLineLayerId(SOURCE)).toMatch(/-routes-line$/);
-    expect(routesPathCasingLayerId(SOURCE)).toMatch(/-routes-path-casing$/);
     expect(routesPathLayerId(SOURCE)).toMatch(/-routes-path$/);
     expect(routesLabelLayerId(SOURCE)).toMatch(/-routes-labels$/);
   });

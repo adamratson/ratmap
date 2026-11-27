@@ -503,7 +503,9 @@ describe('addRegionToMap', () => {
     }
   });
 
-  it('draws a track as a lane between two edges, not as the heaviest line on the map', async () => {
+  it('draws a track as one solid line, thinner than a footpath, not as the heaviest line on the map', async () => {
+    // As a lane between two edges in the path ink, 326 of the 952 lines at z12 over the
+    // Soldeu ski area read as pairs of contours by day and as roads at night.
     const map = fakeMap();
     await addRegionToMap(map as unknown as MLMap, registry, region, 'light');
     const ink = mapInk('light');
@@ -511,12 +513,35 @@ describe('addRegionToMap', () => {
     const casing = paint(`${sid('basemap')}-paths-casing`);
     const line = paint(`${sid('basemap')}-paths`);
     const track = { kind_detail: 'track' };
-
-    expect(paintValue('line', 'line-color', casing['line-color'], 15, track)).toEqual(styleColor(ink.pathLine));
-    expect(paintValue('line', 'line-color', line['line-color'], 15, track)).toEqual(styleColor(ink.trackFill));
-    // A footpath is still the path ink, on a light casing.
     const footpath = { kind_detail: 'path' };
-    expect(paintValue('line', 'line-color', line['line-color'], 15, footpath)).toEqual(styleColor(ink.pathLine));
+
+    for (const kind of [track, footpath]) {
+      expect(paintValue('line', 'line-color', line['line-color'], 15, kind)).toEqual(styleColor(ink.pathLine));
+      expect(paintValue('line', 'line-color', casing['line-color'], 15, kind)).toEqual(styleColor(ink.pathCasing));
+    }
+    const dash = (kind: Record<string, unknown>) => paintValue('line', 'line-dasharray', line['line-dasharray'], 15, kind);
+    expect(dash(track)).toEqual([1, 0]);
+    expect(dash(footpath)).toEqual([2.5, 1.5]);
+    for (const zoom of [12, 14, 16]) {
+      const width = (kind: Record<string, unknown>) => paintValue('line', 'line-width', line['line-width'], zoom, kind) as number;
+      expect(width(track)).toBeLessThan(width(footpath));
+    }
+  });
+
+  it('casts no casing under the paths at z12-13, where the whole network is in view', async () => {
+    // Under every dashed path, the casing turned the network into a white flicker over the
+    // relief at the zooms a walk is chosen at.
+    const map = fakeMap();
+    const pathsArtifact = { kind: 'paths', filename: 'lochaber-paths.pmtiles', path: 'p5', bytes: 1 };
+    await addRegionToMap(map as unknown as MLMap, registry, { ...region, artifacts: [...region.artifacts, pathsArtifact] }, 'light');
+    for (const id of [`${sid('paths')}-paths-casing`, `${sid('basemap')}-paths-casing`]) {
+      const opacity = (map.layers.find((l) => String(l.id) === id)!.paint as Record<string, unknown>)['line-opacity'];
+      const at = (zoom: number) => paintValue('line', 'line-opacity', opacity, zoom, {}) as number;
+      expect(at(12)).toBe(0);
+      expect(at(13.4)).toBe(0);
+      expect(at(14)).toBeGreaterThan(0);
+      expect(at(14.5)).toBe(1);
+    }
   });
 
   it('filters paths on the attribute the Protomaps schema actually uses', async () => {
@@ -914,17 +939,15 @@ describe('walking routes', () => {
       await addRegionToMap(map as unknown as MLMap, registry, { ...region, artifacts: [...artifacts] }, 'light');
 
       const ids = map.layers.map((l) => String(l.id));
-      const casing = ids.indexOf(`${sid('routes')}-path-casing`);
       const path = ids.indexOf(`${sid('routes')}-path`);
-      expect(casing).toBeGreaterThan(-1);
-      expect(path).toBe(casing + 1);
+      expect(path).toBeGreaterThan(-1);
       // A stretch along a road is drawn as the road.
       expect(path).toBeLessThan(ids.indexOf(`${sid('basemap')}-roads_minor`));
       expect(path).toBeLessThan(ids.indexOf(`${sid('basemap')}-roads_major`));
       // And the relief, contours and water lie under it.
-      expect(casing).toBeGreaterThan(ids.indexOf(`${sid('terrain')}-hillshade`));
-      expect(casing).toBeGreaterThan(ids.indexOf(`${sid('contours')}-lines`));
-      if (inOrder) expect(casing).toBeGreaterThan(ids.indexOf(`${sid('basemap')}-water`));
+      expect(path).toBeGreaterThan(ids.indexOf(`${sid('terrain')}-hillshade`));
+      expect(path).toBeGreaterThan(ids.indexOf(`${sid('contours')}-lines`));
+      if (inOrder) expect(path).toBeGreaterThan(ids.indexOf(`${sid('basemap')}-water`));
     }
   });
 
@@ -956,8 +979,8 @@ describe('walking routes', () => {
     await addRegionToMap(map as unknown as MLMap, registry, withRoutes, 'light');
     await addRegionToMap(map as unknown as MLMap, registry, other, 'light');
 
-    // The tint, the routes drawn as paths (casing and line) and the names.
-    expect(map.layers.filter((l) => l.source === sid('routes'))).toHaveLength(4);
+    // The tint, the routes drawn as paths and the names.
+    expect(map.layers.filter((l) => l.source === sid('routes'))).toHaveLength(3);
   });
 });
 

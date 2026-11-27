@@ -249,14 +249,14 @@ export function ratmapFlavor(theme: Theme): Flavor {
 export interface MapInk {
   /** Halo behind any map text the app draws (peak, contour and grade labels). */
   labelHalo: string;
-  pathLine: string;
-  pathCasing: string;
   /**
-   * The inside of a track. A track is drawn as a lane — this between two thin edges in the
-   * path ink — rather than as a solid line in it: solid and 3.5 px wide, a track was the
-   * boldest line on the map, heavier than the main road it left.
+   * Footpaths dashed and tracks solid, in this one ink. A track is the thinner of the two:
+   * solid and 3.5 px wide it was the boldest line on the map, heavier than the main road it
+   * left, and as a lane between two edges in this ink it read as a pair of contours.
    */
-  trackFill: string;
+  pathLine: string;
+  /** Under a path from z14 (see PATH_CASING_FROM in src/regions/region-layers.ts). */
+  pathCasing: string;
   /**
    * Contours. Two inks, not one width: the 10 m lines are read by counting and must stay
    * recessive; the 50 m index lines are what the relief is read from, a step firmer.
@@ -340,7 +340,6 @@ const DAY_INK: MapInk = {
   labelHalo: 'rgba(255,255,255,0.9)',
   pathLine: '#8a3d2e',
   pathCasing: 'rgba(255,255,255,0.85)',
-  trackFill: '#fbfaf7',
   contour: 'rgba(176, 104, 44, 0.42)', // 1.6 / 1.5 / 1.6:1
   contourIndex: 'rgba(168, 96, 36, 0.8)', // 2.9 / 2.5 / 2.7:1
   contourLabel: '#94561f',
@@ -378,7 +377,6 @@ const NIGHT_INK: MapInk = {
   labelHalo: 'rgba(14,17,20,0.9)',
   pathLine: '#d08a6e',
   pathCasing: 'rgba(14,17,20,0.8)',
-  trackFill: '#22282f',
   contour: 'rgba(214, 170, 126, 0.3)', // 1.9 / 1.9 / 1.9:1
   contourIndex: 'rgba(222, 172, 122, 0.52)', // 3.2 / 3.2 / 3.1:1
   contourLabel: '#c89a70',

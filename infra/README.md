@@ -272,6 +272,34 @@ One that fails every try is listed at the end, after the rest have gone up, and 
 script exits 1 *without* uploading the manifest, which would otherwise offer downloads
 that 404. Run it again to send what is missing.
 
+### Pruning the bucket
+
+upload.sh never deletes, so a file the manifest stops listing stays in the bucket: a
+region dropped from the catalogue, or a version a rebuild replaced (`-contours` once
+contours became `-contours-1`). By 2026-11-24 that came to 134 GB of a 273 GB bucket.
+`prune-bucket.sh` deletes them, but not straight away:
+
+```sh
+./scripts/prune-bucket.sh             # report: what is unlisted, what can go now, when the rest can
+./scripts/prune-bucket.sh --list      # and each file, with why it waits
+./scripts/prune-bucket.sh --delete    # delete what can go now
+```
+
+A file goes once it was uploaded more than `PRUNE_DAYS` ago (default 7; `--days N`) and no
+manifest live in that time lists it. A phone that read the old manifest may still be
+downloading a file the new one dropped, and an upload in progress puts its archives up
+before the manifest that lists them. To know which manifests were live, upload.sh keeps
+each one it replaces as `regions/manifest-history/<when it went up>.json` (about 160 kB
+each, never deleted) and no longer re-uploads a manifest identical to the published one.
+That history begins on 2026-11-27. Where it runs out, nothing is deleted until that point
+is `PRUNE_DAYS` ago, and that applies to anything that replaces the manifest without keeping
+it, such as an upload.sh from before then on a host that has not pulled. Files outside
+`regions/` are never touched: the app's own build names the global files, and an older
+build can still be running on a phone.
+
+upload.sh ends by running the report, so each upload says what is waiting and when it
+can go. Deleting is always by hand, and permanent: the bucket keeps no versions.
+
 ## Verify (C4 acceptance check)
 
 After uploading, confirm CORS and range requests actually work from a browser origin, not

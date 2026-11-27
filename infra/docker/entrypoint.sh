@@ -29,6 +29,7 @@ ratmap infra toolchain
                                                build-region.sh scotland --dry-run
                                                build-world-catalog.sh
                                                upload.sh
+                                               prune-bucket.sh [--list] [--delete]
                                                prune-caches.sh --dry-run   (global runs
                                                prune by themselves; see docker/README.md)
   build-catalog.sh [args...]                 regenerate regions.json from Geofabrik's

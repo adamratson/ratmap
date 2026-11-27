@@ -1,0 +1,4 @@
+delete	regions/a/a-contours.pmtiles	2097152
+missing	regions/a/a-gone.pmtiles
+delete	regions/b/b-old.pmtiles	5242880
+wait	regions/c/c-new.pmtiles	7340032	2026-12-01T08:00:00Z	uploaded recently

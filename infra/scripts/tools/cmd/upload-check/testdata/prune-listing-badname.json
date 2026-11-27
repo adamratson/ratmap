@@ -1,0 +1,50 @@
+{
+ "Contents": [
+  {
+   "Key": "regions/manifest.json",
+   "LastModified": "2026-11-20T12:00:00+00:00",
+   "Size": 2000,
+   "ETag": "\"live\""
+  },
+  {
+   "Key": "regions/manifest-history/20261110T120000Z.json",
+   "LastModified": "2026-11-20T11:59:30+00:00",
+   "Size": 2000
+  },
+  {
+   "Key": "regions/manifest-history/20261101T000000Z.json",
+   "LastModified": "2026-11-10T11:58:00+00:00",
+   "Size": 2000
+  },
+  {
+   "Key": "regions/a/a-basemap.pmtiles",
+   "LastModified": "2026-09-01T00:00:00+00:00",
+   "Size": 3221225472
+  },
+  {
+   "Key": "regions/a/a-contours.pmtiles",
+   "LastModified": "2026-09-01T00:00:00+00:00",
+   "Size": 2097152
+  },
+  {
+   "Key": "regions/b/b-old.pmtiles",
+   "LastModified": "2026-10-01T00:00:00+00:00",
+   "Size": 5242880
+  },
+  {
+   "Key": "regions/c/c-new.pmtiles",
+   "LastModified": "2026-11-24T08:00:00+00:00",
+   "Size": 7340032
+  },
+  {
+   "Key": "world-catalog.pmtiles",
+   "LastModified": "2026-08-01T00:00:00+00:00",
+   "Size": 9437184
+  },
+  {
+   "Key": "regions/manifest-history/old.json",
+   "LastModified": "2026-11-21T00:00:00+00:00",
+   "Size": 10
+  }
+ ]
+}

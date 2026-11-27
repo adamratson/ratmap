@@ -1,10 +1,15 @@
-// Command upload-check holds upload.sh's three checks.
+// Command upload-check holds upload.sh's checks, and prune-bucket.sh's.
 //
 //	upload-check changed LISTING DIST_DIR KEY...      # which archives differ from the bucket
 //	upload-check unpublished PUBLISHED LOCAL          # regions a new manifest would drop
+//	upload-check archive PUBLISHED LOCAL LASTMODIFIED # where to keep the manifest replaced
 //	upload-check served HEADERS BODY LOCAL            # the live manifest is served right
+//	upload-check history NOW DAYS LISTING             # the kept manifests prune reads
+//	upload-check prune NOW DAYS LISTING LIVE LIVE_META HISTORY_DIR PLAN
+//	                                                  # what in the bucket may be deleted
 //
-// See upload.sh beside each call for why each check exists.
+// See upload.sh and prune-bucket.sh beside each call for why each check exists, and
+// prune.go for how prune decides.
 package main
 
 import (
@@ -28,7 +33,10 @@ func (f failure) Error() string { return string(f) }
 
 const usage = `usage: upload-check changed LISTING DIST_DIR KEY...
        upload-check unpublished PUBLISHED_MANIFEST LOCAL_MANIFEST
-       upload-check served HEADERS BODY LOCAL_MANIFEST`
+       upload-check archive PUBLISHED_MANIFEST LOCAL_MANIFEST LASTMODIFIED
+       upload-check served HEADERS BODY LOCAL_MANIFEST
+       upload-check history NOW DAYS LISTING
+       upload-check prune NOW DAYS LISTING LIVE LIVE_META HISTORY_DIR PLAN`
 
 func main() {
 	err := run(os.Args[1:], os.Stdout)
@@ -55,8 +63,14 @@ func run(args []string, out io.Writer) error {
 		return changed(args[1], args[2], args[3:], out)
 	case len(args) == 3 && args[0] == "unpublished":
 		return unpublished(args[1], args[2], out)
+	case len(args) == 4 && args[0] == "archive":
+		return archive(args[1], args[2], args[3], out)
 	case len(args) == 4 && args[0] == "served":
 		return served(args[1], args[2], args[3], out)
+	case len(args) == 4 && args[0] == "history":
+		return historyNeeded(args[1], args[2], args[3], out)
+	case len(args) == 8 && args[0] == "prune":
+		return prune(args[1], args[2], args[3], args[4], args[5], args[6], args[7], out)
 	}
 	return errUsage
 }

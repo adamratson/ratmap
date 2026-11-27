@@ -146,6 +146,9 @@ services:
       # (an unset ALLOW_UNPUBLISH just makes the guard refuse, not silently do the wrong
       # thing), but the same fix either way.
       ALLOW_UNPUBLISH: "${ALLOW_UNPUBLISH:-}"
+      # Days a file must go unlisted before prune-bucket.sh deletes it (default 7). Same
+      # passthrough reason; `prune-bucket.sh --days N` does the same.
+      PRUNE_DAYS: "${PRUNE_DAYS:-}"
 
     stop_grace_period: 60s
 

@@ -68,6 +68,45 @@ go_tool() {
   echo "$dir/$name"
 }
 
+# Object storage, for upload.sh and prune-bucket.sh: checks infra/.env has what they need, per
+# infra/SETUP.md, and sets aws-cli up to talk to Krystal. Then BUCKET_URL is the bucket and
+# s3_cp <file> <key> [aws s3 cp options] puts a file there.
+s3_setup() {
+  : "${S3_BUCKET:?Set S3_BUCKET in infra/.env — see infra/SETUP.md}"
+  : "${S3_ENDPOINT:?Set S3_ENDPOINT in infra/.env — see infra/SETUP.md}"
+  : "${S3_REGION:?Set S3_REGION in infra/.env — see infra/SETUP.md}"
+  : "${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID in infra/.env — see infra/SETUP.md}"
+  : "${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY in infra/.env — see infra/SETUP.md}"
+
+  # `pmtiles upload` (gocloud's aws-sdk-go-v2-based S3 client) fails every write against
+  # Krystal with a flat SigV4 "SignatureDoesNotMatch", regardless of region string or
+  # path-style addressing — tested 2026-08-28, not a config problem, a client incompatibility
+  # with Krystal's Swift-based S3 gateway. `aws s3 cp` (botocore) signs the exact same request
+  # successfully, so it does the uploading instead; nothing pmtiles-specific was
+  # happening in the old call, it was just a multipart PUT. That also drops the pmtiles CLI
+  # as an upload-time dependency.
+  #
+  # aws-cli v2's default CRC32 request-checksum trailer is a separate, known incompatibility
+  # with non-AWS S3 gateways (hit against R2 too, see infra/docker/README.md) — force it off.
+  export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
+  # Retries. aws-cli's default is 3 attempts per request, and a multipart upload fails whole
+  # when one part runs out of them: on 2026-11-24 austria-contours-1 died at part 26 when the
+  # gateway closed the connection ("Connection was closed before we received a valid
+  # response"). Measured against a server that drops every part (2026-11-24): the default
+  # gave up after 3 attempts and ~5 s; AWS_MAX_ATTEMPTS raises it, with backoff (standard
+  # mode, capped at 20 s a wait), and a failed upload is still aborted, leaving no parts
+  # behind. Never exported empty: aws-cli then refuses every call (exit 255).
+  export AWS_RETRY_MODE="${AWS_RETRY_MODE:-standard}"
+  export AWS_MAX_ATTEMPTS="${AWS_MAX_ATTEMPTS:-10}"
+  AWS_DEFAULT_REGION="$S3_REGION"
+  export AWS_DEFAULT_REGION
+  BUCKET_URL="s3://${S3_BUCKET}"
+}
+
+s3_cp() {
+  aws s3 cp "$1" "${BUCKET_URL}/$2" --endpoint-url "$S3_ENDPOINT" "${@:3}"
+}
+
 # Run one of scripts/tools' Go commands with the given arguments: built into a scratch
 # directory, run, and the directory removed. For the commands a person runs by hand —
 # through build-manifest.sh and build-catalog.sh — and the ones the build scripts call

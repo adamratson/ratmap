@@ -17,3 +17,19 @@ served-h-gzip-int-as-float.json	served	testdata/h-gzip	testdata/live.json.gz	tes
 served-h-none-live.json	served	testdata/h-none	testdata/live.json.gz	testdata/live.json
 served-h-br-live.json	served	testdata/h-br	testdata/live.json.gz	testdata/live.json
 served-h-twice-live.json	served	testdata/h-twice	testdata/live.json.gz	testdata/live.json
+history-window	history	1795564800	7	testdata/prune-listing.json
+history-wide	history	1795564800	30	testdata/prune-listing.json
+history-badname	history	1795564800	7	testdata/prune-listing-badname.json
+prune-chain	prune	1795564800	7	testdata/prune-listing.json	testdata/prune-live.json	testdata/prune-meta.json	testdata/prune-history	{{out}}
+prune-later	prune	1795996800	7	testdata/prune-listing.json	testdata/prune-live.json	testdata/prune-meta.json	testdata/prune-history	{{out}}
+prune-broken	prune	1795564800	7	testdata/prune-listing-broken.json	testdata/prune-live.json	testdata/prune-meta.json	testdata/prune-history	{{out}}
+prune-changed	prune	1795564800	7	testdata/prune-listing.json	testdata/prune-live.json	testdata/prune-meta-newer.json	testdata/prune-history	{{out}}
+prune-unfetched	prune	1795564800	30	testdata/prune-listing.json	testdata/prune-live.json	testdata/prune-meta.json	testdata/prune-history	{{out}}
+prune-noage	prune	1795564800	7	testdata/prune-listing-noage.json	testdata/prune-live.json	testdata/prune-meta.json	testdata/prune-history	{{out}}
+prune-empty-live	prune	1795564800	7	testdata/prune-listing.json	testdata/prune-empty.json	testdata/prune-meta.json	testdata/prune-history	{{out}}
+prune-days-0	prune	1795564800	0	testdata/prune-listing.json	testdata/prune-live.json	testdata/prune-meta.json	testdata/prune-history	{{out}}
+archive-changed	archive	testdata/live.json.gz	testdata/fewer.json	2026-11-24T21:11:13+00:00
+archive-same	archive	testdata/live.json.gz	testdata/same-reordered.json	2026-11-24T21:11:13+00:00
+archive-junk	archive	testdata/listing-junk.json	testdata/live.json	2026-11-24T21:11:13+00:00
+archive-bad-time	archive	testdata/live.json	testdata/fewer.json	yesterday
+prune-ms	prune	1795564800	7	testdata/prune-listing-ms.json	testdata/prune-live.json	testdata/prune-meta.json	testdata/prune-history	{{out}}

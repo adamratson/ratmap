@@ -1,0 +1,13 @@
+Bucket: 8 files, 3.0 GB
+  listed by the live manifest  1 file, 3.0 GB
+  not listed, under regions/   3 files, 14 MB
+  outside regions/             1 file, 9 MB (never pruned: the app names these itself)
+  manifest and its history     3 files, 6 kB
+Live manifest up since 2026-11-20 12:00 UTC; the history reaches back to 2026-11-01 00:00 UTC (2 earlier manifests kept)
+MISSING: 1 file(s) the live manifest lists are not in the bucket, and fail to download:
+  regions/a/a-gone.pmtiles
+Deletable now: 1 file, 5 MB
+Waiting:       2 files, 9 MB, until 2026-11-27 11:59 UTC to 2026-12-01 08:00 UTC
+  uploaded recently            1 file, 7 MB
+  listed by a recent manifest  1 file, 2 MB
+exit 0

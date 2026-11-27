@@ -1,0 +1,17 @@
+{
+ "schemaVersion": 1,
+ "builtAt": "x",
+ "regions": [
+  {
+   "id": "r",
+   "artifacts": [
+    {
+     "path": "regions/a/a-basemap.pmtiles"
+    },
+    {
+     "path": "regions/a/a-gone.pmtiles"
+    }
+   ]
+  }
+ ]
+}

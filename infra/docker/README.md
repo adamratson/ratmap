@@ -699,6 +699,14 @@ drop that line and always keep an `infra/.env`, or pass `--env-file ../.env` you
 docker compose run --rm infra upload.sh
 ```
 
+It ends with `prune-bucket.sh`'s report of what the bucket holds that the manifest no
+longer lists. Deleting that is by hand, once it has gone unlisted for a week (see
+infra/README.md, "Pruning the bucket"):
+
+```sh
+docker compose run --rm infra prune-bucket.sh --delete
+```
+
 `.dockerignore` keeps `.env` and `dist/` out of the image; credentials never go into a
 layer.
 

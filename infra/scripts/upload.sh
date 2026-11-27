@@ -4,39 +4,7 @@
 # / S3_REGION.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-: "${S3_BUCKET:?Set S3_BUCKET in infra/.env — see infra/SETUP.md}"
-: "${S3_ENDPOINT:?Set S3_ENDPOINT in infra/.env — see infra/SETUP.md}"
-: "${S3_REGION:?Set S3_REGION in infra/.env — see infra/SETUP.md}"
-: "${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID in infra/.env — see infra/SETUP.md}"
-: "${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY in infra/.env — see infra/SETUP.md}"
-
-# `pmtiles upload` (gocloud's aws-sdk-go-v2-based S3 client) fails every write against
-# Krystal with a flat SigV4 "SignatureDoesNotMatch", regardless of region string or
-# path-style addressing — tested 2026-08-28, not a config problem, a client incompatibility
-# with Krystal's Swift-based S3 gateway. `aws s3 cp` (botocore) signs the exact same request
-# successfully, so it does the uploading here instead; nothing pmtiles-specific was
-# happening in the old call, it was just a multipart PUT. That also drops the pmtiles CLI
-# as an upload-time dependency.
-#
-# aws-cli v2's default CRC32 request-checksum trailer is a separate, known incompatibility
-# with non-AWS S3 gateways (hit against R2 too, see infra/docker/README.md) — force it off.
-export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
-# Retries. aws-cli's default is 3 attempts per request, and a multipart upload fails whole
-# when one part runs out of them: on 2026-11-24 austria-contours-1 died at part 26 when the
-# gateway closed the connection ("Connection was closed before we received a valid
-# response"). Measured against a server that drops every part (2026-11-24): the default
-# gave up after 3 attempts and ~5 s; AWS_MAX_ATTEMPTS raises it, with backoff (standard
-# mode, capped at 20 s a wait), and a failed upload is still aborted, leaving no parts
-# behind. Never exported empty: aws-cli then refuses every call (exit 255).
-export AWS_RETRY_MODE="${AWS_RETRY_MODE:-standard}"
-export AWS_MAX_ATTEMPTS="${AWS_MAX_ATTEMPTS:-10}"
-AWS_DEFAULT_REGION="$S3_REGION"
-export AWS_DEFAULT_REGION
-BUCKET_URL="s3://${S3_BUCKET}"
-
-s3_cp() {
-  aws s3 cp "$1" "${BUCKET_URL}/$2" --endpoint-url "$S3_ENDPOINT" "${@:3}"
-}
+s3_setup
 
 s3_head_size() {
   aws s3api head-object --bucket "$S3_BUCKET" --key "$1" --endpoint-url "$S3_ENDPOINT" \
@@ -163,8 +131,11 @@ if [ -f "$MANIFEST" ]; then
   PUBLISHED_MANIFEST="$(mktemp)"
   MANIFEST_GZ="$(mktemp)"
   trap 'rm -f "$PUBLISHED_MANIFEST" "$MANIFEST_GZ"' EXIT
-  if aws s3 cp "${BUCKET_URL}/regions/manifest.json" "$PUBLISHED_MANIFEST" \
-       --endpoint-url "$S3_ENDPOINT" --no-progress >/dev/null 2>&1; then
+  # get-object rather than `aws s3 cp`: the same GET, but it also says when the published
+  # manifest went up, which is the name it is kept under below.
+  if PUBLISHED_AT="$(aws s3api get-object --bucket "$S3_BUCKET" --key regions/manifest.json \
+       --endpoint-url "$S3_ENDPOINT" "$PUBLISHED_MANIFEST" \
+       --query LastModified --output text 2>/dev/null)"; then
     MISSING="$(go_run upload-check unpublished "$PUBLISHED_MANIFEST" "$MANIFEST")"
     if [ -n "$MISSING" ]; then
       echo >&2
@@ -174,42 +145,81 @@ if [ -f "$MANIFEST" ]; then
       [ "${ALLOW_UNPUBLISH:-}" = "1" ] || exit 1
       echo "ALLOW_UNPUBLISH=1 set — continuing." >&2
     fi
-  fi
 
-  # Gzipped, with `Content-Encoding: gzip`: 387 kB of JSON -> 69 kB (measured 2026-09-24),
-  # and the app fetches it at every startup and on every visit to the Offline sheet. The
-  # bucket cannot compress on the fly, so it is stored compressed; browsers undo the
-  # encoding transparently, before `response.json()` ever sees it. `-n` leaves the name and
-  # time out of the gzip header, so an unchanged manifest uploads byte-identical.
-  gzip -9 -n -c "$MANIFEST" > "$MANIFEST_GZ"
-  echo "Uploading regions/manifest.json (gzip, $(wc -c < "$MANIFEST_GZ" | tr -d ' ') bytes)"
-  s3_cp "$MANIFEST_GZ" "regions/manifest.json" \
-    --content-type application/json --content-encoding gzip --no-progress
-
-  # Then prove it is served that way. Gzip bytes served *without* the header are not JSON
-  # to a browser, and every install would lose its catalogue at once — so if the gateway
-  # dropped the header, put the plain file back and stop loudly rather than leave that up.
-  if [ -n "${PUBLIC_BASE_URL:-}" ]; then
-    # curl for the fetch: it is what the rest of this script already trusts to talk to the
-    # bucket, and a verification that failed for a reason of its own — a Python without
-    # its CA bundle did exactly that on macOS — would roll back every upload. Without
-    # --compressed, curl saves the body as served, so a missing header shows up as gzip
-    # bytes where JSON should be.
-    SERVED_HEADERS="$(mktemp)"
-    SERVED_BODY="$(mktemp)"
-    trap 'rm -f "$PUBLISHED_MANIFEST" "$MANIFEST_GZ" "$SERVED_HEADERS" "$SERVED_BODY"' EXIT
-    if ! curl -sS --fail --max-time 30 -H 'Accept-Encoding: gzip' -H 'Cache-Control: no-cache' \
-           -D "$SERVED_HEADERS" -o "$SERVED_BODY" "${PUBLIC_BASE_URL%/}/regions/manifest.json" \
-       || ! go_run upload-check served "$SERVED_HEADERS" "$SERVED_BODY" "$MANIFEST"
-    then
-      echo >&2
-      echo "The gzipped manifest is not being served correctly — restoring the plain one." >&2
-      s3_cp "$MANIFEST" "regions/manifest.json" --content-type application/json --no-progress
-      exit 1
+    # Keep the manifest this one replaces, as regions/manifest-history/<when it went up>.json.
+    # prune-bucket.sh reads the history to tell how long a file has gone unlisted: a phone
+    # that read the old manifest may still be downloading a file the new one drops, so the
+    # file has to stay a while (see tools/cmd/upload-check/prune.go). Before the new manifest,
+    # and stopping if it fails: replaced without being kept, the old manifest's files could
+    # be pruned the next day. A manifest the same as the published one is neither kept nor
+    # uploaded again, which would only move the time it went up.
+    HISTORY_KEY="$(go_run upload-check archive "$PUBLISHED_MANIFEST" "$MANIFEST" "$PUBLISHED_AT")"
+    if [ -z "$HISTORY_KEY" ]; then
+      MANIFEST_UNCHANGED=1
+    else
+      kept_as=(--content-type application/json)
+      if [ "$(head -c 2 "$PUBLISHED_MANIFEST" | od -An -tx1 | tr -d ' \n')" = "1f8b" ]; then
+        kept_as+=(--content-encoding gzip)
+      fi
+      echo "Keeping the manifest it replaces as $HISTORY_KEY"
+      if ! s3_cp "$PUBLISHED_MANIFEST" "$HISTORY_KEY" "${kept_as[@]}" --no-progress; then
+        echo >&2
+        echo "FAILED to keep the published manifest: the new one was not uploaded. Run" >&2
+        echo "upload.sh again (the archives are all there and are skipped)." >&2
+        exit 1
+      fi
     fi
   else
-    echo "PUBLIC_BASE_URL unset — could not verify how the manifest is served." >&2
+    echo "  ! no published manifest could be read: if there was one, it is replaced without being" >&2
+    echo "    kept, and prune-bucket.sh deletes nothing for PRUNE_DAYS (a week)" >&2
+  fi
+
+  if [ -n "${MANIFEST_UNCHANGED:-}" ]; then
+    echo "regions/manifest.json is the one already published — not uploaded again"
+  else
+    # Gzipped, with `Content-Encoding: gzip`: 387 kB of JSON -> 69 kB (measured 2026-09-24),
+    # and the app fetches it at every startup and on every visit to the Offline sheet. The
+    # bucket cannot compress on the fly, so it is stored compressed; browsers undo the
+    # encoding transparently, before `response.json()` ever sees it. `-n` leaves the name and
+    # time out of the gzip header, so an unchanged manifest uploads byte-identical.
+    gzip -9 -n -c "$MANIFEST" > "$MANIFEST_GZ"
+    echo "Uploading regions/manifest.json (gzip, $(wc -c < "$MANIFEST_GZ" | tr -d ' ') bytes)"
+    s3_cp "$MANIFEST_GZ" "regions/manifest.json" \
+      --content-type application/json --content-encoding gzip --no-progress
+
+    # Then prove it is served that way. Gzip bytes served *without* the header are not JSON
+    # to a browser, and every install would lose its catalogue at once — so if the gateway
+    # dropped the header, put the plain file back and stop loudly rather than leave that up.
+    if [ -n "${PUBLIC_BASE_URL:-}" ]; then
+      # curl for the fetch: it is what the rest of this script already trusts to talk to the
+      # bucket, and a verification that failed for a reason of its own — a Python without
+      # its CA bundle did exactly that on macOS — would roll back every upload. Without
+      # --compressed, curl saves the body as served, so a missing header shows up as gzip
+      # bytes where JSON should be.
+      SERVED_HEADERS="$(mktemp)"
+      SERVED_BODY="$(mktemp)"
+      trap 'rm -f "$PUBLISHED_MANIFEST" "$MANIFEST_GZ" "$SERVED_HEADERS" "$SERVED_BODY"' EXIT
+      if ! curl -sS --fail --max-time 30 -H 'Accept-Encoding: gzip' -H 'Cache-Control: no-cache' \
+             -D "$SERVED_HEADERS" -o "$SERVED_BODY" "${PUBLIC_BASE_URL%/}/regions/manifest.json" \
+         || ! go_run upload-check served "$SERVED_HEADERS" "$SERVED_BODY" "$MANIFEST"
+      then
+        echo >&2
+        echo "The gzipped manifest is not being served correctly — restoring the plain one." >&2
+        s3_cp "$MANIFEST" "regions/manifest.json" --content-type application/json --no-progress
+        exit 1
+      fi
+    else
+      echo "PUBLIC_BASE_URL unset — could not verify how the manifest is served." >&2
+    fi
   fi
 fi
 
 echo "Done. Public base URL: ${PUBLIC_BASE_URL:-<set PUBLIC_BASE_URL in infra/.env>}"
+
+# What the bucket still holds that the manifest no longer lists, and when it can go.
+# Reported only: deleting is `prune-bucket.sh --delete`, by hand. The upload is done
+# whatever this says.
+echo
+echo "Unlisted files in the bucket:"
+"$(dirname "${BASH_SOURCE[0]}")/prune-bucket.sh" \
+  || echo "  ! could not check (above); the upload itself is done" >&2

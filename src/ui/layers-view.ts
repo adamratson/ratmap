@@ -12,6 +12,7 @@ import { terrainSwatch } from '../overlays/terrain-features';
 import { landmarkSwatch } from '../overlays/landmarks';
 import { hutsWaterSwatch } from '../overlays/huts-water';
 import { routeSwatch } from '../overlays/routes';
+import { peakSwatch } from '../overlays/peaks';
 import { powerSwatch, wallSwatch } from '../overlays/detail';
 import { slopeCssColor } from '../overlays/avalanche';
 import { lineSwatch } from './legend-view';
@@ -28,7 +29,7 @@ const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink
     label: 'Summits',
     note: 'Summit markers, names and heights.',
     swatch: (ink) =>
-      `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="6" fill="${ink.peakDot}" stroke="${ink.peakDotStroke}" stroke-width="2"/></svg>`,
+      peakSwatch(ink),
   },
   hillshade: {
     label: 'Hillshade',

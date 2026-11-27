@@ -24,6 +24,8 @@ export interface Shape {
   fills?: ReadonlyArray<readonly Vertex[]>;
   /** A closed polygon whose interior is filled with the rim colour, not left clear. */
   backing?: readonly Vertex[];
+  /** The halo's width in grid units, when not RIM: for a shape drawn smaller than its kin. */
+  rim?: number;
 }
 
 export const GRID = 32;
@@ -70,7 +72,7 @@ export function shapePart(shape: Shape, u: number, v: number): 'none' | 'rim' | 
   for (const [cx, cy, r] of shape.discs ?? []) edge = Math.min(edge, Math.hypot(u - cx, v - cy) - r);
   for (const polygon of shape.fills ?? []) edge = Math.min(edge, polygonDistance(u, v, polygon));
   if (edge <= 0) return 'glyph';
-  if (edge <= RIM || (shape.backing && insidePolygon(u, v, shape.backing))) return 'rim';
+  if (edge <= (shape.rim ?? RIM) || (shape.backing && insidePolygon(u, v, shape.backing))) return 'rim';
   return 'none';
 }
 
@@ -163,6 +165,6 @@ export function shapeSwatch(shape: Shape, { glyph, rim }: { glyph: string; rim: 
   const backing = shape.backing ? `<polygon points="${points(shape.backing)}" fill="${rim}"/>` : '';
   return (
     `<svg viewBox="0 0 40 24"><g transform="translate(10 2) scale(0.625)">` +
-    `${backing}${marks(rim, RIM)}${marks(glyph, 0)}</g></svg>`
+    `${backing}${marks(rim, shape.rim ?? RIM)}${marks(glyph, 0)}</g></svg>`
   );
 }

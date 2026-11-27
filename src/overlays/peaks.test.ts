@@ -50,6 +50,12 @@ function peaksLayer(theme: 'light' | 'dark' = 'light') {
   return { layer: addLayer.mock.calls[0][0], images };
 }
 
+/** An image pixel's colour as #rrggbb. */
+function pixel(image: Image, x: number, y: number): string {
+  const at = (y * image.width + x) * 4;
+  return `#${[...image.data.slice(at, at + 3)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
 /** Whether a filter keeps a summit at a zoom, evaluated as MapLibre would. */
 function keeps(filter: unknown, props: Record<string, unknown>, zoom: number): boolean {
   return featureFilter(filter as FilterSpecification).filter({ zoom }, { type: 1, properties: props } as never);
@@ -105,28 +111,42 @@ describe('addPeaksLayer', () => {
     expect(layout['text-allow-overlap']).toBe(false);
   });
 
-  it('draws the dot in the peak ink, ringed in the ground, at the size the circle had', () => {
+  it('draws the dot in the peak ink, ringed in the ground', () => {
     for (const theme of ['light', 'dark'] as const) {
       const ink = mapInk(theme);
       const { layer, images } = peaksLayer(theme);
       const [, , munroId, peakId] = layer.layout['icon-image'];
-      const pixel = (image: Image, x: number, y: number) => {
-        const at = (y * image.width + x) * 4;
-        return `#${[...image.data.slice(at, at + 3)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-      };
       const peak = images.get(peakId)!;
       const munro = images.get(munroId)!;
       const mid = peak.width / 2;
       expect(pixel(peak, mid, mid)).toBe(ink.peakDot);
       expect(pixel(munro, mid, mid)).toBe(ink.peakMunroDot);
-      // Rim just outside the disc (radius 10 of 32, at 2x of 20 px: 12.5 px), clear corners.
-      expect(pixel(peak, mid + 13, mid)).toBe(ink.peakDotStroke);
+      // Halo just outside the dot, clear corners.
+      expect(pixel(peak, mid + 6, mid)).toBe(ink.peakDotStroke);
       expect(peak.data[3]).toBe(0);
-      // 13 px across from z12, as the circle layer drew it (radius 6.5).
-      const size = layer.layout['icon-size'];
-      expect(size).toEqual(['step', ['zoom'], 0.64, 9, 0.8, 12, 1.04]);
-      expect(Math.round(((2 * 10) / 32) * 20 * 1.04)).toBe(13);
     }
+  });
+
+  it('marks where the top is, small enough not to bury the contours round it', () => {
+    // At 13 px of near-black in a white ring the dot was the heaviest mark on the map: it
+    // filled the top contour rings and covered a trig pillar's symbol on the summit.
+    const { layer, images } = peaksLayer();
+    const [, , munroId, peakId] = layer.layout['icon-image'];
+    // The same at every zoom.
+    expect(layer.layout['icon-size']).toBeUndefined();
+    // 2x device pixels: the dot spans 10 of them across the middle row, 5 CSS px; the
+    // halo 1.4 px a side, inside the trig symbol's 16 px triangle.
+    const peak = images.get(peakId)!;
+    const mid = peak.width / 2;
+    const row = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => pixel(peak, from + i, mid));
+    const ink = mapInk('light');
+    expect(row(mid - 4, mid + 4).every((c) => c === ink.peakDot)).toBe(true);
+    expect(pixel(peak, mid - 6, mid)).toBe(ink.peakDotStroke);
+    expect(peak.width).toBeLessThanOrEqual(2 * 9);
+    // A Munro's dot is the same size: the ▲ and the gold tell it, not a bigger mark.
+    expect(images.get(munroId)!.width).toBe(peak.width);
+    // And the name sits just under it.
+    expect(layer.layout['text-offset'][1]).toBeLessThan(0.5);
   });
 
   it('inserts the label layer before the basemap town/city labels, not on top of everything', () => {
@@ -323,7 +343,7 @@ describe('munro styling', () => {
 
     // Shape (▲ prefix), not colour alone — a munro must read as one on a greyscale screen.
     expect(JSON.stringify(layer.layout['text-field'])).toContain('▲');
-    // And the dot still differs, in colour and size, as a second, redundant cue.
+    // And the dot still differs in colour, as a second, redundant cue.
     const [op, test, munroImage, peakImage] = layer.layout['icon-image'];
     expect(op).toBe('case');
     expect(JSON.stringify(test)).toContain('munro');

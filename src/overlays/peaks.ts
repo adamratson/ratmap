@@ -10,7 +10,7 @@ import type { TileSourceRegistry } from '../map/tile-source-registry';
 import { MAP_FONTS, mapInk, type MapInk } from '../map/flavor';
 import { TOWN_LABEL_LAYER_ID } from '../map/landuse';
 import type { Theme } from '../ui/theme';
-import { ensureShapeImage, type Shape } from './icon-shapes';
+import { ensureShapeImage, GRID, type Shape } from './icon-shapes';
 
 // Summits overlay, backed by our own peaks-global.pmtiles — Protomaps v4 dropped `ele`
 // from its POI layer (C6), so upstream peaks are unusable for a mountain map.
@@ -137,14 +137,39 @@ export const PEAKS_RENDER_FILTER = [
   ['any', PEAKS_NOTABILITY_FILTER, MUNRO_EXPR],
 ] as const;
 
-/** The summit dot, on the icon grid. Drawn 20 px square: 12.5 px across at icon-size 1. */
-const PEAK_DOT: Shape = { discs: [[16, 16, 10]] };
-/** A Munro's dot, 1.3x the width, as the circle layer drew it. */
-const MUNRO_DOT: Shape = { discs: [[16, 16, 13]] };
-const PEAK_DOT_SIZE = 20;
+/**
+ * The summit's mark: a dot 5 px across in a 1.4 px halo, at every zoom, a Munro's the same
+ * in gold.
+ *
+ * It answers one question, where exactly the top is, and the name and height under it say
+ * what it is. So it is a point, not a weight. At 13 px of near-black in a white ring it was
+ * the heaviest mark on the map (2026-11-27): it filled the top contour rings that show a
+ * summit's shape, outweighed the summit's own name, and covered any trig pillar on the top,
+ * whose symbol is drawn beneath it. At 5 px it sits inside the ring, and a trig's triangle
+ * shows round it. A Munro is told by the ▲ and the gold, not by a bigger dot.
+ */
+export const PEAK_DOT_PX = 5;
+export const PEAK_DOT_RIM_PX = 1.4;
+/** The image's edge in CSS px: the dot and its halo, and the antialiasing round them. */
+const PEAK_DOT_SIZE = 9;
+const UNITS_PER_PX = GRID / PEAK_DOT_SIZE;
+const PEAK_DOT: Shape = {
+  discs: [[GRID / 2, GRID / 2, (PEAK_DOT_PX / 2) * UNITS_PER_PX]],
+  rim: PEAK_DOT_RIM_PX * UNITS_PER_PX,
+};
 
 function peakDotColors(ink: MapInk, munro: boolean) {
   return { glyph: munro ? ink.peakMunroDot : ink.peakDot, rim: ink.peakDotStroke };
+}
+
+/** The summit's dot as a legend swatch, at the size the map draws it. */
+export function peakSwatch(ink: MapInk): string {
+  return (
+    '<svg viewBox="0 0 40 24">' +
+    `<circle cx="20" cy="12" r="${PEAK_DOT_PX / 2 + PEAK_DOT_RIM_PX}" fill="${ink.peakDotStroke}"/>` +
+    `<circle cx="20" cy="12" r="${PEAK_DOT_PX / 2}" fill="${ink.peakDot}"/>` +
+    '</svg>'
+  );
 }
 
 /**
@@ -224,12 +249,9 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: T
         'icon-image': [
           'case',
           MUNRO_EXPR,
-          ensureShapeImage(map, 'ratmap-peak-munro', MUNRO_DOT, peakDotColors(ink, true), PEAK_DOT_SIZE),
+          ensureShapeImage(map, 'ratmap-peak-munro', PEAK_DOT, peakDotColors(ink, true), PEAK_DOT_SIZE),
           ensureShapeImage(map, 'ratmap-peak', PEAK_DOT, peakDotColors(ink, false), PEAK_DOT_SIZE),
         ],
-        // A summit's dot is 8, 10 and 13 px across from z<9, z9 and z12, a Munro's 10, 13
-        // and 17: big enough to read as a summit over hillshade, not as a POI or hamlet.
-        'icon-size': ['step', ['zoom'], 0.64, 9, 0.8, 12, 1.04],
         // Name on the first line, elevation on the second — dropped cleanly when either is
         // missing rather than leaving a stray separator or a blank line. A Munro gets a ▲
         // prefix: colour alone isn't a safe way to mark list membership (washes out on a
@@ -239,7 +261,8 @@ export function addPeaksLayer(map: MLMap, registry: TileSourceRegistry, theme: T
         // Bold), but heavy enough to hold up against a busy hillshaded background.
         'text-font': [MAP_FONTS.medium],
         'text-size': 12,
-        'text-offset': [0, 0.7],
+        // Just under the dot and its halo (3.9 px from the point): the name belongs to it.
+        'text-offset': [0, 0.4],
         'text-anchor': 'top',
         // Neither optional: a dot without its name is a dot nobody can read, and a name
         // without its dot does not say where the summit is.

@@ -45,6 +45,13 @@ describe('shapePart', () => {
     expect(shapePart({ discs: [[16, 16, 2]], backing }, 8, 8)).toBe('rim');
     expect(shapePart({ discs: [[16, 16, 2]] }, 8, 8)).toBe('none');
   });
+
+  it('haloes a shape by its own rim width when it has one', () => {
+    // 4 units out from a disc of radius 8: beyond the default halo, inside a rim of 5.
+    expect(shapePart({ discs: [[16, 16, 8]] }, 28, 16)).toBe('none');
+    expect(shapePart({ discs: [[16, 16, 8]], rim: 5 }, 28, 16)).toBe('rim');
+    expect(shapePart({ discs: [[16, 16, 8]], rim: 5 }, 30, 16)).toBe('none');
+  });
 });
 
 describe('shapeImage', () => {

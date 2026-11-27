@@ -4,6 +4,7 @@ import { TERRAIN_FEATURE_KINDS, terrainSwatch } from '../overlays/terrain-featur
 import { LANDMARK_KINDS, landmarkSwatch } from '../overlays/landmarks';
 import { HUTS_WATER_LEGEND, hutsWaterSwatch } from '../overlays/huts-water';
 import { ROUTES_LEGEND, routeSwatch } from '../overlays/routes';
+import { peakSwatch } from '../overlays/peaks';
 import { DETAIL_LEGEND } from '../overlays/detail';
 import { AVALANCHE_TERRAIN_ONLY, SLOPE_CLASSES, slopeCssColor } from '../overlays/avalanche';
 import { compassAdvice, describeDeclination, magneticField, magneticModel } from '../location/declination';
@@ -86,7 +87,7 @@ export function renderLegend(body: HTMLElement, ink: MapInk, place?: LegendPlace
     <div class="legend-section">
       <h3>Summits</h3>
       ${legendRow(
-        `<svg viewBox="0 0 40 24"><circle cx="20" cy="12" r="6" fill="${ink.peakDot}" stroke="${ink.peakDotStroke}" stroke-width="2"/></svg>`,
+        peakSwatch(ink),
         'Summit',
         'Less prominent summits appear as you zoom in.',
       )}

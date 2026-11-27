@@ -4,7 +4,8 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_cmd pmtiles
 
-SOURCE_URL="${TERRAIN_SOURCE_URL:-https://download.mapterhorn.com/planet.pmtiles}"
+SOURCE_URL="${TERRAIN_SOURCE_URL:-$MAPTERHORN_PLANET_URL}"
+require_pinned_source "$SOURCE_URL"   # lib.sh: the release is pinned by ETag
 
 # Raster tiles are much heavier than the vector world catalog at the same zoom — verified
 # 2026-08-21: maxzoom=4 -> ~62 MB, maxzoom=6 -> ~862 MB (both via range requests, not a

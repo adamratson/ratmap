@@ -3,4 +3,5 @@ WEST=-0.0
 SOUTH=0
 EAST=0.5
 NORTH=1e-05
+DEM_ZOOM=
 exit 0

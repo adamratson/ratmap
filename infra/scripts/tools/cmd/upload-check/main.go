@@ -79,6 +79,16 @@ func run(args []string, out io.Writer) error {
 // the listing lacks. Every way the listing can be wrong errs towards uploading: a key it
 // omits reads as absent, a size it misreports reads as changed. A listing that cannot be
 // read at all fails, and upload.sh falls back to checking one archive at a time.
+//
+// In the order upload.sh sends them: keys new to the bucket first, then those replacing a
+// file already there, the ones under regions/ last of all. A region file replaced under
+// its own name is served at once, while the live manifest still gives the old one's size,
+// and a phone starting that download then reads the new file to the old length. The
+// manifest goes up straight after these, so that lasts as long as they take to send and
+// no longer: the global files and anything new go before them. That is still every region
+// file a rebuild changes, since names carry a format version (-1, -2), not a build: on a
+// refresh onto new OSM data, ~6 GB of overlays across the catalogue (2026-11-27). New keys
+// are listed by no manifest yet, so they can go up whenever. Otherwise in the order given.
 func changed(listing, dist string, keys []string, out io.Writer) error {
 	data, err := os.ReadFile(listing)
 	if err != nil {
@@ -103,12 +113,25 @@ func changed(listing, dist string, keys []string, out io.Writer) error {
 			remote[*o.Key] = *o.Size
 		}
 	}
+	var fresh, replaced, replacedRegions []string
 	for _, key := range keys {
 		st, err := os.Stat(filepath.Join(dist, key))
 		if err != nil {
 			return err
 		}
-		if size, present := remote[key]; !present || size != float64(st.Size()) {
+		size, present := remote[key]
+		switch {
+		case !present:
+			fresh = append(fresh, key)
+		case size == float64(st.Size()):
+		case strings.HasPrefix(key, "regions/"):
+			replacedRegions = append(replacedRegions, key)
+		default:
+			replaced = append(replaced, key)
+		}
+	}
+	for _, group := range [][]string{fresh, replaced, replacedRegions} {
+		for _, key := range group {
 			fmt.Fprintln(out, key)
 		}
 	}

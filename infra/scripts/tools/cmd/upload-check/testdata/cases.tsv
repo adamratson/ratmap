@@ -33,3 +33,4 @@ archive-same	archive	testdata/live.json.gz	testdata/same-reordered.json	2026-11-
 archive-junk	archive	testdata/listing-junk.json	testdata/live.json	2026-11-24T21:11:13+00:00
 archive-bad-time	archive	testdata/live.json	testdata/fewer.json	yesterday
 prune-ms	prune	1795564800	7	testdata/prune-listing-ms.json	testdata/prune-live.json	testdata/prune-meta.json	testdata/prune-history	{{out}}
+changed-order	changed	testdata/listing-order.json	testdata/built	regions/a/a-basemap.pmtiles	regions/a/a-huts-1.pmtiles	sac-global.pmtiles

@@ -69,8 +69,9 @@ var artifactKinds = []struct{ suffix, kind string }{
 	{"-basemap.pmtiles", "basemap"},
 	{"-terrain.pmtiles", "terrain"},
 	// Versioned since contours moved to Mapterhorn's DEM (fetch-dem.sh), for the reason
-	// the avalanche line gives; bump together with build-contours.sh.
-	{"-contours-1.pmtiles", "contours"},
+	// the avalanche line gives; bump together with build-contours.sh. -2: traced at z12
+	// in the regions with "contourDemZoom" (2026-11-27).
+	{"-contours-2.pmtiles", "contours"},
 	{"-paths.pmtiles", "paths"},
 	{"-sac.pmtiles", "sac"},
 	{"-terrain-features.pmtiles", "terrain-features"},

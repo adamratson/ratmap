@@ -96,8 +96,10 @@ list and why each item is safe to remove:
   run sets `DEM_SOURCE=glo30`.
 - **OSM subsets:** a continent's subset whose extract or filter has changed since it was
   built.
-- **dist/:** region files an older build named, such as `-contours` once contours are
-  `-contours-1`. The bucket keeps the copies the live catalogue points at.
+- **dist/:** region files an older build named, such as `-contours-1` once contours are
+  `-contours-2`. The bucket keeps the copies the live catalogue points at. A region's
+  `-contours-1` whose lines have not changed (no `contourDemZoom`) is renamed to `-2`
+  instead, so the contours stage need not trace it again.
 - **Partial files:** files killed runs left behind, once untouched for an hour.
 - **Scratch:** the previous global run's whole scratch directory, `/work/tmp/global`.
 
@@ -222,15 +224,15 @@ Every run ends with a summary, whether it succeeded, failed, or was stopped (ctr
 
 ```
 ================================================================
-run 20261123T091405Z FAILED at contours, after 14:02:11
+run 20261123T091405Z FAILED: contours, after 15:12:40
 
   prefetch           ok          41:05
   world              ok           0:00  already built
   regions            ok        5:01:00  12 built, 379 already built
   contours           FAILED    3:10:00  49 built, 13 FAILED
                                         failed: england-south-west scotland greece ...
-  avalanche          not run
-  manifest           not run
+  avalanche          ok        1:10:31  41 built
+  manifest           ok           0:09
 
   see /work/logs/20261123T091405Z-contours.log
   and /work/logs/20261123T091405Z-contours-<region>.log for each failed region
@@ -239,11 +241,20 @@ run 20261123T091405Z FAILED at contours, after 14:02:11
 ================================================================
 ```
 
-The first line is the verdict. The run stops at the first stage that fails, and a
-per-region stage (`regions`, `contours`, `avalanche`) fails if any one of its regions
-does, after building all the rest. The exit status says the same: 0 when every stage
-succeeded, 1 when one failed. For a detached run, `docker wait ratmap-global` waits for
-it and prints that status.
+The first line is the verdict, naming every stage that failed. A per-region stage
+(`regions`, `contours`, `avalanche`) fails if any one of its regions does, after building
+all the rest, and the run carries on past a failed stage to the ones after it, `manifest`
+included: the manifest merges onto the live catalogue, so a region whose build failed
+keeps what is published, and the rest publish when you upload. (Until 2026-11-27 the run
+stopped at the first failure: on 23 November, failed contours meant no avalanche and no
+manifest.) The
+one exception is `prefetch`: every later stage reads what it pins and downloads, so a run
+stops there if it fails.
+
+The exit status: 0 when every stage succeeded, 1 when any failed. For a detached run,
+`docker wait ratmap-global` waits for it and prints that status. A failed run's manifest
+is still worth publishing, but read which stages failed first: `upload.sh` never runs on
+its own.
 
 The summary is also saved as `/work/logs/<run-id>-summary.txt`, and the last run's as
 `latest-summary.txt`, for when the console is gone:
@@ -273,8 +284,9 @@ docker compose run --rm --entrypoint cat infra /work/logs/latest-summary.txt
 | `access` | `build-access.sh` over all 8 continents → `access-global.pmtiles` (highways tagged `access=private` or `no` whose `foot` or right-of-way `designation` opens them to walkers, at z15 only; the router admits a restricted basemap way only along one of these, since the basemap carries no `foot`) | like `huts`, a `tags-filter` over the shared subset. Scotland, Cumbria and Northumberland: 2,536 ways, a 232 kB Scotland cutout; the filter grows Scotland's shared subset from 59 to 63 MB (2026-11-18) |
 | `places` | `build-places.sh` over all 8 continents → a search index per region under `regions/<id>/`, and `places.sqlite`, the app's fallback | hours, the memory-hungry one |
 | `regions` | `build-region.sh` for every id in `regions.json` (filter with `RATMAP_REGION_FILTER`) | hours — days for a global catalogue. 16 range requests per extract (`REGION_DOWNLOAD_THREADS`), terrain downloading alongside the basemap. `RATMAP_REGIONS_PARALLEL` builds several regions at once, up to 4, sized to the host |
-| `contours` | `build-contours.sh` for the ids opting in with `"contours": true` — each region traced in 1° cells at ~1 GB a cell, whatever its size; two regions at a time, the box's cells split between them (`RATMAP_CONTOURS_PARALLEL`, `RATMAP_CONTOURS_CELL_WORKERS`) | the slowest by far. Its 30 m DEMs are fetched ahead of the builds (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2) and cached, and `avalanche` reuses them for every region that has both |
+| `contours` | `build-contours.sh` for the ids opting in with `"contours": true` — each region traced in 1° cells at ~1 GB a cell, whatever its size; two regions at a time, the box's cells split between them (`RATMAP_CONTOURS_PARALLEL`, `RATMAP_CONTOURS_CELL_WORKERS`) | the slowest by far. Its 30 m DEMs are fetched ahead of the builds (`RATMAP_CONTOURS_FETCH_AHEAD`, default 2) and cached, and `avalanche` reuses them for every region that has both. The 40 regions with `"contourDemZoom": 12` (lidar under most of their land) are traced from z12 instead, at ~2x the time; that DEM is dropped from the cache once traced, and `avalanche` fetches its own (see `../README.md`, "Contours read a finer zoom") |
 | `manifest` | `build-manifest.sh` — always regenerated, always last. Merges onto the live catalogue when `PUBLIC_BASE_URL` is set, so regions this disk does not hold stay published; a full rebuild from `dist/` only when it isn't | seconds when little changed: sha256s are cached by size, mtime and inode in `dist/.manifest-sha256-cache.json`, so only new or rebuilt archives are hashed. A first run hashes everything, 2 threads (`MANIFEST_HASH_WORKERS`, 1 for a spinning disk) |
+| `upload` | `upload.sh`, so a run ends published (see [Upload](#upload)). Held back when any stage failed (`--upload-anyway` publishes regardless), refused unless `manifest` ran in the same run, skipped without credentials or with `--dry-run`; `--no-upload` leaves it out of `all` | as long as the changed files take to send: on a refresh onto new OSM data, ~7 GB of global files and ~6 GB of region overlays (2026-11-27) |
 
 `sac`, `paths`, `terrain-features`, `landmarks`, `detail`, `parking`, `huts`, `routes` and `access` sit before `regions`
 in `all` for a reason: `build-region.sh` cuts each region's `<id>-sac.pmtiles`,
@@ -284,7 +296,29 @@ of those global archives, so a `regions` run that precedes them builds the whole
 without any of them. Naming stages by hand,
 keep that order.
 
-Stages skip work that already exists; `--force` redoes it. `--dry-run` passes through to
+Stages skip work that is already done; `--force` redoes all of it. What counts as done:
+
+- **The OSM stages** (`peaks` to `access`, and `places`): their output exists *and* was
+  built from the snapshots pinned now. Each records its pins beside its output, as
+  `dist/.<stage>.inputs`, so `--repin` rebuilds every one of them, and an output with no
+  record (anything built before 2026-11-27) is rebuilt once. Peaks' DEMs are not in the
+  record: after re-pinning Mapterhorn in `scripts/lib.sh`, run `global peaks --force`.
+- **`regions`**: a region's basemap (and terrain) exists. Its overlay cutouts are re-cut,
+  alone, when the global archive they come from is newer than they are, so a re-pinned
+  run refreshes them in seconds without re-fetching any basemap.
+- **`world`, `terrain`, `contours`, `avalanche`**: the file exists. Their sources are
+  pinned by ETag (`scripts/lib.sh`) or are DEMs that do not move, and the app names
+  `world` and `terrain`'s dated files itself.
+
+So a refresh onto current OpenStreetMap data is
+
+```sh
+docker compose run -d --name ratmap-global infra global all --repin
+```
+
+and not `--force`, which re-extracts every region's basemap and terrain, days of
+transfer for the same bytes: the Protomaps and Mapterhorn planets are pinned and have not
+changed. `--dry-run` passes through to
 `build-region.sh` so you can size the region extracts first. `--skip-preflight` overrides
 the resource check if you know better. `--repin` throws away the pinned snapshot dates
 and resolves current ones — see below.
@@ -473,6 +507,14 @@ Two details worth knowing:
   file is a 404 — `prefetch` says so and tells you to re-run with `--repin`, which
   resolves fresh dates, removes the snapshots they replace, and refetches whatever is
   not already cached.
+
+The two planets every region is cut from are pinned too, by ETag, since both are
+republished in place under one name: Protomaps' `v4.pmtiles` (the basemap and `world`)
+and Mapterhorn's `planet.pmtiles` (terrain and the DEMs), in `scripts/lib.sh`. Each build
+checks its source still serves the pinned release before cutting from it, so a republish
+part-way through a run fails the regions after it, loudly, rather than leaving the
+catalogue cut from two releases. Re-pin by hand, after checking the new release: a
+Protomaps schema change once dropped `ele` from peaks without a word (C6, C13).
 
 A `<continent>-latest.osm.pbf` left in the cache by an older run is not wasted: if its
 bytes hash to the pinned snapshot's digest then it *is* that snapshot, and `prefetch`
@@ -698,6 +740,24 @@ drop that line and always keep an `infra/.env`, or pass `--env-file ../.env` you
 ```sh
 docker compose run --rm infra upload.sh
 ```
+
+`global all` does this itself, as its last stage, `upload`. It holds back when any stage
+failed: the manifest would still be sound (it merges onto the live catalogue, so what
+failed keeps what is published), but someone should read why first. Then publish what
+did build with `upload.sh` as above, or say beforehand not to wait with
+`--upload-anyway`. It uploads only a manifest the same run built, so publishing after a
+manual fix is `global manifest upload`. `global all --no-upload` builds without
+publishing.
+
+The order it sends things in matters to phones. A file uploaded under a name the live
+manifest already lists is served at once, while that manifest still gives the old file's
+size, so a download starting then reads the new file to the old length — a truncated
+archive the app takes for a complete one (nothing checks the sha256). So `upload.sh` sends
+new files first, then global files, then the region files that replace existing ones, and
+the manifest straight after those: that window lasts only while the region replacements
+go up. On a refresh that is every region overlay, ~6 GB, since a name's `-1` or `-2`
+versions the format, not the build. Rebuilt basemaps would make it ~58 GB more; closing
+the window entirely means naming each build.
 
 It ends with `prune-bucket.sh`'s report of what the bucket holds that the manifest no
 longer lists. Deleting that is by hand, once it has gone unlisted for a week (see

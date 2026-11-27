@@ -55,3 +55,5 @@ vars-contours-patagonia	region-vars	contours	testdata/regions.json	patagonia
 vars-avalanche-patagonia	region-vars	avalanche	testdata/regions.json	patagonia	8
 ~vars-avalanche-antarctic	region-vars	avalanche	testdata/regions.json	antarctic	8
 vars-avalanche-zmin14	region-vars	avalanche	testdata/regions.json	neg0	14
+contour-dems	contour-dems	testdata/regions.json	scotland	switzerland
+vars-contours-badzoom	region-vars	contours	testdata/regions.json	badzoom

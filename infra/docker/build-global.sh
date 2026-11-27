@@ -73,12 +73,14 @@ MIN_DIST_GB="${RATMAP_MIN_DIST_GB:-20}"
 MIN_MEM_GB="${RATMAP_MIN_MEM_GB:-4}"
 REC_MEM_GB=8
 
-ALL_STAGES=(prefetch world terrain peaks sac paths terrain-features landmarks detail parking huts routes access places regions contours avalanche manifest)
+ALL_STAGES=(prefetch world terrain peaks sac paths terrain-features landmarks detail parking huts routes access places regions contours avalanche manifest upload)
 FORCE=""
 DRY_RUN=""
 SKIP_PREFLIGHT=""
 PREFLIGHT_ONLY=""
 REPIN=""
+NO_UPLOAD=""
+UPLOAD_ANYWAY=""
 stages=()
 
 # What the console shows. info: one live progress line per stage and the lines that
@@ -95,12 +97,20 @@ for arg in "$@"; do
     --skip-preflight)  SKIP_PREFLIGHT=1 ;;
     --preflight-only)  PREFLIGHT_ONLY=1 ;;
     --repin)           REPIN=1 ;;
+    --no-upload)       NO_UPLOAD=1 ;;
+    --upload-anyway)   UPLOAD_ANYWAY=1 ;;
     all)               stages=("${ALL_STAGES[@]}") ;;
-    prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|parking|huts|routes|access|places|regions|contours|avalanche|manifest) stages+=("$arg") ;;
+    prefetch|world|terrain|peaks|sac|paths|terrain-features|landmarks|detail|parking|huts|routes|access|places|regions|contours|avalanche|manifest|upload) stages+=("$arg") ;;
     -*)  echo "Unknown flag: $arg" >&2; exit 2 ;;
     *)   echo "Unknown stage: $arg (known: ${ALL_STAGES[*]}, all)" >&2; exit 2 ;;
   esac
 done
+
+if [ -n "$NO_UPLOAD" ] && [ "${#stages[@]}" -gt 0 ]; then
+  kept=()
+  for s in "${stages[@]}"; do [ "$s" = upload ] || kept+=("$s"); done
+  stages=(${kept[@]+"${kept[@]}"})
+fi
 
 case "$LOG_LEVEL" in
   info|debug) ;;
@@ -739,6 +749,58 @@ have_output() {  # have_output <glob...>
   return 1
 }
 
+# Which snapshots an OSM-derived global file was built from, recorded beside it as
+# dist/.<stage>.inputs: each continent's pin, "<continent>\t<snapshot>\t<md5>". A stage
+# whose output exists is built only if it was built from the snapshots pinned now, so a
+# --repin (or a continent added) rebuilds every OSM stage, where before an existing file
+# was enough and a re-pinned run published the old snapshot's data as if it were new.
+# An output with no record — built before 2026-11-27, when this began, or by a build
+# script run on its own — is rebuilt too: nothing says which snapshot it is. Peaks also
+# reads Mapterhorn's DEMs, which this does not cover: their pin (lib.sh) moves only by
+# hand, and a re-pin there wants `global peaks --force`.
+#
+# Only the OSM stages. world and terrain are cut from planets pinned by ETag (lib.sh),
+# and the app names their dated files itself, so a rebuild of either is a release of the
+# app, not something a run should do because it can.
+osm_inputs() {
+  local c pin
+  for c in "${CONTINENTS[@]}"; do
+    if pin="$(pin_lookup "$c")"; then
+      printf '%s\t%s\n' "$c" "$pin"
+    else
+      printf '%s\tunpinned\n' "$c"
+    fi
+  done
+}
+
+# up_to_date <stage> <output> — whether <output> is built from the snapshots pinned now,
+# saying why not when it exists. --force is never up to date.
+up_to_date() {
+  local stage="$1" out="$2" record="$DIST_DIR/.$1.inputs"
+  [ -z "$FORCE" ] && [ -f "$out" ] || return 1
+  if [ ! -s "$PIN_FILE" ]; then
+    # RATMAP_NO_CACHE, or prefetch never run: the build scripts fetch -latest lazily, and
+    # there is nothing to compare with. The file is kept, as it always was, but not
+    # silently.
+    log "$stage: already built; no pinned snapshots to check it against — --force to redo"
+    return 0
+  fi
+  if [ ! -f "$record" ]; then
+    log "$stage: built, but with no record of which snapshots — rebuilding"
+    return 1
+  fi
+  if [ "$(cat "$record")" != "$(osm_inputs)" ]; then
+    log "$stage: built from other snapshots than the ones pinned now — rebuilding"
+    diff <(cat "$record") <(osm_inputs) | sed -n 's/^[<>] /    /p' | head -n 16 || true
+    return 1
+  fi
+  log "$stage: already built from the pinned snapshots — --force to redo"
+  return 0
+}
+
+# record_inputs <stage> — after a stage has built, note what from.
+record_inputs() { osm_inputs > "$DIST_DIR/.$1.inputs"; }
+
 stage_world() {
   if [ -z "$FORCE" ] && have_output "$DIST_DIR/world-catalog-*.pmtiles"; then
     log "world: already built ($(ls -1 "$DIST_DIR"/world-catalog-*.pmtiles | tail -1)) — --force to redo"
@@ -758,20 +820,19 @@ stage_terrain() {
 }
 
 stage_peaks() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/peaks-global.pmtiles" ]; then
-    log "peaks: already built — --force to redo"
+  if up_to_date peaks "$DIST_DIR/peaks-global.pmtiles"; then
     result "already built"
     return 0
   fi
   # A genuinely global peaks build: the whole point of this image. With every continent
   # present, build-peaks.sh's Ben Nevis *and* Mont Blanc assertions both run, so a
   # silent `ele` regression fails the build instead of shipping.
-  PEAKS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-peaks.sh"
+  PEAKS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-peaks.sh" || return 1
+  record_inputs peaks
 }
 
 stage_sac() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/sac-global.pmtiles" ]; then
-    log "sac: already built — --force to redo"
+  if up_to_date sac "$DIST_DIR/sac-global.pmtiles"; then
     result "already built"
     return 0
   fi
@@ -781,12 +842,12 @@ stage_sac() {
   #
   # In ALL_STAGES order this sits between peaks and places, so `global all` gets it right
   # on its own — this note is for anyone naming stages by hand.
-  SAC_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-sac.sh"
+  SAC_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-sac.sh" || return 1
+  record_inputs sac
 }
 
 stage_paths() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/paths-global.pmtiles" ]; then
-    log "paths: already built — --force to redo"
+  if up_to_date paths "$DIST_DIR/paths-global.pmtiles"; then
     result "already built"
     return 0
   fi
@@ -804,98 +865,99 @@ stage_paths() {
   # the number the stage runs with; build-paths.sh works it out the same way when it is
   # run directly, and caps an explicit one either way.
   PATHS_PARALLEL="${RATMAP_PATHS_PARALLEL:-$(workers_for_budget 3 3)}" \
-    PATHS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-paths.sh"
+    PATHS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-paths.sh" || return 1
+  record_inputs paths
 }
 
 stage_terrain-features() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/terrain-features-global.pmtiles" ]; then
-    log "terrain-features: already built — --force to redo"
+  if up_to_date terrain-features "$DIST_DIR/terrain-features-global.pmtiles"; then
     result "already built"
     return 0
   fi
   # Scree, shingle, rock and boulders — natural= values Protomaps' OSM ingestion drops
   # outright (see build-terrain-features.sh's own header). Before `regions`, same reason
   # as `sac` and `paths`: build-region.sh cuts each region's own cutout from this file.
-  TERRAIN_FEATURES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-terrain-features.sh"
+  TERRAIN_FEATURES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-terrain-features.sh" || return 1
+  record_inputs terrain-features
 }
 
 stage_landmarks() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/landmarks-global.pmtiles" ]; then
-    log "landmarks: already built — --force to redo"
+  if up_to_date landmarks "$DIST_DIR/landmarks-global.pmtiles"; then
     result "already built"
     return 0
   fi
   # Masts, towers, trig pillars and cairns — man_made= POIs Protomaps does not keep (see
   # build-landmarks.sh's own header). Before `regions`, same reason as `terrain-features`.
-  LANDMARKS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-landmarks.sh"
+  LANDMARKS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-landmarks.sh" || return 1
+  record_inputs landmarks
 }
 
 stage_detail() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/detail-global.pmtiles" ]; then
-    log "detail: already built — --force to redo"
+  if up_to_date detail "$DIST_DIR/detail-global.pmtiles"; then
     result "already built"
     return 0
   fi
   # Walls, fences, power lines, gates, stiles and fords — none of it in the basemap (see
   # build-detail.sh's own header). Before `regions`, same reason as `terrain-features`.
-  DETAIL_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-detail.sh"
+  DETAIL_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-detail.sh" || return 1
+  record_inputs detail
 }
 
 stage_parking() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/parking-global.pmtiles" ]; then
-    log "parking: already built — --force to redo"
+  if up_to_date parking "$DIST_DIR/parking-global.pmtiles"; then
     result "already built"
     return 0
   fi
   # Car parks, the small unnamed ones included — the basemap drops most of those (see
   # build-parking.sh's own header). Before `regions`, same reason as `terrain-features`.
-  PARKING_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-parking.sh"
+  PARKING_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-parking.sh" || return 1
+  record_inputs parking
 }
 
 stage_huts() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/huts-global.pmtiles" ]; then
-    log "huts: already built — --force to redo"
+  if up_to_date huts "$DIST_DIR/huts-global.pmtiles"; then
     result "already built"
     return 0
   fi
   # Huts, shelters, campsites and water, told apart where the basemap cannot (see
   # build-huts.sh's own header). Before `regions`, same reason as `terrain-features`.
-  HUTS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-huts.sh"
+  HUTS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-huts.sh" || return 1
+  record_inputs huts
 }
 
 stage_routes() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/routes-global.pmtiles" ]; then
-    log "routes: already built — --force to redo"
+  if up_to_date routes "$DIST_DIR/routes-global.pmtiles"; then
     result "already built"
     return 0
   fi
   # Named walking routes, joined from their relations — the basemap carries none (see
   # build-routes.sh's own header). Before `regions`, same reason as `terrain-features`.
-  ROUTES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-routes.sh"
+  ROUTES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-routes.sh" || return 1
+  record_inputs routes
 }
 
 stage_access() {
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/access-global.pmtiles" ]; then
-    log "access: already built — --force to redo"
+  if up_to_date access "$DIST_DIR/access-global.pmtiles"; then
     result "already built"
     return 0
   fi
   # Ways tagged private that are open on foot, which the router needs because the basemap
   # carries `access` but not `foot` (see build-access.sh's own header). Before `regions`,
   # same reason as `terrain-features`.
-  ACCESS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-access.sh"
+  ACCESS_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-access.sh" || return 1
+  record_inputs access
 }
 
 stage_places() {
   # Built means both outputs: a places.sqlite from before the region indexes existed is
   # not a finished stage, and skipping it would leave every region without its index.
-  if [ -z "$FORCE" ] && [ -f "$DIST_DIR/places.sqlite" ] \
-     && compgen -G "$DIST_DIR/regions/*/*-places-1.sqlite" >/dev/null; then
-    log "places: already built — --force to redo"
+  if compgen -G "$DIST_DIR/regions/*/*-places-1.sqlite" >/dev/null \
+     && up_to_date places "$DIST_DIR/places.sqlite"; then
     result "already built"
     return 0
   fi
-  PLACES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-places.sh"
+  PLACES_SOURCE_URLS="$(osm_source_urls)" "$SCRIPTS_DIR/build-places.sh" || return 1
+  record_inputs places
   # Two kinds of output. The region indexes (regions/<id>/<id>-places-1.sqlite) are
   # bucket artifacts like the archives beside them: the manifest stage lists them and
   # upload.sh publishes them. places.sqlite, the global fallback, is app shell.
@@ -913,19 +975,11 @@ region_ids() {
   catalog ids "$INFRA_DIR/regions.json" "${1:-}" "${RATMAP_REGION_FILTER:-}"
 }
 
-# "<id> <w> <s> <e> <n>" for each id given, in that order. The numbers are printed as
-# Python's str() printed them, exactly as build-contours.sh and build-avalanche.sh hand them to
-# fetch-dem.sh — which is what makes a DEM fetched from here the cache entry those
-# scripts look for.
-region_bboxes() {
-  catalog bboxes "$INFRA_DIR/regions.json" "$@"
-}
-
 # One bad region must not end a run of several hundred. A malformed bbox failed on
 # Antarctica after Africa had finished, and took every continent not yet reached with it —
 # hours of downloads abandoned over one region that could have been skipped. Failures are
-# collected and reported at the end; the stage still fails, so nothing downstream treats a
-# partial catalogue as complete.
+# collected and reported at the end; the stage still fails, so the run ends FAILED and
+# says which regions (the stages after it still run: see the driver loop).
 stage_regions() {
   # Artifact kinds that are cut from a global archive rather than from upstream, as
   # "<kind>:<global file>[:<file suffix>]". All additive (C16), so a missing one is a
@@ -959,18 +1013,21 @@ stage_regions() {
     fi
   done
 
-  local id wants_terrain only already=0
+  local id wants_terrain only already=0 recut=0
   local -a jobs=() failed=()
   while read -r id wants_terrain; do
     only=""
     if [ -z "$FORCE" ] && [ -z "$DRY_RUN" ] \
        && [ -f "$DIST_DIR/regions/$id/$id-basemap.pmtiles" ] \
        && { [ "$wants_terrain" = 0 ] || [ -f "$DIST_DIR/regions/$id/$id-terrain.pmtiles" ]; }; then
-      # Built — unless an artifact kind has been *added* since. Then cut only those:
-      # re-extracting a region to pick up a 1.8 MB grade file would mean re-fetching its
-      # basemap and terrain over range requests, which for a global catalogue is days of
-      # transfer for bytes that have not changed.
-      local -a missing=()
+      # Built — unless an artifact kind has been *added* since, or its global archive
+      # rebuilt since it was cut (a re-pinned snapshot: see up_to_date). Then cut only
+      # those: re-extracting a region to pick up a 1.8 MB grade file would mean
+      # re-fetching its basemap and terrain over range requests, which for a global
+      # catalogue is days of transfer for bytes that have not changed. Newer by mtime:
+      # move_into_dist keeps a global's from when its build finished, and a cutout's is
+      # from when it was cut, so a cutout older than its global was cut from an older one.
+      local -a missing=() stale=()
       for pair in "${cut_from_global[@]}"; do
         kind="${pair%%:*}"
         rest="${pair#*:}"
@@ -978,11 +1035,17 @@ stage_regions() {
         suffix="$kind"
         [ "$rest" != "$global" ] && suffix="${rest#*:}"
         [ -f "$DIST_DIR/$global" ] || continue
-        [ -f "$DIST_DIR/regions/$id/$id-$suffix.pmtiles" ] || missing+=("$kind")
+        if [ ! -f "$DIST_DIR/regions/$id/$id-$suffix.pmtiles" ]; then
+          missing+=("$kind")
+        elif [ "$DIST_DIR/$global" -nt "$DIST_DIR/regions/$id/$id-$suffix.pmtiles" ]; then
+          missing+=("$kind")
+          stale+=("$kind")
+        fi
       done
 
       if [ "${#missing[@]}" -gt 0 ]; then
         only="--only=$(IFS=,; echo "${missing[*]}")"
+        [ "${#stale[@]}" -gt 0 ] && recut=$((recut + 1))
       else
         log "regions/$id: already built — --force to redo"
         already=$((already + 1))
@@ -996,6 +1059,9 @@ stage_regions() {
     jobs+=("$id${only:+ $only}")
   done < <(region_ids)
 
+  if [ "$recut" -gt 0 ]; then
+    log "regions: $recut region(s) to re-cut: their global archives were rebuilt since"
+  fi
   if [ "${#jobs[@]}" -eq 0 ]; then
     log "regions: nothing to build"
     region_result 0 "$already"
@@ -1097,7 +1163,7 @@ stage_contours() {
   local id already=0
   local -a ids=()
   while read -r id _; do
-    if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-contours-1.pmtiles" ]; then
+    if [ -z "$FORCE" ] && [ -f "$DIST_DIR/regions/$id/$id-contours-2.pmtiles" ]; then
       log "contours/$id: already built — --force to redo"
       already=$((already + 1))
       continue
@@ -1138,10 +1204,14 @@ stage_contours() {
   if [ "$ahead" -gt 0 ] && [ -n "$dem_cache" ]; then
     DEM_READY="$LOG_DIR/${RUN_ID}-contours-dems-ready"
     : > "$DEM_READY"
-    fetch_one_dem() {  # fetch_one_dem <id> <w> <s> <e> <n>
-      local id="$1"
-      shift
-      if ! bash "$SCRIPTS_DIR/fetch-dem.sh" "$@" - > "$LOG_DIR/${RUN_ID}-contours-$id-dem.log" 2>&1; then
+    # At the zoom the build will ask for — the region's contourDemZoom, or fetch-dem.sh's
+    # own rule ("-") — or the build would find nothing cached and fetch again.
+    fetch_one_dem() {  # fetch_one_dem <id> <zoom|-> <w> <s> <e> <n>
+      local id="$1" zoom="$2"
+      shift 2
+      [ "$zoom" = - ] && zoom=""
+      if ! DEM_ZOOM="$zoom" bash "$SCRIPTS_DIR/fetch-dem.sh" "$@" - \
+           > "$LOG_DIR/${RUN_ID}-contours-$id-dem.log" 2>&1; then
         printf '[%s] contours/%s: fetch-ahead failed — its build will fetch for itself\n' \
           "$(date -u +%H:%M:%S)" "$id"
       fi
@@ -1154,7 +1224,8 @@ stage_contours() {
     export DEM_TOTAL="${#ids[@]}"
     printf '@@fetch 0 %s DEMs\n' "$DEM_TOTAL"
     (
-      region_bboxes "${ids[@]}" | xargs -P "$ahead" -L 1 bash -c 'fetch_one_dem "$@"' _
+      catalog contour-dems "$INFRA_DIR/regions.json" "${ids[@]}" \
+        | xargs -P "$ahead" -L 1 bash -c 'fetch_one_dem "$@"' _
       echo "__done__" >> "$DEM_READY"
     ) &
     DEM_FETCHER=$!
@@ -1328,6 +1399,50 @@ stage_manifest() {
   "$SCRIPTS_DIR/build-manifest.sh" "${args[@]}"
 }
 
+stage_upload() {
+  # Publishes what the run built: upload.sh, as by hand, and last, so that `global all`
+  # ends with the catalogue live rather than waiting for someone to notice it finished.
+  # upload.sh puts new files up first and the ones replacing a published file just
+  # before the manifest (see upload-check changed), keeps the manifest it replaces, and
+  # ends with prune-bucket.sh's report; it deletes nothing.
+  if [ -n "$DRY_RUN" ]; then
+    log "upload: dry run — nothing uploaded"
+    result "skipped: dry run"
+    return 0
+  fi
+  if [ -z "${S3_BUCKET:-}" ] || [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+    log "upload: no object storage credentials (infra/.env) — nothing uploaded"
+    result "skipped: no credentials in infra/.env"
+    return 0
+  fi
+  # What it publishes is the manifest this run built. Without one, dist/ holds whatever
+  # manifest an earlier run left, which could list less than the live one does.
+  if [ "${stage_status[manifest]:-}" != ok ]; then
+    log "upload: the manifest stage did not run in this run, or failed: nothing uploaded"
+    log "  (\`global manifest upload\` builds one from dist/ and publishes it)"
+    result "refused: no manifest built in this run"
+    return 1
+  fi
+  # A failed stage keeps what is published for what failed (the manifest merges onto
+  # the live catalogue), so publishing the rest is sound — but a person reads why it
+  # failed first, unless they said beforehand not to wait.
+  if [ "${#failures[@]}" -gt 0 ] && [ -z "$UPLOAD_ANYWAY" ]; then
+    log "upload: ${failures[*]} failed, so nothing is uploaded: what did build is in dist/"
+    log "  with its manifest. Publish it with upload.sh, or run with --upload-anyway."
+    result "skipped: ${failures[*]} failed (--upload-anyway to publish regardless)"
+    return 0
+  fi
+  local out status=0
+  out="$(mktemp)"
+  "$SCRIPTS_DIR/upload.sh" 2>&1 | tee "$out" || status=$?
+  # Its own count, and the prune report's waiting line, for the summary.
+  grep -E '^[0-9]+ uploaded, ' "$out" | tail -n 1 | while IFS= read -r line; do result "$line"; done
+  grep -E '^ *Waiting: ' "$out" | sed 's/^ *Waiting: */unlisted in the bucket, waiting: /' \
+    | while IFS= read -r line; do result "$line"; done
+  rm -f "$out"
+  return "$status"
+}
+
 ########################################################################
 # run
 ########################################################################
@@ -1390,7 +1505,8 @@ if [ -z "$PREFLIGHT_ONLY" ] && [ "${#stages[@]}" -gt 0 ]; then
   fi
 fi
 
-# The catalogue queries above (catalogue_dist_gb, peaks_mem_gb, region_ids, region_bboxes)
+# The catalogue queries above (catalogue_dist_gb, peaks_mem_gb, region_ids, and the
+# contours stage's contour-dems)
 # are Go, scripts/tools/cmd/catalog, built here once from the working copy like every Go
 # tool in the pipeline. This driver does not source lib.sh (see the note on the sizing
 # helpers), so it does the build itself. stage-console, which every stage's output goes
@@ -1425,6 +1541,7 @@ RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 RESULTS="$CATALOG_DIR/results"
 mkdir -p "$RESULTS"
 declare -A stage_status=() stage_time=()
+failures=()
 running=""
 overall_start=$SECONDS
 
@@ -1444,16 +1561,22 @@ run_summary() {
   if [ "$rc" -eq 0 ] && [ -z "$running" ]; then
     verdict="succeeded"
   else
-    verdict="FAILED (exit $rc)"
+    # Every stage that failed, since the run carries on past them; and a stop, first.
+    local failed_list="" stopped_in=""
     for s in "${stages[@]}"; do
       case "${stage_status[$s]:-}" in
-        FAILED)  verdict="FAILED at $s" ;;
+        FAILED)  failed_list="${failed_list:+$failed_list, }$s" ;;
         # Killed by a signal: bash's own status is no guide to that in the trap.
-        stopped) verdict="STOPPED during $s" ;;
-        *) continue ;;
+        stopped) stopped_in="$s" ;;
       esac
-      break
     done
+    if [ -n "$stopped_in" ]; then
+      verdict="STOPPED during $stopped_in${failed_list:+ (FAILED: $failed_list)}"
+    elif [ -n "$failed_list" ]; then
+      verdict="FAILED: $failed_list"
+    else
+      verdict="FAILED (exit $rc)"
+    fi
   fi
   {
     echo "================================================================"
@@ -1531,9 +1654,26 @@ for stage in "${stages[@]}"; do
       echo "  the end of $logfile:"
       tail -c 200000 "$logfile" | tr '\r' '\n' | grep -v '^\s*$' | tail -n 25 | sed 's/^/  | /'
     fi
-    # The summary comes on the way out (the EXIT trap); the stages after this one do
-    # not run.
-    exit 1
+    # Carry on with the rest: one failed region fails its stage, and on 2026-11-23 a
+    # stage's failure ended the run there, so avalanche never ran and what had built
+    # stayed unpublished until the manifest was run by hand the next day. The stages after this
+    # one either do not read its output or read what is there (regions builds without a
+    # global it lacks, and re-cuts only from one rebuilt), and the manifest merges onto
+    # the live catalogue, so what failed keeps what is published. The upload stage then
+    # holds back (unless --upload-anyway): the summary says FAILED, the run exits 1, and
+    # publishing what built is upload.sh, by hand, once someone has read why.
+    #
+    # Except prefetch. Every later stage reads the snapshots it pins and downloads; run
+    # without them, they would fetch -latest themselves, unverified, 85 GB of it.
+    failures+=("$stage")
+    if [ "$stage" = prefetch ]; then
+      log "  every later stage reads what prefetch pins and downloads: stopping here"
+      running=""
+      exit 1
+    fi
+    log "  carrying on with the rest; the run will end FAILED"
   fi
   running=""
 done
+# The summary comes on the way out (the EXIT trap).
+[ "${#failures[@]}" -eq 0 ] || exit 1

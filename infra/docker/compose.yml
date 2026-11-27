@@ -3,7 +3,7 @@
 #   cd infra/docker
 #   docker compose build
 #   docker compose run --rm infra doctor          # check the box can take it
-#   docker compose run --rm infra global all      # the whole planet (days)
+#   docker compose run --rm infra global all      # the whole planet (days), then upload
 #
 # Long runs want to survive a closed terminal:
 #   docker compose run -d --name ratmap-global infra global all

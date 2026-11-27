@@ -60,14 +60,25 @@ else
     reason="$(head -1 "$LISTING.err" 2>/dev/null)"
     echo "  ! bucket listing unusable${reason:+ ($reason)} — checking one archive at a time" >&2
     checked=0
+    # In upload-check changed's order, for its reason: new keys, then replacements, the
+    # ones under regions/ last, just before the manifest.
+    fresh=() replaced=() replaced_regions=()
     for key in "${files[@]}"; do
       checked=$((checked + 1))
       # Progress, because this path is the slow one described above.
       [ $((checked % 25)) -eq 0 ] && echo "  checked $checked of ${#files[@]}"
-      if [ "$(s3_head_size "$key")" != "$(wc -c < "$DIST_DIR/$key" | tr -d ' ')" ]; then
-        to_upload+=("$key")
+      remote_size="$(s3_head_size "$key")"
+      if [ "$remote_size" = absent ]; then
+        fresh+=("$key")
+      elif [ "$remote_size" != "$(wc -c < "$DIST_DIR/$key" | tr -d ' ')" ]; then
+        case "$key" in
+          regions/*) replaced_regions+=("$key") ;;
+          *) replaced+=("$key") ;;
+        esac
       fi
     done
+    to_upload=(${fresh[@]+"${fresh[@]}"} ${replaced[@]+"${replaced[@]}"} \
+               ${replaced_regions[@]+"${replaced_regions[@]}"})
   fi
   rm -f "$LISTING" "$LISTING.err"
 fi

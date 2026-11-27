@@ -5,6 +5,8 @@
 #
 # `-` for <out.tif> fills the cache and writes nothing else. That is how the contours
 # stage fetches the next regions' DEMs while the current one traces (build-global.sh).
+# `--evict` removes the bbox's cache entry instead: build-contours.sh does that with a
+# z12 DEM once it has traced it (see DEM_ZOOM below).
 #
 # Shared by build-contours.sh and build-avalanche.sh (native resolution) and the prominence
 # step in build-peaks.sh (coarser, with the true maximum of each coarse cell).
@@ -68,13 +70,26 @@ esac
 
 # The zoom read from Mapterhorn's planet.pmtiles: the coarsest whose 512 px pixel is no
 # coarser than 30 m at the bbox's middle latitude (see the header), within the archive's
-# z0-12.
-MAPTERHORN_DEM_ZOOM="$(awk -v s="$SOUTH" -v n="$NORTH" 'BEGIN {
+# z0-12 — unless DEM_ZOOM names one. build-contours.sh sets it from a region's
+# "contourDemZoom": z12 where lidar lies under most of its land, which the rule's zoom
+# averages away (england-north-west, 2026-11-27: summits 1.3 m out against 2.4 m, crags
+# drawn as crags; 1.9x the build time, a 29% bigger file, 3.8x the DEM).
+if [ -n "${DEM_ZOOM:-}" ]; then
+  case "$DEM_ZOOM" in
+    [0-9] | 1[0-2]) ;;
+    *) echo "fetch-dem.sh: DEM_ZOOM must be a zoom from 0 to 12, not '$DEM_ZOOM'" >&2; exit 2 ;;
+  esac
+  [ "$DEM_SOURCE" = mapterhorn ] \
+    || { echo "fetch-dem.sh: DEM_ZOOM is a Mapterhorn zoom; DEM_SOURCE is $DEM_SOURCE" >&2; exit 2; }
+  MAPTERHORN_DEM_ZOOM="$DEM_ZOOM"
+else
+  MAPTERHORN_DEM_ZOOM="$(awk -v s="$SOUTH" -v n="$NORTH" 'BEGIN {
   ground = 40075016.686 * cos((s + n) / 2 * atan2(0, -1) / 180) / (512 * 30)
   z = log(ground) / log(2); zi = int(z); if (zi < z) zi++
   if (zi > 12) zi = 12; if (zi < 0) zi = 0
   print zi
 }')"
+fi
 
 export CPL_VSIL_CURL_ALLOWED_EXTENSIONS=.tif
 
@@ -98,6 +113,15 @@ if [ "$DEM_SOURCE" = mapterhorn ]; then
 else
   CACHE_KEY="glo30-${DEM_CACHE_GLO30_VERSION}_${WEST}_${SOUTH}_${EAST}_${NORTH}_${RES:-native}"
 fi
+if [ "$OUT" = --evict ]; then
+  if [ -n "${DEM_CACHE_DIR:-}" ]; then
+    # The sidecar first: it is what marks an entry complete.
+    rm -f "$DEM_CACHE_DIR/$CACHE_KEY.txt" "$DEM_CACHE_DIR/$CACHE_KEY.tif"
+    echo "  DEM cache entry removed: $CACHE_KEY" >&2
+  fi
+  exit 0
+fi
+
 CACHED=""
 if [ -n "${DEM_CACHE_DIR:-}" ]; then
   CACHED="$DEM_CACHE_DIR/$CACHE_KEY.tif"

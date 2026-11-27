@@ -10,8 +10,10 @@ require_cmd pmtiles
 # running app, we extract our own copy below and upload *that*. The extracted file's
 # embedded `planetiler:buildtime` / `planetiler:osm:osmosisreplicationtime` metadata
 # (`pmtiles show` on the output) is the actual record of which upstream build this is —
-# note those values in the commit/PR whenever this is re-run.
-SOURCE_URL="${WORLD_SOURCE_URL:-https://data.source.coop/protomaps/openstreetmap/v4.pmtiles}"
+# note those values in the commit/PR whenever this is re-run. The release itself is pinned
+# by ETag in lib.sh, and checked before the extract.
+SOURCE_URL="${WORLD_SOURCE_URL:-$PROTOMAPS_PLANET_URL}"
+require_pinned_source "$SOURCE_URL"
 
 # Verified 2026-08-21: maxzoom=5 extracted in ~9s, transferring ~15 MB (not the 135 GB
 # source) via range requests, for a ~15 MB world.pmtiles at zoom 0-5.

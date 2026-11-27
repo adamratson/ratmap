@@ -35,6 +35,7 @@
     {
       "id": "switzerland",
       "avalanche": true,
+      "contourDemZoom": 12,
       "name": "Switzerland",
       "bbox": [
         5.9544,
@@ -187,6 +188,18 @@
         -60
       ],
       "avalanche": true
+    },
+    {
+      "id": "badzoom",
+      "contours": true,
+      "contourDemZoom": 12.5,
+      "name": "Bad zoom",
+      "bbox": [
+        -5.3,
+        56.6,
+        -4.6,
+        57.0
+      ]
     }
   ]
 }

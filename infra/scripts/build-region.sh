@@ -64,8 +64,9 @@ eval "$REGION_VARS"
 
 # Upstream sources, pinned the same way as the global builds (C13/C15 — we extract our
 # own copies rather than hotlinking these at runtime).
-BASEMAP_SOURCE="${WORLD_SOURCE_URL:-https://data.source.coop/protomaps/openstreetmap/v4.pmtiles}"
-TERRAIN_SOURCE="${TERRAIN_SOURCE_URL:-https://download.mapterhorn.com/planet.pmtiles}"
+# Both are checked against their pins (lib.sh) before anything is cut from them.
+BASEMAP_SOURCE="${WORLD_SOURCE_URL:-$PROTOMAPS_PLANET_URL}"
+TERRAIN_SOURCE="${TERRAIN_SOURCE_URL:-$MAPTERHORN_PLANET_URL}"
 
 # SAC grades (T1-T6) are ours, not upstream's — build-sac.sh makes sac-global.pmtiles from
 # OSM. Prefer the local copy when this machine has just built one, and fall back to the
@@ -394,6 +395,12 @@ archive_tile_count() {
 TERRAIN_OUT="$OUT_DIR/$REGION_ID-terrain.pmtiles"
 TERRAIN_PID=""
 TERRAIN_LOG=""
+if wants basemap; then
+  require_pinned_source "$BASEMAP_SOURCE"
+fi
+if wants terrain && [ "$WANT_TERRAIN" = 1 ]; then
+  require_pinned_source "$TERRAIN_SOURCE"
+fi
 if wants terrain && [ "$WANT_TERRAIN" = 1 ] && [ -z "$DRY_RUN" ]; then
   TERRAIN_LOG="$(mktemp)"
   trap 'if [ -n "$TERRAIN_PID" ]; then kill "$TERRAIN_PID" 2>/dev/null || true; fi; rm -f "$TERRAIN_LOG"' EXIT

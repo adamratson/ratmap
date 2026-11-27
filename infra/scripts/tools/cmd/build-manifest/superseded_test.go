@@ -23,12 +23,13 @@ func TestSupersededFiles(t *testing.T) {
 		"regions/lakes/lakes-basemap.pmtiles",
 		"regions/lakes/lakes-terrain.pmtiles",
 		"regions/lakes/lakes-terrain-features.pmtiles",
-		"regions/lakes/lakes-contours-1.pmtiles",
+		"regions/lakes/lakes-contours-2.pmtiles",
 		"regions/lakes/lakes-avalanche-2.pmtiles",
 		"regions/lakes/lakes-peaks-2.pmtiles",
 		"regions/lakes/lakes-places-1.sqlite",
 		// Older names of those kinds: superseded.
 		"regions/lakes/lakes-contours.pmtiles",
+		"regions/lakes/lakes-contours-1.pmtiles",
 		"regions/lakes/lakes-avalanche-1.pmtiles",
 		"regions/lakes/lakes-peaks-1.pmtiles",
 		"regions/lakes/lakes-places.sqlite",
@@ -56,6 +57,7 @@ func TestSupersededFiles(t *testing.T) {
 	for _, rel := range []string{
 		"regions/lake-district/lake-district-avalanche-1.pmtiles",
 		"regions/lakes/lakes-avalanche-1.pmtiles",
+		"regions/lakes/lakes-contours-1.pmtiles",
 		"regions/lakes/lakes-contours.pmtiles",
 		"regions/lakes/lakes-peaks-1.pmtiles",
 		"regions/lakes/lakes-places.sqlite",

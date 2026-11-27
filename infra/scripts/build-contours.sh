@@ -53,8 +53,11 @@ mkdir -p "$OUT_DIR"
 # Versioned in the filename since the source moved to Mapterhorn (2026-11-18): a region
 # already downloaded only fetches a file whose name it does not hold, so contours traced
 # from a new DEM need a new name to reach anyone. Bump with tools/cmd/build-manifest's
-# artifactKinds and docker/build-global.sh's "already built" check.
-OUT="$OUT_DIR/$REGION_ID-contours-1.pmtiles"
+# artifactKinds and docker/build-global.sh's "already built" check. -2 since
+# contourDemZoom (2026-11-27), for every region: the version names the kind, not a region,
+# so the regions still traced at the rule's zoom moved too. Their -1 is the same DEM's
+# lines, and the contours stage renames it rather than tracing it again.
+OUT="$OUT_DIR/$REGION_ID-contours-2.pmtiles"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -62,13 +65,18 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 echo "Region: $REGION_NAME ($REGION_ID)"
 echo "  bbox: $WEST,$SOUTH,$EAST,$NORTH"
 echo "  interval: ${CONTOUR_INTERVAL} m (index every ${INDEX_EVERY} m), zoom ${CONTOUR_MINZOOM}-${CONTOUR_MAXZOOM}"
+if [ -n "$DEM_ZOOM" ]; then
+  echo "  DEM: Mapterhorn z$DEM_ZOOM (contourDemZoom)"
+else
+  echo "  DEM: Mapterhorn at the zoom nearest 30 m"
+fi
 echo
 
 # Tile resolution, availability checking (in parallel — 16-way, dominates for a
 # multi-tile region) and clipping all live in fetch-dem.sh, shared with the prominence
 # step in build-peaks.sh.
 echo "==> fetching DEM"
-"$SCRIPT_DIR/fetch-dem.sh" "$WEST" "$SOUTH" "$EAST" "$NORTH" "$WORK_DIR/clip.tif"
+DEM_ZOOM="$DEM_ZOOM" "$SCRIPT_DIR/fetch-dem.sh" "$WEST" "$SOUTH" "$EAST" "$NORTH" "$WORK_DIR/clip.tif"
 
 echo "==> building contour-cell"
 # Compiled from this checkout on every build, never carried in the image: the pipeline is
@@ -186,7 +194,7 @@ echo "==> joining"
 # then failed `pmtiles verify` — as any contours build since 0c483f6 (2026-09-04) would
 # have, until this was found on 2026-09-23. The same trap build-paths.sh's comment
 # describes, with the same fix.
-TMP_OUT="$WORK_DIR/$REGION_ID-contours-1.pmtiles"
+TMP_OUT="$WORK_DIR/$REGION_ID-contours-2.pmtiles"
 #
 # Joined in cell order, so the output is the same whatever order the cells finished in.
 # -pk because there is no tile size limit to apply: the cells were tiled without one, and
@@ -222,6 +230,15 @@ fi
 move_into_dist "$TMP_OUT" "$OUT"
 echo
 echo "Built $OUT ($(du -h "$OUT" | cut -f1))"
+
+# A DEM at contourDemZoom is 3.8x the rule's (399 MB against 106 MB for
+# england-north-west), read by nothing else — avalanche and prominence read the rule's
+# zoom — and fetched again in half a minute. So it leaves the cache now it is traced
+# rather than piling up on /work, the disk a global run is short of. A build that failed
+# above keeps it for the retry.
+if [ -n "$DEM_ZOOM" ]; then
+  DEM_ZOOM="$DEM_ZOOM" "$SCRIPT_DIR/fetch-dem.sh" "$WEST" "$SOUTH" "$EAST" "$NORTH" --evict
+fi
 # --base-live, not a bare rebuild: this dist/ almost never holds every region in the
 # catalogue (regions are built incrementally, often on different machines), and a bare
 # `build-manifest` only knows about what's on disk right here — publishing that would

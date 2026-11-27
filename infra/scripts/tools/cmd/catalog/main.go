@@ -5,6 +5,7 @@
 //	catalog region-vars avalanche REGIONS_JSON ID ZMIN      # build-avalanche.sh
 //	catalog ids       REGIONS_JSON [FLAG [REGEX]]           # build-global.sh region_ids
 //	catalog bboxes    REGIONS_JSON ID...                    # build-global.sh region_bboxes
+//	catalog contour-dems REGIONS_JSON ID...                 # build-global.sh stage_contours
 //	catalog bytes     REGIONS_JSON ID...                    # build-global.sh stage_regions
 //	catalog dist-gb   REGIONS_JSON DIST_DIR                 # build-global.sh catalogue_dist_gb
 //	catalog peaks-mem REGIONS_JSON RES WORKERS PER_FETCH_GB BYTES_PER_PX  # peaks_mem_gb
@@ -35,6 +36,7 @@ import (
 const usage = `usage: catalog region-vars region|contours|avalanche REGIONS_JSON ID [ZMIN]
        catalog ids REGIONS_JSON [FLAG [REGEX]]
        catalog bboxes REGIONS_JSON ID...
+       catalog contour-dems REGIONS_JSON ID...
        catalog bytes REGIONS_JSON ID...
        catalog dist-gb REGIONS_JSON DIST_DIR
        catalog peaks-mem REGIONS_JSON RES WORKERS PER_FETCH_GB BYTES_PER_PX`
@@ -107,6 +109,12 @@ func run(args []string, out io.Writer) error {
 			return err
 		}
 		return bboxes(out, regions, args[2:])
+	case "contour-dems":
+		regions, err := load(args[1])
+		if err != nil {
+			return err
+		}
+		return contourDEMs(out, regions, args[2:])
 	case "bytes":
 		regions, err := load(args[1])
 		if err != nil {
@@ -262,9 +270,62 @@ func contoursVars(out io.Writer, regions []*region, id string) error {
 	if err != nil {
 		return err
 	}
+	zoom, err := contourDEMZoom(r)
+	if err != nil {
+		return err
+	}
 	fmt.Fprintf(out, "REGION_NAME=%s\n", shell.Quote(r.Name))
 	for i, k := range []string{"WEST", "SOUTH", "EAST", "NORTH"} {
 		fmt.Fprintf(out, "%s=%s\n", k, text[i])
+	}
+	fmt.Fprintf(out, "DEM_ZOOM=%s\n", zoom)
+	return nil
+}
+
+// contourDEMZoom is the region's "contourDemZoom": the Mapterhorn zoom its contours are
+// traced at, when it is not fetch-dem.sh's own rule (the coarsest zoom no coarser than
+// 30 m). Set where lidar or a fine national model lies under most of the region's land,
+// which z12 carries at about twice the detail of the rule's zoom; see build-contours.sh.
+// Empty when unset.
+func contourDEMZoom(r *region) (string, error) {
+	raw := bytes.TrimSpace(r.fields["contourDemZoom"])
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", nil
+	}
+	z, err := strconv.Atoi(string(raw))
+	if err != nil || z < 0 || z > 12 {
+		return "", exitMsg(fmt.Sprintf("Region '%s': \"contourDemZoom\" must be a whole zoom from 0 to 12 "+
+			"(Mapterhorn's planet.pmtiles stops at 12), not %s.", r.ID, raw))
+	}
+	return strconv.Itoa(z), nil
+}
+
+// contourDEMs prints "<id> <zoom> <w> <s> <e> <n>" for each id given: the contourDemZoom,
+// or "-" for fetch-dem.sh's own rule, and the bbox as bboxes prints it. What the contours
+// stage fetches each region's DEM ahead with, and how it tells a region whose contours are
+// traced at the rule's zoom from one whose are not.
+func contourDEMs(out io.Writer, regions []*region, idList []string) error {
+	by := map[string]*region{}
+	for _, r := range regions {
+		by[r.ID] = r
+	}
+	for _, id := range idList {
+		r, ok := by[id]
+		if !ok {
+			return fmt.Errorf("no region %q in regions.json", id)
+		}
+		text, _, err := bbox(r)
+		if err != nil {
+			return err
+		}
+		zoom, err := contourDEMZoom(r)
+		if err != nil {
+			return err
+		}
+		if zoom == "" {
+			zoom = "-"
+		}
+		fmt.Fprintln(out, id+" "+zoom+" "+strings.Join(text, " "))
 	}
 	return nil
 }

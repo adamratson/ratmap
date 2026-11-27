@@ -24,7 +24,10 @@ ratmap infra toolchain
                                                      paths terrain-features landmarks
                                                      detail parking huts routes access
                                                      places regions contours avalanche
-                                                     manifest all
+                                                     manifest upload all
+                                             --repin: fresh OSM snapshots
+                                             --no-upload: all but upload
+                                             --upload-anyway: publish after a failure
   <script>.sh [args...]                      run one infra/scripts entry directly, e.g.
                                                build-region.sh scotland --dry-run
                                                build-world-catalog.sh

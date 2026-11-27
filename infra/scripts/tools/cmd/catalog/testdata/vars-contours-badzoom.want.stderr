@@ -1,0 +1,1 @@
+Region 'badzoom': "contourDemZoom" must be a whole zoom from 0 to 12 (Mapterhorn's planet.pmtiles stops at 12), not 12.5.

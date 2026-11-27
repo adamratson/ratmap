@@ -249,6 +249,10 @@ this doesn't need re-running on every data refresh the way the others do.
 Uploads the archives in `dist/` that the bucket does not already hold at the same size, via
 `aws s3 cp` (S3-compatible, uses the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in `.env`) —
 not `pmtiles upload`; see `upload.sh`'s header comment for why. Then the manifest, last.
+New files go first and region files replacing ones already there go last, straight before
+the manifest: until it is up, a phone starting one of those downloads would read the new
+file to the old manifest's length (infra/docker/README.md, "Upload"). A global run does
+all this itself, as its last stage.
 
 The manifest goes up gzipped with `Content-Encoding: gzip` (387 kB → 69 kB), since the
 bucket cannot compress on the fly and the app fetches it on every start. The script then
@@ -297,8 +301,8 @@ it, such as an upload.sh from before then on a host that has not pulled. Files o
 `regions/` are never touched: the app's own build names the global files, and an older
 build can still be running on a phone.
 
-upload.sh ends by running the report, so each upload says what is waiting and when it
-can go. Deleting is always by hand, and permanent: the bucket keeps no versions.
+upload.sh ends by running the report, so each upload, and each `global all` run, which
+ends with the upload, says what is waiting and when it can go. Deleting is always by hand, and permanent: the bucket keeps no versions.
 
 ## Verify (C4 acceptance check)
 
@@ -637,6 +641,26 @@ until it is re-pinned on purpose. `DEM_SOURCE=glo30` reads Copernicus GLO-30 as 
 Contours, avalanche and summits built from it carry new filenames (`-contours-1`,
 `-avalanche-2`, `-peaks-2`) so they reach regions already downloaded. What follows was
 written about the GLO-30 path; the cache and the retries apply to both.
+
+**Contours read a finer zoom where lidar allows it.** By default every consumer reads the
+coarsest zoom no coarser than 30 m (z11 over Britain and the Alps, ~22 m), which for most
+regions is all there is. Where lidar or a fine national model lies under at least half a
+contour region's land, `regions.json` gives it `"contourDemZoom": 12` (~11–13 m), and its
+contours are traced from that. Measured on england-north-west (2026-11-27): summits 1.3 m
+out against 2.4 m, crags and knolls drawn as their own lines, 1.9x the build time, a 29%
+bigger file and a 3.8x DEM. That DEM leaves the cache once traced; avalanche and
+prominence stay at the rule's zoom. Contours became `-contours-2` with this, for every
+region; a region without `contourDemZoom` keeps its lines, and `prune-caches.sh` renames
+its `-contours-1` rather than drop it. Which regions qualify is measured, not guessed:
+
+```sh
+cd scripts/tools && go run ./cmd/dem-coverage ../../regions.json
+```
+
+prints each contour region's share of land under 10 m-or-finer sources, from
+Mapterhorn's coverage tiles, and every region where `regions.json` disagrees with the 50%
+rule. 40 of the 62 qualified on 2026-11-27; england-south-west (46%) and wales (43%) fell
+just short, Scotland (14%) far short.
 
 `fetch-dem.sh` — prominence, contours and avalanche all go through it — used to return a
 slightly different DEM every time. GDAL reads a VRT's sources on parallel threads by

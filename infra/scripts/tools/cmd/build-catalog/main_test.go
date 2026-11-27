@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -139,5 +140,37 @@ func TestEstimateKey(t *testing.T) {
 	}
 	if key(request{terrainSource, box{1, 2, 3, 4}, 11}) != "terrain|1,2,3,4|z11" {
 		t.Fatal("terrain key")
+	}
+}
+
+// The per-region decisions survive a regeneration: read back from the regions.json being
+// replaced, and written out on the regenerated region, contourDemZoom after contours.
+func TestOverridesKeepContourDEMZoom(t *testing.T) {
+	dir := t.TempDir()
+	p := paths{regionsJSON: dir + "/regions.json"}
+	if err := os.WriteFile(p.regionsJSON, []byte(`{"regions": [
+	  {"id": "alps", "contours": true, "contourDemZoom": 12, "maxBytes": 5},
+	  {"id": "plain", "name": "Plain"}
+	]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	o, err := overrides(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(o.byID["alps"]["contourDemZoom"]); got != "12" {
+		t.Fatalf("contourDemZoom kept as %q, want 12", got)
+	}
+	if _, ok := o.byID["plain"]["contourDemZoom"]; ok {
+		t.Fatal("a region without contourDemZoom gained one")
+	}
+	over := o.byID["alps"]
+	r := genRegion{ID: "alps", Contours: over["contours"], ContourDEMZoom: over["contourDemZoom"]}
+	out, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `"contours":true,"contourDemZoom":12`; !json.Valid(out) || !strings.Contains(string(out), want) {
+		t.Fatalf("written as %s, want it to contain %s", out, want)
 	}
 }

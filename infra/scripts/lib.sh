@@ -320,6 +320,50 @@ DEM_CACHE_DIR="${DEM_CACHE_DIR-$CACHE_ROOT/dem}"
 MAPTERHORN_PLANET_URL="${MAPTERHORN_PLANET_URL:-https://download.mapterhorn.com/planet.pmtiles}"
 MAPTERHORN_PLANET_ETAG="${MAPTERHORN_PLANET_ETAG:-\"fa356a37f6efbb757fe00d1767bddf01-2650\"}"
 
+# Protomaps' planet basemap, which build-region.sh and build-world-catalog.sh cut from,
+# pinned by ETag the same way (C13). Source Cooperative republishes v4.pmtiles in place,
+# so the ETag is the release: this one was last modified 2026-03-31, and every basemap in
+# the bucket was cut from it (pinned 2026-11-27). A republish fails those builds until this
+# is changed on purpose, after checking the new build's schema: a v2 -> v4 change once
+# dropped `ele` from peaks without a word (C6).
+PROTOMAPS_PLANET_URL="${PROTOMAPS_PLANET_URL:-https://data.source.coop/protomaps/openstreetmap/v4.pmtiles}"
+PROTOMAPS_PLANET_ETAG="${PROTOMAPS_PLANET_ETAG:-\"9e09dd251e816c0ea9208e1e34c28eba-2572\"}"
+
+# require_pinned_source <url> — stop unless <url> still serves the release pinned above.
+# For the planets that builds cut from directly with `pmtiles extract` (fetch-dem.sh checks
+# Mapterhorn its own way). Checked when a build starts, so that regions built days apart
+# in one run come from one release, and a republish fails the build rather than mixing
+# releases or caching a new one under the old name; `pmtiles extract` checks the ETag on
+# every request itself, so a republish part-way through fails that extract too. A local
+# file needs no pin; any other URL is built from, but said to be unpinned.
+require_pinned_source() {
+  local url="$1" want name etag="" wait
+  case "$url" in
+    "$PROTOMAPS_PLANET_URL") want="$PROTOMAPS_PLANET_ETAG" name=PROTOMAPS_PLANET_ETAG ;;
+    "$MAPTERHORN_PLANET_URL") want="$MAPTERHORN_PLANET_ETAG" name=MAPTERHORN_PLANET_ETAG ;;
+    http://* | https://*)
+      echo "  ! $url is not pinned: lib.sh pins only the Protomaps and Mapterhorn planets" >&2
+      return 0 ;;
+    *) return 0 ;;
+  esac
+  for wait in 10 30 60 -; do
+    etag="$(curl -sfI --max-time 30 --retry 3 --retry-connrefused "$url" \
+      | tr -d '\r' | awk 'tolower($1) == "etag:" { print $2 }')" || true
+    [ -n "$etag" ] && break
+    if [ "$wait" = - ]; then
+      echo "  could not read $url's ETag — giving up" >&2
+      return 1
+    fi
+    echo "  no answer from $url; asking again in ${wait}s" >&2
+    sleep "$wait"
+  done
+  if [ "$etag" != "$want" ]; then
+    echo "  $url has been republished: its ETag is $etag, and lib.sh pins $want." >&2
+    echo "  Check the new release, then set $name in lib.sh to re-pin." >&2
+    return 1
+  fi
+}
+
 # The DEM cache's key versions. Here rather than in fetch-dem.sh, which builds the keys,
 # so that prune-caches.sh can tell a current entry from one no build will read again.
 # Bump whenever anything changes what a given bbox fetches — tile selection, ordering,

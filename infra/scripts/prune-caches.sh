@@ -32,6 +32,8 @@
 #   dist/        region files an older build named (`-contours` once contours are
 #                `-contours-1`; see build-manifest's superseded.go). The bucket keeps the
 #                copies the live catalogue points at: upload.sh never deletes there.
+#                (Except `-contours-1` of a region without "contourDemZoom": renamed to
+#                `-contours-2`, its current name, since its lines have not changed.)
 #   partials     a DEM cache `.part`, a subset's dotted temporary, or a dotted
 #                `.building.pmtiles` in dist/, untouched for PARTIAL_MINUTES. Every writer
 #                of these streams into them, so an hour without a write is a dead run's,
@@ -129,8 +131,38 @@ if [ -d "$PATHS_TILE_CACHE" ]; then
   done
 fi
 
-if [ -z "$OSM_ONLY" ]; then
+if [ -z "$OSM_ONLY" ] && [ -f "$INFRA_DIR/regions.json" ]; then
+  # Before the superseded files go: contours became -2 on 2026-11-27, for every region
+  # (the version names the kind), but only the regions with "contourDemZoom" are traced
+  # any differently. The rest's -1 is the same DEM's lines, and tracing turkey and morocco
+  # again is hours, so it is renamed rather than dropped. A one-off: once no dist/ holds a
+  # -contours-1 beside a region without contourDemZoom, this finds nothing.
+  #
+  # If the catalogue cannot say which regions those are, nothing is renamed and nothing
+  # superseded is dropped either: dropping would take the -1s this is here to keep.
+  SKIP_SUPERSEDED=""
+  RENAMED=""
+  if contour_ids="$(go_run catalog ids "$INFRA_DIR/regions.json" contours | cut -d' ' -f1)" \
+     && contour_dems="$(go_run catalog contour-dems "$INFRA_DIR/regions.json" $contour_ids)"; then
+    while read -r id zoom _; do
+      [ -n "$id" ] && [ "$zoom" = - ] || continue
+      old="$DIST_DIR/regions/$id/$id-contours-1.pmtiles"
+      new="$DIST_DIR/regions/$id/$id-contours-2.pmtiles"
+      [ -f "$old" ] && [ ! -e "$new" ] || continue
+      printf '  %-11s %8s  %s -> %s\n' "renamed" "" "$old" "$(basename "$new")"
+      [ -n "$DRY_RUN" ] || mv "$old" "$new"
+      RENAMED="$RENAMED$old"$'\n'
+    done <<< "$contour_dems"
+  else
+    echo "  ! could not read the contour regions from regions.json: superseded files kept" >&2
+    SKIP_SUPERSEDED=1
+  fi
+fi
+
+if [ -z "$OSM_ONLY" ] && [ -z "${SKIP_SUPERSEDED:-}" ]; then
   while IFS= read -r f; do
+    # A dry run leaves a renamed file where it was, to be listed again here.
+    grep -qxF -- "$f" <<< "${RENAMED:-}" && continue
     drop "superseded" "$f"
   done < <(go_run build-manifest --superseded "$DIST_DIR")
   while IFS= read -r f; do

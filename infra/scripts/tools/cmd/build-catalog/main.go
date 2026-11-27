@@ -1155,13 +1155,16 @@ func splitToFit(boxes []box, est *estimator, limit int64, maxDepth int, withTerr
 // opposite about hillshade (Antarctica's is 101 GB at z11, spanning every longitude);
 // `maxBytes` says a region is worth more than the default cap — Switzerland's basemap is
 // 980 MB at z15, and dropping it to z14 to stay under 900 MB trades away detail over the
-// Alps to save 20% of a download people take on wifi before a trip.
+// Alps to save 20% of a download people take on wifi before a trip. `contourDemZoom` says
+// a region's contours are worth tracing at z12, where lidar lies under most of its land:
+// measured from Mapterhorn's coverage (tools/cmd/dem-coverage), but a call on cost
+// against detail, made region by region (see build-contours.sh).
 type overrideSet struct {
 	byID  map[string]map[string]json.RawMessage
 	order []string
 }
 
-var overrideKeys = []string{"contours", "avalanche", "maxBytes", "terrain"}
+var overrideKeys = []string{"contours", "contourDemZoom", "avalanche", "maxBytes", "terrain"}
 
 func overrides(p paths) (overrideSet, error) {
 	o := overrideSet{byID: map[string]map[string]json.RawMessage{}}
@@ -1245,6 +1248,7 @@ type genRegion struct {
 	BasemapMaxzoom int             `json:"basemapMaxzoom,omitempty"`
 	TerrainMaxzoom int             `json:"terrainMaxzoom,omitempty"`
 	Contours       json.RawMessage `json:"contours,omitempty"`
+	ContourDEMZoom json.RawMessage `json:"contourDemZoom,omitempty"`
 	Avalanche      json.RawMessage `json:"avalanche,omitempty"`
 	MaxBytes       json.RawMessage `json:"maxBytes,omitempty"`
 	Terrain        json.RawMessage `json:"terrain,omitempty"`
@@ -1469,7 +1473,8 @@ func mergeWithManual(p paths, generated []*genRegion, ov overrideSet) ([]record,
 	}
 	for _, r := range generated {
 		if over, ok := ov.byID[r.ID]; ok {
-			r.Contours, r.Avalanche, r.MaxBytes, r.Terrain = over["contours"], over["avalanche"], over["maxBytes"], over["terrain"]
+			r.Contours, r.ContourDEMZoom, r.Avalanche, r.MaxBytes, r.Terrain = over["contours"], over["contourDemZoom"],
+				over["avalanche"], over["maxBytes"], over["terrain"]
 		}
 	}
 	records := append([]record(nil), manual...)
@@ -1556,7 +1561,10 @@ const catalogueComment = "Region definitions for the offline download catalogue.
 	"`contours: true` " +
 	"opts a region into the contour build, which is otherwise skipped — it costs roughly " +
 	"300 MB of intermediate GeoJSON per square degree and does not scale to a global " +
-	"catalogue. `avalanche: true` likewise opts a region into the avalanche terrain " +
+	"catalogue. `contourDemZoom: 12` traces a contour region's lines from Mapterhorn's " +
+	"z12 rather than the zoom nearest 30 m, set where lidar or a fine national model lies " +
+	"under at least half its land (tools/cmd/dem-coverage): about twice the detail there, " +
+	"and nothing gained elsewhere. `avalanche: true` likewise opts a region into the avalanche terrain " +
 	"build (Phase 4.6); it is set for ranges with an avalanche warning service or " +
 	"documented avalanche activity, which is a judgement about winter use rather than " +
 	"about the shape of the ground."

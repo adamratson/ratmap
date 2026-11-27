@@ -842,7 +842,13 @@ describe('walking routes', () => {
       type: 'line',
       source: sid('routes'),
       'source-layer': 'routes',
-      minzoom: 8,
+      minzoom: 12,
+    });
+    expect(map.layers.find((l) => l.id === `${sid('routes')}-path`)).toMatchObject({
+      type: 'line',
+      source: sid('routes'),
+      minzoom: 10,
+      maxzoom: 12,
     });
     expect(map.layers.find((l) => l.id === `${sid('routes')}-labels`)).toMatchObject({
       type: 'symbol',
@@ -891,6 +897,37 @@ describe('walking routes', () => {
     expect(scree).toBeGreaterThan(ids.indexOf(`${sid('routes')}-line`));
   });
 
+  it('draws the routes as paths over the relief and water, under the roads, whichever arrives first', async () => {
+    const pathsArtifact = { kind: 'paths', filename: 'lochaber-paths.pmtiles', path: 'p5', bytes: 1 };
+    const basemap = region.artifacts.find((a) => a.kind === 'basemap')!;
+    const rest = region.artifacts.filter((a) => a.kind !== 'basemap');
+    for (const [artifacts, inOrder] of [
+      [[...region.artifacts, routesArtifact], true],
+      // C16: the basemap arriving after the routes, with and without the paths archive.
+      // The roads still go over the routes; the water, which then arrives with them, goes
+      // over too until the region is next restored in manifest order, basemap first.
+      [[...rest, routesArtifact, basemap], false],
+      [[...rest, pathsArtifact, routesArtifact, basemap], false],
+    ] as const) {
+      const map = fakeMap();
+
+      await addRegionToMap(map as unknown as MLMap, registry, { ...region, artifacts: [...artifacts] }, 'light');
+
+      const ids = map.layers.map((l) => String(l.id));
+      const casing = ids.indexOf(`${sid('routes')}-path-casing`);
+      const path = ids.indexOf(`${sid('routes')}-path`);
+      expect(casing).toBeGreaterThan(-1);
+      expect(path).toBe(casing + 1);
+      // A stretch along a road is drawn as the road.
+      expect(path).toBeLessThan(ids.indexOf(`${sid('basemap')}-roads_minor`));
+      expect(path).toBeLessThan(ids.indexOf(`${sid('basemap')}-roads_major`));
+      // And the relief, contours and water lie under it.
+      expect(casing).toBeGreaterThan(ids.indexOf(`${sid('terrain')}-hillshade`));
+      expect(casing).toBeGreaterThan(ids.indexOf(`${sid('contours')}-lines`));
+      if (inOrder) expect(casing).toBeGreaterThan(ids.indexOf(`${sid('basemap')}-water`));
+    }
+  });
+
   it('puts the names with the region’s labels, over the paths', async () => {
     const map = fakeMap();
 
@@ -919,8 +956,8 @@ describe('walking routes', () => {
     await addRegionToMap(map as unknown as MLMap, registry, withRoutes, 'light');
     await addRegionToMap(map as unknown as MLMap, registry, other, 'light');
 
-    // The corridor, the national diamonds and the names.
-    expect(map.layers.filter((l) => l.source === sid('routes'))).toHaveLength(3);
+    // The tint, the routes drawn as paths (casing and line) and the names.
+    expect(map.layers.filter((l) => l.source === sid('routes'))).toHaveLength(4);
   });
 });
 

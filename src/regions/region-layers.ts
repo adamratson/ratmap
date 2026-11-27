@@ -166,6 +166,26 @@ function beneathGround(map: MLMap): string | undefined {
 }
 
 /**
+ * Where the walking routes drawn as paths at z10-11 belong: over the relief, the contours,
+ * the water and the buildings, and under the roads, so a stretch of route along a road is
+ * drawn as the road. Above the tunnels, which run beneath the ground the path is on.
+ *
+ * The basemap's first road layer that is not a tunnel, runway or taxiway. Without the
+ * basemap yet (C16), under the paths, where the basemap's roads will then arrive above
+ * them (see the `overGround` anchor in addKindLayers).
+ */
+function beneathSurfaceRoads(map: MLMap): string | undefined {
+  return (
+    downloadedLayerIds(map).find((id) => {
+      const source = layerSource(map, id);
+      if (!source.endsWith('-basemap') || map.getLayer(id)?.type !== 'line') return false;
+      const name = id.slice(source.length + 1);
+      return name.startsWith('roads_') && !/^roads_(tunnels|runway|taxiway)/.test(name);
+    }) ?? beneathPaths(map)
+  );
+}
+
+/**
  * Where a region's own point symbols belong — landmarks, gates, fords: in with the
  * basemap's POIs, just beneath them. Above every line, so no path strikes through a mast or
  * a gate, and above the contour and grade labels, which give way to a symbol rather than
@@ -717,14 +737,16 @@ function addKindLayers(
     addHutsWaterLayer(map, sourceId, { ink, minzoom, before: aboveBasemapPois(map) });
   } else if (kind === 'routes') {
     // Named walking routes (see src/overlays/routes.ts): an opaque tint round the path,
-    // so beneath everything drawn over the ground (beneathGround) — and the names with the
-    // rest of the region's text. Ground shading that arrives later goes under the paths
-    // (beneathPaths), which is above this.
+    // so beneath everything drawn over the ground (beneathGround); the routes drawn as
+    // paths at z10-11 under the roads (beneathSurfaceRoads); and the names with the rest
+    // of the region's text. Ground shading that arrives later goes under the paths
+    // (beneathPaths), which is above the tint.
     map.addSource(sourceId, { type: 'vector', url, attribution: OSM_ATTRIBUTION });
     addRoutesLayers(map, sourceId, {
       ink,
       minzoom,
       beforeLine: beneathGround(map),
+      beforePath: beneathSurfaceRoads(map),
       beforeLabels: beneathLabels(map),
     });
   } else if (kind === 'detail') {

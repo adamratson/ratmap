@@ -1,6 +1,5 @@
 import type { ExpressionSpecification, Map as MLMap } from 'maplibre-gl';
 import { MAP_FONTS, type MapInk } from '../map/flavor';
-import { ensureShapeImage, type Shape } from './icon-shapes';
 
 // Named walking routes: the West Highland Way, the GR and Wanderland routes, the E-paths,
 // a village's waymarked loop. OSM route relations, which neither the Protomaps basemap nor
@@ -15,28 +14,43 @@ import { ensureShapeImage, type Shape } from './icon-shapes';
 //
 // **The level is OSM's, and means different things in different countries.** Switzerland's
 // 24,494 local routes are its whole signposted network cut signpost to signpost; Montenegro
-// tags its numbered trails national. So the map draws three tiers and says no more than
-// that: international and national routes, regional ones, and local ones from z12 only.
+// tags its numbered trails national. So the map does not draw a national route as more
+// important than a regional one: nothing a walker could rely on would back that up. The
+// level decides only when a route appears, and whether it stands out from the local ones.
 //
-// National and international routes are a chain of violet diamonds along the path, the
-// OS Explorer's mark for a long-distance trail, from z8 down: the one way of marking a
-// route that cannot be mistaken for anything else on the map. Regional and local routes,
-// far more of them, are quieter. From z12, where the paths are drawn, a route is a pale
-// tint around its path — the corridor a paper map shades along a trail — wider than the
-// SAC grade band, so a graded path on a named route shows both. Below z12, where no path
-// is drawn, it is a plain line: the trail is what is worth seeing while choosing one.
+// Each part answers one question, the same way at every zoom:
 //
-// Not a line beside the path: a route's ways run in whatever direction each was mapped, so
-// an offset line would swap sides at every join. And not translucent: MapLibre draws every
-// join of a line as its own fan, and where a path's vertices crowd together the overlapping
-// fans of a translucent line built up into dark starbursts (seen along the West Highland
-// Way at z12, 2026-11-18). So the tint is opaque, and lies under the hillshade and contours,
-// which still read across it.
+//   - **Where does it go?** National and regional routes are drawn as paths from z10, in
+//     the path ink, two zooms before the rest of the network (the paths archive starts at
+//     z12): the paths worth seeing while choosing a walk. Under the roads, so a stretch
+//     along a road is the road. They hand over to the paths themselves at z12.
+//   - **Is this path waymarked, and which way does the route go at a junction?** From z12,
+//     a pale tint round the path, wider than the SAC grade band so a graded path on a route
+//     shows both. Not below z12: there every path drawn is a route, and the tint would say
+//     nothing. Local routes are a fainter tint than the rest. Around Grindelwald and
+//     Zermatt 79-87% of route length is local (z12 tiles of switzerland-routes-1,
+//     2026-11-27): in one tint a long route could not be followed through the signposted
+//     network it crosses.
+//   - **What do the signs call it?** The name along the line.
+//
+// There were OS-style diamonds on national routes. They told a walker nothing the name did
+// not, appeared from z8 with no path under them, and at z14 were 13 px marks every 21 px
+// along a 1.4 px path, drawn over the roads (2026-11-27). Gone.
+//
+// The tint is not a line beside the path: a route's ways run in whatever direction each
+// was mapped, so an offset line would swap sides at every join. And not translucent:
+// MapLibre draws every join of a line as its own fan, and where a path's vertices crowd
+// together the overlapping fans of a translucent line built up into dark starbursts (seen
+// along the West Highland Way at z12, 2026-11-18). So the tint is opaque, and lies under
+// the hillshade and contours, which still read across it.
 
 export const ROUTES_SOURCE_LAYER = 'routes';
 
-/** The tiers the map draws, most important first. */
-export type RouteTier = 'national' | 'regional' | 'local';
+/**
+ * The two ways a route is drawn: national, international and regional routes, which come
+ * in at z10 and take the stronger tint, and local ones.
+ */
+export type RouteTier = 'main' | 'local';
 
 export interface RouteLegendEntry {
   tier: RouteTier;
@@ -46,74 +60,53 @@ export interface RouteLegendEntry {
 
 export const ROUTES_LEGEND: readonly RouteLegendEntry[] = [
   {
-    tier: 'national',
-    label: 'National or international route',
-    note: 'Long-distance trails such as the West Highland Way or the E-paths, marked with diamonds as on OS maps. From zoom 8.',
-  },
-  {
-    tier: 'regional',
-    label: 'Regional route',
-    note: 'From zoom 8.',
+    tier: 'main',
+    label: 'National or regional route',
+    note: 'Long-distance and regional trails such as the West Highland Way or the GR routes. Drawn as paths from zoom 10, before the rest of the network; tinted from zoom 12.',
   },
   {
     tier: 'local',
     label: 'Local route',
-    note: 'Waymarked local walks. From zoom 12; in some countries every signposted path.',
+    note: 'Waymarked local walks, from zoom 12, in a fainter tint so a longer route can be followed through them. In some countries every signposted path.',
   },
 ];
 
-/** From z8, the routes archive's own floor (build-routes.sh's -Z8). */
-export const ROUTES_MIN_ZOOM = 8;
+/** From z10: national and regional routes, drawn as paths. */
+export const ROUTES_MIN_ZOOM = 10;
 
-/** Where paths start being drawn, and the line becomes a tint around them. */
-const HALO_ZOOM = 12;
+/** Where the paths archive starts (build-paths.sh's -Z12): the routes become a tint round them. */
+const TINT_ZOOM = 12;
 
 export function routesLineLayerId(sourceId: string): string {
   return `${sourceId}-line`;
+}
+
+export function routesPathLayerId(sourceId: string): string {
+  return `${sourceId}-path`;
+}
+
+export function routesPathCasingLayerId(sourceId: string): string {
+  return `${sourceId}-path-casing`;
 }
 
 export function routesLabelLayerId(sourceId: string): string {
   return `${sourceId}-labels`;
 }
 
-export function routesDiamondLayerId(sourceId: string): string {
-  return `${sourceId}-diamonds`;
-}
-
-/** The diamond, on the icon grid: a square on its point. */
-const DIAMOND: Shape = { fills: [[[16, 5], [27, 16], [16, 27], [5, 16]]] };
-/** CSS px the diamond image is drawn at; icon-size scales it with the zoom. */
-const DIAMOND_SIZE = 14;
-
-function diamondColors(ink: MapInk) {
-  return { glyph: ink.walkNational, rim: ink.landmarkRim };
-}
-
-const tier: ExpressionSpecification = [
-  'match',
-  ['get', 'network'],
-  ['iwn', 'nwn'],
-  'national',
-  'rwn',
-  'regional',
-  'local',
-];
-
-/** A value per tier, for paint and layout expressions. */
-function byTier(national: number, regional: number, local: number): ExpressionSpecification {
-  return ['match', tier, 'national', national, 'regional', regional, local];
-}
+const isLocal: ExpressionSpecification = ['!', ['in', ['get', 'network'], ['literal', ['iwn', 'nwn', 'rwn']]]];
 
 /**
- * The route line or corridor (regional and local routes), the diamonds (national ones), and
- * the route names along them.
+ * The tint round the path from z12, the national and regional routes drawn as paths at
+ * z10-11, and the names along them.
  *
- * The diamonds go with the labels' anchor, above every line, so a path never strikes
- * through one; they never collide with anything, so they take no label's place.
+ * Each goes before its own anchor: the tint before `beforeLine`, under everything drawn over
+ * the ground; the paths before `beforePath`, over the relief and water but under the roads;
+ * the names before `beforeLabels`, with the region's other text.
  *
  * Names from z11 for national and regional routes, z14 for local ones: a Swiss local
  * route's name is often just the next signpost ("Grosse Scheidegg - Schreckfeld"), useful
- * close in and noise further out. National names place first.
+ * close in and noise further out. Where two collide, the national or regional name places
+ * first.
  */
 export function addRoutesLayers(
   map: MLMap,
@@ -122,106 +115,93 @@ export function addRoutesLayers(
     minzoom,
     ink,
     beforeLine,
+    beforePath,
     beforeLabels,
-  }: { minzoom: number; ink: MapInk; beforeLine?: string; beforeLabels?: string },
+  }: { minzoom: number; ink: MapInk; beforeLine?: string; beforePath?: string; beforeLabels?: string },
 ): void {
+  const base = { source: sourceId, 'source-layer': ROUTES_SOURCE_LAYER };
+
   map.addLayer(
     {
+      ...base,
       id: routesLineLayerId(sourceId),
       type: 'line',
-      source: sourceId,
-      'source-layer': ROUTES_SOURCE_LAYER,
-      minzoom: Math.max(ROUTES_MIN_ZOOM, minzoom),
-      filter: ['!=', tier, 'national'],
+      minzoom: Math.max(TINT_ZOOM, minzoom),
       layout: {
-        // Butt, not round: a route is many ways end to end, and translucent round caps
-        // overlap at every join, a darker bead each (seen at z12 along the West Highland
-        // Way). Butt ends meet flush.
+        // Butt, not round: a route is many ways end to end, and round caps overlap at every
+        // join. Butt ends meet flush.
         'line-cap': 'butt',
         'line-join': 'round',
-        'line-sort-key': byTier(0, 1, 0),
+        // The stronger tint over the fainter where a longer route shares a local one's path,
+        // so it can be followed through.
+        'line-sort-key': ['case', isLocal, 0, 1],
       },
       paint: {
-        // The route ink as a line; its tier's tint once it is a corridor round a path.
-        'line-color': [
-          'step',
-          ['zoom'],
-          ink.walkRoute,
-          HALO_ZOOM,
-          ['match', tier, 'regional', ink.walkRouteTint[0], ink.walkRouteTint[1]],
-        ],
-        // National values unused: those routes are the diamonds.
-        // Wider than the SAC band (4-12 px, on the same exponential curve) from z12, so a
-        // ring of the tint shows outside the grade: 3 px a side for a local route at z14.5,
-        // where at 1.2x the band's width it was under 2 px and lost against the band.
-        'line-width': [
-          'interpolate',
-          ['exponential', 1.5],
-          ['zoom'],
-          ROUTES_MIN_ZOOM,
-          byTier(1.6, 1.2, 1),
-          HALO_ZOOM - 1,
-          byTier(2.6, 2, 1.6),
-          HALO_ZOOM,
-          byTier(10, 9, 8),
-          16,
-          byTier(26, 23, 20),
-        ],
+        'line-color': ['case', isLocal, ink.walkRouteTint[1], ink.walkRouteTint[0]],
+        // Wider than the SAC band (4-12 px, on the same exponential curve), so a ring of the
+        // tint shows outside the grade: 3 px a side for a local route at z14.5, where at 1.2x
+        // the band's width it was under 2 px and lost against the band.
+        'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], TINT_ZOOM, 9, 16, 23],
       },
     },
     beforeLine,
   );
 
+  // National and regional routes as paths at z10-11, in the paths' own ink and dash
+  // (addPathLayers in src/regions/region-layers.ts), thinning to their z12 widths so the
+  // hand-over to the paths archive does not show. Local routes are left out: they come in
+  // at z12 with the rest of the network.
+  const pathZooms = { minzoom: Math.max(ROUTES_MIN_ZOOM, minzoom), maxzoom: TINT_ZOOM };
+  const notLocal = ['!', isLocal] as ExpressionSpecification;
   map.addLayer(
     {
-      id: routesDiamondLayerId(sourceId),
-      type: 'symbol',
-      source: sourceId,
-      'source-layer': ROUTES_SOURCE_LAYER,
-      minzoom: Math.max(ROUTES_MIN_ZOOM, minzoom),
-      filter: ['==', tier, 'national'],
-      layout: {
-        'icon-image': ensureShapeImage(map, 'ratmap-route-diamond', DIAMOND, diamondColors(ink), DIAMOND_SIZE),
-        'symbol-placement': 'line',
-        // Close enough to read as a chain, not as scattered marks: about one diamond's
-        // width of gap at z12, a little more further in.
-        'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 8, 12, 12, 16, 16, 26],
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 12, 0.8, 16, 1.1],
-        // Upright whichever way the path runs, as on the OS map. Turned with the path, a
-        // diamond on a diagonal stretch was a square.
-        'icon-rotation-alignment': 'viewport',
-        'icon-pitch-alignment': 'viewport',
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
+      ...base,
+      ...pathZooms,
+      id: routesPathCasingLayerId(sourceId),
+      type: 'line',
+      filter: notLocal,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': ink.pathCasing,
+        'line-width': ['interpolate', ['linear'], ['zoom'], ROUTES_MIN_ZOOM, 1.6, TINT_ZOOM, 2],
       },
     },
-    beforeLabels,
+    beforePath,
+  );
+  map.addLayer(
+    {
+      ...base,
+      ...pathZooms,
+      id: routesPathLayerId(sourceId),
+      type: 'line',
+      filter: notLocal,
+      layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      paint: {
+        'line-color': ink.pathLine,
+        'line-width': ['interpolate', ['linear'], ['zoom'], ROUTES_MIN_ZOOM, 0.8, TINT_ZOOM, 1],
+        'line-dasharray': [2.5, 1.5],
+      },
+    },
+    beforePath,
   );
 
   map.addLayer(
     {
+      ...base,
       id: routesLabelLayerId(sourceId),
       type: 'symbol',
-      source: sourceId,
-      'source-layer': ROUTES_SOURCE_LAYER,
       minzoom: Math.max(11, minzoom),
       filter: ['has', 'name'],
       layout: {
         // The zoom step outermost: MapLibre allows ['zoom'] only as the input of a
         // top-level step or interpolate.
-        'text-field': [
-          'step',
-          ['zoom'],
-          ['case', ['==', tier, 'local'], '', ['get', 'name']],
-          14,
-          ['get', 'name'],
-        ],
+        'text-field': ['step', ['zoom'], ['case', isLocal, '', ['get', 'name']], 14, ['get', 'name']],
         'text-font': [MAP_FONTS.medium],
-        'text-size': byTier(11, 10.5, 10),
+        'text-size': ['case', isLocal, 10, 10.5],
         'text-letter-spacing': 0.04,
         'symbol-placement': 'line',
         'symbol-spacing': 400,
-        'symbol-sort-key': byTier(0, 1, 2),
+        'symbol-sort-key': ['case', isLocal, 1, 0],
         // 60, as for the grade and contour labels: at 45 a trail's switchbacks rejected
         // nearly every placement (the West Highland Way unnamed from z11 to z13 over
         // Kinlochleven, 2026-11-18).
@@ -238,27 +218,14 @@ export function addRoutesLayers(
   );
 }
 
-/** The tier as a legend swatch, in the inks the map uses: diamonds along a path, or a tint round one. */
+/** The tier as a legend swatch, in the inks the map uses: a path in its tint. */
 export function routeSwatch(entry: RouteTier, ink: MapInk): string {
-  const path =
-    `<line x1="3" y1="12" x2="37" y2="12" stroke="${ink.pathCasing}" stroke-width="3.5" stroke-linecap="round"/>` +
-    `<line x1="3" y1="12" x2="37" y2="12" stroke="${ink.pathLine}" stroke-width="1.5" stroke-dasharray="4 3"/>`;
-  if (entry === 'national') {
-    const { glyph, rim } = diamondColors(ink);
-    const diamond = (x: number) => `<polygon points="${x},8 ${x + 5},12 ${x},16 ${x - 5},12"/>`;
-    const diamonds = [9, 20, 31].map(diamond).join('');
-    return (
-      '<svg viewBox="0 0 40 24">' +
-      path +
-      `<g fill="${glyph}" stroke="${rim}" stroke-width="1.5" stroke-linejoin="round" paint-order="stroke">${diamonds}</g>` +
-      '</svg>'
-    );
-  }
-  const i = entry === 'regional' ? 0 : 1;
+  const tint = ink.walkRouteTint[entry === 'local' ? 1 : 0];
   return (
     '<svg viewBox="0 0 40 24">' +
-    `<line x1="3" y1="12" x2="37" y2="12" stroke="${ink.walkRouteTint[i]}" stroke-width="${[10, 9][i]}" stroke-linecap="butt"/>` +
-    path +
+    `<line x1="3" y1="12" x2="37" y2="12" stroke="${tint}" stroke-width="9" stroke-linecap="butt"/>` +
+    `<line x1="3" y1="12" x2="37" y2="12" stroke="${ink.pathCasing}" stroke-width="3.5" stroke-linecap="round"/>` +
+    `<line x1="3" y1="12" x2="37" y2="12" stroke="${ink.pathLine}" stroke-width="1.5" stroke-dasharray="4 3"/>` +
     '</svg>'
   );
 }

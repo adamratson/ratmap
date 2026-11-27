@@ -126,8 +126,16 @@ export const PEAKS_NOTABILITY_FILTER = [
  * prominence — Phase 3.5 calls this out explicitly for the Wainwrights (a deliberately
  * low-prominence list), and the same rule applies here even though most Munros already
  * clear the prominence floor on their own merits.
+ *
+ * And only a summit with something to write beside it: a name or a height. One with
+ * neither is a bare dot nobody can read — a 227 m-prominence top east of Encamp, mapped
+ * with no name and no `ele`, was the one unnamed dot on the map at z12 (2026-11-27).
  */
-export const PEAKS_RENDER_FILTER = ['any', PEAKS_NOTABILITY_FILTER, MUNRO_EXPR] as const;
+export const PEAKS_RENDER_FILTER = [
+  'all',
+  ['any', ['has', 'name'], ['has', 'ele']],
+  ['any', PEAKS_NOTABILITY_FILTER, MUNRO_EXPR],
+] as const;
 
 /** The summit dot, on the icon grid. Drawn 20 px square: 12.5 px across at icon-size 1. */
 const PEAK_DOT: Shape = { discs: [[16, 16, 10]] };

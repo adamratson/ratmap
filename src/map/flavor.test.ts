@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { layers } from '@protomaps/basemaps';
-import { MAP_FONTS, mapInk, ratmapFlavor, STREAM_INK } from './flavor';
+import { MAP_FONTS, mapInk, ratmapFlavor } from './flavor';
 import { contrast, styleColor } from '../test-support/paint-value';
 
 // Listed, not loaded: a glob of the glyph files actually in public/fonts, grouped by
@@ -113,14 +113,10 @@ describe('walking routes', () => {
       const ink = mapInk(theme);
       const { water } = ratmapFlavor(theme);
       for (const tint of ink.walkRouteTint) expect(hueApart(tint, water)).toBeGreaterThanOrEqual(45);
-      // Below z12 it is a thin line, beside the streams' own.
-      expect(hueApart(ink.walkRoute, STREAM_INK[theme])).toBeGreaterThanOrEqual(45);
     });
 
-    it(`holds as a line and as text (${theme})`, () => {
+    it(`names them legibly (${theme})`, () => {
       const ink = mapInk(theme);
-      const flavor = ratmapFlavor(theme);
-      expect(contrast(ink.walkRoute, flavor.earth)).toBeGreaterThanOrEqual(3);
       expect(contrast(ink.walkRouteText, theme === 'light' ? '#ffffff' : '#0e1114')).toBeGreaterThanOrEqual(4.5);
     });
   }

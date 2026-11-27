@@ -69,7 +69,7 @@ const LAYER_ROWS: Record<LayerGroup, { label: string; note: string; swatch: (ink
   routes: {
     label: 'Walking routes',
     note: 'Named and waymarked routes, from long-distance trails to local walks.',
-    swatch: (ink) => routeSwatch('national', ink),
+    swatch: (ink) => routeSwatch('main', ink),
   },
   boundaries: {
     label: 'Walls, fences and gates',

@@ -323,25 +323,15 @@ export interface MapInk {
   /**
    * Named walking routes (src/overlays/routes.ts).
    *
-   * All of them in one violet family: blue-leaning, so neither the saturated magenta of the
-   * planned route nor the SAC ramp's T6 purple, which is a band, not a corridor.
-   *
-   * National and international routes are a chain of diamonds along the path, the way the
-   * OS Explorer marks them, at every zoom: `walkNational`, a deep violet, rimmed in
-   * `landmarkRim`. Not the Explorer's green: printed on white paper it stands out, but here
-   * it sat on green woods and pasture in their own hue, at 2.6:1 on dense woodland, where
-   * the violet holds 4.5:1.
-   *
-   * Regional and local routes are lilac. `walkRoute` is their line below z12; the tints, regional then local, are the
-   * opaque corridor round the path from z12 — pale by day, deep at night, the local one a
-   * step nearer the ground. `walkRouteText` names every tier.
+   * Lilac: blue-leaning, so neither the saturated magenta of the planned route nor the SAC
+   * ramp's T6 purple, which is a band, not a corridor. The tints, national and regional
+   * then local, are the opaque corridor round the path from z12 — pale by day, deep at
+   * night, the local one a step nearer the ground. Below z12 a route is drawn in the paths'
+   * own ink. `walkRouteText` names them.
    *
    * They were all teal, which sits beside water's blue: a pale band winding down a valley
-   * was a river (day tint #b0ddd9 against water #a9c3cc; at night #1b4846 against #1d3040),
-   * and once streams had an ink of their own, the line below z12 was one more stream.
+   * was a river (day tint #b0ddd9 against water #a9c3cc; at night #1b4846 against #1d3040).
    */
-  walkNational: string;
-  walkRoute: string;
   walkRouteTint: readonly [string, string];
   walkRouteText: string;
 }
@@ -378,14 +368,12 @@ const DAY_INK: MapInk = {
   boundary: '#7d776e',
   power: '#454a52',
   ford: '#2f6b86',
-  walkNational: '#5e3fa3', // 6.4:1 on open ground, 4.5 on dense wood, inside a white rim
-  walkRoute: '#7b55b5', // 4.5:1 on open ground, 4.1 on wood
   walkRouteTint: ['#cbb6e8', '#d8c8ee'],
   walkRouteText: '#62419a', // 7.7:1 on the halo
 };
 
-// Contrast against night earth (#161a1f): path 6.3:1, contour label 6.9:1, route 5.8:1,
-// straight legs 8.1:1.
+// Contrast against night earth (#161a1f): path 6.3:1, contour label 6.9:1, straight legs
+// 8.1:1.
 const NIGHT_INK: MapInk = {
   labelHalo: 'rgba(14,17,20,0.9)',
   pathLine: '#d08a6e',
@@ -418,8 +406,6 @@ const NIGHT_INK: MapInk = {
   boundary: '#7a8189',
   power: '#aeb5be',
   ford: '#7fb3c9',
-  walkNational: '#b79cf0', // 7.5:1 on open ground, 6.8 on dense wood
-  walkRoute: '#a98be0', // 6.2:1 on open ground, 5.9 on wood
   walkRouteTint: ['#46385f', '#3c3152'],
   walkRouteText: '#b9a0e8', // 8.4:1 on the halo
 };

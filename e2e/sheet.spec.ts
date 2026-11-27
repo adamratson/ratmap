@@ -200,8 +200,12 @@ test.describe('the docked panel', () => {
     await openChip(page, 'Routes');
     expect(await sheetHeight(page)).toBe(0);
 
-    // The attribution (ODbL, legally required) is on the map, clear of the panel.
-    const attribution = await page.locator('.maplibregl-ctrl-attrib').boundingBox();
+    // The attribution (ODbL, legally required) is on the map, clear of the panel. MapLibre
+    // keeps the control hidden until a source has supplied attribution text, so wait for it:
+    // measured straight away, it sometimes has no box yet.
+    const attributionControl = page.locator('.maplibregl-ctrl-attrib');
+    await expect(attributionControl).toBeVisible();
+    const attribution = await attributionControl.boundingBox();
     expect(attribution).not.toBeNull();
     expect(attribution!.x).toBeGreaterThanOrEqual(panel!.x + panel!.width);
     expect(attribution!.y + attribution!.height).toBeLessThanOrEqual(viewport.height);

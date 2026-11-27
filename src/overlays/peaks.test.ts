@@ -296,13 +296,20 @@ describe('PEAKS_RENDER_FILTER', () => {
   it('renders a munro at every zoom regardless of prominence', () => {
     // Same low prominence, only one is a munro — this is the case that regresses: a
     // marginal munro must not vanish the way an equally low-prominence bump correctly does.
-    expect(passes({ prom: 10, lists: 'munro' }, 6)).toBe(true);
-    expect(passes({ prom: 10 }, 6)).toBe(false);
+    expect(passes({ name: 'Beinn Teallach', prom: 10, lists: 'munro' }, 6)).toBe(true);
+    expect(passes({ name: 'a bump', prom: 10 }, 6)).toBe(false);
   });
 
   it('still applies the ordinary notability filter to non-munro peaks', () => {
-    expect(passes({ prom: 1483 }, 6)).toBe(true);
-    expect(passes({ prom: 93 }, 6)).toBe(false);
+    expect(passes({ name: 'Bobotov Kuk', prom: 1483 }, 6)).toBe(true);
+    expect(passes({ name: 'Savin kuk', prom: 93 }, 6)).toBe(false);
+  });
+
+  it('draws no summit with nothing to write beside it', () => {
+    // East of Encamp: 227 m of prominence, no name, no height — a dot nobody could read.
+    expect(passes({ prom: 227.2 }, 12)).toBe(false);
+    expect(passes({ prom: 227.2, ele: 2100 }, 12)).toBe(true);
+    expect(passes({ prom: 227.2, name: 'Tossal' }, 12)).toBe(true);
   });
 
   it('is what addPeaksLayer actually filters on', () => {

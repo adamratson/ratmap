@@ -114,8 +114,9 @@ export function renderLegend(body: HTMLElement, ink: MapInk, place?: LegendPlace
     <div class="legend-section">
       <h3>Walking routes</h3>
       <p class="legend-note">
-        A halo around the path; below zoom 12, a line. Named along the route. In downloaded
-        regions, from OpenStreetMap: what counts as national or local varies by country.
+        A tint around the path, so a waymarked route can be followed through junctions.
+        Named along the route. In downloaded regions, from OpenStreetMap: what counts as
+        national or local varies by country.
       </p>
       ${ROUTES_LEGEND.map((entry) => legendRow(routeSwatch(entry.tier, ink), entry.label, entry.note)).join('')}
     </div>
